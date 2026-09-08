@@ -1,0 +1,222 @@
+/* L6 - the live board and the badge case. Scoped under .scr-l6-board.
+ *
+ * NO box-shadow anywhere in this file. Depth is 1px solid var(--line).
+ * NO --maroon, NO --gold - the accent indirection is --accent and it swaps
+ * token between light and dark.
+ * EVERY figure carries .num (tabular-nums, from tokens.css).
+ * The badge metals and the family fills are inline in the SVG on purpose: they
+ * are a FIXED SCALE and must not be reachable by a team-color overwrite.
+ */
+
+.scr-l6-board { display: block; }
+
+/* ---------------------------------------------------------------- the head */
+.l6-h1 { font-size: var(--t-section); margin: 0 0 6px; }
+
+.l6-game { margin: 0 0 12px; }
+.l6-game-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.l6-at { font-size: var(--t-micro); color: var(--dim); flex: none; }
+.l6-score { margin-left: auto; font-size: var(--t-score); font-weight: 800; flex: none; }
+
+/* ------------------------------------------------------------- the banners */
+.l6-banner {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; margin: 0 0 10px;
+  border: 1px solid var(--line); border-left-width: 3px;
+  border-radius: var(--radius-card); background: var(--card);
+}
+.l6-banner-settling { border-left-color: var(--accent); }
+.l6-banner-final    { border-left-color: var(--fg); }
+.l6-banner-t { font-size: var(--t-emph); font-weight: 700; }
+.l6-banner-s { font-size: var(--t-micro); color: var(--dim); }
+
+/* The one new badge, once, then it gets out of the way. */
+.l6-toast {
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 12px; margin: 0 0 10px;
+  border: 1px solid var(--accent); border-radius: var(--radius-card);
+  background: var(--card);
+}
+.l6-toast-i { flex: none; display: block; line-height: 0; }
+.l6-toast-b { flex: 1 1 auto; min-width: 0; }
+.l6-toast-b b { display: block; font-size: var(--t-emph); }
+.l6-toast-h { display: block; font-size: var(--t-micro); color: var(--dim); }
+.l6-toast-n {
+  flex: none; font-size: var(--t-micro); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent);
+}
+
+/* ------------------------------------------------------------ the self card
+ * Pinned above the table. The team stripe is the only place team color appears
+ * as a surface, and it ALWAYS has a hairline beside it - which is what makes it
+ * survive a yellow primary on --card:#ffffff and a navy one on --bg:#120a0e. */
+/* The stripe is TWO SOLID HALVES, --team-a over --team-b, the same split the
+ * team chip draws - not a gradient, and not one flat band. One band failed the
+ * dark test by looking: a navy primary as a 3px bar on --card:#1c1216 is a dark
+ * bar on a dark card and it vanishes. The second half cannot vanish with it,
+ * because teamVars guarantees --team-b is a real color or --team-null, which is
+ * legible on both grounds. The card keeps its full 1px --line border, which is
+ * what carries a yellow primary on --card:#ffffff. */
+.l6-self {
+  padding: 12px 12px 10px 15px; margin: 0 0 12px;
+  background-image: linear-gradient(to bottom, var(--team-a, var(--line)) 0 58%, var(--team-b, var(--line)) 58% 100%);
+  background-repeat: no-repeat;
+  background-size: 3px 100%;
+  background-position: left top;
+}
+.l6-self-top { display: flex; align-items: baseline; gap: 8px; }
+.l6-place { font-size: var(--t-emph); font-weight: 800; flex: none; }
+.l6-place-of { font-weight: 400; font-size: var(--t-micro); color: var(--dim); }
+.l6-self-name {
+  flex: 1 1 auto; min-width: 0; font-size: var(--t-emph); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.l6-move { flex: none; font-size: var(--t-micro); font-weight: 700; }
+
+/* 🔴 THE ONLY 30px FIGURE ON THIS SCREEN, and it is PROFIT - the thing the board
+ * sorts on. The balance below it is 15px. A board whose largest number is the
+ * pile contradicts its own sort key in the first place a reader looks. */
+.l6-fig { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 10px; }
+.l6-made { font-size: var(--t-bank); font-weight: 800; line-height: 1.05; }
+.l6-fig-l { font-size: var(--t-micro); color: var(--dim); }
+
+.l6-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 8px;
+  margin: 0; padding: 10px 0 0; border-top: 1px solid var(--line);
+}
+.l6-stat-k { grid-row: 1; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+.l6-stat-v { grid-row: 2; margin: 0; font-size: var(--t-body); font-weight: 700; }
+.l6-stats dd:first-of-type { font-size: var(--t-emph); }
+
+.l6-void-note { margin: 8px 0 0; font-size: var(--t-micro); color: var(--dim); }
+.l6-bank-note { margin: 10px 0 0; font-size: var(--t-micro); color: var(--dim); line-height: 1.4; }
+
+/* ------------------------------------------------------------------- form
+ * Five colored score chips, off the Sofascore bar. Denser than any table row,
+ * and the one thing that screen does which a table cannot. --up / --down are a
+ * FIXED SCALE and are never team color; a void is neither and is drawn neither. */
+.l6-form { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); }
+.l6-form-h { margin: 0 0 6px; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+.l6-form-none { margin: 0; font-size: var(--t-micro); color: var(--dim); }
+.l6-form-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.l6-form-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.l6-form-side { font-size: 10px; color: var(--dim); text-align: center; }
+.l6-chip {
+  display: block; text-align: center; padding: 5px 2px;
+  border-radius: var(--radius-chip); font-size: var(--t-micro); font-weight: 700;
+  border: 1px solid transparent;
+}
+.l6-chip-won  { background: var(--up);    color: #fff; }
+.l6-chip-lost { background: var(--down);  color: #fff; }
+.l6-chip-void { background: var(--track); color: var(--dim); border-color: var(--line); }
+
+/* ------------------------------------------------------------- the table
+ * A PLAIN RANKED TABLE: micro uppercase heads, hairline rows, no card per row,
+ * the viewer's own row tinted. Straight off IMG_5226. */
+.l6-table {
+  border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); overflow: hidden;
+}
+.l6-hd, .l6-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-bottom: 1px solid var(--line);
+}
+.l6-row:last-child { border-bottom: 0; }
+.l6-hd {
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--dim); padding-top: 9px; padding-bottom: 7px;
+}
+/* The column heads inherit their width from the columns and NOTHING ELSE. Left
+ * alone, `Made` picked up the cell's 17px/800 and read as the loudest thing on
+ * the board - a label outshouting every number under it. Caught by looking. */
+.l6-hd .l6-c-pos, .l6-hd .l6-c-hit, .l6-hd .l6-c-made {
+  font-size: 10px; font-weight: 600; color: var(--dim);
+}
+/* A standings row is a LINK, not a control, so the 44px minimum does not bind
+ * it - the same call every ranked table on disk makes. It is 52px anyway,
+ * because the name carries a second line. */
+.l6-row {
+  min-height: 52px; color: inherit; text-decoration: none;
+}
+.l6-row-me { background: var(--track); }
+.l6-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.l6-c-pos { flex: none; width: 2.4em; text-align: right; color: var(--dim); font-size: var(--t-body); }
+.l6-caret { font-style: normal; font-size: 8px; margin-left: 2px; vertical-align: 1px; }
+.l6-c-who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.l6-name-line { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.l6-name {
+  font-size: var(--t-emph); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.l6-pins { flex: none; display: inline-flex; align-items: center; gap: 1px; line-height: 0; }
+.l6-sub { display: block; font-size: var(--t-micro); color: var(--dim); font-weight: 400; }
+.l6-c-hit { flex: none; width: 3.6em; text-align: right; font-size: var(--t-body); }
+.l6-hit-v { display: block; }
+.l6-c-made { flex: none; width: 3.6em; text-align: right; font-size: var(--t-section); font-weight: 800; }
+
+.l6-note { margin: 10px 2px 0; font-size: var(--t-micro); line-height: 1.45; color: var(--dim); }
+.l6-note-dim { margin-top: 4px; }
+
+/* -------------------------------------------------------------- alone
+ * 🔴 A leaderboard of two is not a leaderboard. This block replaces the table
+ * rather than sitting under it, because a table of one row IS the failure. */
+.l6-alone { padding: 14px 12px; }
+.l6-alone-h { margin: 0 0 6px; font-size: var(--t-emph); font-weight: 700; }
+.l6-alone-b { margin: 0 0 8px; font-size: var(--t-body); color: var(--dim); line-height: 1.45; }
+.l6-invite {
+  min-height: var(--tap-min); width: 100%; margin: 4px 0 0;
+  border: 1px solid var(--accent); background: var(--card); color: var(--accent);
+  font-weight: 700; font-size: var(--t-emph);
+}
+.l6-alone-n { margin: 10px 0 0; font-size: var(--t-micro); color: var(--dim); line-height: 1.4; }
+
+/* ------------------------------------------------------------ the badge case
+ * Three across at 393px, the same density as the reference. The disc is 34px;
+ * the pip row is the extra 8.5px under it. */
+.l6-badges { margin: 22px 0 0; }
+.l6-bhead { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 12px; }
+.l6-h2 { font-size: var(--t-section); margin: 0; }
+.l6-bcount { font-size: var(--t-body); color: var(--dim); }
+.l6-bcount b { font-size: var(--t-figure); font-weight: 800; color: var(--fg); }
+
+.l6-fam { margin-bottom: 16px; }
+.l6-fam-h {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: var(--t-body); font-weight: 700; margin-bottom: 6px;
+}
+.l6-fam-p { font-size: var(--t-micro); font-weight: 600; color: var(--dim); flex: none; }
+.l6-fam-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+
+.l6-badge {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-card);
+  padding: 9px 8px 10px; display: flex; flex-direction: column; gap: 3px; min-width: 0;
+}
+/* An earned tier is not dimmed and is marked by the border, never by the ring -
+ * the ring is the constant that binds fifteen drawings into one set. */
+.l6-badge.is-on { border-color: var(--accent); }
+.l6-badge:not(.is-on) .l6-bn { color: var(--dim); }
+.l6-badge:not(.is-on) .l6-bh { opacity: .75; }
+.l6-badge.is-new { border-color: var(--accent); border-width: 2px; padding: 8px 7px 9px; }
+.l6-bi { line-height: 0; display: block; margin-bottom: 2px; }
+.l6-bsvg { display: block; }
+.l6-bn { font-size: var(--t-body); font-weight: 700; letter-spacing: .02em; }
+.l6-bh { font-size: 10px; line-height: 1.35; color: var(--dim); }
+
+.l6-bnote { margin: 4px 2px 0; font-size: var(--t-micro); line-height: 1.45; color: var(--dim); }
+
+/* At 360px and under the third badge column stops fitting its 10px caption on
+ * two lines. Measured, not guessed. */
+@media (max-width: 360px) {
+  .l6-fam-row { gap: 5px; }
+  .l6-badge { padding: 8px 6px 9px; }
+  .l6-stats { grid-template-columns: repeat(2, 1fr); gap: 8px 8px; }
+  .l6-stat-k { grid-row: auto; }
+  .l6-stat-v { grid-row: auto; }
+}
+
+/* A second column is available above 1200px; the board keeps the phone measure
+ * and the badge case moves beside it rather than stretching to 1900px. */
+@media (min-width: 1200px) {
+  .l6-badges { margin-top: 0; }
+}
