@@ -548,13 +548,26 @@ function parlayNote(
 }
 
 /** The editing state alone, for a parlay nobody has resolved yet (P3's live UI). */
+/**
+ * 🔴 A VOIDED PARLAY REPORTS 'void', not 'locked'.
+ *
+ * This function used to return `resolution.state` raw, which for a parlay that
+ * had voided out was 'locked' with the void hiding in a separate `outcome`
+ * field. types.ts AMENDMENT 3 puts 'void' in the state union precisely so this
+ * cannot happen, and P3 found the consequence: a screen printing `state` says a
+ * dead parlay is still running. It had to absorb the mismatch in its own file.
+ *
+ * The resolution keeps both fields - `outcome` still says why - but the STATE a
+ * caller reads is now the truth about whether the thing is over.
+ */
 export function parlayState(
   legInputs: readonly LegInput[],
   games: ReadonlyMap<string, SlateGame>,
   ats: boolean,
   now: number,
 ): ParlayState {
-  return resolveParlay(legInputs, games, ats, now).state;
+  const r = resolveParlay(legInputs, games, ats, now);
+  return r.outcome === 'void' ? 'void' : r.state;
 }
 
 /* ------------------------------------------------------------------ *

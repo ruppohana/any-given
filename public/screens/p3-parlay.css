@@ -1,0 +1,210 @@
+/* P3 - THE PARLAY. Every rule scoped under .scr-p3-parlay.
+ *
+ * NO SHADOWS - depth is 1px solid var(--line). NO icon font, NO chart library, NO npm
+ * package - the five glyphs are inline SVG paths in the module. NO --maroon and NO --gold:
+ * --accent is read, and it swaps token on dark. NO team variable is written at :root -
+ * team-chip.js sets them per element, and a leg row carries two chips.
+ *
+ * THE MEASUREMENT THAT DESIGNS IT: 393 - 20 (shell gutter) - 2 (card hairline)
+ * - 24 (card padding) = 347px of usable card. The ladder is four rungs in that:
+ * (347 - 18) / 4 = 82px each, which is what fixes "6 legs" and "20" on two lines at 11px.
+ *
+ * 🔴 AND THE SIZE THAT IS NOT HERE. There is no 30px figure on this screen and no
+ * --t-bank. That size exists in this system to keep a STAKE honest and the pool has no
+ * stake - nothing on this screen is staked, bought or sold. The worth figure is 21px,
+ * which is the scale's own "figure", and the pool name above it is 17px.
+ */
+
+/* ---- head ---- */
+.scr-p3-parlay .p3-h { font-size: var(--t-section); font-weight: 650; margin: 0 0 2px; }
+.scr-p3-parlay .p3-sub { margin: 0 0 12px; font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- THE SLIP. One card. It is the thing that gets screenshotted, so everything that
+ * says what this parlay IS lives inside one border and nothing else does. */
+.scr-p3-parlay .p3-slip { padding: 12px; }
+
+.scr-p3-parlay .p3-slip-top {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+}
+.scr-p3-parlay .p3-k {
+  font-size: var(--t-micro); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--dim);
+}
+.scr-p3-parlay .p3-count { font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- the figure. 21px, and the unit is on its own line under it rather than beside it:
+ * at 393px "points if every leg lands" beside a number wraps into the number's baseline
+ * and the two read as one broken sentence. */
+.scr-p3-parlay .p3-worth { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 10px; }
+.scr-p3-parlay .p3-worth-n {
+  font-size: var(--t-figure); font-weight: 700; line-height: 1.1; color: var(--fg);
+}
+.scr-p3-parlay .p3-worth-u { font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- THE LADDER. Four rungs, printed whole. A sportsbook computes one number at you;
+ * this prints the published table and lights the rung you are standing on. It is DOM
+ * boxes and a hairline - there is no chart library in this app and never will be. */
+.scr-p3-parlay .p3-ladder {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;
+}
+.scr-p3-parlay .p3-rung {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 6px 2px; min-width: 0;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--dim);
+}
+.scr-p3-parlay .p3-rung-n { font-size: 10px; letter-spacing: .02em; white-space: nowrap; }
+.scr-p3-parlay .p3-rung-w { font-size: var(--t-emph); font-weight: 650; color: var(--fg); }
+/* 🔴 A RUNG YOU HAVE PASSED AND A RUNG YOU HAVE NOT LOOK THE SAME, and that is a decision.
+ * The first cut dimmed the passed rungs, which made the untaken 12 and 20 the darkest
+ * things in the component - a published table redrawn as a climb, which is the nudge this
+ * screen is written to avoid. Every rung is the same weight; only where you stand moves. */
+.scr-p3-parlay .p3-rung[data-on="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--fg);
+}
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .scr-p3-parlay .p3-rung[data-on="true"] { background: var(--track); }
+}
+.scr-p3-parlay .p3-rung[data-on="true"] .p3-rung-w { color: var(--accent); font-weight: 800; }
+
+/* ---- THE VERDICT. ONE component. data-outcome is the only thing that differs between a
+ * win, a miss and a void: same mark, same size, same slot, same line height. That is the
+ * symmetric-result rule satisfied by construction rather than by comparing two components. */
+.scr-p3-parlay .p3-verdict {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; margin-bottom: 8px;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+}
+.scr-p3-parlay .p3-v-word { font-size: var(--t-emph); font-weight: 700; }
+.scr-p3-parlay .p3-verdict[data-outcome="won"]  { border-color: var(--up); }
+.scr-p3-parlay .p3-verdict[data-outcome="won"]  .p3-v-word { color: var(--up); }
+.scr-p3-parlay .p3-verdict[data-outcome="lost"] { border-color: var(--down); }
+.scr-p3-parlay .p3-verdict[data-outcome="lost"] .p3-v-word { color: var(--down); }
+.scr-p3-parlay .p3-verdict[data-outcome="void"] .p3-v-word { color: var(--dim); }
+
+/* ---- THE REDUCTION. Loud on purpose. A five-leg parlay that quietly becomes a four-leg
+ * parlay has gone from 12 points to 6, and the rule is that it never happens silently. */
+.scr-p3-parlay .p3-reduced {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; margin-bottom: 8px;
+  border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-button); background: var(--bg);
+}
+.scr-p3-parlay .p3-red-k {
+  font-size: 10px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--accent);
+}
+.scr-p3-parlay .p3-red-b { font-size: var(--t-body); color: var(--fg); }
+
+/* The module's own sentence, printed verbatim. */
+.scr-p3-parlay .p3-say { margin: 0 0 10px; font-size: var(--t-body); color: var(--dim); }
+
+/* ---- THE LEGS. Hairline divided, no card per leg - a card inside a card is how a slip
+ * turns into a stack of receipts. */
+.scr-p3-parlay .p3-legs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.scr-p3-parlay .p3-leg {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 56px; padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.scr-p3-parlay .p3-leg-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.scr-p3-parlay .p3-l1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.scr-p3-parlay .p3-l2 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.scr-p3-parlay .p3-team {
+  font-size: var(--t-body); font-weight: 650; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-p3-parlay .p3-vs { font-size: var(--t-micro); color: var(--dim); flex: none; }
+/* The line, only when the pool is against the spread. It is the one market number on this
+ * screen and it is a number ON A GAME, never a price on the parlay. */
+.scr-p3-parlay .p3-spread { font-size: var(--t-micro); color: var(--fg); flex: none; }
+.scr-p3-parlay .p3-when { font-size: var(--t-micro); color: var(--dim); white-space: nowrap; }
+
+/* 🔴 TEAM COLOR APPEARS ON THIS SCREEN IN EXACTLY ONE PLACE: THE CHIPS, scoped per element
+ * by team-chip.js. A 3px team-colored rail down the leg row was drawn and then taken back
+ * out - P2 already uses a 3px accent rail to mean "this is the side you took", and the same
+ * device in a different color one screen over means something else. The chip carries the
+ * identity; the mark on the right carries the result, on the fixed --up / --down scale. */
+
+/* 🔴 A VOIDED LEG IS STATED, NEVER HIDDEN. A leg that vanishes reads as a leg that lost.
+ * Same hatch P2 uses on a void row, so one void looks like every other void in the pool. */
+.scr-p3-parlay .p3-leg[data-result="void"] {
+  background: repeating-linear-gradient(135deg, transparent 0 7px, var(--track) 7px 8px);
+}
+.scr-p3-parlay .p3-leg[data-result="void"] .p3-team { text-decoration: line-through; color: var(--dim); }
+
+/* ---- THE MARK. Identical geometry to P2's result mark, so a landed leg here and a
+ * correct pick there are the same object. */
+.scr-p3-parlay .p3-mark {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%; border: 1px solid currentColor;
+  color: var(--dim);
+}
+.scr-p3-parlay .p3-mark[data-result="won"]  { color: var(--up); }
+.scr-p3-parlay .p3-mark[data-result="lost"] { color: var(--down); }
+.scr-p3-parlay .p3-mark[data-result="void"] { color: var(--dim); }
+.scr-p3-parlay .p3-lockglyph { flex: none; color: var(--dim); opacity: .7; padding: 0 2px; }
+
+/* ---- THE LOCK LINE. The one invented element on this screen: legs are in kickoff order,
+ * so the boundary between "no longer editable" and "still yours" is a real line in a
+ * sorted list. Five scattered padlocks say "some of these" and never say where. */
+.scr-p3-parlay .p3-lockline {
+  list-style: none; display: flex; align-items: center; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.scr-p3-parlay .p3-lockline::before,
+.scr-p3-parlay .p3-lockline::after {
+  content: ""; flex: 1 1 auto; height: 1px; background: var(--line);
+}
+.scr-p3-parlay .p3-lockline-t {
+  flex: none; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--dim); white-space: nowrap;
+}
+
+/* ---- remove. 44px of hit area and NO BOX AROUND IT. Drawn with a border first: four
+ * legs became four empty framed squares running down the right of the card, and the
+ * heaviest thing in a component whose subject is the teams was the delete control. The
+ * target is unchanged; only the frame went. */
+.scr-p3-parlay .p3-drop {
+  flex: none; width: var(--tap-min); min-height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--dim); background: transparent; border-color: transparent;
+}
+.scr-p3-parlay .p3-drop:hover { color: var(--fg); border-color: var(--line); }
+
+/* ---- THE POOL OF LEGS. Picks already made. This is the whole reason a leg cannot
+ * disagree with a pick: there is nowhere on this screen to enter one. */
+.scr-p3-parlay .p3-pool { margin-top: 16px; }
+.scr-p3-parlay .p3-pool-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.scr-p3-parlay .p3-pool-n { font-size: var(--t-micro); color: var(--dim); }
+.scr-p3-parlay .p3-gate { margin: 8px 0; font-size: var(--t-body); color: var(--fg); }
+.scr-p3-parlay .p3-shut { margin: 8px 0 0; font-size: var(--t-micro); color: var(--dim); }
+.scr-p3-parlay .p3-why { margin: 10px 0 0; font-size: var(--t-micro); color: var(--dim); }
+.scr-p3-parlay .p3-closed { margin: 14px 2px 0; font-size: var(--t-body); color: var(--dim); }
+
+.scr-p3-parlay .p3-cands { list-style: none; margin: 0; padding: 0; }
+.scr-p3-parlay .p3-cand {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 56px; padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.scr-p3-parlay .p3-add {
+  flex: none; display: inline-flex; align-items: center; gap: 5px;
+  min-height: var(--tap-min); padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); color: var(--accent); font-weight: 650;
+}
+.scr-p3-parlay .p3-add-t { font-size: var(--t-body); }
+.scr-p3-parlay .p3-add:disabled { color: var(--dim); cursor: default; }
+
+.scr-p3-parlay .p3-note { margin: 14px 2px 0; font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- desktop. The slip keeps the phone measure and the ladder keeps four equal rungs;
+ * shell.css caps the column. There is no second column here on purpose - this screen is
+ * one object and splitting it would put the legs beside the thing that describes them. */
+@media (min-width: 560px) {
+  .scr-p3-parlay .p3-rung-n { font-size: var(--t-micro); }
+}
