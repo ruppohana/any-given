@@ -1,0 +1,470 @@
+/* P6 - create and commission. Everything scoped under .scr-p6-create.
+ *
+ * DEPTH IS 1px solid var(--line). Not one box-shadow in this file.
+ * ACCENT: var(--accent) only - maroon in light, GOLD ON DARK. A rule hard-coded
+ * to --maroon is invisible in the other theme and nothing warns you. The filled
+ * button's text reads var(--card), which swaps with it.
+ * There is exactly ONE filled control per state, and it is .p6-primary.
+ */
+
+.scr-p6-create { padding-bottom: 10px; }
+
+/* ---------------------------------------------------------------- the header */
+
+.scr-p6-create .p6-head { margin: 2px 0 12px; }
+.scr-p6-create .p6-kicker {
+  margin: 0 0 2px;
+  font-size: var(--t-micro);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.scr-p6-create .p6-title {
+  margin: 0;
+  font-size: var(--t-section);
+  line-height: 1.2;
+  font-weight: 700;
+  /* A pool named by a group text can be long. It wraps; it never clips. */
+  overflow-wrap: anywhere;
+}
+.scr-p6-create .p6-sub {
+  margin: 3px 0 0;
+  font-size: var(--t-body);
+  color: var(--dim);
+}
+.scr-p6-create .p6-banner {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--track);
+  font-size: var(--t-body);
+}
+
+/* ----------------------------------------------------------------- the cards */
+
+.scr-p6-create .p6-card { padding: 12px; margin-bottom: 10px; }
+.scr-p6-create .p6-h {
+  margin: 0 0 4px;
+  font-size: var(--t-emph);
+  font-weight: 700;
+}
+.scr-p6-create .p6-note {
+  margin: 6px 0 0;
+  font-size: var(--t-micro);
+  color: var(--dim);
+  line-height: 1.45;
+}
+.scr-p6-create .p6-card > .p6-note:first-of-type { margin-top: 4px; }
+.scr-p6-create .p6-sub-h {
+  margin: 0 0 6px;
+  font-size: var(--t-body);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------- the scope selector, first */
+
+.scr-p6-create .p6-scopes {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+/* Each row is a 44px target with its own count on the right. The count is the
+ * argument for the row, so it is set in the same line as the label rather than
+ * hidden in the description. */
+.scr-p6-create .p6-scope {
+  display: grid;
+  gap: 2px;
+  min-height: var(--tap-min);
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--card);
+  position: relative;
+}
+.scr-p6-create .p6-scope-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.scr-p6-create .p6-scope-label {
+  font-size: var(--t-emph);
+  font-weight: 600;
+}
+.scr-p6-create .p6-scope-count {
+  font-size: var(--t-body);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.scr-p6-create .p6-scope-who {
+  font-size: var(--t-micro);
+  color: var(--dim);
+  line-height: 1.4;
+}
+/* SELECTION IS A BORDER AND A BAR, NEVER A FILL. Filling the chosen row would put
+ * a second accent block on a screen that has one button, and at 393px five rows
+ * of solid accent is the whole card. */
+.scr-p6-create .p6-scope[aria-checked="true"] {
+  border-color: var(--accent);
+}
+.scr-p6-create .p6-scope[aria-checked="true"]::before {
+  content: "";
+  position: absolute;
+  left: -1px; top: -1px; bottom: -1px;
+  width: 3px;
+  border-radius: var(--radius-button) 0 0 var(--radius-button);
+  background: var(--accent);
+}
+.scr-p6-create .p6-scope[aria-checked="true"] .p6-scope-count { color: var(--fg); }
+.scr-p6-create .p6-default {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.scr-p6-create .p6-count-note { margin-top: 8px; }
+
+/* The dependent controls under the selector. */
+.scr-p6-create .p6-sub {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.scr-p6-create .p6-sub[hidden] { display: none; }
+
+.scr-p6-create .p6-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+}
+.scr-p6-create .p6-seg-b {
+  min-height: var(--tap-min);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--card);
+  font-size: var(--t-body);
+  color: var(--fg);
+}
+.scr-p6-create .p6-seg-b[aria-checked="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.scr-p6-create .p6-conf-list { display: grid; gap: 6px; }
+.scr-p6-create .p6-conf {
+  min-height: var(--tap-min);
+  text-align: left;
+  padding: 0 10px;
+  font-size: var(--t-body);
+}
+
+/* The hand-pick rows. Two chips and a kickoff, and the kickoff is tabular so a
+ * column of them does not dance. */
+.scr-p6-create .p6-games { display: grid; gap: 6px; }
+.scr-p6-create .p6-game {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: var(--tap-min);
+  padding: 6px 10px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--card);
+}
+.scr-p6-create .p6-game[aria-pressed="true"] { border-color: var(--accent); }
+.scr-p6-create .p6-game-teams {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.scr-p6-create .p6-at { font-size: var(--t-micro); color: var(--dim); }
+.scr-p6-create .p6-game-when {
+  font-size: var(--t-micro);
+  color: var(--dim);
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* THE CONSEQUENCE LINE - what the choice leaves. */
+.scr-p6-create .p6-summary {
+  margin: 12px 0 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--track);
+  font-size: var(--t-emph);
+  font-weight: 600;
+}
+.scr-p6-create .p6-lock-line {
+  margin: 8px 0 0;
+  font-size: var(--t-micro);
+  color: var(--dim);
+  line-height: 1.45;
+}
+.scr-p6-create .p6-locked-scope {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--track);
+}
+.scr-p6-create .p6-locked-value {
+  margin: 0;
+  font-size: var(--t-figure);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.scr-p6-create .p6-locked-scope .p6-summary {
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--t-body);
+  font-weight: 400;
+  color: var(--dim);
+}
+
+/* ------------------------------------------------------------------ the name */
+
+.scr-p6-create .p6-label {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: var(--t-micro);
+  color: var(--dim);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.scr-p6-create .p6-input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--t-emph);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+}
+.scr-p6-create .p6-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* --------------------------------------------------------------- the switches */
+
+.scr-p6-create .p6-scoring {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+.scr-p6-create .p6-switch-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.scr-p6-create .p6-switch-text { flex: 1 1 auto; min-width: 0; }
+.scr-p6-create .p6-switch-label {
+  display: block;
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+.scr-p6-create .p6-switch-note { display: block; margin-top: 2px; }
+
+/* One element, 44px of target, a hairline knob. No shadow, no gradient. */
+.scr-p6-create .p6-switch {
+  flex: none;
+  width: 52px;
+  min-height: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--track);
+}
+.scr-p6-create .p6-knob {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  transition: transform .12s ease;
+}
+.scr-p6-create .p6-switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.scr-p6-create .p6-switch[aria-checked="true"] .p6-knob { transform: translateX(22px); }
+/* A locked switch is DASHED, not merely faint. Opacity alone read as an ordinary
+ * off switch at 393px - and dashed is already this system's word for "no value
+ * here", which is what the null team chip uses. */
+.scr-p6-create .p6-switch:disabled {
+  opacity: .55;
+  cursor: default;
+  border-style: dashed;
+}
+
+.scr-p6-create .p6-fixed {
+  margin: 12px 0 0;
+  padding: 10px 10px 10px 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  font-size: var(--t-micro);
+  color: var(--dim);
+  line-height: 1.5;
+}
+.scr-p6-create .p6-fixed li { margin-bottom: 4px; }
+.scr-p6-create .p6-fixed li:last-child { margin-bottom: 0; }
+.scr-p6-create .p6-fixed b { color: var(--fg); }
+
+/* ---------------------------------------------------------------- the invite */
+
+.scr-p6-create .p6-copyrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.scr-p6-create .p6-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--bg);
+  font-size: var(--t-body);
+  /* A link is one long token. It scrolls inside its own box rather than pushing
+   * the Copy button off the right edge at 393px. */
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.scr-p6-create .p6-code {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--bg);
+  font-size: var(--t-figure);
+  font-weight: 700;
+  letter-spacing: .22em;
+  /* The letterspacing pushes the last glyph off center without this. */
+  text-indent: .22em;
+}
+.scr-p6-create .p6-copy {
+  flex: none;
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+.scr-p6-create .p6-copy[data-done="true"] { border-color: var(--up); color: var(--up); }
+.scr-p6-create .p6-copy[data-done="false"] { border-color: var(--down); color: var(--down); }
+
+/* --------------------------------------------------------------- the members */
+
+.scr-p6-create .p6-members { margin-top: 4px; }
+.scr-p6-create .p6-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+/* An open confirm claims the whole row rather than the right-hand column. */
+.scr-p6-create .p6-danger-wrap[data-open="true"] { flex: 1 0 100%; }
+.scr-p6-create .p6-member-who { min-width: 0; }
+.scr-p6-create .p6-member-name {
+  display: block;
+  font-size: var(--t-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.scr-p6-create .p6-member-meta {
+  display: block;
+  font-size: var(--t-micro);
+  color: var(--dim);
+}
+
+/* ------------------------------------------------ destructive, with a confirm */
+
+.scr-p6-create .p6-danger {
+  min-height: var(--tap-min);
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--card);
+  color: var(--down);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+.scr-p6-create .p6-confirm {
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--down);
+  border-radius: var(--radius-button);
+}
+.scr-p6-create .p6-confirm-q {
+  margin: 0 0 8px;
+  font-size: var(--t-body);
+  line-height: 1.4;
+}
+.scr-p6-create .p6-confirm-row { display: flex; gap: 8px; }
+.scr-p6-create .p6-confirm-no,
+.scr-p6-create .p6-confirm-yes {
+  flex: 1 1 0;
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+.scr-p6-create .p6-confirm-no { color: var(--fg); }
+
+/* --------------------------------------------------- THE ONE FILLED CONTROL */
+
+.scr-p6-create .p6-cta-wrap { margin-top: 4px; }
+.scr-p6-create .p6-primary {
+  width: 100%;
+  min-height: var(--tap-min);
+  border-radius: var(--radius-button);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  /* --card swaps with the accent, so this reads on maroon AND on gold. A
+   * hard-coded #fff is invisible on gold. */
+  color: var(--card);
+  font-size: var(--t-emph);
+  font-weight: 700;
+}
+.scr-p6-create .p6-copy.p6-primary { width: auto; flex: none; }
+.scr-p6-create .p6-primary:disabled { opacity: .5; cursor: default; }
+.scr-p6-create .p6-cta-why {
+  margin: 6px 0 0;
+  font-size: var(--t-micro);
+  color: var(--down);
+}
+.scr-p6-create .p6-cta-note { margin-top: 6px; text-align: center; }

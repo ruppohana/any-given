@@ -147,7 +147,7 @@ paid for once.**
 | **Nothing in front of the slate** | Any account wall, date-of-birth field, install prompt or interstitial above the fold |
 | **Symmetric result** | Win and miss are not the same component with a different sign |
 | **The delay holds** | The broadcast delay replaces the board instead of holding it legible. **It is a slider, always on, user-set** |
-| **Marks** | Any logo, any ESPN CDN image URL, anything defaulting marks on |
+| **Marks** | 🔴 **AMENDED 2026-09-08 and NOT SETTLED.** Jason reversed the no-logos decision — *"yes with logo, toggle on"* — then held it: *"i need to see it run before i make all these decisions."* **So the toggle is the deliverable and the default is undecided.** `team-chip.js` implements both paths and a screen calls it the same way either way. **No screen hard-codes a logo, no screen reads the ESPN CDN itself, and no screen assumes which way the switch is set.** The chip is never deleted: it is the fallback for marks-off, a team with no logo, and a logo that fails to load |
 | **Scoping** | A pool component wrote `--maroon`, `--gold` or `--accent` at `:root` |
 | **Accent token** | A component hard-codes `--maroon` or `--gold`. **Read `--accent`** — light and dark do not share the token |
 | **Depth** | Any `box-shadow`. **Depth is `1px solid var(--line)`** |
