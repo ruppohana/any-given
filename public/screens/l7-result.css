@@ -1,0 +1,227 @@
+/* L7 - result and settlement. Everything scoped under .scr-l7-result.
+ *
+ * NO box-shadow anywhere in this file. Depth is 1px solid var(--line).
+ * NO --maroon and NO --gold. --accent only, because the accent SWAPS TOKEN on
+ *   dark and a component hard-coded to either one is invisible in one theme.
+ * --up / --down are the fixed scale and they are the only colored figures here.
+ *   Team color never touches the bank, the verdict or the delta - it appears once,
+ *   inside the team chip beside the player who settled the snap, which is the only
+ *   place on this screen where a team is the subject.
+ * Every figure is .num, i.e. tabular.
+ */
+
+.scr-l7-result .l7-h {
+  font-size: var(--t-section);
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- the bank */
+
+.scr-l7-result .l7-bank { padding: 14px; margin-bottom: 10px; }
+
+.scr-l7-result .l7-bank-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* THE LARGEST TYPE IN THE APP. Live layer only - the pool has no bank strip. */
+.scr-l7-result .l7-balance {
+  font-size: var(--t-bank);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  min-width: 0;
+}
+
+.scr-l7-result .l7-unit {
+  font-size: var(--t-micro);
+  font-weight: 600;
+  color: var(--dim);
+  margin-left: 6px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+/* THE MOVEMENT. --up / --down, fixed scale, never team color. The class comes
+ * from fmt.signClass, so the sign is the ONLY thing the verdict decides here. */
+.scr-l7-result .l7-move {
+  font-size: var(--t-figure);
+  font-weight: 700;
+  text-align: right;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.scr-l7-result .l7-move.up   { color: var(--up); }
+.scr-l7-result .l7-move.down { color: var(--down); }
+
+.scr-l7-result .l7-move-note {
+  display: block;
+  font-size: var(--t-micro);
+  font-weight: 500;
+  color: var(--dim);
+  letter-spacing: 0.01em;
+}
+
+/* THE VERDICT IS A CHIP. The bar gives a win a full-bleed banner across the top
+ * of the board and gives a miss nothing; this is the same 11px chip in all three
+ * outcomes, in the same slot, at the same weight. */
+.scr-l7-result .l7-verdict {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 3px 9px;
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--line);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--bg);
+}
+.scr-l7-result [data-verdict="landed"] .l7-verdict { color: var(--up);   border-color: var(--up); }
+.scr-l7-result [data-verdict="missed"] .l7-verdict { color: var(--down); border-color: var(--down); }
+.scr-l7-result [data-verdict="void"]   .l7-verdict { color: var(--dim);  border-style: dashed; }
+.scr-l7-result [data-verdict="settling"] .l7-verdict { color: var(--accent); border-color: var(--accent); }
+
+.scr-l7-result .l7-position {
+  margin: 10px 0 0;
+  font-size: var(--t-micro);
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------- the call and the play, one card */
+
+.scr-l7-result .l7-call { padding: 12px 14px; }
+
+.scr-l7-result .l7-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.scr-l7-result .l7-side {
+  flex: none;
+  font-size: var(--t-emph);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+}
+
+.scr-l7-result .l7-say {
+  font-size: var(--t-body);
+  color: var(--fg);
+  line-height: 1.4;
+  min-width: 0;
+}
+
+/* Staked / Locked at / Returned. Three rows, always three, in every outcome. */
+.scr-l7-result .l7-terms {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 10px 0;
+  font-size: var(--t-body);
+}
+.scr-l7-result .l7-t { color: var(--dim); font-size: var(--t-micro); align-self: center; }
+.scr-l7-result .l7-d { margin: 0; font-weight: 700; text-align: right; }
+
+.scr-l7-result .l7-play {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.scr-l7-result .l7-meta {
+  margin: 0 0 6px;
+  font-size: var(--t-micro);
+  color: var(--dim);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* THE PLAYER WHO SETTLED IT, ON THE SAME CARD AS THE CALL. */
+.scr-l7-result .l7-star {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 26px;
+}
+.scr-l7-result .l7-star-name { font-size: var(--t-emph); font-weight: 700; }
+.scr-l7-result .l7-jersey {
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  padding: 1px 5px;
+}
+.scr-l7-result .l7-role { font-size: var(--t-body); color: var(--dim); }
+.scr-l7-result .l7-star-none { font-size: var(--t-body); color: var(--dim); font-style: italic; }
+
+.scr-l7-result .l7-text {
+  margin: 8px 0 0;
+  font-size: var(--t-body);
+  color: var(--dim);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.scr-l7-result .l7-skeleton {
+  height: 44px;
+  border-radius: var(--radius-card);
+  background: var(--track);
+}
+
+.scr-l7-result .l7-foot {
+  margin: 12px 2px 0;
+  font-size: var(--t-micro);
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ motion
+ *
+ * CHOSEN HERE, because nothing in this project specifies any. One animation,
+ * 220ms, cubic-bezier(.2,.7,.3,1), on the two moments DESIGN-BRIEF section 9
+ * names: the call settling and the balance moving.
+ *
+ * IT IS MIRRORED, NOT DIFFERENT. A gain rises into place; a loss falls into
+ * place; same 8px, same duration, same curve. A void travels 0px because the bank
+ * did not move. There is no flash, no pulse and no celebration on a win, because
+ * that would be motion the miss is not given - which is the whole failure of the
+ * bar this screen answers.
+ *
+ * tokens.css already reduces this to 0.01ms under prefers-reduced-motion: reduce.
+ */
+.scr-l7-result .l7-wrap { --l7-y: 0px; }
+.scr-l7-result [data-sign="up"]   { --l7-y:  8px; }
+.scr-l7-result [data-sign="down"] { --l7-y: -8px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .scr-l7-result[data-motion="on"] .l7-move,
+  .scr-l7-result[data-motion="on"] .l7-balance {
+    animation: l7-settle 220ms cubic-bezier(.2, .7, .3, 1) both;
+  }
+  .scr-l7-result[data-motion="on"] .l7-move { animation-delay: 60ms; }
+}
+
+@keyframes l7-settle {
+  from { transform: translateY(var(--l7-y)); opacity: 0.35; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ------------------------------------------------------------ narrow first */
+
+@media (max-width: 360px) {
+  .scr-l7-result .l7-balance { font-size: var(--t-score); }
+  .scr-l7-result .l7-move    { font-size: var(--t-emph); }
+}

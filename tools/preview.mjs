@@ -17,6 +17,7 @@
  *   /<screen-id>/<state>             -> one screen in one state
  */
 import { createServer } from 'node:http';
+import { stripTypeScriptTypes } from 'node:module';
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,8 +25,23 @@ import { join, extname, dirname } from 'node:path';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.env.PORT || 8788);
-const MIME = { '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
-               '.png': 'image/png', '.svg': 'image/svg+xml', '.html': 'text/html' };
+const MIME = { '.js': 'text/javascript', '.ts': 'text/javascript', '.css': 'text/css',
+               '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
+               '.html': 'text/html' };
+
+/* 🔴 A SCREEN MUST BE ABLE TO RUN THE REAL MODULES. Raised by L7, and it was a
+ * hole in this file: src/lib/*.ts was served as application/octet-stream, so a
+ * browser would not execute it and every screen had to hand-carry a snapshot of
+ * its module's output across the gap. A screen judged against a snapshot is a
+ * screen judged against something a model wrote - rule zero, one level up.
+ *
+ * Node 24 strips types without a build step, so the browser gets real JavaScript
+ * from the real file. No bundler, no dist/, nothing to keep in sync. */
+async function serveSource(p) {
+  const src = await readFile(p, 'utf8');
+  if (!p.endsWith('.ts')) return src;
+  return stripTypeScriptTypes(src, { mode: 'strip', sourceMap: false });
+}
 
 async function screens() {
   const dir = join(ROOT, 'public', 'screens');
@@ -118,8 +134,10 @@ createServer(async (req, res) => {
     for (const base of ['public', '']) {
       const p = join(ROOT, base, path);
       if (p.startsWith(ROOT) && existsSync(p) && extname(p)) {
-        res.writeHead(200, { 'content-type': (MIME[extname(p)] || 'application/octet-stream') + '; charset=utf-8' });
-        return res.end(await readFile(p));
+        const type = MIME[extname(p)] || 'application/octet-stream';
+        const isText = type.startsWith('text/') || type.endsWith('json');
+        res.writeHead(200, { 'content-type': type + (isText ? '; charset=utf-8' : '') });
+        return res.end(isText ? await serveSource(p) : await readFile(p));
       }
     }
     const [, id, state] = path.split('/');

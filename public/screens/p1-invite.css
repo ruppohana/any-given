@@ -1,0 +1,141 @@
+/* P1 - the invite landing. Everything scoped under .scr-p1-invite.
+ *
+ * DEPTH IS 1px solid var(--line). There is not a single box-shadow in this file,
+ * which is the difference between this and all three bar screens - two of which
+ * float a card on a gradient and one of which clips that card off the right edge
+ * at exactly the width this is measured at.
+ *
+ * ACCENT: read var(--accent). It is maroon in light and GOLD ON DARK - a rule
+ * hard-coded to --maroon is invisible in the other theme and nothing warns you.
+ * The primary button's text reads var(--card), which swaps with it.
+ */
+
+.scr-p1-invite { padding-bottom: 8px; }
+
+/* ---- the pool, named, first ---- */
+
+.scr-p1-invite .p1-kicker {
+  margin: 4px 0 2px;
+  font-size: var(--t-micro);
+  color: var(--dim);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.scr-p1-invite .p1-title {
+  margin: 0;
+  font-size: var(--t-section);
+  line-height: 1.2;
+  font-weight: 700;
+  /* A pool named by a group text can be long. It wraps; it never clips. */
+  overflow-wrap: anywhere;
+}
+.scr-p1-invite .p1-by {
+  margin: 3px 0 12px;
+  font-size: var(--t-body);
+  color: var(--dim);
+}
+.scr-p1-invite .p1-lede {
+  margin: 6px 0 12px;
+  font-size: var(--t-body);
+  color: var(--dim);
+}
+
+/* ---- ONE primary action. Nothing else on this screen is a filled control. ---- */
+
+.scr-p1-invite .p1-cta {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-min);   /* 44px floor, measured at 393px */
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-button);   /* 9px */
+  background: var(--accent);
+  color: var(--card);
+  font-size: var(--t-emph);
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.scr-p1-invite .p1-cta:disabled { opacity: .45; cursor: default; }
+.scr-p1-invite .p1-cta:active:not(:disabled) { opacity: .88; }
+
+/* The states component's own button must not read as a second primary. */
+.scr-p1-invite .state-action { border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+
+/* ---- the notice band: a reason, never a wall ---- */
+
+.scr-p1-invite .p1-notice {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-button);
+  background: var(--card);
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+.scr-p1-invite .p1-notice-title { margin: 0; font-size: var(--t-body); font-weight: 700; }
+.scr-p1-invite .p1-notice-body  { margin: 3px 0 0; font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- THE SLATE. Shown, not described. ---- */
+
+.scr-p1-invite .p1-slate { margin-top: 12px; padding: 0 12px; overflow: hidden; }
+
+.scr-p1-invite .p1-slate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 10px 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+.scr-p1-invite .p1-week { font-size: var(--t-body); font-weight: 700; }
+.scr-p1-invite .p1-rule { font-size: var(--t-micro); color: var(--dim); }
+
+.scr-p1-invite .p1-game { padding: 9px 0 8px; border-bottom: 1px solid var(--line); }
+.scr-p1-invite .p1-game:last-child { border-bottom: 0; }
+
+.scr-p1-invite .p1-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 2px 0;
+  min-width: 0;
+}
+.scr-p1-invite .p1-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scr-p1-invite .p1-score {
+  flex: none;
+  min-width: 2.4em;
+  text-align: right;
+  font-size: var(--t-body);
+  color: var(--dim);
+}
+
+/* SYMMETRIC RESULT: one component, one attribute, opposite sign. A win is not a
+ * different element from a miss. */
+.scr-p1-invite .p1-side[data-result="won"]  .p1-name  { font-weight: 700; }
+.scr-p1-invite .p1-side[data-result="won"]  .p1-score { font-weight: 700; color: var(--fg); }
+.scr-p1-invite .p1-side[data-result="lost"] .p1-name  { color: var(--dim); }
+
+.scr-p1-invite .p1-meta {
+  margin: 3px 0 0;
+  padding-left: 28px;          /* clears the chip, so the meta line starts at the name */
+  font-size: var(--t-micro);
+  color: var(--dim);
+}
+
+.scr-p1-invite .p1-foot {
+  margin: 12px 2px 0;
+  font-size: var(--t-micro);
+  color: var(--dim);
+}
+
+/* The chip is 20px here rather than the 22px default, because two of them stack
+ * inside one 393px row and the row still has to clear 44px as a whole. */
+.scr-p1-invite .tchip { flex: none; }
+.scr-p1-invite .tchip-abbrev { min-width: 3.4em; }
