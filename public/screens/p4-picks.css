@@ -1,0 +1,259 @@
+/* P4 - MY PICKS. Every rule scoped under .scr-p4-picks.
+ *
+ * NO SHADOWS - depth is 1px solid var(--line). NO icon font, NO chart library, NO npm
+ * package: the five glyphs on this screen are inline SVG paths in the module.
+ * NO hard-coded accent - var(--accent) is read, and it swaps token on dark.
+ * NO --team-a / --team-b at :root - team-chip.js sets them per element, per chip.
+ * EVERY figure carries .num, which is tabular-nums in tokens.css.
+ *
+ * THE MEASUREMENT THIS IS FITTED TO, at the 393px design width:
+ *   393 - 20 gutter          = 373
+ *   373 - 44 action - 16 gap = 313 for identity + status
+ * The action column is RESERVED ON EVERY ROW even when it is empty. That is 44px of a
+ * 393px screen spent on nothing, on maybe half the rows, and it buys a straight right
+ * edge down thirty-one of them - which is the difference between a list you scan and a
+ * list you read. It is also a real 44x44 target rather than a 36px one dressed up.
+ */
+
+/* ---- head. The pool name is NOT the largest type here, and that is the one place
+ * this screen diverges from P2 on purpose: P2's subject is the slate, so its largest
+ * type is the slate's name and it assigns no figure. This screen's subject is a number
+ * about your week. It still never reaches 30px - that size keeps a stake honest and
+ * the pool has no stake. */
+.scr-p4-picks .p4-h { font-size: var(--t-section); font-weight: 650; margin: 0 0 2px; }
+.scr-p4-picks .p4-sub { margin: 0 0 10px; font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- THE PARLAY PIN. Sticky, and the only sticky element on this screen: two pinned
+ * things is neither of them pinned. POOL-SCREENS P4 asks for the parlay's state
+ * "pinned where it cannot be missed", and a 393px screen has room for exactly one. */
+.scr-p4-picks .p4-pin {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 7px 2px;
+  display: grid; gap: 6px;
+}
+.scr-p4-picks .p4-pin-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.scr-p4-picks .p4-pin-k {
+  font-size: var(--t-micro); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dim); flex: none;
+}
+.scr-p4-picks .p4-pin-v {
+  font-size: var(--t-body); font-weight: 600; color: var(--fg);
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The state chip. NOT --up / --down until it has actually resolved - a parlay that is
+ * merely alive is not a win, which is the same rule the row marks obey. */
+.scr-p4-picks .p4-pin-chip {
+  flex: none; font-size: var(--t-micro); font-weight: 700;
+  border-radius: var(--radius-chip); padding: 2px 7px;
+  border: 1px solid var(--line); color: var(--dim); background: var(--card);
+}
+.scr-p4-picks .p4-pin-chip[data-outcome="won"]  { color: var(--up); border-color: currentColor; }
+.scr-p4-picks .p4-pin-chip[data-outcome="lost"] { color: var(--down); border-color: currentColor; }
+.scr-p4-picks .p4-pin[data-state="partial_lock"] .p4-pin-chip,
+.scr-p4-picks .p4-pin[data-state="valid"] .p4-pin-chip,
+.scr-p4-picks .p4-pin[data-state="at_max"] .p4-pin-chip { color: var(--accent); border-color: currentColor; }
+
+/* THE LEG STRIP IS THE HALF-LOCKED CASE MADE VISIBLE. Legs lock independently, so a
+ * parlay can be half shut - and here it looks half shut, because some pills carry a
+ * padlock and some do not. Nothing else in the app can show that. */
+/* SIZED SO SIX LEGS - THE MAXIMUM - FIT ACROSS 393px WITHOUT SCROLLING. First cut
+ * used the row's chip size and five legs already clipped the fifth against the edge
+ * with a scrollbar under them, inside the one element on the screen that is pinned so
+ * it cannot be missed. `ag-scroll-x` stays as the safety valve for a long abbreviation
+ * set - the page body must never scroll sideways and it does not - but the ordinary
+ * case must not need it. */
+.scr-p4-picks .p4-legs { display: flex; gap: 3px; padding-bottom: 1px; }
+.scr-p4-picks .p4-leg {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 4px; border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--dim);
+}
+.scr-p4-picks .p4-leg .tchip { gap: 3px; }
+.scr-p4-picks .p4-leg .tchip-abbrev { font-size: 10px; }
+.scr-p4-picks .p4-leg[data-leg-result="open"]   { border-style: dashed; }
+.scr-p4-picks .p4-leg[data-leg-result="won"]    { color: var(--up); }
+.scr-p4-picks .p4-leg[data-leg-result="lost"]   { color: var(--down); }
+.scr-p4-picks .p4-leg[data-leg-result="void"]   { color: var(--dim); opacity: .7; }
+.scr-p4-picks .p4-pin-note { margin: 0; font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- THE TWO FIGURES. Equal size, side by side, because on a Saturday morning one of
+ * them is nought and the other one is the entire reason the screen was opened. A single
+ * pinned figure reading 0 is Armchair's leaderboard, which pins `0 pts` above a list
+ * that bottoms out at 11,940. */
+.scr-p4-picks .p4-sum { margin: 10px 0 12px; padding: 10px 12px; }
+.scr-p4-picks .p4-sum-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.scr-p4-picks .p4-cell { min-width: 0; }
+.scr-p4-picks .p4-cell-k {
+  font-size: var(--t-micro); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--dim);
+}
+.scr-p4-picks .p4-cell-v { font-size: var(--t-figure); font-weight: 650; line-height: 1.15; }
+.scr-p4-picks .p4-sum-n { margin: 8px 0 0; font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- the list. NO CARD PER ROW, hairline divided, one header per DAY and never one
+ * per row. Sofascore pays a full competition header on every fixture and gets four and
+ * a half of them on a screen for it. */
+.scr-p4-picks .p4-list { display: block; }
+.scr-p4-picks .p4-day {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 30px; padding: 8px 2px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.scr-p4-picks .p4-day-l { font-size: var(--t-micro); font-weight: 700; color: var(--fg); }
+.scr-p4-picks .p4-day-n { font-size: var(--t-micro); color: var(--dim); }
+
+/* ---- THE DIVIDER. In kickoff order "now" is ONE line through the list, so the answer
+ * to "make the remaining window legible at a glance" is one element rather than a badge
+ * repeated on every row. It partitions on kickoff, which is exactly what it claims. */
+.scr-p4-picks .p4-divider {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 2px 6px;
+}
+.scr-p4-picks .p4-divider::before,
+.scr-p4-picks .p4-divider::after {
+  content: ""; flex: 1 1 auto; height: 1px; background: var(--accent); opacity: .45;
+}
+.scr-p4-picks .p4-divider-l {
+  flex: 0 1 auto; font-size: var(--t-micro); font-weight: 700; color: var(--accent);
+  text-align: center;
+}
+
+/* ---- THE ROW. Identity, status, action. Line three only where there is something to
+ * say, so a row with nothing to add stays two lines - which is what keeps thirty-one of
+ * them readable at 393px. */
+.scr-p4-picks .p4-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 44px;
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px 0 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.scr-p4-picks .p4-id { min-width: 0; display: grid; gap: 3px; }
+.scr-p4-picks .p4-id1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.scr-p4-picks .p4-id2 { display: flex; align-items: center; gap: 5px; min-width: 0; }
+
+/* YOUR TEAM LOUD, THE OPPONENT QUIET. The pick has already been made, so a symmetric
+ * row - CBS's, and the right answer on the pick screen - would spend half its width
+ * drawing the side you did not take. */
+.scr-p4-picks .p4-team {
+  font-size: var(--t-body); font-weight: 650; color: var(--fg);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-p4-picks .p4-spread { font-size: var(--t-micro); color: var(--dim); flex: none; }
+.scr-p4-picks .p4-over { font-size: var(--t-micro); color: var(--dim); flex: none; }
+.scr-p4-picks .p4-opp {
+  font-size: var(--t-micro); color: var(--dim);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---- status. THE EDIT DEADLINE, STATED, PER PICK. A padlock says shut and never says
+ * how long you have; this column says both, in words, on every row. */
+.scr-p4-picks .p4-status { text-align: right; display: grid; gap: 3px; justify-items: end; }
+.scr-p4-picks .p4-s1 { font-size: var(--t-body); color: var(--fg); white-space: nowrap; }
+.scr-p4-picks .p4-s2 {
+  font-size: var(--t-micro); color: var(--dim); white-space: nowrap;
+  display: flex; align-items: center; gap: 5px; justify-content: flex-end;
+}
+.scr-p4-picks .p4-s1[data-kind="void"] { color: var(--dim); }
+
+/* THREE STEPS, NEVER A RAMP - the same argument the confidence chips are built on, and
+ * `soon` is the only one that changes what you do next. --accent, never --up: an open
+ * pick has not won anything. */
+.scr-p4-picks .p4-row[data-urgency="far"]  .p4-s1 { color: var(--dim); font-weight: 400; }
+.scr-p4-picks .p4-row[data-urgency="near"] .p4-s1 { color: var(--fg); font-weight: 600; }
+.scr-p4-picks .p4-row[data-urgency="soon"] .p4-s1 { color: var(--accent); font-weight: 700; }
+
+/* 🔴 `Live` IS NOT ACCENT, AND IT WAS UNTIL THE `partial` ROUTE WAS LOOKED AT. Seven
+ * games in progress put seven accent-colored `Live` labels down one screen, directly
+ * above a `Closes in 45m` in the same color - two meanings, one color, and the one
+ * that matters lost. On this screen the accent means YOU CAN STILL ACT, and a live
+ * game is the single thing you cannot act on. Weight carries it instead. */
+.scr-p4-picks .p4-live { color: var(--fg); font-weight: 700; }
+.scr-p4-picks .p4-locked {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--dim); font-size: var(--t-body);
+}
+.scr-p4-picks .p4-pts { font-variant-numeric: tabular-nums; }
+
+/* CBS's score line, taken whole: away then home, the loser's figure dimmed. */
+.scr-p4-picks .p4-score { display: inline-flex; align-items: baseline; gap: 4px; }
+.scr-p4-picks .p4-sc-k {
+  font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--dim);
+}
+.scr-p4-picks .p4-sc { font-size: var(--t-body); font-weight: 700; color: var(--fg); }
+.scr-p4-picks .p4-sc[data-loser="true"] { color: var(--dim); font-weight: 400; }
+.scr-p4-picks .p4-sc-sep { color: var(--dim); font-size: var(--t-micro); }
+
+/* ---- THE RESULT MARK. One component, one slot, one size, and only the sign changes -
+ * the symmetric-result rule satisfied by construction rather than by matching two
+ * components against each other afterwards. --up and --down are reached HERE and
+ * nowhere else on this screen. */
+.scr-p4-picks .p4-mark {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%; border: 1px solid currentColor;
+}
+.scr-p4-picks .p4-mark[data-result="won"]  { color: var(--up); }
+.scr-p4-picks .p4-mark[data-result="lost"] { color: var(--down); }
+.scr-p4-picks .p4-mark[data-result="void"] { color: var(--dim); }
+
+/* ---- the action column. A real 44x44 target, reserved on every row. */
+.scr-p4-picks .p4-act { display: flex; align-items: center; justify-content: center; }
+.scr-p4-picks .p4-swap {
+  width: 44px; height: 44px; min-height: var(--tap-min);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); color: var(--accent);
+}
+.scr-p4-picks .p4-swap:disabled { color: var(--dim); opacity: .5; cursor: default; }
+
+/* ---- line three. The cover clause, the void's cause, the pool's split. */
+/* IT WRAPS. First render at 393px truncated the void row's own explanation to
+ * "...it landed exactly on the line. No..." - the one line on this screen whose whole
+ * job is to stop `Void` reading as a bug, cut off mid-sentence by an ellipsis. Seen in
+ * the browser, not reasoned about. A second line on a handful of rows is cheaper than
+ * a sentence that does not finish. */
+.scr-p4-picks .p4-l3 {
+  grid-column: 1 / -1;
+  margin-top: 5px; font-size: var(--t-micro); color: var(--dim);
+  overflow-wrap: anywhere;
+}
+
+/* ---- ROW STATES.
+ *
+ * A resolved row gets a 3px edge in the FIXED result scale. An unresolved one gets
+ * nothing - a pick that has not resolved is not a win, and there is no third color
+ * standing in for "probably". */
+.scr-p4-picks .p4-row[data-state="won"]  .p4-id { border-left: 3px solid var(--up); padding-left: 7px; margin-left: -10px; }
+.scr-p4-picks .p4-row[data-state="lost"] .p4-id { border-left: 3px solid var(--down); padding-left: 7px; margin-left: -10px; }
+.scr-p4-picks .p4-row[data-state="void"] .p4-id { border-left: 3px solid var(--line); padding-left: 7px; margin-left: -10px; }
+
+/* ---- VOID. ONE VOID PATH: the game did not happen, for everybody. Both void rows on
+ * this screen - one cancelled, one landed exactly on the line - are drawn IDENTICALLY
+ * and differ only by a clause on line three. The row is STATED, never hidden: a row
+ * that vanishes reads as a pick that lost. */
+.scr-p4-picks .p4-row[data-state="void"] {
+  background: repeating-linear-gradient(135deg, transparent 0 7px, var(--track) 7px 8px);
+}
+.scr-p4-picks .p4-row[data-state="void"] .p4-team,
+.scr-p4-picks .p4-row[data-state="void"] .p4-opp { opacity: .65; }
+
+/* CBS desaturates the whole card once it is locked, and it is right to: a locked row is
+ * a record, not a control. The identity stays legible; the weight comes off. */
+.scr-p4-picks .p4-row[data-state="locked"] .p4-team { font-weight: 600; color: var(--dim); }
+
+.scr-p4-picks .p4-foot { margin-top: 14px; display: grid; gap: 6px; }
+.scr-p4-picks .p4-footline { margin: 0; font-size: var(--t-micro); color: var(--dim); }
+.scr-p4-picks .p4-real { padding-top: 6px; border-top: 1px solid var(--line); }
+
+/* ---- desktop. The row keeps the phone measure; shell.css caps it. Widening this grid
+ * is precisely how CBS at ~1900px ends up with two team names at the extreme edges and
+ * a lake between them, so the identity column gets the extra room and the status column
+ * stays where the thumb expects it. */
+@media (min-width: 560px) {
+  .scr-p4-picks .p4-opp { font-size: var(--t-body); }
+}
