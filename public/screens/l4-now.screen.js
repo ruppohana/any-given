@@ -130,7 +130,9 @@ export const GAME = 'real-bois-at-ore';
 
 /** From `src/lib/calls.ts` HOUSE_RULES. Not decided here; restated so the view
  *  can size a ladder. B2 will move these and they are parameters for that reason. */
-export const HOUSE = { startingBank: 100, stakeLadder: [5, 10, 25], maxPayoutMultiple: 6 };
+/* Mirrors calls.ts HOUSE_RULES. The bank was raised 100 -> 200 on 2026-09-08
+ * after three real games showed a stake of 10 busting before the fourth quarter. */
+export const HOUSE = { startingBank: 200, stakeLadder: [5, 10, 25], maxPayoutMultiple: 6 };
 
 /** THE BALANCE IS MARBLES. There is no other word for it and `credits`,
  *  `coins`, `top-up`, `buy` and `refill` may not appear beside it. */

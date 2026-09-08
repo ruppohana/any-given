@@ -94,8 +94,26 @@ export type LedgerRules = {
   voidReturnsTheStake: boolean;
 };
 
+/* THE BANK IS 200, decided by Jason 2026-09-08, and it was measured rather than
+ * argued - which is what BUILD-BRIEF section 11 asked for: "one real game answers
+ * it; an argument does not." Three real games, a naive caller alternating sides:
+ *
+ *   bank  stake 5   stake 10        stake 25
+ *   100   survives  BUSTS 1 of 3    BUSTS all 3     <- what it was
+ *   200   survives  survives        BUSTS 2 of 3    <- what it is
+ *   500   survives  survives        survives
+ *
+ * 200 is the number and 500 would have been the mistake. At 500 you can take the
+ * maximum stake on every snap of a whole game, which deletes bet sizing - and
+ * settled.md already says an infinite bank makes maximum stake the dominant
+ * strategy. At 200 the two lower rungs carry you through a game and the top one
+ * does not, so sizing is a decision rather than a formality.
+ *
+ * At 100 the game ended before the fourth quarter, which is worse than
+ * unbalanced: the bank refills at the NEXT game, so busting early meant sitting
+ * out the half people actually watch. */
 export const HOUSE_RULES: LedgerRules = {
-  startingBank: 100,
+  startingBank: 200,
   stakeLadder: [5, 10, 25],
   maxPayoutMultiple: 6,
   voidReturnsTheStake: true,

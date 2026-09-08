@@ -290,13 +290,13 @@ test('a void snap returns the stake and moves neither record nor streak', () => 
   assert.equal(after.streak, 0);
 });
 
-test('nobody is ever eliminated: the worst scripted run still starts the next game at 100', () => {
+test('nobody is ever eliminated: the worst scripted run still starts the next game whole', () => {
   const priced = new Map(screen.PRICED.map((r) => [r.snapId, r]));
   const allMiss = screen.PRICED.map((r) => ({ snapId: r.snapId, side: 'run', stake: 25, p: r.run.p, outcome: 'pass' }));
   const wiped = screen.replay(allMiss);
   assert.ok(wiped.balance < screen.HOUSE.startingBank);
   const next = calls.nextGame(calls.openLedger('g1', 'u1'), 'g2');
-  assert.equal(next.bank.balance, 100);
+  assert.equal(next.bank.balance, screen.HOUSE.startingBank);
   assert.equal(priced.size, 6);
 });
 
@@ -497,7 +497,7 @@ test('no-model is defined rather than silent, and it refuses the call', () => {
   const r = calls.accept(led, { snapId: 's', side: 'run', stake: 10, p: 0 });
   assert.equal(r.ok, false);
   assert.equal(r.reason, 'bad_price');
-  assert.equal(led.bank.balance, 100, 'the guard is above the debit');
+  assert.equal(led.bank.balance, screen.HOUSE.startingBank, 'the guard is above the debit');
 });
 
 test('one call per snap is legible: no route offers a second tap on a called snap', () => {

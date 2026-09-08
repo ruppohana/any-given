@@ -383,11 +383,13 @@ test('the bank at zero is not a dead end, and it says so where it would be belie
   const screen = await loadScreen();
   const broke = JSON.parse(JSON.stringify(screen.PREVIEW.missed));
   broke.bank.balance = 0;
-  broke.bank.delta = -100;
+  broke.bank.delta = -broke.bank.start;
   const root = globalThis.document.createElement('div');
   screen.render(root, { snap: broke, teams: TEAMS, forState: 'missed' }, 'missed');
   const text = allText(root).join(' ');
-  assert.match(text, /goes back to 100 at the next kickoff/);
+  // The number comes from the bank itself, so raising it cannot leave the
+  // promise on screen contradicting the rule.
+  assert.match(text, new RegExp('goes back to ' + broke.bank.start + ' at the next kickoff'));
   assert.match(text, /still in the pool/);
 });
 

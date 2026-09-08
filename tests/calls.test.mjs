@@ -59,18 +59,18 @@ test('7.4 a second tap on the same snap is refused, and the bank does not move t
   const L = openLedger('g1', 'u1');
   const a = accept(L, { snapId: 's1', side: 'run', stake: 10, p: 0.5 });
   assert.equal(a.ok, true);
-  assert.equal(L.bank.balance, 90);
+  assert.equal(L.bank.balance, HOUSE_RULES.startingBank - 10);
 
   const b = accept(L, { snapId: 's1', side: 'pass', stake: 10, p: 0.5 });
   assert.equal(b.ok, false);
   assert.equal(b.reason, 'call_pending');
-  assert.equal(L.bank.balance, 90, 'the guard is worthless after the stake has left');
+  assert.equal(L.bank.balance, HOUSE_RULES.startingBank - 10, 'the guard is worthless after the stake has left');
 
   // and not on a different snap either - one unresolved call at a time
   const c = accept(L, { snapId: 's2', side: 'run', stake: 5, p: 0.5 });
   assert.equal(c.ok, false);
   assert.equal(c.reason, 'call_pending');
-  assert.equal(L.bank.balance, 90);
+  assert.equal(L.bank.balance, HOUSE_RULES.startingBank - 10);
 });
 
 test('7.4 a snap already settled cannot be called again - the D1 unique index', () => {
@@ -101,7 +101,7 @@ test('the payout is stake / p, capped at 6x, on the price at the moment of the c
   assert.equal(r.call.p, 0.25);
   assert.equal(r.returned, 40);
   assert.equal(r.delta, 30);
-  assert.equal(L.bank.balance, 130);
+  assert.equal(L.bank.balance, HOUSE_RULES.startingBank + 30);
 });
 
 test('the price is on the tile before the tap', () => {
@@ -132,8 +132,8 @@ test('the board ranks on profit - balance minus start', () => {
   accept(L, { snapId: 's1', side: 'run', stake: 25, p: 0.5 });
   settle(L, 's1', 'run');
   const bank = bankOf(L);
-  assert.equal(bank.start, 100);
-  assert.equal(bank.balance, 125);
+  assert.equal(bank.start, HOUSE_RULES.startingBank);
+  assert.equal(bank.balance, HOUSE_RULES.startingBank + 25);
   assert.equal(bank.delta, 25);
   assert.equal(bank.delta, bank.balance - bank.start);
 
@@ -160,8 +160,8 @@ test('the bank is set back to its start every game and nobody is locked out', ()
   assert.equal(refused.reason, 'bank_too_low');
 
   const g2 = nextGame(L, 'g2');
-  assert.equal(g2.bank.balance, 100);
-  assert.equal(g2.bank.start, 100);
+  assert.equal(g2.bank.balance, HOUSE_RULES.startingBank);
+  assert.equal(g2.bank.start, HOUSE_RULES.startingBank);
   assert.equal(g2.bank.delta, 0);
   assert.equal(g2.bank.record.landed, 0);
   const ok = accept(g2, { snapId: 'y', side: 'run', stake: 25, p: 0.5 });
@@ -172,7 +172,9 @@ test('a stake off the ladder is refused; a stake bigger than the bank is trimmed
   const L = openLedger('g1', 'u1');
   assert.equal(accept(L, { snapId: 's', side: 'run', stake: 7, p: 0.5 }).reason, 'not_on_the_ladder');
   assert.deepEqual(HOUSE_RULES.stakeLadder, [5, 10, 25]);
-  assert.equal(HOUSE_RULES.startingBank, 100);
+  // Raised from 100 to 200 on 2026-09-08, measured against three real games:
+  // at 100 a stake of 10 busted before the fourth quarter.
+  assert.equal(HOUSE_RULES.startingBank, 200);
 
   const thin = openLedger('g1', 'u2', { startingBank: 7 });
   const r = accept(thin, { snapId: 's', side: 'run', stake: 25, p: 0.5 });
@@ -188,20 +190,20 @@ test('a snap that was not a run or a pass is void, and a void returns the stake'
     const r = settle(L, 's1', t);
     assert.equal(r.landed, null);
     assert.equal(r.delta, 0);
-    assert.equal(L.bank.balance, 100, `${t} must not cost Marbles`);
+    assert.equal(L.bank.balance, HOUSE_RULES.startingBank, `${t} must not cost Marbles`);
     assert.equal(L.bank.record.landed + L.bank.record.missed, 0);
   }
   // the reference's own arithmetic, for the parity run below
   const ref = openLedger('g1', 'u1', { voidReturnsTheStake: false });
   accept(ref, { snapId: 's1', side: 'run', stake: 10, p: 0.5 });
   settle(ref, 's1', 'penalty');
-  assert.equal(ref.bank.balance, 90);
+  assert.equal(ref.bank.balance, HOUSE_RULES.startingBank - 10);
 
   // a call open when the game ends comes back whatever the rule
   const end = openLedger('g1', 'u1', { voidReturnsTheStake: false });
   accept(end, { snapId: 's9', side: 'pass', stake: 25, p: 0.4 });
   voidOpen(end);
-  assert.equal(end.bank.balance, 100);
+  assert.equal(end.bank.balance, HOUSE_RULES.startingBank);
 });
 
 test('lock moves the call to locked and settle still pays it', () => {
@@ -219,7 +221,7 @@ test('a closed snap is refused, and a bad price or side is refused', () => {
   assert.equal(accept(L, { snapId: 's1', side: 'punt', stake: 10, p: 0.5 }).reason, 'bad_side');
   assert.equal(accept(L, { snapId: 's1', side: 'run', stake: 10, p: 0 }).reason, 'bad_price');
   assert.equal(accept(L, { snapId: 's1', side: 'run', stake: 10, p: 1.4 }).reason, 'bad_price');
-  assert.equal(L.bank.balance, 100);
+  assert.equal(L.bank.balance, HOUSE_RULES.startingBank);
 });
 
 // ---------------------------------------------------------------------------
@@ -384,7 +386,7 @@ function loadReference() {
   });
 
   const prelude = `
-    var START_CREDITS=100, MIN_STAKE=5, STAKES=[5,10,25];
+    var START_CREDITS=200, MIN_STAKE=5, STAKES=[5,10,25];
     var STAKE=10, FRIENDS=0, PICK=null, LAST=null;
     function games(){} function bump(){} function earned(){return[];}
     function postScore(){}
@@ -640,7 +642,7 @@ test('REPLAY - a second caller, and the agreement holds while both banks are liv
   assert.equal(s.divergences, 0);
   assert.ok(s.agreedNonZero >= 30, 'the agreement must hold before the bank empties');
   assert.equal(s.peakMine, s.peakReference);
-  assert.ok(s.peakMine > 100, 'this caller was ahead at some point in the game');
+  assert.ok(s.peakMine > HOUSE_RULES.startingBank, 'this caller was ahead at some point in the game');
   assert.equal(s.finalMine, s.finalReference);
   assert.equal(s.landed, s.refHits);
   assert.equal(s.landed + s.missed, s.refCalls);
