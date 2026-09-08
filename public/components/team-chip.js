@@ -119,7 +119,10 @@ export function logoUrl(team) {
 export function teamChip(team, opts) {
   opts = opts || {};
   const size = opts.size || 22;
-  const withAbbrev = opts.withAbbrev !== false;
+  /* 🔴 THE MARK CARRIES THE ABBREVIATION NOW, so the separate label defaults OFF
+   * - drawing both prints it twice. A screen that wants a text label beside the
+   * mark asks for it. */
+  const withAbbrev = opts.withAbbrev === true;
   const adjacentTo = opts.adjacentTo || null;
 
   const wrap = document.createElement('span');
@@ -139,11 +142,11 @@ export function teamChip(team, opts) {
     img.addEventListener('error', function () {
       img.remove();
       wrap.dataset.markFailed = 'true';
-      wrap.insertBefore(chipMark(state, size), wrap.firstChild);
+      wrap.insertBefore(chipMark(state, size, team && team.abbrev), wrap.firstChild);
     });
     wrap.appendChild(img);
   } else {
-    wrap.appendChild(chipMark(state, size));
+    wrap.appendChild(chipMark(state, size, team && team.abbrev));
   }
 
   if (withAbbrev) {
@@ -158,32 +161,70 @@ export function teamChip(team, opts) {
   return wrap;
 }
 
-/** The two-color mark. Inline SVG - no icon font, no CDN, no image. */
-function chipMark(state, size) {
+/** THE MARK. Solid primary field, the abbreviation in it, the secondary as a bar
+ *  along the foot.
+ *
+ *  🔴 REDRAWN 2026-09-08 to Jason's reference - a fantasy-football team tile: a
+ *  filled rounded square in the team color with the abbreviation reversed out of
+ *  it and a stripe of the second color at the bottom.
+ *
+ *  It replaces a vertical split of the two colors, which was worse for a reason
+ *  worth writing down: the split gave BOTH colors equal weight, so a team read as
+ *  two colors rather than as one team with a trim - and at 22px on a row the seam
+ *  was the loudest thing in it. Here the primary is the identity and the
+ *  secondary is a detail, which is how a team actually reads.
+ *
+ *  It also carries the abbreviation INSIDE the mark rather than beside it, so the
+ *  mark is self-sufficient at a size where a separate label would not fit.
+ *
+ *  Three states, unchanged: two colors, one color, none. */
+function chipMark(state, size, abbrev) {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('focusable', 'false');
-  svg.setAttribute('class', 'tchip-mark');
-  const left = document.createElementNS(NS, 'path');
-  left.setAttribute('d', 'M 5 1 H 12 V 23 H 5 A 4 4 0 0 1 1 19 V 5 A 4 4 0 0 1 5 1 Z');
-  left.setAttribute('fill', 'var(--team-a)');
-  const right = document.createElementNS(NS, 'path');
-  right.setAttribute('d', 'M 12 1 H 19 A 4 4 0 0 1 23 5 V 19 A 4 4 0 0 1 19 23 H 12 Z');
-  right.setAttribute('fill', 'var(--team-b)');
-  const ring = document.createElementNS(NS, 'rect');
-  ring.setAttribute('x', '1'); ring.setAttribute('y', '1');
-  ring.setAttribute('width', '22'); ring.setAttribute('height', '22');
-  ring.setAttribute('rx', '5');
-  ring.setAttribute('fill', 'none');
-  ring.setAttribute('stroke', 'var(--line)');
-  ring.setAttribute('stroke-width', '1');
-  /* A team with NO captured color says so, rather than pretending to be grey. */
-  if (state === 'none') ring.setAttribute('stroke-dasharray', '3 2');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
-  svg.appendChild(left); svg.appendChild(right); svg.appendChild(ring);
+  svg.setAttribute('class', 'tchip-mark');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('focusable', 'false');
+
+  const add = (tag, attrs) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k of Object.keys(attrs)) n.setAttribute(k, attrs[k]);
+    svg.appendChild(n);
+    return n;
+  };
+
+  /* The field. A null team is the defined grey, never whatever #000000 does. */
+  add('rect', { x: 0, y: 0, width: 24, height: 24, rx: 5.5, fill: 'var(--team-a)' });
+
+  /* The trim. Only when there genuinely IS a second color - a one-color team gets
+   * a clean edge rather than a grey bar pretending to be a trim. */
+  if (state === 'two') {
+    add('path', { d: 'M 0 19.2 H 24 V 18.5 A 5.5 5.5 0 0 1 18.5 24 H 5.5 A 5.5 5.5 0 0 1 0 18.5 Z',
+                  fill: 'var(--team-b)' });
+    add('rect', { x: 0, y: 19.2, width: 24, height: 3.3, fill: 'var(--team-b)' });
+  }
+
+  /* The hairline, always - it is what carries a yellow field on white and a navy
+   * one on #120a0e without knowing which theme it is in. Dashed for a team we
+   * have no color for, which is this system's existing word for "no value". */
+  const ring = add('rect', { x: 0.5, y: 0.5, width: 23, height: 23, rx: 5.2,
+                             fill: 'none', stroke: 'var(--line)', 'stroke-width': 1 });
+  if (state === 'none') ring.setAttribute('stroke-dasharray', '3 2');
+
+  /* The abbreviation, reversed out of the field. Two to four characters, scaled
+   * so a four-letter abbreviation still fits inside the square. */
+  const text = String(abbrev || '—').slice(0, 4);
+  const fs = text.length >= 4 ? 7.2 : text.length === 3 ? 8.6 : 10.4;
+  const t = add('text', {
+    x: 12, y: state === 'two' ? 15.2 : 16.4, 'text-anchor': 'middle',
+    'font-size': fs, 'font-weight': 800, 'letter-spacing': '.02em',
+    'font-family': 'ui-sans-serif, system-ui, sans-serif',
+    fill: state === 'none' ? 'var(--fg)' : '#fff'
+  });
+  t.textContent = text;
+  if (state === 'none') t.setAttribute('opacity', '.55');
   return svg;
 }
 

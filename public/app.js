@@ -1,19 +1,20 @@
-/* THE APP - the twelve screens in one navigable shell, running on the real
+/* THE APP - all sixteen screens in one navigable shell, running on the real
  * fixtures with no network.
  *
  * WHY THIS EXISTS. Jason, 2026-09-08: "honestly i need to see it run before i
  * make all these decisions." The preview harness renders one screen in one state
  * at a time, which is the right tool for closing a piece and the wrong one for
- * judging a product. This is the same twelve modules, mounted in one shell, with
+ * judging a product. This is the same sixteen modules, mounted in one shell, with
  * the tabs wired and state carried between them.
  *
  * It is NOT the Worker. There is no server, no Durable Object, no D1 and no feed
  * - every screen is fed from fixtures/, exactly as its own tests feed it. What it
  * proves is the shape and the flow; what it cannot prove is anything live.
  *
- * 🔴 The MARKS switch in the header is the deliverable of a decision Jason
- * reopened and then held: logos on, logos off, same screen, one tap. The default
- * is not decided and this is how it gets decided.
+ * 🔴 MARKS DEFAULT ON, decided by Jason 2026-09-08 after seeing it run. The
+ * switch stays, because the two-color chip is the fallback for marks-off, a team
+ * with no logo, and a logo that fails to load - and because a default flip is the
+ * whole escape hatch if a school or a conference ever writes.
  */
 
 import { navBar, NAV_CSS } from '/components/nav.js';
@@ -25,8 +26,12 @@ import { TEAM_CHIP_CSS } from '/components/team-chip.js';
 const ROUTES = [
   { id: 'slate',     dest: 'slate',     screen: 'p2-slate',        state: 'ready-short', label: 'The slate (3 real games)' },
   { id: 'slate131',  dest: 'slate',     screen: 'p2-slate',        state: 'ready',       label: 'The slate (131 games)' },
+  { id: 'picks',     dest: 'picks',     screen: 'p4-picks',        state: 'ready',       label: 'My picks' },
+  { id: 'parlay',    dest: 'picks',      screen: 'p3-parlay',       state: 'valid',       label: 'The parlay' },
   { id: 'standings', dest: 'standings', screen: 'p5-standings',    state: 'ready',       label: 'Standings' },
   { id: 'invite',    dest: 'slate',     screen: 'p1-invite',       state: 'ready',       label: 'Invite landing' },
+  { id: 'create',    dest: 'slate',     screen: 'p6-create',       state: 'create',      label: 'Create a pool' },
+  { id: 'rules',     dest: 'live',      screen: 's6-rules',        state: 'ready',       label: 'Rules' },
   { id: 'now',       dest: 'live',      screen: 'l4-now',          state: 'open',        label: 'The call' },
   { id: 'landed',    dest: 'live',      screen: 'l7-result',       state: 'landed',      label: 'Result — landed' },
   { id: 'missed',    dest: 'live',      screen: 'l7-result',       state: 'missed',      label: 'Result — missed' },
@@ -40,17 +45,9 @@ const ROUTES = [
   { id: 'offline',   dest: 'live',      screen: 's1-shell',        state: 'offline',     label: 'Offline' }
 ];
 
-/* P3 the parlay, P4 my picks and P6 create were never dispatched - no comparable
- * exists on disk for any of them, and a piece whose bar does not exist is not
- * built. The Picks tab says that rather than showing an empty screen. */
-const NOT_BUILT = {
-  picks: {
-    title: 'My picks is not built',
-    body: 'P3 the parlay, P4 my picks and P6 create a pool have no comparable on '
-        + 'disk, and a screen whose bar does not exist is not dispatched. They are '
-        + 'the capture list, not an oversight.'
-  }
-};
+/* All sixteen screens are built. P3, P4, P6 and S6 were dispatched without a bar
+ * - no comparable exists on disk for any of them - and each says so in its own
+ * return rather than pretending otherwise. */
 
 const fixtures = {
   teams: null,
@@ -73,7 +70,6 @@ function ensureCss(name) {
 
 function currentRoute() {
   const id = (location.hash || '#/slate').replace(/^#\//, '');
-  if (id === 'picks') return { id: 'picks', dest: 'picks', notBuilt: NOT_BUILT.picks };
   return ROUTES.find((r) => r.id === id) || ROUTES[0];
 }
 
@@ -84,17 +80,6 @@ async function mount() {
   root.className = 'ag-main';
 
   document.getElementById('picker').value = route.id;
-
-  if (route.notBuilt) {
-    const box = document.createElement('div');
-    box.className = 'state state-empty';
-    const h = document.createElement('p'); h.className = 'state-title'; h.textContent = route.notBuilt.title;
-    const p = document.createElement('p'); p.className = 'state-body'; p.textContent = route.notBuilt.body;
-    box.append(h, p);
-    root.appendChild(box);
-    drawNav(route.dest);
-    return;
-  }
 
   ensureCss(route.screen);
   root.classList.add('scr-' + route.screen);
@@ -139,8 +124,8 @@ async function boot() {
 
   fixtures.teams = await (await fetch('/fixtures/teams.json')).json();
 
-  let marks = 'off';
-  try { marks = localStorage.getItem('ag.marks') || 'off'; } catch {}
+  let marks = 'on';   /* 🔴 DEFAULT ON, Jason 2026-09-08 after seeing it run */
+  try { marks = localStorage.getItem('ag.marks') || 'on'; } catch {}
   document.documentElement.dataset.marks = marks;
   document.getElementById('marks').checked = marks === 'on';
   document.getElementById('marks').addEventListener('change', (e) => setMarks(e.target.checked));
