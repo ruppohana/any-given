@@ -161,3 +161,10 @@
   border-radius: var(--radius-button); background: var(--card);
   border: 1px solid var(--line); color: var(--fg); font-weight: 600;
 }
+
+/* THE WORDMARK IS THE MARK. "Any Given" in ink, the sport word in the accent -
+ * the completion is the only place the name explains itself. */
+.l1-mark { display: inline-flex; align-items: baseline; gap: .32em;
+           font-size: 21px; font-weight: 800; letter-spacing: -.01em; }
+.l1-mark-stem { color: var(--fg); }
+.l1-mark-tail { color: var(--accent); }

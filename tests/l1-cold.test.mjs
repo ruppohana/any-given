@@ -241,7 +241,14 @@ test('no box-shadow, no dependency, no CDN, no mark, no image', () => {
     assert.ok(!/<img|background-image|url\(/i.test(text), `${name} loads an image`);
   }
   assert.ok(!/\bimport\s+.*from\s+'[^/.]/.test(CODE), 'no npm package');
-  assert.ok(/dataset\.stub\s*=/.test(CODE), 'the unbuilt mark must be marked as a stub');
+  /* 🔴 THERE IS NO UNBUILT MARK ANY MORE. Jason, 2026-09-08: "Wordmark, yes."
+   * The cockatoo is dead and the wordmark IS the mark, so the assertion flips
+   * from "the stub must be declared" to "there must be no stub" - and the
+   * wordmark must actually be drawn rather than reserved. */
+  assert.ok(!/dataset\.stub\s*=/.test(CODE), 'nothing here is a placeholder any more');
+  assert.ok(!/cockatoo/i.test(CODE), 'the cockatoo is dead');
+  assert.match(CODE, /l1-mark-stem/, 'the wordmark is drawn');
+  assert.match(CODE, /COMPLETION/, 'and it completes itself with the sport');
 });
 
 test('components read --accent; --maroon and --gold appear only where the root write is', () => {

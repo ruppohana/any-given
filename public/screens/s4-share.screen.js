@@ -484,8 +484,10 @@ export function cardSvg(model) {
   }));
 
   /* ---- header rail: identity left, the two teams right ---- */
-  markSlot(svg, PAD, 64, 88);
-  wordmarkInto(svg, model.wordmark, PAD + 112, 128, 46);
+  /* 🔴 NO MARK SLOT. Jason, 2026-09-08: "Wordmark, yes." The cockatoo is dead and
+   * the wordmark IS the mark, so the card no longer reserves a square for a bird
+   * nobody was going to draw - the name takes the space it was holding. */
+  wordmarkInto(svg, model.wordmark, PAD, 128, 62);
 
   /* THE CHIPS BELONG TO A CALL CARD ONLY. A call is about one game and naming its
    * two teams is the point; a week card is about seven, and drawing the first

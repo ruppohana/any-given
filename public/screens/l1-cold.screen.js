@@ -198,16 +198,27 @@ function el(tag, cls, text) {
   return e;
 }
 
-/* 🔴 STUB, AND IT IS NAMED ONE. The mark is a cockatoo head, filled, beak open
- * mid-screech. NOBODY HAS DRAWN IT. This reserves its footprint - 40px, the top
- * left corner the bar puts a logo in - and draws a hairline frame and nothing
- * else. It does not guess at the bird. A faked mark is worse than an empty slot
- * because the next session inherits it as a decision. */
-function markSlot() {
-  const s = el('div', 'l1-mark');
-  s.dataset.stub = 'mark-cockatoo';
-  s.setAttribute('aria-label', 'Any Given');
+/* 🔴 THE WORDMARK IS THE MARK. Jason, 2026-09-08: "Wordmark, yes."
+ *
+ * The cockatoo is dead. It won a blind naming run under a DIFFERENT PRODUCT NAME
+ * - this was called Called Shot then - was never argued for on its merits here,
+ * and spent two days blocking the icon, the splash, the badge ring and the share
+ * card while nobody drew it.
+ *
+ * What replaces it is the thing the product already had: the name completing
+ * itself. "Any Given" in ink, the sport word in the accent. It is typographic, so
+ * it costs no drawing and survives at any size; it changes with the sport, which
+ * an animal cannot; and it is the one place in the product where the name
+ * explains itself, which an abstract name badly needs. */
+const COMPLETION = { football: 'Snap', basketball: 'Possession' };
+
+function markSlot(sport) {
+  const s = el('span', 'l1-mark');
+  const stem = el('span', 'l1-mark-stem', 'Any Given');
+  const tail = el('span', 'l1-mark-tail', COMPLETION[sport || 'football'] || '…');
+  s.append(stem, tail);
   s.setAttribute('role', 'img');
+  s.setAttribute('aria-label', 'Any Given ' + (COMPLETION[sport || 'football'] || ''));
   return s;
 }
 
