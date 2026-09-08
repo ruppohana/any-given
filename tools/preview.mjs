@@ -85,7 +85,13 @@ import { navBar, NAV_CSS } from '/components/nav.js';
 const navStyle = document.createElement('style');
 navStyle.textContent = NAV_CSS;
 document.head.appendChild(navStyle);
-document.getElementById('nav').replaceWith(navBar('slate', { liveAvailable: false, liveReason: 'No game in progress', hrefFor: (d) => '#' + d.id }));
+/* A screen may opt OUT of navigation by exporting chrome = 'none'. Raised by
+ * L1: a COLD LAUNCH has no navigation - there is nowhere to navigate to yet, and
+ * drawing a bottom bar on the first screen a stranger sees is the shell asserting
+ * an app they have not entered. The harness drew it unconditionally. */
+const navSlot = document.getElementById('nav');
+if (screen.chrome === 'none') navSlot.remove();
+else navSlot.replaceWith(navBar('slate', { liveAvailable: false, liveReason: 'No game in progress', hrefFor: (d) => '#' + d.id }));
 const fixtures = {
   teams: await (await fetch('/fixtures/teams.json')).json(),
   games: ['real-utep-at-ou','real-ball-at-osu','real-bois-at-ore']
