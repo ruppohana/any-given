@@ -218,14 +218,21 @@ test('🔴 the ring is the constant: one color, all fifteen, earned and locked',
   console.log('    ring:', [...rings][0], 'across 15 badges x earned/locked');
 });
 
-test('🔴 tier lives in the pips and nowhere else', () => {
+test('🔴 tier lives in the numeral and nowhere else', () => {
+  /* Was "tier lives in the pips". The pips are gone - 4.8px at 34px was still two
+   * dots of different metal - and the tier is a numeral inside the object, which
+   * is what every reference sheet does and what is actually legible at that size.
+   *
+   * The assertion is unchanged in substance: strip the thing that carries tier
+   * and the three drawings must be byte-identical, so nothing else - not the
+   * ring, not the fill, not the glyph - is doing tier's job quietly. */
   for (const key of KEYS) {
     const svgs = [0, 1, 2].map((t) => SCREEN.badgeSvg(key, t, false, 34));
-    // strip the pip row; everything else must be byte-identical across tiers.
-    const body = svgs.map((s) => s.replace(/<circle cx="[\d.]+" cy="27"[^>]*\/>/g, ''));
-    assert.equal(body[0], body[1], `${key}: bronze and silver differ outside the pips`);
-    assert.equal(body[1], body[2], `${key}: silver and gold differ outside the pips`);
-    // and the pips DO change
+    const body = svgs.map((s) => s
+      .replace(/<circle cx="[\d.]+" cy="[\d.]+" r="[\d.]+" fill="#1a1416"[^>]*\/>/g, '')
+      .replace(/<text[^>]*>\d<\/text>/g, ''));
+    assert.equal(body[0], body[1], `${key}: bronze and silver differ outside the numeral`);
+    assert.equal(body[1], body[2], `${key}: silver and gold differ outside the numeral`);
     assert.notEqual(svgs[0], svgs[1], `${key}: bronze and silver are the same drawing`);
     assert.notEqual(svgs[1], svgs[2], `${key}: silver and gold are the same drawing`);
   }
@@ -253,17 +260,24 @@ test('🔴 the badge metals are a fixed scale and cannot be reached by team colo
   }
 });
 
-test('the pips are big enough to read at 34px — the thing the reference gets wrong', () => {
-  const svg = SCREEN.badgeSvg('win', 1, false, 34);
-  const r = Number((svg.match(/cy="27" r="([\d.]+)"/) || [])[1]);
-  const viewW = Number((svg.match(/viewBox="0 0 (\d+)/) || [])[1]);
-  const px = (r * 2 * 34) / viewW;
-  // sports-live/ncaalive/server.py:2615 uses r=0.95 on a 24 box => 2.7px across.
-  const reference = (0.95 * 2 * 34) / 24;
-  assert.ok(px >= 4, `pip is ${px.toFixed(2)}px across at 34px`);
-  console.log(`    pip diameter at 34px: ${px.toFixed(2)}px (reference implementation: ${reference.toFixed(2)}px)`);
+test('the tier is a numeral inside the object, and it is never in the ring', () => {
+  /* REPLACED 2026-09-08. The old test asserted the pips were big enough to read;
+   * they were 4.8px at 34px, which is better than the reference's 2.69px and
+   * still two dots of different metal. Jason's reference sheets all carry the
+   * placing as a NUMERAL inside the object, and a numeral is legible at 34px in a
+   * way a pip is not.
+   *
+   * The rule that survives is the one that was always load-bearing: THE RING IS
+   * THE CONSTANT and tier is never in it. That is what makes fifteen drawings
+   * read as one set. */
+  const svgs = [0, 1, 2].map((t) => SCREEN.badgeSvg('win', t, false, 34));
+  svgs.forEach((svg, t) => {
+    assert.match(svg, new RegExp('>' + (t + 1) + '</text>'), 'the tier reads as a numeral');
+  });
+  const rings = svgs.map((svg) => (svg.match(/stroke="([^"]+)" stroke-width="1.4"/) || [])[1]);
+  assert.equal(new Set(rings).size, 1, 'one ring color across every tier');
+  assert.ok(!/circle[^>]*cy="27"/.test(svgs[0]), 'the pip row is gone');
 });
-
 test('five families of three — a badge you have earned still has somewhere to go', () => {
   const src = SCREEN_SRC.match(/const FAMILIES = \[([\s\S]*?)\n\];/)[1];
   assert.equal((src.match(/^\s{2}\['/gm) || []).length, 5);

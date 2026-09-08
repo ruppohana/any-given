@@ -185,60 +185,76 @@ const METAL = ['#A9714B', '#AEB6BC', '#E0A93B'];
 
 /** Concrete objects, never diagrams - a cup, a podium, a sun, a bolt, two rings.
  *  Drawn on a 24-wide box centered at 12,12 so the pip row can live below it. */
+/* THE OBJECTS. Redrawn 2026-09-08 to Jason's reference sheets: solid filled
+ * forms - trophy, rosette, medal, shield, laurel - not single-stroke outlines,
+ * and the TIER IS A NUMERAL INSIDE THE OBJECT rather than a row of pips.
+ *
+ * 🔴 That last part contradicts badges-audible-reference's "pips carry tier", and
+ * it is a measurement rather than a preference: L6 measured the reference's pips
+ * at 2.69px across at 34px, and moving them to their own row only got them to
+ * 4.8px. A numeral inside a solid form is legible at 34px; two dots of different
+ * gray are not. The rule that survives is the one that matters - TIER IS NEVER IN
+ * THE RING - and the ring is still the constant across all fifteen.
+ *
+ * Every path is drawn in a 24x24 box, filled, no stroke, so it reads as a
+ * silhouette at a leaderboard pin's 17px and holds detail at the case's 34px. */
 function badgeGlyph(key) {
   switch (key) {
-    case 'win':
-      return '<path d="M8 5h8v4a4 4 0 0 1-8 0V5Z"/>'
-           + '<path d="M8 6H6a2 2 0 0 0 0 4h2M16 6h2a2 2 0 0 1 0 4h-2" fill="none" stroke="currentColor" stroke-width="1.4"/>'
-           + '<path d="M11 13h2v3h-2zM8.5 16h7v1.6h-7z"/>';
-    case 'top':
-      return '<path d="M4 13h4v5H4zM16 11.5h4v6.5h-4z" opacity=".55"/><path d="M9.5 8h5v10h-5z"/>';
-    case 'day':
-      return '<circle cx="12" cy="12" r="4.2"/>'
-           + '<path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7" '
-           + 'fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>';
-    case 'crazy':
-      return '<path d="M13.5 3 6 13h4.5L10 21l7.5-10H13l.5-8Z"/>';
-    case 'ref':
-      return '<circle cx="9.4" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.7"/>'
-           + '<circle cx="14.6" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.7"/>';
+    case 'win':   // a cup - won the room
+      return '<path d="M7.6 4h8.8v4.6a4.4 4.4 0 0 1-8.8 0V4Z"/>'
+           + '<path d="M7.6 5.1H6.2a2.4 2.4 0 0 0 0 4.8h1.4v-1.7h-1.4a.7.7 0 0 1 0-1.4h1.4V5.1Z"/>'
+           + '<path d="M16.4 5.1h1.4a2.4 2.4 0 0 1 0 4.8h-1.4V8.2h1.4a.7.7 0 0 0 0-1.4h-1.4V5.1Z"/>'
+           + '<path d="M10.9 13.4h2.2v2.9h-2.2zM8 16.9h8V19H8z"/>';
+    case 'top':   // a rosette - in the hunt
+      return '<path d="M12 3.2 13.9 6l3.3.3-2.2 2.5.6 3.3L12 10.6 8.4 12.1l.6-3.3L6.8 6.3 10.1 6 12 3.2Z"/>'
+           + '<path d="M9.2 12.6 7.4 20l3-1.6L12 21l1.6-2.6 3 1.6-1.8-7.4-2.8 1.2-2.8-1.2Z"/>';
+    case 'day':   // a medal on a ribbon - all day Saturday
+      return '<path d="M8.4 2.6h2.5l2 5.2-2.8 1.3-1.7-6.5ZM15.6 2.6h-2.5l-2 5.2 2.8 1.3 1.7-6.5Z"/>'
+           + '<circle cx="12" cy="15.4" r="6.2"/>';
+    case 'crazy': // a bolt in a shield - told you so
+      return '<path d="M12 2.4 4.6 5.1v6.6c0 4.3 3.1 8 7.4 9.9 4.3-1.9 7.4-5.6 7.4-9.9V5.1L12 2.4Z"/>';
+    case 'ref':   // a laurel - the group chat
+      return '<path d="M12 4.2c-3 1.5-4.6 4.3-4.6 7.4 0 3 1.6 5.9 4.6 7.4-1-2.4-1.4-4.8-1.4-7.4s.4-5 1.4-7.4Z"/>'
+           + '<path d="M12 4.2c3 1.5 4.6 4.3 4.6 7.4 0 3-1.6 5.9-4.6 7.4 1-2.4 1.4-4.8 1.4-7.4s-.4-5-1.4-7.4Z"/>'
+           + '<circle cx="12" cy="11.6" r="2.6"/>';
   }
-  return '<circle cx="12" cy="12" r="4"/>';
+  return '<circle cx="12" cy="12" r="5"/>';
 }
 
-/**
- * @param {string} key    family
- * @param {number} tier   0 | 1 | 2
- * @param {boolean} locked  draws THE SAME MARK as an outline - a badge you can
- *   still earn should look like the thing you are earning, not like a padlock.
- * @param {number} px     rendered width. 34 is the case; 17 is a board pin.
- *
- * The viewBox is 24x30 rather than 24x24 so the tier pips get their own row
- * BELOW the disc. In the reference they sit inside it at r=0.95, which at 34px
- * is a 1.3px dot: measured in a real browser and unreadable, and they are the
- * only channel carrying tier. Out here they are 1.7 units - 4.8px at 34 - and
- * they still are not the ring.
- */
+/* The families whose glyph has a hole the numeral can sit in. The rest carry it
+ * on a small disc at the foot, so a numeral never lands on a shape it cannot be
+ * read against. */
+const NUMERAL_INSIDE = { day: [12, 15.4, 4.4], crazy: [12, 12.4, 4.4], ref: [12, 11.6, 2.9] };
+
 export function badgeSvg(key, tier, locked, px) {
   const w = px || 34;
   const t = Math.max(0, Math.min(2, tier | 0));
   const fill = locked ? 'none' : (FAMILY_FILL[key] || '#8a7f83');
   const ink = locked ? 'var(--dim)' : '#fff';
-  /* A held pip is BIG and in this tier's metal; an unheld one is a small dot in
-   * the hairline color. Size carries the count as well as color does, because
-   * silver against --line at 4.8px is the same "two grays" problem one step
-   * down - looked at, at 34px, in a real browser. */
-  const pips = [0, 1, 2].map((i) => (i <= t
-    ? `<circle cx="${12 + (i - 1) * 5}" cy="27" r="1.7" fill="${locked ? 'none' : METAL[t]}"`
-      + ` stroke="${METAL[t]}" stroke-width="${locked ? 1.2 : 0}"/>`
-    : `<circle cx="${12 + (i - 1) * 5}" cy="27" r="0.95" fill="var(--line)"/>`)
-  ).join('');
-  return `<svg class="l6-bsvg" width="${w}" height="${Math.round(w * 30 / 24)}" viewBox="0 0 24 30" `
+  const metal = METAL[t];
+
+  /* THE TIER IS A NUMERAL, 1 2 3, and it sits inside the object where the object
+   * has room for it - otherwise on a disc at the foot. It is in this tier's
+   * metal on a dark ground, so it reads by shape first and metal second rather
+   * than by metal alone. */
+  const spot = NUMERAL_INSIDE[key];
+  const [nx, ny, nr] = spot || [17.6, 19.4, 4.6];
+  const numeral =
+      `<circle cx="${nx}" cy="${ny}" r="${nr}" fill="${locked ? 'var(--card)' : '#1a1416'}"`
+    + ` stroke="${locked ? 'var(--line)' : metal}" stroke-width="1.1"/>`
+    + `<text x="${nx}" y="${ny + nr * 0.36}" text-anchor="middle"`
+    + ` font-size="${(nr * 1.5).toFixed(1)}" font-weight="700"`
+    + ` font-family="ui-sans-serif, system-ui, sans-serif"`
+    + ` fill="${locked ? 'var(--dim)' : metal}">${t + 1}</text>`;
+
+  return `<svg class="l6-bsvg" width="${w}" height="${w}" viewBox="0 0 24 24" `
     + `role="img" aria-hidden="true" focusable="false">`
     + `<circle cx="12" cy="12" r="10.2" fill="${fill}"${locked ? ' stroke="var(--line)" stroke-width="1"' : ''}/>`
+    /* THE RING IS THE CONSTANT. One color across all fifteen, earned or locked -
+     * it is what makes the set read as a set at a glance. */
     + `<circle cx="12" cy="12" r="10.9" fill="none" stroke="${BADGE_RING}" stroke-width="1.4"${locked ? ' opacity=".62"' : ''}/>`
-    + `<g fill="${ink}" transform="translate(1,-0.2) scale(0.92)"${locked ? ' opacity=".9"' : ''}>${badgeGlyph(key)}</g>`
-    + pips + '</svg>';
+    + `<g fill="${ink}"${locked ? ' opacity=".9"' : ''}>${badgeGlyph(key)}</g>`
+    + numeral + '</svg>';
 }
 
 /** Every badge held, as ids like "win5". Counted, never flagged, so a tier is a
