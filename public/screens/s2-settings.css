@@ -1,0 +1,195 @@
+/* S2 - settings and identity. Every rule is scoped under .scr-s2-settings.
+ *
+ * FOUR THINGS IN HERE ARE LOAD-BEARING RATHER THAN DECORATION:
+ *  1. Every accent is var(--accent). Nothing reads --maroon or --gold, so the
+ *     chosen segment is maroon in light and gold on dark with no branch here.
+ *  2. There is no box-shadow. Depth is 1px solid var(--line), including the
+ *     range thumb and the switch knob, which are the two places a shadow is
+ *     usually smuggled in.
+ *  3. Every control clears 44px: the segment buttons, the switch, the school
+ *     rows, the inputs, and the range, which gets its height from the element
+ *     rather than from the thumb.
+ *  4. Every number carries .num, so the delay readout does not reflow as it is
+ *     dragged - which is the whole tabular-nums argument, on the one control in
+ *     this app that moves under your thumb.
+ */
+
+.scr-s2-settings .s2-title { font-size: var(--t-section); margin: 0 0 2px; }
+.scr-s2-settings .s2-sub { color: var(--dim); font-size: var(--t-micro); margin: 0 0 14px; }
+
+.scr-s2-settings .s2-card { padding: 12px; margin-bottom: 12px; }
+.scr-s2-settings .s2-h { font-size: var(--t-emph); font-weight: 600; margin: 0 0 8px; }
+.scr-s2-settings .s2-note { color: var(--dim); font-size: var(--t-micro); margin: 8px 0 0; }
+.scr-s2-settings .s2-card > .s2-note:first-of-type { margin-top: 0; }
+
+/* The absence, said out loud. This is the Armchair signup form answered: seven
+ * fields including a date of birth, in front of everything they ship. */
+.scr-s2-settings .s2-none {
+  margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line);
+  color: var(--dim); font-size: var(--t-micro);
+}
+.scr-s2-settings .s2-none b { color: var(--fg); }
+.scr-s2-settings .s2-defer { margin: 0; font-size: var(--t-body); color: var(--dim); }
+.scr-s2-settings .s2-queued {
+  margin: 8px 0 0; font-size: var(--t-micro); color: var(--fg);
+  border-left: 2px solid var(--accent); padding-left: 8px;
+}
+
+/* ---- fields ---- */
+
+.scr-s2-settings .s2-label {
+  display: block; font-size: var(--t-micro); color: var(--dim); margin-bottom: 4px;
+}
+.scr-s2-settings .s2-input {
+  width: 100%; min-height: var(--tap-min); padding: 0 12px;
+  font: inherit; font-size: var(--t-body); color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+}
+.scr-s2-settings .s2-input::placeholder { color: var(--dim); }
+.scr-s2-settings .s2-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scr-s2-settings .s2-search { margin-top: 8px; }
+
+/* ---- the segmented control ---- */
+
+.scr-s2-settings .s2-seg {
+  display: flex; border: 1px solid var(--line); border-radius: var(--radius-button);
+  overflow: hidden;
+}
+.scr-s2-settings .s2-seg-b {
+  flex: 1 1 0; min-width: 0; min-height: var(--tap-min);
+  border: 0; border-left: 1px solid var(--line); border-radius: 0;
+  background: var(--card); color: var(--fg);
+  font-size: var(--t-body); font-weight: 600;
+}
+.scr-s2-settings .s2-seg-b:first-child { border-left: 0; }
+/* The chosen one reads --accent. Maroon on white, gold on #120a0e, no branch. */
+.scr-s2-settings .s2-seg-b[aria-checked="true"] {
+  background: var(--accent); color: var(--card);
+}
+
+/* ---- the switch ---- */
+
+.scr-s2-settings .s2-toggle-row {
+  display: flex; align-items: center; gap: 8px; min-height: var(--tap-min);
+  border-top: 1px solid var(--line);
+}
+.scr-s2-settings .s2-card > .s2-toggle-row:first-of-type { border-top: 0; }
+.scr-s2-settings .s2-rows > .s2-toggle-row:first-child { border-top: 1px solid var(--line); }
+.scr-s2-settings .s2-toggle-label { flex: 1 1 auto; font-size: var(--t-body); }
+.scr-s2-settings .s2-tag {
+  flex: none; font-size: var(--t-micro); color: var(--dim);
+  border: 1px solid var(--line); border-radius: var(--radius-chip); padding: 2px 6px;
+}
+.scr-s2-settings .s2-switch {
+  flex: none; width: 52px; height: 30px; min-height: 30px; padding: 2px;
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--track); display: flex; align-items: center;
+  /* The 44px target is the ROW; the switch itself is a 30px pill with a 44px
+   * reach, so a thumb landing anywhere on the row's right end hits it. */
+  position: relative;
+}
+.scr-s2-settings .s2-switch::after {
+  content: ''; position: absolute; inset: -7px -4px; /* the 44px reach */
+}
+.scr-s2-settings .s2-knob {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--line);
+  transform: translateX(0); transition: transform .12s ease-out;
+}
+.scr-s2-settings .s2-switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.scr-s2-settings .s2-switch[aria-checked="true"] .s2-knob { transform: translateX(22px); }
+
+/* ---- the followed team ---- */
+
+.scr-s2-settings .s2-skip-row { display: flex; align-items: center; gap: 8px; }
+.scr-s2-settings .s2-skip-row .s2-note { flex: 1 1 auto; }
+/* Skip is a real, reachable control in the same weight as everything else -
+ * exactly where Sofascore puts it. It is not a dimmed afterthought. */
+.scr-s2-settings .s2-skip {
+  flex: none; min-height: var(--tap-min); padding: 0 16px;
+  font-size: var(--t-body); font-weight: 600; color: var(--accent);
+  background: transparent; border: 1px solid var(--line);
+}
+.scr-s2-settings .s2-current {
+  display: flex; align-items: center; gap: 8px; min-height: var(--tap-min);
+  border-bottom: 1px solid var(--line);
+}
+.scr-s2-settings .s2-current-name { flex: 1 1 auto; font-size: var(--t-body); font-weight: 600; }
+.scr-s2-settings .s2-linkbtn {
+  flex: none; min-height: var(--tap-min); padding: 0 10px;
+  background: transparent; border: 0; color: var(--accent);
+  font-size: var(--t-micro); font-weight: 600;
+}
+
+/* A page of eight, and NO INNER SCROLLER - a 268px scroll box in the middle of a
+ * settings page eats the wheel and strands everything under it. Search is the
+ * path to the other 752.
+ * A list, not a 3-up grid: Sofascore's grid works because it has a crest per
+ * row, and ours would be a grid of holes for the 401 schools with no color. */
+.scr-s2-settings .s2-list {
+  margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius-button);
+  overflow: hidden;
+}
+.scr-s2-settings .s2-nomatch { margin: 0; padding: 12px 10px; }
+.scr-s2-settings .s2-team {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: var(--tap-min); padding: 0 10px; text-align: left;
+  background: var(--card); border: 0; border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.scr-s2-settings .s2-team:last-child { border-bottom: 0; }
+.scr-s2-settings .s2-team-name {
+  flex: 1 1 auto; min-width: 0; font-size: var(--t-body);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-s2-settings .s2-team[aria-selected="true"] {
+  background: var(--bg); border-left: 2px solid var(--accent); padding-left: 8px;
+}
+.scr-s2-settings .s2-count { margin-top: 6px; }
+
+/* ---- the delay ---- */
+
+.scr-s2-settings .s2-delay-read {
+  margin: 0 0 6px; font-size: var(--t-figure); font-weight: 600; color: var(--fg);
+  /* NOT 30px. The bank strip owns --t-bank and it is the live layer's alone. */
+}
+.scr-s2-settings .s2-range {
+  width: 100%; height: var(--tap-min); margin: 0;
+  accent-color: var(--accent);              /* the fill and the thumb, both themes */
+  background: transparent;
+}
+.scr-s2-settings .s2-range:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Positioned at the real percentage of the travel, never evenly spaced. The
+ * thumb is 16px wide, so the track's usable center line is inset by half of it
+ * at each end - which is why the two edge marks are pinned rather than centered. */
+.scr-s2-settings .s2-scale {
+  position: relative; height: 15px; margin-top: -4px;
+  font-size: var(--t-micro); color: var(--dim);
+}
+.scr-s2-settings .s2-mark { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.scr-s2-settings .s2-mark[data-edge="start"] { transform: none; left: 0 !important; }
+.scr-s2-settings .s2-mark[data-edge="end"] { transform: none; left: auto !important; right: 0; }
+.scr-s2-settings .s2-delay-warn {
+  margin: 8px 0 0; font-size: var(--t-micro); color: var(--down);
+  border-left: 2px solid var(--down); padding-left: 8px;
+}
+
+/* ---- density, with the real fixture row inside the control ---- */
+
+.scr-s2-settings .s2-demo {
+  margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--bg); padding: 8px 10px;
+}
+.scr-s2-settings .s2-demo-row { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.scr-s2-settings .s2-demo-teams { display: flex; align-items: center; gap: 4px; flex: none; }
+.scr-s2-settings .s2-demo-at { font-size: var(--t-micro); color: var(--dim); }
+.scr-s2-settings .s2-demo-stack { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.scr-s2-settings .s2-demo-line {
+  font-size: var(--t-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-s2-settings .s2-demo-when { font-size: var(--t-micro); color: var(--dim); }
+.scr-s2-settings .s2-demo[data-density="compact"] .s2-demo-row { min-height: 32px; }
+.scr-s2-settings .s2-demo[data-density="compact"] .s2-demo-when { margin-left: auto; }
+
+/* ---- desktop. The measure cap is the shell's; nothing here stretches ---- */

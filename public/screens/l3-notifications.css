@@ -1,0 +1,188 @@
+/* L3 - notifications and the spoiler rule. Scoped under .scr-l3-notifications,
+ * which render() puts on the root itself.
+ *
+ * NO SHADOW OF ANY KIND. Depth is 1px solid var(--line), which is the whole
+ * system. The only accented thing on the screen is the primary control and the
+ * "now" badge, and both read --accent so they survive the light/dark token swap
+ * - maroon in light, gold on dark, never hard-coded to either.
+ *
+ * Every figure carries .num. Every control clears 44px.
+ */
+
+.scr-l3-notifications { --l3-gap: 12px; }
+
+.scr-l3-notifications .l3-h {
+  font-size: var(--t-section); margin: 0 0 2px; letter-spacing: -0.01em;
+}
+.scr-l3-notifications .l3-sub {
+  color: var(--dim); font-size: var(--t-body); margin: 0 0 14px;
+}
+.scr-l3-notifications .l3-note {
+  color: var(--dim); font-size: var(--t-micro); margin: 10px 2px 0; line-height: 1.45;
+}
+.scr-l3-notifications .l3-cap {
+  color: var(--dim); font-size: var(--t-micro); margin: 8px 2px 0; line-height: 1.45;
+}
+
+/* ---- the rule, stated once, on every state that has one ---- */
+
+.scr-l3-notifications .l3-rule { padding: 12px; margin-bottom: var(--l3-gap); }
+.scr-l3-notifications .l3-rule-lead {
+  margin: 0 0 10px; font-size: var(--t-emph); font-weight: 600; line-height: 1.3;
+}
+.scr-l3-notifications .l3-rule-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.scr-l3-notifications .l3-rule-list li {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 10px; align-items: start;
+  font-size: var(--t-body); color: var(--dim);
+}
+.scr-l3-notifications .l3-rule-foot {
+  margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: var(--t-micro); color: var(--dim); line-height: 1.45;
+}
+
+/* ---- the two badges. THE ONLY PLACE THE DISTINCTION IS DRAWN ---- */
+
+.scr-l3-notifications .l3-badge {
+  font-size: var(--t-micro); border-radius: var(--radius-chip);
+  padding: 2px 6px; border: 1px solid var(--line);
+  white-space: nowrap; align-self: start; justify-self: start;
+}
+.scr-l3-notifications .l3-badge-held { background: var(--track); color: var(--fg); }
+.scr-l3-notifications .l3-badge-now {
+  background: transparent; color: var(--accent); border-color: var(--accent);
+}
+
+/* ---- one notification, drawn as the phone draws it ---- */
+
+.scr-l3-notifications .l3-samples { display: grid; gap: 8px; }
+.scr-l3-notifications .l3-alert {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px; padding: 10px; align-items: start;
+}
+.scr-l3-notifications .l3-mark {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg);
+  display: grid; place-items: center; font-size: 17px; line-height: 1;
+  color: var(--accent); padding-bottom: 8px;
+}
+.scr-l3-notifications .l3-alert-main { min-width: 0; }
+.scr-l3-notifications .l3-alert-head {
+  display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
+}
+.scr-l3-notifications .l3-alert-title {
+  font-size: var(--t-body); font-weight: 600; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-l3-notifications .l3-alert-time { font-size: var(--t-micro); color: var(--dim); flex: none; }
+.scr-l3-notifications .l3-alert-body {
+  margin: 2px 0 0; font-size: var(--t-body); color: var(--dim); line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.scr-l3-notifications .l3-alert-teams { display: flex; gap: 10px; margin-top: 7px; }
+
+/* ---- controls ---- */
+
+.scr-l3-notifications .l3-actions {
+  display: grid; gap: 8px; margin-top: var(--l3-gap);
+}
+.scr-l3-notifications .l3-btn {
+  min-height: var(--tap-min); padding: 0 16px; width: 100%;
+  font-size: var(--t-emph); font-weight: 600;
+}
+.scr-l3-notifications .l3-btn-primary {
+  background: var(--accent); border-color: var(--accent); color: var(--card);
+}
+
+/* ---- prompt-pending ---- */
+
+.scr-l3-notifications .l3-pending { padding: 12px; margin-bottom: var(--l3-gap); }
+.scr-l3-notifications .l3-pending-lead {
+  margin: 0 0 8px; font-size: var(--t-emph); font-weight: 600;
+}
+.scr-l3-notifications .l3-pending-body {
+  margin: 0 0 8px; font-size: var(--t-body); color: var(--dim); line-height: 1.4;
+}
+.scr-l3-notifications .l3-pending-body:last-child { margin-bottom: 0; }
+
+/* ---- granted: what actually happened over one real game ---- */
+
+.scr-l3-notifications .l3-counts { padding: 4px 12px; margin-bottom: var(--l3-gap); }
+.scr-l3-notifications .l3-count {
+  display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 10px;
+  align-items: center; min-height: var(--tap-min);
+  border-bottom: 1px solid var(--line);
+}
+.scr-l3-notifications .l3-count:last-child { border-bottom: 0; }
+.scr-l3-notifications .l3-count-n { font-size: var(--t-figure); font-weight: 600; }
+.scr-l3-notifications .l3-count-t { display: grid; font-size: var(--t-body); }
+.scr-l3-notifications .l3-count-why { color: var(--dim); font-size: var(--t-micro); }
+
+/* ---- denied. Permanent, and the app is not broken ---- */
+
+.scr-l3-notifications .l3-denied { padding: 12px; margin-bottom: var(--l3-gap); }
+.scr-l3-notifications .l3-denied-lead {
+  margin: 0 0 8px; font-size: var(--t-body); font-weight: 600; line-height: 1.35;
+}
+.scr-l3-notifications .l3-denied-list {
+  margin: 0; padding-left: 18px; font-size: var(--t-body); color: var(--dim); line-height: 1.45;
+}
+.scr-l3-notifications .l3-denied-list li { margin-bottom: 5px; }
+.scr-l3-notifications .l3-denied-list li:last-child { margin-bottom: 0; }
+
+/* ---- preferences. THE COPY IS THE INTERFACE ---- */
+
+.scr-l3-notifications .l3-prefs { padding: 4px 12px 10px; margin-bottom: var(--l3-gap); }
+.scr-l3-notifications .l3-prefs-head {
+  margin: 12px 0 2px; font-size: var(--t-micro); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--dim);
+}
+.scr-l3-notifications .l3-pref {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px;
+  align-items: center; border-bottom: 1px solid var(--line); padding: 6px 0;
+}
+.scr-l3-notifications .l3-pref:last-child { border-bottom: 0; }
+.scr-l3-notifications .l3-pref-label {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px;
+  align-items: start; min-height: var(--tap-min); padding: 4px 0; cursor: pointer;
+}
+.scr-l3-notifications .l3-check {
+  width: 22px; height: 22px; margin: 0; accent-color: var(--accent); align-self: center;
+}
+.scr-l3-notifications .l3-pref-text { display: grid; gap: 2px; min-width: 0; align-content: center; }
+.scr-l3-notifications .l3-pref-name { font-size: var(--t-body); font-weight: 600; }
+.scr-l3-notifications .l3-pref-sample {
+  font-size: var(--t-micro); color: var(--dim); line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- quiet hours ---- */
+
+.scr-l3-notifications .l3-quiet { padding: 12px; margin-bottom: var(--l3-gap); }
+.scr-l3-notifications .l3-quiet-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.scr-l3-notifications .l3-quiet-field { display: grid; gap: 4px; }
+.scr-l3-notifications .l3-quiet-label {
+  font-size: var(--t-micro); color: var(--dim); text-transform: uppercase; letter-spacing: .05em;
+}
+.scr-l3-notifications .l3-select {
+  min-height: var(--tap-min); border-radius: var(--radius-button);
+  border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  font: inherit; font-size: var(--t-body); padding: 0 8px;
+}
+.scr-l3-notifications .l3-quiet-note {
+  margin: 10px 0 0; font-size: var(--t-micro); color: var(--dim); line-height: 1.45;
+}
+
+/* ---- which games. Drawn against the identities that break a two-color chip ---- */
+
+.scr-l3-notifications .l3-games { padding: 4px 12px 10px; }
+.scr-l3-notifications .l3-game {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 22px; gap: 10px;
+  align-items: center; min-height: var(--tap-min); border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.scr-l3-notifications .l3-game:last-child { border-bottom: 0; }
+.scr-l3-notifications .l3-game-chips { display: flex; gap: 6px; }
+.scr-l3-notifications .l3-game-name {
+  font-size: var(--t-body); font-weight: 600; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

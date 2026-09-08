@@ -25,12 +25,39 @@ export function payoutLabel(p, cap) {
 }
 
 /** The pool's own crowd split. NEVER shown before the pick.
- *  Small-n: in a pool of four, 75% is three people and it identifies them. */
-export function crowdLabel(share, n, threshold) {
-  if (threshold === undefined) threshold = 8;
-  if (share == null || !n) return '\u2014';
-  if (n < threshold) return `${Math.round(share * n)} of ${n}`;
+ *
+ * SUPPRESS. DO NOT FALL BACK TO A COUNT. This returned "2 of 3" below n=8, and
+ * P2 put that on screen, where it names two people by arithmetic. src/lib/pool.ts
+ * had already reasoned it the other way and it is right: A COUNT IS MORE PRECISE
+ * THAN A PERCENTAGE, so it fails the identification test harder, not softer.
+ * Two files, one rule, and the screen consumed the wrong one.
+ *
+ *   n < 5                 -> null. Every percentage is a named handful
+ *   minority is exactly 1 -> null. One dissenter is identified by arithmetic at
+ *                            ANY pool size - "94% took Oregon" among seventeen
+ *                            people is a public accusation
+ *   minority is 0         -> shown. Unanimous names nobody
+ *
+ * Returns null rather than a dash, so a screen can tell "no number yet" from
+ * "we are not going to tell you" and say which. */
+export function crowdLabel(share, n, minN) {
+  if (minN === undefined) minN = 5;
+  if (share == null || !n) return null;
+  if (n < minN) return null;
+  const taken = Math.round(share * n);
+  if (Math.min(taken, n - taken) === 1) return null;
   return Math.round(share * 100) + '%';
+}
+
+/** Why the crowd figure is absent, so a screen can say which. */
+export function crowdSuppression(share, n, picked, minN) {
+  if (minN === undefined) minN = 5;
+  if (!picked) return 'not_picked';
+  if (share == null || !n) return 'no_data';
+  if (n < minN) return 'small_n';
+  const taken = Math.round(share * n);
+  if (Math.min(taken, n - taken) === 1) return 'lone_dissenter';
+  return null;
 }
 
 /** Kickoff, local. A pick is editable until THIS moment and locks at it. */

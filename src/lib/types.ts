@@ -180,3 +180,40 @@ export type LiveStandingsRow = {
 };
 
 export type Notification = { kind: string; body: string; holdsState: boolean; sendAt: number };
+
+/* ------------------------------------------------------------------ prefs */
+
+/** AMENDMENT 6 - the settings a user actually holds.
+ *
+ *  Raised by S2, which had to shape one because nothing existed to import - and
+ *  S2, L2 and L3 all read the same delay. Three screens inventing three prefs
+ *  objects is the drift the shared vocabulary exists to stop, and the delay is
+ *  the worst one to get wrong: it is the setting the whole spoiler rule hangs on.
+ *
+ *  🔴 THE DELAY IS ALWAYS ON AND USER-SET, and zero is reachable. "Always-on"
+ *  means the control is always present and always applied - not that the minimum
+ *  is above zero. At zero the app can run ahead of the television and the screen
+ *  says so in --down. Whether a hard floor above zero is wanted is Jason's, and
+ *  it is one constant.
+ *
+ *  Everything here is DEVICE-LOCAL. There is no account: a person is a display
+ *  name and a device until they choose otherwise, so these survive offline and
+ *  do not need the network to be true. */
+export type Density = 'compact' | 'detailed';
+export type ThemeChoice = 'light' | 'dark' | 'system';
+
+export type UserPrefs = {
+  /** The MOST that is ever asked, and only after the first pick. Never at the door. */
+  displayName: string | null;
+  followedTeamId: string | null;   // null is a real answer - Skip is honored
+  theme: ThemeChoice;
+  /** Seconds. 0 is legal and means the app may get ahead of the television.
+   *  The reference server accepts 0-600, which is unaimable with a thumb. */
+  delaySeconds: number;
+  /** The VIEWER's, never the pool's. A density toggle changes the rendering, not
+   *  the slate, so it does not touch the rule that scope may not be per-user. */
+  density: Density;
+  alertsOn: boolean;
+  /** Per kind. Each one is held by the feed's delay or carries no state at all. */
+  alerts: Record<string, boolean>;
+};
