@@ -145,22 +145,27 @@ export type Scoring = {
 };
 
 /**
- * 🔴 INVENTED. No document in the vault states a point value for a pick or a parlay.
- * `week_score.points` and `week_score.parlay_points` are INTEGER in D1 and that is all
- * the constraint there is. These numbers are a placeholder with the right SHAPE:
+ * ✅ DECIDED by Jason, 2026-09-08: the ladder is 3 / 6 / 12 / 20.
+ *
+ * It was first written here as 5 / 10 / 20 / 40, invented, because no document in the
+ * vault states a point value for a pick or a parlay. That ladder was wrong for a
+ * reason worth keeping: at 40, a six-leg parlay is worth forty correct picks, which
+ * in a conference-scoped pool of ~8 games is more than a perfect week. The parlay
+ * stops being "the single high-variance swing in a format that is otherwise flat"
+ * (POOL-SCREENS P3) and becomes the entire game.
  *
  *   - one point a pick, which is what every pick'em in the capture list does;
- *   - a doubling parlay ladder, so the parlay is "the single high-variance swing in a
- *     format that is otherwise flat" (POOL-SCREENS P3) — a 6-leg parlay is worth 40,
- *     about two thirds of a perfect 60-game week, and 8 correct picks in a
- *     conference-scoped pool.
+ *   - 3 / 6 / 12 / 20 still doubles to five legs and then flattens, so the sixth leg
+ *     is a real reach rather than a jackpot. A perfect six-leg parlay is worth twenty
+ *     picks - a large swing inside a 131-game week, a decisive one inside an 8-game
+ *     conference pool, and in neither case larger than the week itself.
  *
  * Every function takes `Scoring` as an argument. Changing these numbers changes no code.
  */
 export const DEFAULT_SCORING: Scoring = Object.freeze({
   pickPoints: 1,
   atsPickPoints: 1,
-  parlayWorth: Object.freeze({ 3: 5, 4: 10, 5: 20, 6: 40 }),
+  parlayWorth: Object.freeze({ 3: 3, 4: 6, 5: 12, 6: 20 }),
 });
 
 /* ------------------------------------------------------------------ *
