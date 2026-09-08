@@ -326,7 +326,10 @@ export type ParlayError =
   | { code: 'no_pick_on_game'; gameId: string }
   | { code: 'leg_disagrees_with_pick'; gameId: string; pick: PickSide; leg: PickSide }
   | { code: 'game_not_on_slate'; gameId: string }
-  | { code: 'game_already_kicked'; gameId: string };
+  | { code: 'game_already_kicked'; gameId: string }
+  /** 🔴 The parlay's COMPOSITION is frozen at its first kickoff. Decided by
+   *  Jason 2026-09-08. See parlayLockedAt. */
+  | { code: 'parlay_composition_locked'; firstKickoff: number; gameId: string };
 
 export type LegInput = { gameId: string; side: PickSide };
 
@@ -337,6 +340,46 @@ export type LegInput = { gameId: string; side: PickSide };
  * `picks` is the user's own picks on this week's slate, keyed by gameId.
  * Validation is for a proposed EDIT, so it also refuses a leg whose game has kicked.
  */
+/**
+ * 🔴 WHEN THE PARLAY STOPS BEING EDITABLE AS A WHOLE.
+ *
+ * Decided by Jason 2026-09-08. Every OTHER lock in this product happens before
+ * you know anything: a pick locks at its own kickoff, scope locks at the first
+ * kickoff of week 1. The parlay was the only one that did not, and P3 found what
+ * that bought: legs lock individually, so you could watch three of them land and
+ * THEN add a fourth, moving the worth from 3 to 6 with no risk on the legs
+ * already decided. Free points, and a parlay that is not a prediction.
+ *
+ * A parlay is ONE object with ONE payoff, so its composition freezes when the
+ * first of its legs kicks. After that the legs still resolve independently - a
+ * parlay can still be half-locked, which is the state machine's hard part and is
+ * unchanged - but no leg may be added, removed or switched.
+ *
+ * Returns null for a parlay with no legs or no kickoffs known.
+ */
+export function parlayLockedAt(
+  legs: readonly LegInput[],
+  games: ReadonlyMap<string, SlateGame>,
+): number | null {
+  let first: number | null = null;
+  for (const leg of legs) {
+    const g = games.get(leg.gameId);
+    if (!g) continue;
+    if (first === null || g.kickoffUtc < first) first = g.kickoffUtc;
+  }
+  return first;
+}
+
+/** Whether the parlay may still be composed - legs added, dropped or switched. */
+export function parlayIsComposable(
+  legs: readonly LegInput[],
+  games: ReadonlyMap<string, SlateGame>,
+  now: number,
+): boolean {
+  const at = parlayLockedAt(legs, games);
+  return at === null || now < at;
+}
+
 export function validateParlay(
   legs: readonly LegInput[],
   picks: ReadonlyMap<string, PickSide>,
@@ -350,6 +393,12 @@ export function validateParlay(
   if (legs.length > PARLAY_MAX_LEGS) {
     errors.push({ code: 'too_many_legs', have: legs.length, max: PARLAY_MAX_LEGS });
   }
+  /* The whole parlay freezes at its first kickoff, so a leg cannot be added to a
+   * result that is already known. Reported once, against the earliest leg that
+   * has kicked, rather than once per leg - it is one fact about the parlay. */
+  const lockAt = parlayLockedAt(legs, games);
+  const frozen = lockAt !== null && now >= lockAt;
+
   const seen = new Set<string>();
   for (const leg of legs) {
     if (seen.has(leg.gameId)) errors.push({ code: 'duplicate_game', gameId: leg.gameId });
@@ -367,7 +416,12 @@ export function validateParlay(
       errors.push({ code: 'leg_disagrees_with_pick', gameId: leg.gameId, pick, leg: leg.side });
     }
     if (!isPickEditable(game, now)) {
-      errors.push({ code: 'game_already_kicked', gameId: leg.gameId });
+      /* Once the parlay itself is frozen, a kicked leg is EXPECTED - it is what
+       * froze it. The error that matters then is the composition lock, and
+       * reporting both would say the parlay is broken when it is simply live. */
+      errors.push(frozen
+        ? { code: 'parlay_composition_locked', firstKickoff: lockAt as number, gameId: leg.gameId }
+        : { code: 'game_already_kicked', gameId: leg.gameId });
     }
   }
   return { ok: errors.length === 0, errors };

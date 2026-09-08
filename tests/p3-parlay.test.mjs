@@ -255,7 +255,12 @@ test('3 and 6 are enforced in the UI, using the scorer’s own validator', () =>
   const wrongSide = mod.addLegErrors('d', 'away', legs(3), picks, games, now);
   assert.deepEqual(wrongSide.map((e) => e.code), ['leg_disagrees_with_pick']);
   /* A game that already kicked cannot be added. */
-  assert.deepEqual(mod.addLegErrors('a', 'home', legs(0), picks, games, t(10)).map((e) => e.code), ['game_already_kicked']);
+  /* Adding to a parlay whose first leg has kicked is refused by the composition
+   * lock now - the parlay is one object with one payoff and it freezes when the
+   * first of its legs starts. Decided by Jason 2026-09-08 after this screen
+   * showed the exploit: watch three legs land, then add a fourth. */
+  assert.deepEqual(mod.addLegErrors('a', 'home', legs(0), picks, games, t(10)).map((e) => e.code),
+    ['parlay_composition_locked']);
   /* An error about ANOTHER leg is not a reason to refuse this one - a half-locked parlay
    * must still be editable below the line. */
   const halfLocked = mod.addLegErrors('h', 'home', legs(3), picks, games, t(13));

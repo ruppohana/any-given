@@ -443,7 +443,12 @@ test('a leg must come from a pick already made, and must agree with it', () => {
     slate.slice(0, 3).map((g) => ({ gameId: g.id, side: 'home' })),
     new Map(slate.map((g) => [g.id, 'home'])), map, slate[3].kickoffUtc + 1,
   );
-  assert.ok(kicked.errors.some((e) => e.code === 'game_already_kicked'));
+  /* A kicked leg on a parlay whose first kickoff has passed reports the
+   * COMPOSITION lock, not the per-leg one: after 2026-09-08 the parlay freezes
+   * as a whole at its first kickoff, so a kicked leg is what froze it rather
+   * than a fault in it. Both codes mean "you cannot change this now". */
+  assert.ok(kicked.errors.some((e) =>
+    e.code === 'game_already_kicked' || e.code === 'parlay_composition_locked'));
 });
 
 /* ================================================================== *
