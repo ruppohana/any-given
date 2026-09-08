@@ -341,7 +341,9 @@ export type Call = {
 
 /** 🔴 The bank refills every game. Nobody is ever locked out of the app. */
 export type Bank = {
-  balance: number;           // starts at 100 every game
+  balance: number;           // 🔴 200 since 2026-09-08, measured against three real
+                             // games. READ HOUSE_RULES.startingBank, never a literal:
+                             // this comment said 100 for hours after the code said 200.
   start: number;
   delta: number;             // balance - start. THE LIVE BOARD RANKS ON THIS
   record: { landed: number; missed: number };

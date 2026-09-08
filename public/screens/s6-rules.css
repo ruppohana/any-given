@@ -1,0 +1,175 @@
+/* S6 - rules, how it works, and the void line. Every rule scoped under
+ * .scr-s6-rules.
+ *
+ * THIS IS A READING SCREEN AT 393px, AND THAT IS THE WHOLE CONSTRAINT.
+ * Five things in here are load-bearing rather than decoration:
+ *
+ *  1. NOTHING IS BELOW 12px. Body is var(--t-body) - 13px - and the only
+ *     var(--t-micro) is on eyebrows and end-notes, which are labels rather than
+ *     prose. A rules screen set in 11px is a rules screen nobody reads, and this
+ *     is the one screen in the app whose entire content is words.
+ *
+ *  2. MEASURE IS CAPPED AT 34em. At 393px the column is ~30em, so the cap does
+ *     nothing on a phone and everything on the desktop layout S5 owns. A rules
+ *     paragraph running the full width of a laptop is unreadable, and this file
+ *     is the one that would have caused it.
+ *
+ *  3. THE INDEX ROWS ARE THE TAP TARGETS AND THEY ARE 44px. They are the only
+ *     interactive thing on the screen apart from the state actions, and they are
+ *     what makes it a lookup rather than an essay.
+ *
+ *  4. EVERY ACCENT IS var(--accent). Nothing reads --maroon or --gold, so the
+ *     void rule's rule is maroon in light and gold on dark with no branch here.
+ *
+ *  5. THERE IS NO box-shadow. Depth is 1px solid var(--line), including the void
+ *     banner, which is the one element on the screen a designer would reach for
+ *     a shadow to lift.
+ *
+ * Nothing here writes a token at :root, and nothing sets --team-a / --team-b -
+ * the two chips on this screen come from the shared team-chip component, which
+ * sets them per element.
+ */
+
+.scr-s6-rules { padding-bottom: 24px; }
+
+.scr-s6-rules .s6-title {
+  font-size: var(--t-section); margin: 0 0 2px; letter-spacing: -0.01em;
+}
+.scr-s6-rules .s6-sub {
+  color: var(--dim); font-size: var(--t-body); margin: 0 0 14px; max-width: 34em;
+}
+
+/* A back link is a control. 44px, and it looks like a link rather than a button
+ * because it goes back rather than doing anything. */
+.scr-s6-rules .s6-back {
+  display: inline-flex; align-items: center; min-height: var(--tap-min);
+  color: var(--accent); text-decoration: none; font-size: var(--t-body);
+  font-weight: 600;
+}
+.scr-s6-rules .s6-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- the void banner: section 1, and the one line the screen exists for ---- */
+
+/* IT IS NOT A CARD. A card here would put it in the same frame as the other
+ * nine answers, and it is not one of nine - it is the rule the other nine are
+ * consistent with. The accent rule down the left is the whole difference, and it
+ * is a border rather than a fill so the sentence is read as text and not as a
+ * banner to be dismissed. */
+.scr-s6-rules .s6-void {
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 12px;
+  margin: 0 0 16px;
+}
+.scr-s6-rules .s6-void-line {
+  margin: 0; font-size: var(--t-emph); line-height: 1.4; font-weight: 600;
+  max-width: 34em;
+}
+/* Inside the void card - which is the /section route, arriving from a voided
+ * pick with no banner on screen - the sentence keeps the accent rule, because
+ * it has to be the same OBJECT wherever it appears. Without the rule it sat flush
+ * against the answer under it in one undifferentiated block of bold, which is
+ * what it looked like at 393px before this rule existed. */
+.scr-s6-rules .s6-sec .s6-void-line {
+  font-size: var(--t-body);
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  margin: 0 0 12px;
+}
+
+.scr-s6-rules .s6-eyebrow {
+  margin: 0 0 4px; font-size: var(--t-micro); color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+/* ---- this pool's card: the only data on the screen ---- */
+
+.scr-s6-rules .s6-pool { padding: 12px; margin-bottom: 16px; }
+.scr-s6-rules .s6-pool-name {
+  margin: 0 0 8px; font-size: var(--t-emph); font-weight: 600;
+}
+
+/* ---- the index. THE DESIGN OF THIS SCREEN. ---- */
+
+.scr-s6-rules .s6-index {
+  border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); padding: 10px 12px 4px; margin-bottom: 16px;
+}
+.scr-s6-rules .s6-ix {
+  display: flex; align-items: center; gap: 10px;
+  min-height: var(--tap-min); padding: 6px 0;
+  border-top: 1px solid var(--line);
+  color: var(--fg); text-decoration: none; font-size: var(--t-body);
+}
+.scr-s6-rules .s6-ix:first-of-type { border-top: 0; }
+.scr-s6-rules .s6-ix-q { flex: 1 1 auto; min-width: 0; }
+.scr-s6-rules .s6-chev { flex: 0 0 auto; color: var(--dim); }
+.scr-s6-rules .s6-ix:hover .s6-ix-q { color: var(--accent); }
+.scr-s6-rules .s6-ix:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ---- the answers ---- */
+
+.scr-s6-rules .s6-sec { padding: 14px 12px; margin-bottom: 12px; scroll-margin-top: 12px; }
+.scr-s6-rules .s6-h {
+  font-size: var(--t-emph); font-weight: 600; margin: 0 0 8px;
+}
+.scr-s6-rules .s6-sub-h {
+  font-size: var(--t-body); font-weight: 600; margin: 14px 0 4px; color: var(--fg);
+}
+.scr-s6-rules .s6-p {
+  margin: 0 0 8px; font-size: var(--t-body); color: var(--dim);
+  line-height: 1.5; max-width: 34em;
+}
+.scr-s6-rules .s6-p:last-child { margin-bottom: 0; }
+
+/* THE ANSWER, IN THE FOREGROUND COLOR. Every card opens with one sentence that
+ * answers the index question outright; everything after it is why. If a reader
+ * stops at the first line of a card they have the answer. */
+.scr-s6-rules .s6-lead {
+  margin: 0 0 10px; font-size: var(--t-body); color: var(--fg);
+  font-weight: 600; line-height: 1.45; max-width: 34em;
+}
+
+.scr-s6-rules .s6-ul {
+  margin: 0 0 8px; padding-left: 18px; color: var(--dim);
+  font-size: var(--t-body); line-height: 1.5; max-width: 34em;
+}
+.scr-s6-rules .s6-ul li { margin-bottom: 4px; }
+.scr-s6-rules .s6-ul li::marker { color: var(--accent); }
+
+.scr-s6-rules .s6-note {
+  margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line);
+  font-size: var(--t-micro); color: var(--dim); max-width: 34em;
+}
+
+/* ---- figure rows. EVERY NUMBER IS TABULAR - the ladder, the bank, the stake
+ *      chips and both payout examples all come out of the modules, and a figure
+ *      that reflows when the ladder moves is a figure nobody trusts. ---- */
+
+.scr-s6-rules .s6-kv {
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  margin: 8px 0; overflow: hidden;
+}
+.scr-s6-rules .s6-kv-row {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 8px 10px; border-top: 1px solid var(--line);
+  font-size: var(--t-body);
+}
+.scr-s6-rules .s6-kv-row:first-child { border-top: 0; }
+.scr-s6-rules .s6-kv-k { flex: 1 1 auto; min-width: 0; color: var(--dim); }
+.scr-s6-rules .s6-kv-v {
+  flex: 0 0 auto; color: var(--fg); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the one game on the screen. Two chips and the names in type: there are no
+ *      logos in this app and this screen is not the place one starts. ---- */
+
+.scr-s6-rules .s6-game {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  padding: 10px; margin: 4px 0 8px;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+}
+.scr-s6-rules .s6-game-at { color: var(--dim); font-size: var(--t-micro); }
+.scr-s6-rules .s6-game-name {
+  flex: 1 1 100%; font-size: var(--t-body); color: var(--fg);
+}
