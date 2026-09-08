@@ -68,13 +68,19 @@ async function screens() {
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-const page = (s, state) => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+/* ?w=393 pins the LAYOUT width, so a capture is 393px whatever the tool thinks
+ * its viewport is. Headless Chrome lays out wider than the --window-size it is
+ * given and then crops the screenshot, which silently clipped the right-hand
+ * third of a card and a whole navigation item - a picture that looked like a bug
+ * in the screen and was a bug in the camera. Nothing sets this in normal use. */
+const page = (s, state, w, theme) => `<!doctype html>
+<html lang="en"${theme ? ` data-theme="${theme}"` : ''}><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${s.title} - ${state}</title>
 <link rel="stylesheet" href="/styles/tokens.css">
 <link rel="stylesheet" href="/styles/shell.css">
 <link rel="stylesheet" href="/screens/${s.id}.css">
+${w ? `<style>html{width:${w}px;overflow-x:hidden}body{width:${w}px;margin:0 auto}</style>` : ''}
 </head><body>
 <div class="ag-shell"><main class="ag-main" id="root"></main><div id="nav"></div></div>
 <script type="module">
@@ -150,7 +156,10 @@ createServer(async (req, res) => {
     const s = (await screens()).find((x) => x.id === id);
     if (s) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      return res.end(page(s, state && s.states.includes(state) ? state : s.states[0]));
+      const w = Number(url.searchParams.get('w')) || 0;
+      const th = url.searchParams.get('theme');
+      const theme = th === 'light' || th === 'dark' ? th : '';
+      return res.end(page(s, state && s.states.includes(state) ? state : s.states[0], w, theme));
     }
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('no such screen: ' + id);
