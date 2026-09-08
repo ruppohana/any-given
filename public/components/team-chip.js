@@ -63,7 +63,16 @@ export function tooClose(a, b, threshold) {
 export function teamVars(team) {
   const a = normalizeColor(team && team.primary);
   const b = normalizeColor(team && team.secondary);
-  if (a && b) return { vars: { '--team-a': a, '--team-b': b }, state: 'two' };
+  /* 🔴 A TEAM WHOSE TWO COLORS ARE THE SAME COLOR HAS ONE COLOR. Found by P5
+   * against the real file: Georgetown is 110e42 / 001c58 and San Diego's two are
+   * byte-identical. Drawn as a split, those render as one solid square with an
+   * invisible seam - a two-color chip that has silently become a one-color chip
+   * and does not say so. Six of the 301 two-color teams do this.
+   *
+   * The adjacency rule already catches two TEAMS whose primaries collide; this is
+   * the same failure inside ONE team, and it was missed because the test set was
+   * written as pairs of teams rather than pairs of colors. */
+  if (a && b && !tooClose(a, b)) return { vars: { '--team-a': a, '--team-b': b }, state: 'two' };
   if (a) return { vars: { '--team-a': a, '--team-b': NULL_TEAM }, state: 'one' };
   return { vars: { '--team-a': NULL_TEAM, '--team-b': NULL_TEAM }, state: 'none' };
 }

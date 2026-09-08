@@ -69,3 +69,23 @@ test('how many real PAIRS on a 131-game slate would clash', () => {
   console.log(`    ${clashes} of ${pairs} arbitrary real pairs clash on primary`);
   assert.ok(pairs > 0);
 });
+
+test('a team whose two colors are the same color has ONE color', () => {
+  // Real rows from fixtures/teams.json, not constructed.
+  const georgetown = { abbrev: 'GTWN', primary: '110e42', secondary: '001c58' };
+  const sandiego   = { abbrev: 'USD',  primary: '2f99d4', secondary: '2f99d4' };
+  const asu        = { abbrev: 'ASU',  primary: '8c1d40', secondary: 'ffc627' };
+  assert.equal(teamVars(georgetown).state, 'one', 'navy on navy is not two colors');
+  assert.equal(teamVars(sandiego).state, 'one', 'identical hexes are not two colors');
+  assert.equal(teamVars(asu).state, 'two', 'maroon and gold genuinely are two');
+});
+
+test('how many real teams collapse from two colors to one', () => {
+  let two = 0, collapsed = 0;
+  for (const t of TEAMS) {
+    const p = normalizeColor(t.primary), s = normalizeColor(t.secondary);
+    if (p && s) { two++; if (teamVars(t).state === 'one') collapsed++; }
+  }
+  console.log(`    ${collapsed} of ${two} nominally two-color teams collapse to one`);
+  assert.equal(collapsed, 6);
+});

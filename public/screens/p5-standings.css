@@ -1,0 +1,175 @@
+/* P5 - STANDINGS. Every rule scoped under .scr-p5-standings.
+ *
+ * THE DENSITY TARGET IS MEASURED, NOT CHOSEN. reference/sofascore-teardown/screens/
+ * IMG_5226.PNG is a 1206px capture of a 402pt device - 3x - and its rows pitch at
+ * 126px, so 42pt. Twenty teams read in two screens there. A standings row is a LINK,
+ * not a control, so 42px is legal where --tap-min would otherwise apply; the toggle
+ * above it IS a control and takes the full 44.
+ *
+ * DEPTH IS 1px solid var(--line). There is no box-shadow in this file.
+ * The highlight is a TINT, not a border - Sofascore's, and it is the right call:
+ * a bordered row inside a bordered card is two rules arguing.
+ * The tint is mixed off --accent, which SWAPS TOKEN on dark. Nothing here reads
+ * --maroon or --gold, and nothing here writes --team-a/--team-b at :root - the chip
+ * sets those per element, which is the pool's whole color model.
+ */
+
+.scr-p5-standings { font-variant-numeric: tabular-nums; }
+
+.scr-p5-standings .p5-h { font-size: var(--t-section); margin: 0 0 2px; }
+.scr-p5-standings .p5-sub {
+  font-size: var(--t-micro); color: var(--dim); margin: 0 0 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- toggle
+ * Week and season are one screen, toggled. Two screens would be two answers to
+ * "am I winning" and the second one is always the stale one. */
+.scr-p5-standings .p5-toggle {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); overflow: hidden; margin: 0 0 10px;
+}
+.scr-p5-standings .p5-tab {
+  position: relative; min-height: var(--tap-min);
+  border: 0; border-radius: 0; background: transparent;
+  color: var(--dim); font-size: var(--t-body); font-weight: 600;
+}
+.scr-p5-standings .p5-tab + .p5-tab { border-left: 1px solid var(--line); }
+.scr-p5-standings .p5-tab[aria-selected="true"] {
+  color: var(--accent);
+  background: var(--card);
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+}
+/* An underline, not a shadow. */
+.scr-p5-standings .p5-tab[aria-selected="true"]::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 2px; background: var(--accent);
+}
+
+/* ---------------------------------------------------------------- notes */
+.scr-p5-standings .p5-note {
+  font-size: var(--t-micro); color: var(--dim); margin: 0 2px 10px;
+}
+.scr-p5-standings .p5-note--live::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 6px; vertical-align: 1px;
+}
+
+/* ---------------------------------------------------------------- the pin
+ * Armchair Quarterback pins your own score above the table because in its own
+ * live capture the user is not in the visible list at all. Same here at rank 18
+ * of 20, and at 138 of 200. */
+.scr-p5-standings .p5-self {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 10px; padding: 10px 12px; margin: 0 0 10px;
+  background: var(--card);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.scr-p5-standings .p5-self-rank { font-size: var(--t-figure); font-weight: 700; line-height: 1.1; }
+.scr-p5-standings .p5-self-mid { min-width: 0; }
+.scr-p5-standings .p5-self-name {
+  font-size: var(--t-body); font-weight: 700;
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+}
+.scr-p5-standings .p5-self-name > span:first-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-p5-standings .p5-you {
+  flex: none; font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent);
+  border: 1px solid var(--line); border-radius: var(--radius-chip); padding: 1px 5px;
+}
+.scr-p5-standings .p5-self-of { font-size: var(--t-micro); color: var(--dim); margin-top: 2px; }
+.scr-p5-standings .p5-self-right { text-align: right; }
+/* --t-figure, NOT --t-bank. The pool has no 30px figure; 30px is the live layer's
+ * balance and the two boards never meet. */
+.scr-p5-standings .p5-self-pts { font-size: var(--t-figure); font-weight: 700; line-height: 1.1; }
+.scr-p5-standings .p5-self-unit { font-size: 10px; color: var(--dim); }
+.scr-p5-standings .p5-self-parlay {
+  grid-column: 1 / -1; margin: 8px 0 0; font-size: var(--t-micro); color: var(--dim);
+  border-top: 1px solid var(--line); padding-top: 8px;
+}
+.scr-p5-standings .p5-self--none { display: block; }
+.scr-p5-standings .p5-self-none { margin: 0; font-size: var(--t-body); color: var(--dim); }
+
+/* ---------------------------------------------------------------- the table */
+.scr-p5-standings .p5-table { padding: 0 12px; overflow: hidden; }
+
+.scr-p5-standings .p5-head,
+.scr-p5-standings .p5-row {
+  display: grid;
+  grid-template-columns: 26px 24px 18px minmax(0, 1fr) 44px 44px;
+  gap: 6px; align-items: center;
+}
+
+/* Short caps headers over the numeric columns only - rank and name need none. */
+.scr-p5-standings .p5-head {
+  min-height: 26px; border-bottom: 1px solid var(--line);
+  font-size: var(--t-micro); color: var(--dim);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.scr-p5-standings .p5-col { text-align: right; }
+.scr-p5-standings .p5-col--on { color: var(--fg); font-weight: 700; }
+
+.scr-p5-standings .p5-rows { list-style: none; margin: 0; padding: 0; }
+.scr-p5-standings .p5-li { display: block; }
+
+.scr-p5-standings .p5-row {
+  min-height: 42px;                 /* the measured Sofascore row */
+  text-decoration: none; color: var(--fg);
+  border-bottom: 1px solid var(--line);
+}
+.scr-p5-standings .p5-li:last-child .p5-row { border-bottom: 0; }
+
+/* TINT, NOT BORDER, and full bleed to the card edge - the negative margin is what
+ * makes it read as a highlighted band rather than an inset box. */
+.scr-p5-standings .p5-row--self {
+  margin-inline: -12px; padding-inline: 12px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+  font-weight: 700;
+}
+
+.scr-p5-standings .p5-rank {
+  display: flex; align-items: baseline; gap: 1px;
+  font-size: var(--t-body); font-weight: 700;
+}
+.scr-p5-standings .p5-tie { font-size: 9px; color: var(--dim); font-weight: 600; }
+
+/* FIXED SCALE. --up / --down, both themes, never team color. */
+.scr-p5-standings .p5-mv { font-size: 10px; font-weight: 700; color: var(--dim); }
+.scr-p5-standings .p5-mv.up { color: var(--up); }
+.scr-p5-standings .p5-mv.down { color: var(--down); }
+
+.scr-p5-standings .p5-chip { display: flex; align-items: center; justify-content: center; }
+
+.scr-p5-standings .p5-namecell {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+}
+.scr-p5-standings .p5-name {
+  font-size: var(--t-body);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-p5-standings .p5-tag {
+  flex: none; font-size: 10px; font-weight: 700; letter-spacing: .01em;
+  border-radius: var(--radius-chip); padding: 1px 5px;
+  border: 1px solid var(--line); color: var(--dim);
+}
+/* The parlay is the one high-variance swing in a flat format, so where it actually
+ * moved somebody it gets the accent. Where it did not, there is no chip at all. */
+.scr-p5-standings .p5-tag--parlay { color: var(--accent); }
+
+.scr-p5-standings .p5-num { text-align: right; font-size: var(--t-body); color: var(--dim); }
+.scr-p5-standings .p5-num--on { color: var(--fg); font-weight: 700; }
+
+/* ---------------------------------------------------------------- footer */
+.scr-p5-standings .p5-foot { margin: 10px 2px 0; }
+.scr-p5-standings .p5-footline {
+  margin: 0 0 4px; font-size: var(--t-micro); color: var(--dim); line-height: 1.35;
+}
+
+/* S5: the desktop layout caps the measure in shell.css. The table keeps the phone
+ * measure there rather than stretching - a 1900px standings row is the CBS failure. */
+@media (min-width: 900px) {
+  .scr-p5-standings .p5-toggle { max-width: 320px; }
+}
