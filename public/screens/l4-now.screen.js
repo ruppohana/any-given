@@ -60,7 +60,7 @@
  */
 
 import { stateBlock, STATES_CSS } from '/components/states.js';
-import { teamChip, TEAM_CHIP_CSS, applyTeamVars } from '/components/team-chip.js';
+import { teamChip, TEAM_CHIP_CSS, applyTeamVars, teamVars } from '/components/team-chip.js';
 import { signed, signClass } from '/components/fmt.js';
 
 export const id = 'l4-now';
@@ -143,6 +143,18 @@ export const BALANCE_NOUN = 'Marbles';
 /* ========================================================================== */
 
 /** `min(stake * 6, round(stake / p))`. The cap is on the MULTIPLE, not the stake. */
+/* 🔴 THE TILE SHOWS WHAT YOU WIN, NOT WHAT COMES BACK. Changed 2026-09-08 on
+ * Jason's call - "use what you win (41)" - and it was a real defect: the tile
+ * read "+51" on a stake of 10 at 5.13x, which is the GROSS RETURN. The plus sign
+ * says delta and the number said total, so every reader would have over-counted
+ * their winnings by exactly their own stake, every time.
+ *
+ * payoutFor stays gross, because that is what the ledger settles and what the
+ * bank receives. winFor is what a tile is allowed to print. */
+export function winFor(stake, p) {
+  return payoutFor(stake, p) - stake;
+}
+
 export function payoutFor(stake, p) {
   if (p == null || !(p > 0)) return stake;
   return Math.min(stake * HOUSE.maxPayoutMultiple, Math.round(stake / p));
@@ -245,6 +257,11 @@ export async function previewData(fixtures, state) {
 
   const priced = byId(PRICED);
   const snaps = new Map();
+  /* The other team, so the card can say which GAME this is. Both competitors are
+   * already in scope off the fixture header - no guessing, no second lookup. */
+  const sideIds = sides.map((c) => (c.team && c.team.id != null ? String(c.team.id) : null)).filter(Boolean);
+  const oppOf = (id) => (sideIds.length === 2 ? (sideIds[0] === String(id) ? sideIds[1] : sideIds[0]) : null);
+
   for (const row of PRICED) {
     const hit = at.get(row.snapId);
     if (!hit) continue;
@@ -254,6 +271,10 @@ export async function previewData(fixtures, state) {
     snaps.set(row.snapId, {
       ...row,
       offense: teams[row.offenseId] || null,
+      /* The other team, so the card can say which GAME this is. Read off the
+       * fixture's own header rather than guessed: whichever competitor is not the
+       * one with the ball. */
+      defense: teams[oppOf(row.offenseId)] || null,
       /* Display strings, straight off the fixture. */
       downDistance: start.downDistanceText || null,
       spot: start.possessionText || null,
@@ -370,6 +391,75 @@ function modelLine(snap) {
 
 /* ---- the pieces ---- */
 
+/** The field, drawn as a field. yardsToGoal 74 is the ball on their own 26. */
+function fieldStrip(snap) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 100, H = 20, EZ = 8;               // end zones are 8 of 100 units
+  const box = el('div', 'l4-field');
+  applyTeamVars(box, snap.offense);
+  if (snap.defense) {
+    const d = teamVars(snap.defense).vars;
+    box.style.setProperty('--opp-a', d['--team-a']);
+  }
+
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  const add = (tag, attrs) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k of Object.keys(attrs)) n.setAttribute(k, attrs[k]);
+    svg.appendChild(n);
+    return n;
+  };
+
+  add('rect', { x: 0, y: 0, width: W, height: H, fill: 'var(--grass)' });
+  /* The two end zones. The offense is driving toward the RIGHT one, which is the
+   * one the other team defends - so it wears their color, not ours. */
+  add('rect', { x: 0, y: 0, width: EZ, height: H, fill: 'var(--team-a)', opacity: '.85' });
+  add('rect', { x: W - EZ, y: 0, width: EZ, height: H,
+                fill: 'var(--opp-a, var(--team-null))', opacity: '.85' });
+
+  /* A line every ten yards, the 50 a shade stronger. */
+  for (let y = 10; y <= 90; y += 10) {
+    const x = EZ + (y / 100) * (W - EZ * 2);
+    add('line', { x1: x, y1: 2, x2: x, y2: H - 2, stroke: 'var(--line)',
+                  'stroke-width': y === 50 ? .7 : .4 });
+  }
+
+  const toGoal = snap.yardsToGoal;
+  if (toGoal != null) {
+    const at = (yards) => EZ + ((100 - yards) / 100) * (W - EZ * 2);
+    /* The line to gain, first, so scrimmage draws over it if they meet. */
+    if (snap.distance != null) {
+      const gx = at(Math.max(0, toGoal - snap.distance));
+      add('line', { x1: gx, y1: 0, x2: gx, y2: H, stroke: 'var(--accent)', 'stroke-width': 1 });
+    }
+    /* The ball is the LINE, not a dot on it. A filled circle on a vertical rule at
+     * this scale reads as a cross rather than as a ball, which is what the first
+     * render showed - so the scrimmage is a full-height rule and the ball is a
+     * small notch on the top edge, clear of the line to gain. */
+    const sx = at(toGoal);
+    add('line', { x1: sx, y1: 0, x2: sx, y2: H, stroke: 'var(--fg)', 'stroke-width': 1.4 });
+    add('path', { d: `M ${sx - 1.8} 0 L ${sx + 1.8} 0 L ${sx} 2.8 Z`, fill: 'var(--fg)' });
+    /* Which way they are going, along the bottom so it crosses nothing. */
+    const dir = Math.min(W - EZ - 1.5, sx + 9);
+    if (dir > sx + 4) {
+      add('path', { d: `M ${sx + 3} ${H - 3} L ${dir} ${H - 3}`, stroke: 'var(--fg)',
+                    'stroke-width': .7, opacity: '.5' });
+      add('path', { d: `M ${dir - 2} ${H - 4.6} L ${dir} ${H - 3} L ${dir - 2} ${H - 1.4}`,
+                    fill: 'none', stroke: 'var(--fg)', 'stroke-width': .7, opacity: '.5' });
+    }
+  }
+  box.appendChild(svg);
+
+  /* The abbreviations sit ON the end zones, which is where they are painted. */
+  const l = el('span', 'l4-field-ez is-left', (snap.offense && snap.offense.abbrev) || '');
+  const r = el('span', 'l4-field-ez is-right', (snap.defense && snap.defense.abbrev) || '');
+  box.append(l, r);
+  return box;
+}
+
 function situation(snap) {
   const wrap = document.createDocumentFragment();
   const row = el('div', 'l4-sit');
@@ -379,26 +469,43 @@ function situation(snap) {
    * possession indicator instead of saying it is unknown. 401 of 760 schools have
    * no usable primary and an opponent can be absent from the file outright; found
    * at 393px by deleting one real row from teams.json and looking. */
+  /* 🔴 THE MATCHUP, NOT JUST THE TEAM WITH THE BALL. Jason, 2026-09-08: "it is
+   * boise vs ? i have." The card named BOIS and never said who they were playing,
+   * so the one thing every viewer already knows - which game this is - was the
+   * one thing missing. The possession chip stays; the opponent joins it. */
   row.appendChild(teamChip(snap.offense, { size: 20 }));
+  if (snap.defense) {
+    row.appendChild(el('span', 'l4-sit-vs', 'v'));
+    row.appendChild(teamChip(snap.defense, { size: 20, adjacentTo: snap.offense }));
+  }
   row.appendChild(el('span', 'l4-sit-dd num', snap.downDistance || '—'));
+  /* 🔴 THE SPOT WAS PRINTED TWICE and the SCORE not at all. "3rd & 4 at BOIS 31"
+   * already carries the spot, and the right-hand column repeated it - which is
+   * what pushed the header onto two lines at 393px. What belongs there is the
+   * thing a viewer actually wants beside the clock, and it was missing from the
+   * card entirely. Found by looking at it. */
   const rest = el('span', 'l4-sit-rest num');
-  rest.textContent = [snap.spot, snap.clockDisplay ? 'Q' + snap.period + ' ' + snap.clockDisplay : null]
+  const score = (snap.awayScore != null && snap.homeScore != null)
+    ? snap.awayScore + '–' + snap.homeScore : null;
+  rest.textContent = [score, snap.clockDisplay ? 'Q' + snap.period + ' ' + snap.clockDisplay : null]
     .filter(Boolean).join(' · ');
   row.appendChild(rest);
   wrap.appendChild(row);
 
   /* The field, own goal on the left. yardsToGoal 74 is the ball on their own 26. */
-  const field = el('div', 'l4-field');
-  applyTeamVars(field, snap.offense);
-  const pct = snap.yardsToGoal == null ? 0 : (100 - snap.yardsToGoal);
-  const gained = el('div', 'l4-field-gained'); gained.style.width = pct + '%';
-  const mark = el('div', 'l4-field-marker'); mark.style.left = pct + '%';
-  field.append(gained, mark);
-  if (snap.distance != null && snap.yardsToGoal != null) {
-    const first = el('div', 'l4-field-first');
-    first.style.left = Math.min(100, pct + snap.distance) + '%';
-    field.appendChild(first);
-  }
+  /* 🔴 THE FIELD, NOT A PROGRESS BAR. Jason, 2026-09-08: "the bar looks stupid
+   * and cheap." It was a 4px div with an opacity fill - a loading bar wearing a
+   * team color, telling a football viewer nothing they could read at a glance.
+   *
+   * This draws the thing itself: grass ground, both end zones in the two teams'
+   * colors, a yard line every ten, the line of scrimmage where the ball actually
+   * is, the line to gain, and an arrow for which way they are going. Every one of
+   * those is a fact already in the snap - none of it is decoration, and a viewer
+   * who watches football reads it without a legend.
+   *
+   * Inline SVG, no library, no image. --grass is DESIGN.md's own token for field
+   * ground and is described there as "the one literal color". */
+  const field = fieldStrip(snap);
   wrap.appendChild(field);
   return wrap;
 }
@@ -415,9 +522,15 @@ function bankStrip(bank, opts) {
   opts = opts || {};
   const card = el('div', 'card l4-bank');
 
+  /* THE UNIT GOES ON THE NUMBER. Jason, 2026-09-08: "put marbles after the
+   * number." A bare 200 needs a caption to say what it is; "200 Marbles" is
+   * self-describing, and the word is doing the work the caption was doing. */
   const bal = el('div', 'l4-bank-balance num');
   bal.textContent = String(opts.from == null ? bank.balance : opts.from);
-  card.appendChild(bal);
+  const unit = el('span', 'l4-bank-unit', BALANCE_NOUN);
+  const balWrap = el('div', 'l4-bank-bal-wrap');
+  balWrap.append(bal, unit);
+  card.appendChild(balWrap);
 
   const right = el('div', 'l4-bank-right');
   const d = el('span', 'l4-bank-delta num ' + signClass(bank.delta));
@@ -434,19 +547,31 @@ function bankStrip(bank, opts) {
   right.append(d, rec);
   card.appendChild(right);
 
-  /* DESIGN.md specs "Play credits · cannot be bought". `credits` is a forbidden
-   * word beside the balance, so it ships in Marbles. */
-  card.appendChild(el('p', 'l4-bank-note', BALANCE_NOUN + ' · cannot be bought'));
+  /* 🔴 "cannot be bought" IS NOT ON THIS CARD ANY MORE. Jason, 2026-09-08: "do i
+   * need to state every single time that marbles cannot be bought? no."
+   *
+   * DESIGN.md says that line stays on screen because it is what keeps this out of
+   * gambling-app territory. The job it was doing is now done by the UNIT: a
+   * balance labelled "Marbles" is already not money, to a user, a reviewer and a
+   * regulator alike. Repeating the sentence on every snap of every game added
+   * nothing and read as nerves.
+   *
+   * It still ships, once, where somebody would go looking for it: Settings and
+   * the rules screen. Deleting it from THERE would be a change to the legal
+   * position; deleting it from here is an edit. */
 
   if (opts.committed) {
     const c = el('p', 'l4-bank-committed');
     c.append(document.createTextNode('Committed on this snap '));
     const b = el('b', 'num', String(opts.committed));
-    c.append(b, document.createTextNode(' · back to ' + HOUSE.startingBank + ' at the next kickoff, always'));
     card.appendChild(c);
-  } else {
+  } else if (bank.balance < HOUSE.stakeLadder[0]) {
+    /* Same rule as the result card: the refill promise appears at the moment it
+     * is load-bearing - a bank too low to stake - and not on every snap of every
+     * game to somebody who was never worried. Settings carries it permanently. */
     card.appendChild(el('p', 'l4-bank-committed',
-      'Back to ' + HOUSE.startingBank + ' at the next kickoff, always. Nobody is ever out.'));
+      'Nothing left to stake tonight. Back to ' + HOUSE.startingBank
+      + ' at the next kickoff, and you are still in the pool.'));
   }
 
   if (opts.from != null && opts.from !== bank.balance) animateTo(bal, opts.from, bank.balance);
@@ -491,7 +616,7 @@ function tile(side, offer, stake, opts) {
   b.appendChild(el('span', 'l4-tile-side', side === 'run' ? 'Run' : 'Pass'));
 
   const pay = el('span', 'l4-tile-pay num');
-  const inner = el('span', 'l4-pay-val', offer ? '+' + payoutFor(stake, offer.p) : 'No price');
+  const inner = el('span', 'l4-pay-val', offer ? '+' + winFor(stake, offer.p) : 'No price');
   pay.appendChild(inner);
   b.appendChild(pay);
 
@@ -527,7 +652,7 @@ function tile(side, offer, stake, opts) {
 function swapPay(tileEl, offer, stake, pct) {
   const pay = tileEl.querySelector('.l4-tile-pay');
   const bar = tileEl.querySelector('.l4-tile-bar');
-  const next = offer ? '+' + payoutFor(stake, offer.p) : 'No price';
+  const next = offer ? '+' + winFor(stake, offer.p) : 'No price';
   const cur = pay.querySelector('.l4-pay-val');
   if (cur && cur.textContent !== next) {
     if (!REDUCED()) {
@@ -627,13 +752,19 @@ export function render(root, data, state) {
   const head = el('div', 'l4-call-head');
   head.appendChild(el('span', 'l4-call-title', 'Call it'));
 
-  if (noModel) {
-    head.appendChild(el('span', 'l4-nomodel', 'No model'));
-  } else {
-    const chip = el('span', 'c-' + snap.confidence, CONF_WORD[snap.confidence]);
-    chip.title = 'Model confidence: ' + snap.confidence;
-    head.appendChild(chip);
-  }
+  /* 🔴 THE CONFIDENCE CHIP IS GONE. Removed 2026-09-08 - Jason: "do i care if the
+   * model is confident?"
+   *
+   * No. The PRICE is the model's opinion, and the line under the tiles already
+   * says how much it has seen - "3,412 comparable snaps from the league", or "97
+   * comparable snaps · down alone, nothing narrower matched". That is the same
+   * fact, checkable, in a number. A chip reading Confident is an adjective about
+   * a model, and adjectives about a model are what people learn to ignore.
+   *
+   * The three steps are NOT removed from the model. price.ts still produces a
+   * confidence and the sample line is driven by it - a low one reads visibly
+   * thinner because the number beside it is small. What went is the word. */
+  if (noModel) head.appendChild(el('span', 'l4-nomodel', 'No model'));
 
   const clockEl = el('span', 'l4-call-clock num');
   head.appendChild(clockEl);

@@ -92,6 +92,30 @@ export function applyTeamVars(el, team) {
  * primary on --card:#ffffff and a navy primary on --bg:#120a0e without knowing
  * which theme it is in: the shape has an outline whatever the fill does.
  */
+/* MARKS. Held PROVISIONAL 2026-09-08 - Jason reversed the no-logos decision and
+ * then said he needed to see it run first, so THE TOGGLE IS THE DELIVERABLE AND
+ * THE DEFAULT IS NOT DECIDED. Both paths are built; he picks after looking.
+ *
+ * The URL derives from the team id, which is the CFBD id and the ESPN id at once
+ * - verified 2026-09-08 against a.espncdn.com for Oregon, Ohio State, Oklahoma
+ * and TCU. Nothing is stored and no logo is committed to this repo.
+ *
+ * 🔴 The chip is NEVER deleted. It is the fallback for marks-off, for a team with
+ * no logo, and for a logo that fails to load - and it is what the product ships
+ * if a school, a conference or CLC ever writes. */
+export function marksOn(doc) {
+  /* Defensive on every hop: a test DOM shim has no documentElement, and a chip
+   * that throws takes the whole screen with it. Marks off is the safe answer -
+   * the two-color chip needs nothing but the team. */
+  const d = doc || (typeof document !== 'undefined' ? document : null);
+  const el = d && d.documentElement;
+  return !!(el && el.dataset && el.dataset.marks === 'on');
+}
+
+export function logoUrl(team) {
+  return team && team.id ? 'https://a.espncdn.com/i/teamlogos/ncaa/500/' + team.id + '.png' : null;
+}
+
 export function teamChip(team, opts) {
   opts = opts || {};
   const size = opts.size || 22;
@@ -106,23 +130,48 @@ export function teamChip(team, opts) {
   const bAdj = adjacentTo ? normalizeColor(adjacentTo.primary) : null;
   if (tooClose(a, bAdj)) wrap.dataset.adjacentClash = 'true';
 
+  const url = marksOn() ? logoUrl(team) : null;
+  if (url) {
+    const img = document.createElement('img');
+    img.className = 'tchip-logo';
+    img.src = url; img.width = size; img.height = size;
+    img.alt = ''; img.loading = 'lazy';
+    img.addEventListener('error', function () {
+      img.remove();
+      wrap.dataset.markFailed = 'true';
+      wrap.insertBefore(chipMark(state, size), wrap.firstChild);
+    });
+    wrap.appendChild(img);
+  } else {
+    wrap.appendChild(chipMark(state, size));
+  }
+
+  if (withAbbrev) {
+    const ab = document.createElement('span');
+    ab.className = 'tchip-abbrev num';
+    ab.textContent = (team && team.abbrev) || '—';
+    wrap.appendChild(ab);
+  }
+  /* The accessible name is the real name in type - the identification is the
+   * text whether a mark is shown or not. */
+  wrap.setAttribute('title', (team && team.name) || 'Unknown team');
+  return wrap;
+}
+
+/** The two-color mark. Inline SVG - no icon font, no CDN, no image. */
+function chipMark(state, size) {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
   svg.setAttribute('class', 'tchip-mark');
-
   const left = document.createElementNS(NS, 'path');
   left.setAttribute('d', 'M 5 1 H 12 V 23 H 5 A 4 4 0 0 1 1 19 V 5 A 4 4 0 0 1 5 1 Z');
   left.setAttribute('fill', 'var(--team-a)');
-
   const right = document.createElementNS(NS, 'path');
   right.setAttribute('d', 'M 12 1 H 19 A 4 4 0 0 1 23 5 V 19 A 4 4 0 0 1 19 23 H 12 Z');
   right.setAttribute('fill', 'var(--team-b)');
-
   const ring = document.createElementNS(NS, 'rect');
   ring.setAttribute('x', '1'); ring.setAttribute('y', '1');
   ring.setAttribute('width', '22'); ring.setAttribute('height', '22');
@@ -132,25 +181,16 @@ export function teamChip(team, opts) {
   ring.setAttribute('stroke-width', '1');
   /* A team with NO captured color says so, rather than pretending to be grey. */
   if (state === 'none') ring.setAttribute('stroke-dasharray', '3 2');
-
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
   svg.appendChild(left); svg.appendChild(right); svg.appendChild(ring);
-  wrap.appendChild(svg);
-
-  if (withAbbrev) {
-    const ab = document.createElement('span');
-    ab.className = 'tchip-abbrev num';
-    ab.textContent = (team && team.abbrev) || '\u2014';
-    wrap.appendChild(ab);
-  }
-  /* The accessible name is the real name in type. The chip is decoration; the
-   * identification is the text, which is the whole no-marks argument. */
-  wrap.setAttribute('title', (team && team.name) || 'Unknown team');
-  return wrap;
+  return svg;
 }
 
 export const TEAM_CHIP_CSS = [
   '.tchip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }',
   '.tchip-mark { flex: none; display: block; }',
+  '.tchip-logo { flex: none; display: block; object-fit: contain; }',
   '.tchip-abbrev { font-size: var(--t-micro); font-weight: 700; letter-spacing: .02em; color: var(--fg); white-space: nowrap; }',
   '.tchip[data-adjacent-clash="true"] .tchip-mark { outline: 2px solid var(--card); border-radius: 6px; }',
   '.tchip[data-team-colors="none"] .tchip-abbrev { color: var(--dim); }'

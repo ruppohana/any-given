@@ -539,6 +539,31 @@ function alertsSection(data) {
 
 /* -------------------------------------------------------------------- render */
 
+/* 🔴 THE BALANCE LINE LIVES HERE NOW. It used to sit on the call card, on every
+ * snap of every game, and Jason removed it 2026-09-08: "do i need to state every
+ * single time that marbles cannot be bought? no."
+ *
+ * DESIGN.md requires the line to stay ON SCREEN, and that requirement survives -
+ * it moved rather than went. The call card carries the UNIT ("200 Marbles"),
+ * which is what tells a user, a reviewer and a regulator it is not money; this
+ * section carries the SENTENCE, once, where somebody would look for it.
+ *
+ * Deleting it from here would be a change to the legal position, not an edit. */
+function balanceSection() {
+  const sec = section('The balance');
+  const row = el('div', 's2-row');
+  row.appendChild(el('div', 's2-row-label', 'Marbles'));
+  const v = el('div', 's2-row-value');
+  v.textContent = 'Cannot be bought';
+  row.appendChild(v);
+  sec.appendChild(row);
+  sec.appendChild(el('p', 's2-note',
+    'Marbles cannot be bought, sold, cashed out or transferred, and nothing that '
+    + 'affects play is ever for sale. Everybody starts every game on the same '
+    + 'number and it resets at the next kickoff, so nobody is ever out.'));
+  return sec;
+}
+
 export function render(root, data, state) {
   root.innerHTML = '';
   root.classList.add('scr-s2-settings');
@@ -608,4 +633,5 @@ export function render(root, data, state) {
   root.appendChild(themeSection(data));
   root.appendChild(densitySection(data));
   root.appendChild(alertsSection(data));
+  root.appendChild(balanceSection());
 }

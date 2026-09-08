@@ -322,13 +322,22 @@ function resultCard(v) {
 
   /* ---- 3. NOBODY IS ELIMINATED, and it is said on the screen where a bank at
    * zero would first be believed. No word here is a currency word. ---- */
-  const foot = el('p', 'l7-foot');
-  foot.textContent = v.bank.balance < 5
-    ? 'Nothing left to stake in this game. Your bank goes back to ' + v.bank.start
-      + ' at the next kickoff and you are still in the pool.'
-    : 'Every game starts at ' + v.bank.start + ' ' + BALANCE_NOUN
-      + '. The next one starts there too.';
-  wrap.appendChild(foot);
+  /* 🔴 ONLY WHEN IT IS NEEDED. Jason, 2026-09-08: "i dont need this every fucking
+   * time either."
+   *
+   * The line existed to say nobody is eliminated. On a healthy bank it says that
+   * to somebody who was not worried, after every single call, and a reassurance
+   * repeated to a person with no problem is noise that trains them to skip the
+   * footer - which is where it would matter when they DO bust.
+   *
+   * So it fires at the only moment it is load-bearing: a bank too low to stake.
+   * The permanent version lives once, in Settings, under The balance. */
+  if (v.bank.balance < 5) {
+    const foot = el('p', 'l7-foot');
+    foot.textContent = 'Nothing left to stake in this game. Your bank goes back to '
+      + v.bank.start + ' at the next kickoff and you are still in the pool.';
+    wrap.appendChild(foot);
+  }
 
   return wrap;
 }

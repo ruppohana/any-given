@@ -22,15 +22,6 @@
 
 /* The field. --team-a is set per element by team-chip.js; it is a var(--team-null)
  * when the school has no usable primary, which is 401 of 760. */
-.l4-field {
-  position: relative; height: 6px; border-radius: 3px;
-  background: var(--track); border: 1px solid var(--line); margin: 0 0 12px;
-  overflow: hidden;
-}
-.l4-field-gained { position: absolute; inset: 0 auto 0 0; background: var(--team-a, var(--team-null)); opacity: .55; }
-.l4-field-marker { position: absolute; top: -3px; width: 3px; height: 10px; border-radius: 2px;
-                   background: var(--fg); transform: translateX(-1px); }
-.l4-field-first  { position: absolute; top: -2px; width: 1px; height: 8px; background: var(--accent); }
 
 /* ------------------------------------------------------------ bank strip */
 
@@ -225,3 +216,37 @@
   .l4-tile-pay { font-size: var(--t-emph); }
   .l4-chip { min-width: 46px; }
 }
+
+/* The unit sits on the number - "200 Marbles", not 200 with a caption below. */
+.l4-bank-bal-wrap { display: flex; align-items: baseline; gap: 6px; }
+.l4-bank-unit { font-size: var(--t-micro); color: var(--dim); font-weight: 600; letter-spacing: .02em; }
+/* The matchup, so the card says which game this is. */
+.l4-sit-vs { font-size: var(--t-micro); color: var(--dim); margin: 0 2px; }
+
+/* The field. Drawn as a field rather than as a progress bar - grass ground, both
+ * end zones in the two teams' colors, a line every ten yards, the ball where it
+ * is and the line to gain. Depth is the 1px hairline, as everywhere else. */
+.l4-field {
+  position: relative;
+  height: 26px;
+  margin: 6px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.l4-field svg { display: block; width: 100%; height: 100%; }
+.l4-field-ez {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 8px; font-weight: 700; letter-spacing: .04em;
+  color: var(--card); mix-blend-mode: normal;
+}
+.l4-field-ez.is-left  { left: 2px; }
+.l4-field-ez.is-right { right: 2px; }
+
+/* The header is one line at 393px. The matchup, the situation, then the score
+ * and clock hard right - and the situation is allowed to shrink before it wraps,
+ * because two lines of header pushed the bank strip off the first screen. */
+.l4-sit { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.l4-sit-dd { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+             white-space: nowrap; font-size: var(--t-body); font-weight: 700; }
+.l4-sit-rest { flex: 0 0 auto; white-space: nowrap; font-size: var(--t-micro); color: var(--dim); }

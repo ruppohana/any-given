@@ -364,13 +364,19 @@ test('the purchasable-word scan: nothing near the balance may be buyable', () =>
     assert.ok(!literals.includes(w), `"${w}" appears in a shippable string on the call screen`);
     assert.ok(!CSS_LIVE.toLowerCase().includes(w), `"${w}" appears in the stylesheet`);
   }
-  /* The line is composed as BALANCE_NOUN + ' · cannot be bought', so both halves
-   * are checked: the noun is Marbles (asserted above against calls.ts) and the
-   * disclaimer is on the strip rather than in settings. It is what keeps this out
-   * of gambling-app territory and it stays on screen. */
-  assert.ok(literals.includes(' · cannot be bought'), 'the disclaimer must be on the bank strip');
-  assert.match(SRC_LIVE, /BALANCE_NOUN \+ ' · cannot be bought'/);
-  assert.ok(literals.includes('nobody is ever out'), 'no elimination, and it says so');
+  /* 🔴 THE DISCLAIMER IS NOT ON THIS CARD ANY MORE, and that is the assertion.
+   * Jason removed it 2026-09-08 - "do i need to state every single time that
+   * marbles cannot be bought? no." What replaced it is the UNIT on the number:
+   * "200 Marbles" is self-describing where a bare 200 needed a caption.
+   *
+   * DESIGN.md's requirement that the line stay on screen is met by it MOVING, not
+   * by it going: s2-settings carries it once, under The balance, and that file's
+   * own test asserts it. Deleting it from there is a change to the legal
+   * position; deleting it from here was an edit. */
+  assert.ok(!literals.includes('cannot be bought'),
+    'the disclaimer belongs in Settings now, not on every snap of every game');
+  assert.match(SRC_LIVE, /l4-bank-unit/, 'the unit goes on the number instead');
+  assert.match(SRC_LIVE, /BALANCE_NOUN/, 'and it is the balance noun, not a literal');
 });
 
 test('the balance is the largest type in the app and the call buttons exceed 44px', () => {
@@ -395,12 +401,15 @@ test('every figure carries tabular numerals', () => {
   }
 });
 
-test('the confidence chip is three fixed steps and never a ramp', () => {
-  assert.match(SRC, /'c-' \+ snap\.confidence/, 'the chip class comes straight off the model');
-  assert.doesNotMatch(CSS, /linear-gradient|hsl\(|color-mix/, 'a gradient is not readable at 11px');
-  for (const row of screen.PRICED) assert.ok(['hi', 'mid', 'lo'].includes(row.confidence));
+test('the model says how much it has seen, in a number rather than an adjective', () => {
+  /* The confidence CHIP was removed 2026-09-08 - Jason: "do i care if the model
+   * is confident?" The price is the model's opinion and the sample line is how
+   * much it has seen, checkable, in a figure. The three steps still exist in
+   * price.ts; what went is the word on the tile. */
+  assert.ok(!/CONF_WORD\[/.test(SRC_LIVE), 'no confidence word is rendered');
+  assert.ok(!/'c-' \+ snap\.confidence/.test(SRC_LIVE), 'no confidence chip is rendered');
+  assert.match(SRC_LIVE, /comparable snaps/, 'the sample count does the job instead');
 });
-
 test('the result is symmetric: one band, one sign, one fixed scale', () => {
   assert.match(CSS, /\.l4-band\[data-sign="up"\][^{]*\{[^}]*var\(--up\)/);
   assert.match(CSS, /\.l4-band\[data-sign="down"\][^{]*\{[^}]*var\(--down\)/);
@@ -468,8 +477,15 @@ test('a team with no identity is drawn as a null, never dropped', () => {
   assert.match(SRC_LIVE, /row\.appendChild\(teamChip\(snap\.offense/);
   assert.doesNotMatch(SRC_LIVE, /if \(snap\.offense\)\s*row\.appendChild/,
     'the chip is unconditional; teamChip has a defined null state');
-  assert.match(CSS_LIVE, /--team-a,\s*var\(--team-null\)/,
-    'the field bar falls back to the null token, never to whatever #000000 does');
+  /* The field is drawn in SVG now rather than as a div bar, so the null fallback
+   * lives on the fill attribute. Both end zones must fall back to the defined
+   * null token rather than to whatever #000000 does - and the OPPONENT's end
+   * zone is the one most likely to be missing, because an opponent can be absent
+   * from teams.json outright. */
+  assert.match(SRC_LIVE, /var\(--opp-a, var\(--team-null\)\)/,
+    'the far end zone falls back to the null token');
+  assert.match(SRC_LIVE, /fill: 'var\(--grass\)'/,
+    'the field ground is the grass token - DESIGN.md calls it the one literal color');
   assert.doesNotMatch(SRC_LIVE, /documentElement\.style\.setProperty\(\s*'--team/,
     'team color is set per element, never at :root');
   /* And the file really does contain teams with nothing, which is why this path
