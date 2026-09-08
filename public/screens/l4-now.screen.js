@@ -391,69 +391,140 @@ function modelLine(snap) {
 
 /* ---- the pieces ---- */
 
-/** The field, drawn as a field. yardsToGoal 74 is the ball on their own 26. */
+/** THE FIELD, IN PERSPECTIVE. Redrawn 2026-09-08 to Jason's reference: a field
+ *  seen from a low angle - a trapezoid, mown stripes, hash marks, yard numbers,
+ *  both end zones. Not a bar with a fill.
+ *
+ *  It is a trapezoid rather than a rectangle because that is the whole reason it
+ *  reads as a FIELD at a glance instead of as a meter: the far touchline is
+ *  shorter than the near one and the yard lines converge. Everything is drawn
+ *  from the same two edges, so the geometry cannot drift apart.
+ *
+ *  Inline SVG. No image, no library, no gradient mesh - the depth is two greens
+ *  and convergence, which is what the constraint leaves and it is enough.
+ *  yardsToGoal 74 is the ball on their own 26. */
 function fieldStrip(snap) {
   const NS = 'http://www.w3.org/2000/svg';
-  const W = 100, H = 20, EZ = 8;               // end zones are 8 of 100 units
+  const W = 200, H = 46;
+  const NEAR_Y = H - 3, FAR_Y = 9;        // the two touchlines
+  const NEAR_INSET = 0, FAR_INSET = 26;   // how far the far edge pulls in
+  const EZ = 0.085;                       // an end zone is 8.5% of the length
+
   const box = el('div', 'l4-field');
   applyTeamVars(box, snap.offense);
   if (snap.defense) {
-    const d = teamVars(snap.defense).vars;
-    box.style.setProperty('--opp-a', d['--team-a']);
+    box.style.setProperty('--opp-a', teamVars(snap.defense).vars['--team-a']);
   }
 
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('aria-hidden', 'true');
-  const add = (tag, attrs) => {
+  const add = (tag, attrs, parent) => {
     const n = document.createElementNS(NS, tag);
     for (const k of Object.keys(attrs)) n.setAttribute(k, attrs[k]);
-    svg.appendChild(n);
+    (parent || svg).appendChild(n);
     return n;
   };
 
-  add('rect', { x: 0, y: 0, width: W, height: H, fill: 'var(--grass)' });
-  /* The two end zones. The offense is driving toward the RIGHT one, which is the
-   * one the other team defends - so it wears their color, not ours. */
-  add('rect', { x: 0, y: 0, width: EZ, height: H, fill: 'var(--team-a)', opacity: '.85' });
-  add('rect', { x: W - EZ, y: 0, width: EZ, height: H,
-                fill: 'var(--opp-a, var(--team-null))', opacity: '.85' });
+  /* x at a fraction of the length, on the near touchline and on the far one. */
+  const nearX = (f) => NEAR_INSET + f * (W - NEAR_INSET * 2);
+  const farX  = (f) => FAR_INSET + f * (W - FAR_INSET * 2);
+  const quad  = (a, b) => `${nearX(a)},${NEAR_Y} ${nearX(b)},${NEAR_Y} `
+                        + `${farX(b)},${FAR_Y} ${farX(a)},${FAR_Y}`;
 
-  /* A line every ten yards, the 50 a shade stronger. */
-  for (let y = 10; y <= 90; y += 10) {
-    const x = EZ + (y / 100) * (W - EZ * 2);
-    add('line', { x1: x, y1: 2, x2: x, y2: H - 2, stroke: 'var(--line)',
-                  'stroke-width': y === 50 ? .7 : .4 });
+  /* Mown stripes, ten of them, alternating. This is the thing that says grass. */
+  for (let i = 0; i < 10; i++) {
+    add('polygon', { points: quad(i / 10, (i + 1) / 10),
+                     fill: 'var(--grass)', opacity: i % 2 ? '1' : '.9' });
   }
+  /* The two end zones, the far one in the other team's color. */
+  add('polygon', { points: quad(0, EZ), fill: 'var(--team-a)', opacity: '.92' });
+  add('polygon', { points: quad(1 - EZ, 1), fill: 'var(--opp-a, var(--team-null))', opacity: '.92' });
+
+  /* Yard lines every five, the tens stronger, converging with the field. */
+  for (let y = 0; y <= 100; y += 5) {
+    const f = EZ + (y / 100) * (1 - EZ * 2);
+    add('line', { x1: nearX(f), y1: NEAR_Y, x2: farX(f), y2: FAR_Y,
+                  stroke: 'var(--card)', 'stroke-width': y % 10 ? .5 : .9,
+                  opacity: y % 10 ? '.45' : '.8' });
+  }
+  /* Hash marks along the two inbound lines. */
+  for (const t of [0.36, 0.64]) {
+    const hy = FAR_Y + t * (NEAR_Y - FAR_Y);
+    const hx = (f) => farX(f) + t * (nearX(f) - farX(f));
+    for (let y = 1; y < 100; y += 1) {
+      if (y % 5 === 0) continue;
+      const f = EZ + (y / 100) * (1 - EZ * 2);
+      add('line', { x1: hx(f), y1: hy - 1, x2: hx(f), y2: hy + 1,
+                    stroke: 'var(--card)', 'stroke-width': .4, opacity: '.5' });
+    }
+  }
+  /* The touchlines, which close the shape. */
+  add('polygon', { points: quad(0, 1), fill: 'none', stroke: 'var(--card)',
+                   'stroke-width': .9, opacity: '.85' });
+
+  /* YARD NUMBERS. Jason, on two reference fields: "the second field is a little
+   * cleaner - easier to read." The cleaner one is flat rather than glossy AND it
+   * numbers its yard lines, which is what lets you find the ball without
+   * counting stripes. They sit low on the field where the perspective is widest
+   * and there is room for them. */
+  [10, 20, 30, 40, 50, 40, 30, 20, 10].forEach((label, i) => {
+    const at = (i + 1) * 10;
+    const f = EZ + (at / 100) * (1 - EZ * 2);
+    const t = 0.74;
+    const n = add('text', {
+      x: farX(f) + t * (nearX(f) - farX(f)),
+      y: FAR_Y + t * (NEAR_Y - FAR_Y),
+      'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700,
+      'font-family': 'ui-sans-serif, system-ui, sans-serif',
+      fill: 'var(--card)', opacity: '.92'
+    });
+    n.textContent = String(label);
+  });
 
   const toGoal = snap.yardsToGoal;
   if (toGoal != null) {
-    const at = (yards) => EZ + ((100 - yards) / 100) * (W - EZ * 2);
-    /* The line to gain, first, so scrimmage draws over it if they meet. */
+    const f = (yards) => EZ + ((100 - yards) / 100) * (1 - EZ * 2);
     if (snap.distance != null) {
-      const gx = at(Math.max(0, toGoal - snap.distance));
-      add('line', { x1: gx, y1: 0, x2: gx, y2: H, stroke: 'var(--accent)', 'stroke-width': 1 });
+      const g = f(Math.max(0, toGoal - snap.distance));
+      add('line', { x1: nearX(g), y1: NEAR_Y, x2: farX(g), y2: FAR_Y,
+                    stroke: 'var(--accent)', 'stroke-width': 1.6 });
     }
-    /* The ball is the LINE, not a dot on it. A filled circle on a vertical rule at
-     * this scale reads as a cross rather than as a ball, which is what the first
-     * render showed - so the scrimmage is a full-height rule and the ball is a
-     * small notch on the top edge, clear of the line to gain. */
-    const sx = at(toGoal);
-    add('line', { x1: sx, y1: 0, x2: sx, y2: H, stroke: 'var(--fg)', 'stroke-width': 1.4 });
-    add('path', { d: `M ${sx - 1.8} 0 L ${sx + 1.8} 0 L ${sx} 2.8 Z`, fill: 'var(--fg)' });
-    /* Which way they are going, along the bottom so it crosses nothing. */
-    const dir = Math.min(W - EZ - 1.5, sx + 9);
-    if (dir > sx + 4) {
-      add('path', { d: `M ${sx + 3} ${H - 3} L ${dir} ${H - 3}`, stroke: 'var(--fg)',
-                    'stroke-width': .7, opacity: '.5' });
-      add('path', { d: `M ${dir - 2} ${H - 4.6} L ${dir} ${H - 3} L ${dir - 2} ${H - 1.4}`,
-                    fill: 'none', stroke: 'var(--fg)', 'stroke-width': .7, opacity: '.5' });
+    const b = f(toGoal);
+    add('line', { x1: nearX(b), y1: NEAR_Y, x2: farX(b), y2: FAR_Y,
+                  stroke: 'var(--fg)', 'stroke-width': 1.6, opacity: '.9' });
+
+    /* 🔴 A BALL, DRAWN AS A BALL, AND IT MOVES. Jason: "make this look like
+     * someone would pay for it. show and move the ball accordingly."
+     *
+     * It sits on the hash where the play starts - two thirds down the field,
+     * not on the touchline - and it is a prolate spheroid with a lace panel and
+     * two seams, at the size that reads at 393px. Leather brown is part of the
+     * same literalism as --grass, which DESIGN.md calls the one literal color;
+     * it is the ball, and a ball is not a UI token.
+     *
+     * The whole ball is one <g> with a transform, so moving it between snaps is
+     * one animated attribute rather than a redraw - and reduced motion simply
+     * lands it. */
+    const T = 0.62;
+    const bx = farX(b) + T * (nearX(b) - farX(b));
+    const by = FAR_Y + T * (NEAR_Y - FAR_Y);
+    const g = add('g', { class: 'l4-ball', transform: `translate(${bx} ${by})` });
+    add('ellipse', { rx: 4.2, ry: 2.6, fill: '#7a4a24' }, g);
+    add('ellipse', { rx: 4.2, ry: 2.6, fill: 'none', stroke: '#5c3517', 'stroke-width': .5 }, g);
+    add('path', { d: 'M -2.4 0 H 2.4', stroke: '#fff', 'stroke-width': .75, opacity: '.95' }, g);
+    for (const lx of [-1.5, -0.5, 0.5, 1.5]) {
+      add('path', { d: `M ${lx} -0.85 V 0.85`, stroke: '#fff', 'stroke-width': .55, opacity: '.95' }, g);
     }
+    add('path', { d: 'M -3.5 -1.1 A 4.2 2.6 0 0 0 -3.5 1.1', fill: 'none',
+                  stroke: '#fff', 'stroke-width': .45, opacity: '.7' }, g);
+    add('path', { d: 'M 3.5 -1.1 A 4.2 2.6 0 0 1 3.5 1.1', fill: 'none',
+                  stroke: '#fff', 'stroke-width': .45, opacity: '.7' }, g);
+    box.dataset.ballX = String(Math.round(bx));
   }
   box.appendChild(svg);
 
-  /* The abbreviations sit ON the end zones, which is where they are painted. */
   const l = el('span', 'l4-field-ez is-left', (snap.offense && snap.offense.abbrev) || '');
   const r = el('span', 'l4-field-ez is-right', (snap.defense && snap.defense.abbrev) || '');
   box.append(l, r);

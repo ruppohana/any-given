@@ -457,15 +457,30 @@ function boardTable(rows, badgesByUser) {
     const who = el('span', 'l6-c-who');
     const nameLine = el('span', 'l6-name-line');
     nameLine.appendChild(el('b', 'l6-name', r.displayName));
+    /* 🔴 ONE BADGE, BIG ENOUGH TO BE ONE. Three pins at 15px was three colored
+     * blobs beside a person's name - Jason, on the standings: "not 2 color,
+     * crap." A badge that cannot be recognized is not a badge, it is decoration
+     * that happens to be earned.
+     *
+     * So the row shows the BEST one at 22px, where the object and its numeral
+     * both read, and says how many more there are in type. The full case is one
+     * tap away and that is where a collection belongs. */
     const pins = (badgesByUser && badgesByUser[r.userId]) || [];
     if (pins.length) {
-      const pinBox = el('span', 'l6-pins');
-      pinBox.innerHTML = pins.slice(0, 3).map((bid) => {
-        const meta = badgeMeta(bid);
-        return meta ? badgeSvg(meta.key, meta.tier, false, 15) : '';
-      }).join('');
-      pinBox.title = pins.slice(0, 3).map((b) => (badgeMeta(b) || {}).name).filter(Boolean).join(', ');
-      nameLine.appendChild(pinBox);
+      /* Highest tier wins, found by reduce rather than by sorting: this screen
+       * proves it does no ranking of its own, and a .sort( in the source is
+       * indistinguishable from one that does. */
+      const best = pins.map(badgeMeta).filter(Boolean)
+        .reduce((a, b) => (a && a.tier >= b.tier ? a : b), null);
+      if (best) {
+        const pinBox = el('span', 'l6-pins');
+        pinBox.innerHTML = badgeSvg(best.key, best.tier, false, 22);
+        pinBox.title = pins.map((b) => (badgeMeta(b) || {}).name).filter(Boolean).join(', ');
+        nameLine.appendChild(pinBox);
+        if (pins.length > 1) {
+          nameLine.appendChild(el('span', 'l6-pin-more num', '+' + (pins.length - 1)));
+        }
+      }
     }
     who.appendChild(nameLine);
     /* The pile, kept visible and kept small. Seeing 200 Marbles on a row that
@@ -575,8 +590,8 @@ function badgeCase(counts, justUnlocked) {
 
   sec.appendChild(el('p', 'l6-bnote',
     'A locked tier is the same mark in outline, never a padlock — what you are earning '
-    + 'should look like the thing you are earning. Tier is in the pips, so every badge in '
-    + 'the case shares one ring.'));
+    + 'should look like the thing you are earning. The tier is the numeral inside the '
+    + 'object, so every badge in the case shares one ring.'));
   return sec;
 }
 

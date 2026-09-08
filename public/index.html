@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Any Given…</title>
+<link rel="stylesheet" href="/styles/tokens.css">
+<link rel="stylesheet" href="/styles/shell.css">
+<style>
+  .ag-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px; border-bottom: 1px solid var(--line);
+    background: var(--card); font-size: var(--t-micro);
+  }
+  .ag-bar select { font: inherit; font-size: var(--t-micro); background: var(--card);
+    color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius-button);
+    padding: 4px 6px; max-width: 46%; }
+  .ag-bar label { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); }
+  .ag-bar .spacer { flex: 1 1 auto; }
+</style>
+</head>
+<body>
+  <!-- The only chrome that is not the product: a screen picker, the marks switch
+       and a theme override. It exists so the whole build can be walked on one
+       device without a router or a server, and it is not part of any screen. -->
+  <div class="ag-bar">
+    <select id="picker" aria-label="Screen"></select>
+    <label><input type="checkbox" id="marks"> Logos</label>
+    <span class="spacer"></span>
+    <select id="theme" aria-label="Theme">
+      <option value="system">Auto</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  </div>
+  <div class="ag-shell"><main class="ag-main" id="root"></main></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

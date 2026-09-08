@@ -220,3 +220,7 @@
 @media (min-width: 1200px) {
   .l6-badges { margin-top: 0; }
 }
+
+/* One badge on a row, at a size where it is recognisable, plus a count. */
+.l6-pins { display: inline-flex; align-items: center; vertical-align: -6px; margin-left: 6px; }
+.l6-pin-more { font-size: var(--t-micro); color: var(--dim); margin-left: 3px; }
