@@ -1,0 +1,13 @@
+node_modules/
+.wrangler/
+.dev.vars
+dist/
+
+# The tendency model. 22 MB of JSON that packs to 1.9 MB gzipped; it is
+# bundled or served, never committed raw. The vault lost five days of backup
+# to a 903 MB blob in main on 2026-09-05.
+tendency.json
+*.tendency.json
+
+# Competitor captures and anything pulled from a CDN.
+captures/

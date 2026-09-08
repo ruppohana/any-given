@@ -1,0 +1,16 @@
+{
+  "name": "anygiven",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Any Given - a free college football pool that becomes a live companion during the game. Cloudflare Workers + Durable Objects + D1.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "preview": "node tools/preview.mjs",
+    "test": "node --test",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.129.1"
+  }
+}

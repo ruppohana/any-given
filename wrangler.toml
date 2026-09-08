@@ -1,0 +1,27 @@
+name = "anygiven"
+main = "src/worker.ts"
+compatibility_date = "2026-09-08"
+assets = { directory = "public", binding = "ASSETS" }
+
+# One live game is one Durable Object. Hibernation means an idle connection
+# costs nothing, and a self-rescheduling alarm is what allows a poll faster
+# than 60 seconds - no cron product on any platform goes below a minute.
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+[[durable_objects.bindings]]
+name = "POOL_ROOM"
+class_name = "PoolRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom", "PoolRoom"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "anygiven"
+database_id = "PLACEHOLDER-created-by-wrangler-d1-create"
+
+[vars]
+SEASON = "2026"

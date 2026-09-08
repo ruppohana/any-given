@@ -1,0 +1,10 @@
+.sh-h { font-size: var(--t-section); margin: 0 0 2px; }
+.sh-sub { color: var(--dim); font-size: var(--t-micro); margin: 0 0 14px; }
+.sh-card { padding: 4px 12px; }
+.sh-row { display: flex; align-items: center; gap: 10px; min-height: var(--tap-min);
+          border-bottom: 1px solid var(--line); }
+.sh-row:last-child { border-bottom: 0; }
+.sh-name { flex: 1 1 auto; font-size: var(--t-body); font-weight: 600;
+           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-state { font-size: var(--t-micro); color: var(--dim); }
+.sh-note { color: var(--dim); font-size: var(--t-micro); margin: 10px 2px 0; }
