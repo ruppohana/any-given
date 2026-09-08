@@ -1,0 +1,227 @@
+/* L4 - the Now tab. The bank strip and the call card.
+ *
+ * Everything is scoped under .scr-l4-now. No box-shadow anywhere: depth is
+ * 1px solid var(--line). No hard-coded --maroon or --gold: only --accent, which
+ * SWAPS TOKEN between light and dark. Every figure is tabular via .num.
+ *
+ * THE ONE RULE THIS FILE EXISTS TO KEEP: the payout is on the tile while the
+ * decision is open. .l4-tile-pay is the largest thing on the tile and it is
+ * present in `open`, `staked`, `settling` and both settled states.
+ */
+
+.scr-l4-now { display: block; }
+
+/* ------------------------------------------------------------- situation */
+
+.l4-sit {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 8px;
+}
+.l4-sit-dd { font-size: var(--t-emph); font-weight: 700; }
+.l4-sit-rest { color: var(--dim); font-size: var(--t-body); margin-left: auto; text-align: right; }
+
+/* The field. --team-a is set per element by team-chip.js; it is a var(--team-null)
+ * when the school has no usable primary, which is 401 of 760. */
+.l4-field {
+  position: relative; height: 6px; border-radius: 3px;
+  background: var(--track); border: 1px solid var(--line); margin: 0 0 12px;
+  overflow: hidden;
+}
+.l4-field-gained { position: absolute; inset: 0 auto 0 0; background: var(--team-a, var(--team-null)); opacity: .55; }
+.l4-field-marker { position: absolute; top: -3px; width: 3px; height: 10px; border-radius: 2px;
+                   background: var(--fg); transform: translateX(-1px); }
+.l4-field-first  { position: absolute; top: -2px; width: 1px; height: 8px; background: var(--accent); }
+
+/* ------------------------------------------------------------ bank strip */
+
+/* PLACEMENT IS THE POINT: this sits ABOVE the call card, always. A stake means
+ * nothing without a balance in view. */
+.l4-bank {
+  padding: 10px 12px 9px;
+  border-left: 3px solid var(--accent);
+  display: grid; grid-template-columns: auto 1fr; gap: 2px 12px;
+  align-items: baseline; margin: 0 0 10px;
+}
+.l4-bank-balance {
+  font-size: var(--t-bank);           /* 30px - THE LARGEST TYPE IN THE APP */
+  font-weight: 700; line-height: 1.05; letter-spacing: -0.02em;
+  grid-column: 1; grid-row: 1;
+}
+.l4-bank-right { grid-column: 2; grid-row: 1; justify-self: end; text-align: right; }
+.l4-bank-delta { font-size: var(--t-figure); font-weight: 700; line-height: 1.1; display: block; }
+.l4-bank-rec   { font-size: var(--t-micro); color: var(--dim); display: block; }
+.l4-bank-note  { grid-column: 1 / -1; grid-row: 2;
+                 font-size: var(--t-micro); color: var(--dim); margin: 3px 0 0;
+                 letter-spacing: .01em; }
+.l4-bank-committed { grid-column: 1 / -1; grid-row: 3; font-size: var(--t-micro);
+                     color: var(--dim); margin: 2px 0 0; }
+.l4-bank-committed b { color: var(--fg); font-weight: 600; }
+
+/* The balance is a QUANTITY moving from one real number to another, so it is
+ * interpolated. Duration is short enough that it never delays the next decision.
+ * tokens.css kills this under prefers-reduced-motion. */
+.l4-bank-balance, .l4-bank-delta { transition: color 240ms ease-out; }
+
+/* ------------------------------------------------------------- call card */
+
+.l4-call { padding: 10px 12px 12px; }
+
+.l4-call-head {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 9px;
+}
+.l4-call-title {
+  font-size: var(--t-micro); font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--accent);
+}
+.l4-call-clock { margin-left: auto; font-size: var(--t-body); font-weight: 700; }
+.l4-call-clock[data-urgent="1"] { color: var(--down); }
+
+/* The snap clock. Linear, because time is linear - easing a countdown lies about
+ * how much of it is left. The width is driven by --snap, written each frame. */
+.l4-snap {
+  height: 3px; border-radius: 2px; background: var(--track);
+  overflow: hidden; margin: 0 0 10px;
+}
+.l4-snap-fill {
+  height: 100%; width: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--snap, 1));
+  background: var(--accent);
+}
+.l4-snap[data-urgent="1"] .l4-snap-fill { background: var(--down); }
+.l4-snap[data-mode="settling"] .l4-snap-fill { background: var(--dim); }
+
+/* ---- stake ladder ---- */
+
+.l4-stake { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; }
+.l4-stake-label {
+  font-size: var(--t-micro); color: var(--dim); letter-spacing: .08em;
+  text-transform: uppercase; margin-right: 2px;
+}
+.l4-chip {
+  min-height: var(--tap-min); min-width: 52px;   /* 44px floor, one-handed */
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); color: var(--fg);
+  font-size: var(--t-emph); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: border-color 140ms ease-out, color 140ms ease-out;
+}
+.l4-chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.l4-chip[disabled] { opacity: .45; }
+
+/* ---- the two tiles ---- */
+
+.l4-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* 76px - one of the two controls in the app that deliberately exceed 44px, and
+ * this is the one the whole product is about. */
+.l4-tile {
+  min-height: 76px;
+  position: relative;
+  display: grid; grid-template-rows: auto auto auto;
+  gap: 1px;
+  padding: 8px 10px 12px;
+  text-align: left;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); color: var(--fg);
+  overflow: hidden;
+  transition: border-color 240ms ease-out, background-color 240ms ease-out, opacity 200ms ease-out;
+}
+.l4-tile-side {
+  font-size: var(--t-emph); font-weight: 700; line-height: 1.1;
+}
+/* THE PRICE. Present before the tap, in every state that has a model. */
+.l4-tile-pay {
+  font-size: var(--t-figure); font-weight: 700; line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  position: relative; height: 1.15em; overflow: hidden;
+}
+.l4-tile-pay span { display: block; }
+.l4-tile-mult { font-size: var(--t-micro); color: var(--dim); font-variant-numeric: tabular-nums; }
+.l4-tile-mult b { color: var(--fg); font-weight: 600; }
+
+/* A price is SWAPPED, never counted through. A payout that ticks up through
+ * 1.4x, 1.6x, 1.8x is offering three numbers it never offered. So the old value
+ * leaves and the new one arrives; nothing in between is ever readable.
+ *
+ * 🔴 AND THE RESTING STATE IS ALWAYS THE NEW NUMBER. Found at 393px in a
+ * background tab, which suspends animations: the outgoing value was the element
+ * in flow and the incoming one started at opacity 0, so a tile whose animation
+ * never ran displayed the OLD PRICE beside the NEW multiple. On a screen whose
+ * whole claim is that the price is on the tile, a stale price is the worst
+ * failure it has. So the real node takes the new text immediately and only a
+ * CLONE animates out; `l4-pay-in` has no `forwards` fill and no opacity floor,
+ * so with every animation suppressed the correct number is simply there. */
+.l4-pay-ghost { position: absolute; inset: 0; pointer-events: none;
+                animation: l4-pay-out 180ms cubic-bezier(.2,.7,.3,1) forwards; }
+.l4-pay-enter { animation: l4-pay-in 180ms cubic-bezier(.2,.7,.3,1); }
+@keyframes l4-pay-out { to { transform: translateY(-100%); opacity: 0; } }
+@keyframes l4-pay-in  { from { transform: translateY(45%); opacity: .25; } }
+
+.l4-tile-bar { position: absolute; left: 0; bottom: 0; height: 3px;
+               background: var(--accent); opacity: .35;
+               transition: width 260ms cubic-bezier(.2,.7,.3,1); }
+
+.l4-tile[data-picked="1"] { border-color: var(--accent); }
+.l4-tile[data-dimmed="1"] { opacity: .5; }
+.l4-tile[data-repriced="1"] { border-color: var(--accent); }
+.l4-tile[aria-disabled="true"] { cursor: default; }
+.l4-tile[data-nomodel="1"] .l4-tile-pay { color: var(--dim); font-size: var(--t-emph); }
+
+/* SETTLED, AND SYMMETRIC. Same component, same geometry, same 240ms, one sign.
+ * Armchair fires a full-bleed green banner on a win and shows nothing at all on
+ * a miss; the bank is the subject here and it moves both ways. */
+.l4-tile[data-settled="up"]   { border-color: var(--up); }
+.l4-tile[data-settled="down"] { border-color: var(--down); }
+
+.l4-note {
+  margin: 10px 0 0; font-size: var(--t-micro); color: var(--dim); line-height: 1.4;
+}
+.l4-note b { color: var(--fg); font-weight: 600; }
+
+/* ---- the staked / settled band. ONE component, one sign. ---- */
+
+.l4-band {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline;
+  gap: 2px 10px;
+  margin: 10px 0 0; padding: 9px 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--bg);
+}
+.l4-band-what { font-size: var(--t-body); font-weight: 600; }
+.l4-band-figure {
+  font-size: var(--t-figure); font-weight: 700; justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+.l4-band-sub { grid-column: 1 / -1; font-size: var(--t-micro); color: var(--dim); margin: 2px 0 0; }
+.l4-band[data-sign="up"]   { border-color: var(--up); }
+.l4-band[data-sign="up"]   .l4-band-figure { color: var(--up); }
+.l4-band[data-sign="down"] { border-color: var(--down); }
+.l4-band[data-sign="down"] .l4-band-figure { color: var(--down); }
+/* 🔴 GAP, not an omission: there is no `settled-void` route. A punt, a penalty
+ * or a kick settles a call as VOID and returns the stake - calls.ts does it and
+ * tests/l4-now.test.mjs proves it - and 20+ of the plays in the captured game are
+ * void snaps, so it is the commonest settlement after a landed one. The dispatch
+ * named six call states and void was not among them, so it is reported rather
+ * than invented. It would be the same band with a third sign. */
+
+/* ---- no model ---- */
+
+/* DESIGN.md records that this state ships SILENTLY in the reference: without a
+ * model there are no odds and nothing warns you. A screen whose whole purpose is
+ * a price cannot be undefined when there is no price, so it is defined here. */
+.l4-nomodel {
+  font-size: var(--t-micro); border-radius: var(--radius-chip);
+  padding: 2px 6px; display: inline-block;
+  background: var(--track); color: var(--dim); font-weight: 600;
+}
+
+/* ---- offline / error keep the bank, because the balance is still true ---- */
+
+.l4-held { margin: 10px 0 0; font-size: var(--t-micro); color: var(--dim); }
+
+/* Two-line labels must not push the tile taller at 393px. */
+@media (max-width: 359px) {
+  .l4-tile-pay { font-size: var(--t-emph); }
+  .l4-chip { min-width: 46px; }
+}

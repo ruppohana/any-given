@@ -105,12 +105,26 @@ test('the payout is stake / p, capped at 6x, on the price at the moment of the c
 });
 
 test('the price is on the tile before the tap', () => {
-  const o = offerFor('s1', 'run', 0.4, 1_700_000_000_000);
+  // The ledger does not price and does not judge confidence - price.ts owns
+  // both (types.ts AMENDMENT 2). offerFor takes the confidence it is given and
+  // passes it through untouched.
+  const o = offerFor('s1', 'run', 0.4, 1_700_000_000_000, 'mid');
   assert.equal(o.p, 0.4);
   assert.equal(o.payoutPerMarble, 2.5);
   assert.equal(o.confidence, 'mid');
-  assert.equal(offerFor('s1', 'run', 0.47, 0).confidence, 'lo');
-  assert.equal(offerFor('s1', 'run', 0.8, 0).confidence, 'hi');
+  assert.equal(o.snapId, 's1');
+  assert.equal(o.closesAt, 1_700_000_000_000);
+});
+
+test('the ledger cannot derive a confidence, and that is the point', () => {
+  // This test replaces one that asserted confidence from |p - 0.5| - the model's
+  // LEAN. A price of 0.95 off a 30-play back-off is not high confidence and a
+  // price of 0.49 off forty thousand plays is not low. Whatever price.ts says
+  // reaches the tile unchanged, including a `lo` on a lopsided price.
+  assert.equal(offerFor('s1', 'run', 0.95, 0, 'lo').confidence, 'lo');
+  assert.equal(offerFor('s1', 'run', 0.49, 0, 'hi').confidence, 'hi');
+  // And the payout still follows the price, capped at 6.
+  assert.equal(offerFor('s1', 'run', 0.1, 0, 'lo').payoutPerMarble, 6);
 });
 
 test('the board ranks on profit - balance minus start', () => {

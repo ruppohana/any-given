@@ -175,7 +175,10 @@ export function payoutFor(
   return Math.min(stake * maxMultiple, Math.round(stake / p));
 }
 
-/** The number that goes on the tile, before the tap. `1 / p`, capped. */
+/** The number that goes on the tile, before the tap. `1 / p`, capped.
+ *  🔴 THE LEDGER DOES NOT PRICE. src/lib/price.ts owns the offer - types.ts
+ *  AMENDMENT 2. This is kept only so a settled row can be re-checked against the
+ *  price it was taken at; it is not a pricer and must not become one. */
 export function payoutPerMarble(
   p: number | null,
   maxMultiple: number = HOUSE_RULES.maxPayoutMultiple,
@@ -184,20 +187,30 @@ export function payoutPerMarble(
   return Math.min(maxMultiple, 1 / p);
 }
 
-/** Three steps, never a ramp. */
-export function confidenceOf(p: number): Confidence {
-  const edge = Math.abs(p - 0.5);
-  if (edge >= 0.2) return 'hi';
-  if (edge >= 0.08) return 'mid';
-  return 'lo';
-}
+/* 🔴 REMOVED 2026-09-08 - confidenceOf(p), keyed on Math.abs(p - 0.5).
+ *
+ * That is the model's LEAN, not its CERTAINTY, and it inverts the rule it was
+ * written for. A price of 0.95 off a 30-play back-off read `hi`; a price of 0.49
+ * off forty thousand plays read `lo`. "The model is allowed to say it is
+ * guessing" is about how much it has seen, and a lean says nothing about that.
+ *
+ * Confidence comes from the SAMPLE COUNT and the BACK-OFF LEVEL, and price.ts is
+ * the only place that knows either. Found by M4 while diffing against the
+ * reference, recorded as AMENDMENT 2, and still exported here afterwards - dead
+ * relative to price.ts but live in the module, waiting for whoever imported
+ * calls.ts first. L4 found it that way.
+ *
+ * A contradicted rule left exported is a second instruction. Deleted, not
+ * deprecated. */
 
-/** The offer for one side of one snap, priced. */
+/** The offer for one side of one snap, at a price PRODUCED BY price.ts.
+ *  The confidence is passed in; this function does not compute one. */
 export function offerFor(
   snapId: string,
   side: CallSide,
   p: number,
   closesAt: number,
+  confidence: Confidence,
   rules: LedgerRules = HOUSE_RULES,
 ): CallOffer {
   return {
@@ -205,7 +218,7 @@ export function offerFor(
     side,
     p,
     payoutPerMarble: payoutPerMarble(p, rules.maxPayoutMultiple),
-    confidence: confidenceOf(p),
+    confidence,
     closesAt,
   };
 }
