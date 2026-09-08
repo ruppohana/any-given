@@ -1,0 +1,191 @@
+/* L2 - the broadcast delay. Every rule scoped under .scr-l2-delay.
+ *
+ * THE ONE RULE THIS STYLESHEET EXISTS TO KEEP: there is no overlay, no scrim, no
+ * opacity below 1 on any board element, and no `position: fixed` anywhere. The bar
+ * (AQB-locked-play-in-progress.png) is a panel over a dimmed grid; the way to be
+ * sure this is not that is to make the covering impossible in the CSS rather than
+ * to remember not to do it in the JS.
+ *
+ * Depth is 1px solid var(--line). No shadows - the token file says so twice.
+ * Accent is read as --accent, never as --maroon or --gold: it SWAPS TOKEN on dark.
+ */
+
+.scr-l2-delay { display: flex; flex-direction: column; gap: 10px; }
+
+/* ------------------------------------------------------------------- strip */
+
+.scr-l2-delay .l2-hold { padding: 10px 12px 12px; }
+
+.scr-l2-delay .l2-hold-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+
+.scr-l2-delay .l2-hold-fig { display: flex; flex-direction: column; min-width: 0; }
+
+.scr-l2-delay .l2-hold-key {
+  font-size: var(--t-micro); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--dim); font-weight: 700;
+}
+
+/* The figure. It is 21px, not 30px: 30px is the bank balance and is the largest
+ * type in the app, and a delay readout is not the bank. */
+.scr-l2-delay .l2-hold-num {
+  font-size: var(--t-figure); font-weight: 700; line-height: 1.1; color: var(--fg);
+}
+
+.scr-l2-delay .l2-hold[data-mode="live"] .l2-hold-num { color: var(--down); }
+.scr-l2-delay .l2-hold[data-mode="offline"] .l2-hold-key { color: var(--down); }
+
+.scr-l2-delay .l2-hold-btn {
+  flex: none; min-height: var(--tap-min); padding: 0 16px;
+  font-size: var(--t-emph); font-weight: 600;
+  border: 1px solid var(--accent); color: var(--accent); background: transparent;
+}
+
+/* The rail. The only moving thing on the screen, and its whole job is to separate
+ * "deliberately behind" from "frozen" - the distinction the bar cannot draw
+ * because it ships no number and no motion at all. */
+.scr-l2-delay .l2-rail {
+  margin: 10px 0 8px; height: 4px; border-radius: 2px;
+  background: var(--track); overflow: hidden;
+}
+.scr-l2-delay .l2-rail-fill {
+  height: 100%; width: 0; background: var(--accent);
+  transition: width .9s linear;
+}
+.scr-l2-delay .l2-hold[data-mode="offline"] .l2-rail-fill { background: var(--down); }
+.scr-l2-delay .l2-hold[data-mode="live"] .l2-rail-fill { background: var(--down); }
+
+.scr-l2-delay .l2-hold-line {
+  margin: 0; font-size: var(--t-body); color: var(--dim);
+}
+
+.scr-l2-delay .l2-warn {
+  margin: 8px 0 0; font-size: var(--t-body); color: var(--down); font-weight: 600;
+}
+
+/* A held play is a COUNT, never its content. */
+.scr-l2-delay .l2-pips { display: flex; gap: 4px; margin-top: 8px; min-height: 6px; }
+.scr-l2-delay .l2-pip {
+  width: 18px; height: 6px; border-radius: 3px;
+  background: var(--track); border: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------------------- panel */
+
+.scr-l2-delay .l2-panel { padding: 12px; }
+.scr-l2-delay .l2-panel-h { margin: 0 0 6px; font-size: var(--t-section); font-weight: 700; }
+
+.scr-l2-delay .l2-read { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.scr-l2-delay .l2-read-num { font-size: var(--t-figure); font-weight: 700; }
+.scr-l2-delay .l2-read-lab { font-size: var(--t-body); color: var(--dim); }
+
+/* 44px of tappable height on the control itself, with a visible 4px track inside
+ * it. A 4px-tall slider is a 4px-tall target and this app is used one-handed on a
+ * couch in the dark. */
+.scr-l2-delay .l2-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: var(--tap-min); margin: 6px 0 0;
+  background: transparent; display: block;
+}
+.scr-l2-delay .l2-slider::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px; background: var(--track);
+}
+.scr-l2-delay .l2-slider::-moz-range-track {
+  height: 4px; border-radius: 2px; background: var(--track);
+}
+.scr-l2-delay .l2-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 26px; height: 26px; margin-top: -11px; border-radius: 50%;
+  background: var(--accent); border: 1px solid var(--card);
+}
+.scr-l2-delay .l2-slider::-moz-range-thumb {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); border: 1px solid var(--card);
+}
+.scr-l2-delay .l2-slider:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.scr-l2-delay .l2-scale {
+  display: flex; justify-content: space-between;
+  font-size: var(--t-micro); color: var(--dim); margin: -4px 0 10px;
+}
+
+.scr-l2-delay .l2-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.scr-l2-delay .l2-preset {
+  flex: 1 1 auto; min-width: 52px; min-height: var(--tap-min); padding: 0 4px;
+  font-size: var(--t-body); font-weight: 600;
+}
+.scr-l2-delay .l2-preset[data-on="true"] {
+  border-color: var(--accent); color: var(--accent); font-weight: 700;
+}
+
+.scr-l2-delay .l2-help,
+.scr-l2-delay .l2-note {
+  margin: 8px 0 0; font-size: var(--t-micro); color: var(--dim);
+}
+
+.scr-l2-delay .l2-cal {
+  display: block; width: 100%; margin-top: 8px;
+  min-height: var(--tap-min); font-size: var(--t-body); font-weight: 600;
+  border-style: dashed;
+}
+
+/* ------------------------------------------------------------------- board
+ * FULL CONTRAST IN EVERY STATE. Nothing here takes an opacity, a filter or a
+ * pointer-events: none while the delay holds, because that is the failure the
+ * whole piece is defined against.
+ */
+
+.scr-l2-delay .l2-board { display: flex; flex-direction: column; gap: 8px; }
+
+.scr-l2-delay .l2-score {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 8px; padding: 10px 12px;
+}
+.scr-l2-delay .l2-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.scr-l2-delay .l2-side-r { justify-content: flex-end; flex-direction: row-reverse; }
+.scr-l2-delay .l2-pts { font-size: var(--t-score); font-weight: 700; }
+.scr-l2-delay .l2-score-mid {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  font-size: var(--t-micro); color: var(--dim);
+}
+.scr-l2-delay .l2-q { font-weight: 700; letter-spacing: .04em; }
+.scr-l2-delay .l2-clock { font-size: var(--t-body); color: var(--fg); font-weight: 600; }
+
+.scr-l2-delay .l2-stale {
+  margin: 0 2px; font-size: var(--t-micro); color: var(--dim);
+}
+
+.scr-l2-delay .l2-play { padding: 10px 12px; }
+.scr-l2-delay .l2-sit {
+  margin: 0 0 4px; font-size: var(--t-micro); color: var(--dim);
+  letter-spacing: .04em; text-transform: uppercase; font-weight: 700;
+}
+.scr-l2-delay .l2-text { margin: 0; font-size: var(--t-body); color: var(--fg); }
+.scr-l2-delay .l2-drive {
+  margin: 6px 0 0; font-size: var(--t-micro); color: var(--dim);
+}
+
+.scr-l2-delay .l2-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
+.scr-l2-delay .l2-tile {
+  flex: 1 1 0; min-width: 0; min-height: 64px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 8px 6px;
+}
+.scr-l2-delay .l2-tile-side { font-size: var(--t-emph); font-weight: 700; }
+/* THE PRICE IS ON THE TILE, BEFORE THE TAP. */
+.scr-l2-delay .l2-tile-price { font-size: var(--t-figure); font-weight: 700; color: var(--accent); }
+.scr-l2-delay .l2-tile-conf { text-transform: uppercase; letter-spacing: .04em; }
+.scr-l2-delay .l2-tile:disabled { color: var(--dim); cursor: not-allowed; }
+.scr-l2-delay .l2-tile:disabled .l2-tile-price { color: var(--dim); }
+
+.scr-l2-delay .l2-why {
+  flex: 1 0 100%; margin: 2px 0 0; font-size: var(--t-micro); color: var(--dim);
+}
+
+/* The board never scrolls sideways, whatever the play text does. */
+.scr-l2-delay .l2-text { overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scr-l2-delay .l2-rail-fill { transition: none; }
+}
