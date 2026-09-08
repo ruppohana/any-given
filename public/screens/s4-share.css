@@ -1,0 +1,134 @@
+/* S4 - the share card. Every rule scoped under .scr-s4-share.
+ *
+ * NO box-shadow anywhere, including on the modal: depth is 1px solid var(--line),
+ * and the dialog gets its separation from the scrim, which is what a scrim is for.
+ * NO --maroon and NO --gold: the accent swaps token on dark and a component
+ * hard-coded to one is invisible in the other.
+ *
+ * TYPE SIZES INSIDE THE CARD ARE IN THE SVG'S OWN UNITS. The card's viewBox is
+ * 1080 wide and it renders into ~373px at the 393px design width, so the scale is
+ * about 0.345 and every size below was chosen by working backwards from the
+ * measured scale in tokens.css:
+ *
+ *   s4-claim    160u -> 55px  the claim, the largest thing on the card
+ *   s4-delta     72u -> 25px  score scale
+ *   s4-outcome   62u -> 21px  figure scale
+ *   s4-fig       58u -> 20px  figure scale
+ *   s4-leg       44u -> 15px  emphasis
+ *   s4-sit/proof 32u -> 11px  micro
+ *   s4-over      30u -> 10px  micro label
+ *
+ * At 240px - roughly the width a sent image is actually looked at in a message
+ * bubble - the claim is still 36px and the outcome 14px. That is the size the
+ * card was designed to survive, and /s4-share/colors is where it is checked.
+ */
+
+/* ------------------------------------------------------------------ the card */
+
+.scr-s4-share .s4-frame { width: 100%; margin: 0 0 12px; }
+.scr-s4-share .s4-frame > svg { display: block; width: 100%; height: auto; }
+.scr-s4-share .s4-frame-small { width: 240px; max-width: 100%; }
+
+.scr-s4-share .s4-card text { font-family: var(--font); }
+.scr-s4-share .s4-claim  { font-size: 160px; font-weight: 800; letter-spacing: -.02em; }
+.scr-s4-share .s4-delta  { font-size: 72px;  font-weight: 800; }
+.scr-s4-share .s4-outcome{ font-size: 62px;  font-weight: 800; letter-spacing: .04em; }
+.scr-s4-share .s4-fig    { font-size: 58px;  font-weight: 700; }
+.scr-s4-share .s4-wordmark { font-weight: 700; letter-spacing: -.01em; }
+.scr-s4-share .s4-leg    { font-size: 44px;  font-weight: 600; }
+.scr-s4-share .s4-legsub { font-size: 30px; }
+.scr-s4-share .s4-legresult { font-size: 40px; font-weight: 700; letter-spacing: .06em; }
+.scr-s4-share .s4-sit    { font-size: 32px; }
+.scr-s4-share .s4-proof  { font-size: 32px; }
+.scr-s4-share .s4-foot   { font-size: 30px; font-weight: 600; }
+.scr-s4-share .s4-foot-dim { font-size: 28px; }
+.scr-s4-share .s4-over   { font-size: 30px; font-weight: 700; letter-spacing: .14em; }
+.scr-s4-share .s4-chip   { font-size: 30px; font-weight: 700; letter-spacing: .1em; }
+.scr-s4-share .s4-abbrev { font-size: 30px; font-weight: 700; letter-spacing: .02em; }
+/* The mark that does not exist yet. Deliberately quiet - it is a hole, not a logo. */
+.scr-s4-share .s4-slot   { font-size: 26px; font-weight: 700; letter-spacing: .12em; }
+
+/* ------------------------------------------------------- the page around it */
+
+.scr-s4-share .s4-alt {
+  margin: 0 0 14px; font-size: var(--t-micro); color: var(--dim); line-height: 1.4;
+}
+.scr-s4-share .s4-note {
+  margin: 0 0 14px; font-size: var(--t-micro); color: var(--dim); line-height: 1.45;
+}
+
+.scr-s4-share .s4-acts { display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
+.scr-s4-share .s4-acts-page { padding-bottom: 6px; }
+.scr-s4-share .s4-btn {
+  min-height: var(--tap-min);           /* a thumb, one-handed, on a moving couch */
+  padding: 0 18px;
+  border-radius: var(--radius-button);
+  font-size: var(--t-emph);
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--fg);
+  cursor: pointer;
+}
+/* The bar sets CLOSE as bare text and SHARE as the filled action. Same hierarchy,
+ * our accent - which swaps token on dark, so this is read once and correct twice. */
+.scr-s4-share .s4-btn-quiet { background: transparent; border-color: transparent; color: var(--accent); }
+.scr-s4-share .s4-btn-go    { background: var(--accent); border-color: var(--accent); color: var(--card); }
+
+/* ------------------------------------------------------ the interception */
+
+.scr-s4-share .s4-behind { display: grid; gap: 10px; padding: 4px 0; }
+.scr-s4-share .s4-behind-row {
+  height: 56px; border-radius: var(--radius-card); background: var(--track);
+}
+
+.scr-s4-share .s4-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0, 0, 0, .62);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.scr-s4-share .s4-dialog {
+  width: 100%; max-width: 340px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  /* No shadow. The scrim is the separation. */
+}
+/* THE ARGUMENT AGAINST THE BAR, IN ONE RULE. Sofascore's dialog shows a clip-art
+ * phone; this shows the card that is actually going to be sent. */
+.scr-s4-share .s4-thumb { display: flex; justify-content: center; margin-bottom: 14px; }
+.scr-s4-share .s4-thumb > svg { width: 180px; height: auto; display: block; }
+.scr-s4-share .s4-thumb-empty {
+  width: 180px; height: 225px; border: 1px dashed var(--line);
+  border-radius: var(--radius-card); background: var(--track);
+}
+.scr-s4-share .s4-over-html {
+  margin: 0 0 4px; font-size: var(--t-micro); font-weight: 700;
+  letter-spacing: .14em; color: var(--dim);
+}
+.scr-s4-share .s4-dlg-h { margin: 0 0 6px; font-size: var(--t-section); font-weight: 700; }
+.scr-s4-share .s4-dlg-b {
+  margin: 0 0 16px; font-size: var(--t-body); color: var(--dim); line-height: 1.45;
+}
+
+/* ------------------------------------------------------------ proof route */
+
+.scr-s4-share .s4-grid { display: grid; gap: 20px; }
+.scr-s4-share .s4-cell-label {
+  margin: 0 0 6px; font-size: var(--t-micro); font-weight: 700;
+  letter-spacing: .06em; color: var(--dim); text-transform: uppercase;
+}
+
+/* The loading skeleton is the CARD'S OWN SHAPE at the card's own aspect, so the
+ * layout does not jump when the real thing lands. */
+.scr-s4-share .s4-frame-skeleton {
+  aspect-ratio: 1080 / 1350;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--track);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scr-s4-share .s4-frame-skeleton { animation: ag-pulse 1.4s ease-in-out infinite; }
+}
