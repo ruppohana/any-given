@@ -192,6 +192,16 @@ did, independently, and TypeScript's structural typing hides the drift until it 
 
 **The listing below is the shape, kept for reading. `src/lib/types.ts` is what compiles.**
 
+**🔴 AND IT APPLIES TO `src/` ONLY. A SCREEN CANNOT IMPORT IT.** Raised by P1, and it is correct:
+`public/screens/*.screen.js` is **browser code served raw**, with no build step and no bundler by
+design, so it cannot import a `.ts` file. Node strips types for `src/` and the Worker; the browser
+does not.
+
+**So for a screen the rule is: honor the shapes BY NAME in JSDoc, and re-declare nothing.**
+`/** @param {import('../../src/lib/types.ts').SlateGame[]} games */` documents the contract without
+importing it. **A screen that writes its own `type Play = {...}` in a comment block has forked the
+vocabulary just as surely as one that imports nothing.**
+
 ```ts
 // ---------- identity ----------
 /** From fixtures/teams.json. Measured 2026-09-08 against the real file:

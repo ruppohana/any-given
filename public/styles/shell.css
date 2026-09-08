@@ -39,10 +39,25 @@
   .ag-shell > .ag-nav { grid-column: 1; grid-row: 1; }
 }
 
+/* 🔴 THE SECOND COLUMN IS OPT-IN, and it was not until P1 rendered at 1400px.
+ * .ag-main was an unconditional two-column grid above 1200px, so EVERY direct
+ * child of a screen auto-placed into it: P1 put its pool header in column one and
+ * a full-width maroon primary button alone in column two - a 600px slab of accent
+ * beside a lake of empty. That is precisely the CBS-at-1900px failure this file
+ * exists to answer, reproduced by the fix for it.
+ *
+ * A screen now opts in by containing an .ag-aside. Everything else keeps one
+ * measure column at every width, which is the correct default: desktop is a
+ * SECOND LAYOUT a screen is designed into, never a widening it falls into. */
 @media (min-width: 1200px) {
   .ag-shell { grid-template-columns: 220px minmax(0, 1fr); }
-  .ag-main  { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
-              gap: 24px; max-width: 1180px; }
+  .ag-main  { max-width: 640px; }
+  .ag-main:has(> .ag-aside) {
+    display: grid;
+    grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+    gap: 24px;
+    max-width: 1180px;
+  }
   .ag-main > .ag-aside { border-left: 1px solid var(--line); padding-left: 24px; }
 }
 /* Nothing gets a second column it has not been designed one for. */
