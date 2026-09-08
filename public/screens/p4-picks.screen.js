@@ -718,8 +718,13 @@ function row(ctx, spec) {
    * this", and the percentage invites the reader to think the split mattered on a game
    * that did not happen. The one void path says it did not happen FOR EVERYBODY, and
    * a two-thirds majority of nobody is not a fact worth a figure. */
+  /* 🔴 NOBODY SEES ANYTHING UNTIL THE GAME LOCKS (Jason, 2026-09-08). Every row
+   * on this screen that is still editable shows no split at all - which also
+   * ends the two-causes problem this screen used to reason about, because the
+   * only cause a reader ever meets now is "it has not kicked yet", and that
+   * names nobody. */
   const share = st === 'void' ? null : crowdShare(pick.crowd, side);
-  const label = crowdLabel(share, pick.crowd && pick.crowd.n);
+  const label = crowdLabel(share, pick.crowd && pick.crowd.n, st !== 'picked');
   if (label) notes.push(label + ' of your pool had this');
   if (notes.length) {
     const l3 = el('div', 'p4-l3', notes.join(' · '));
@@ -1022,7 +1027,7 @@ export function render(root, data, state) {
       for (const s of data.specs) {
         const p = ctx.picks[s.id];
         if (!p || !p.side) continue;
-        if (crowdSuppression(crowdShare(p.crowd, p.side), p.crowd && p.crowd.n, true)) hidden++;
+        if (crowdSuppression(crowdShare(p.crowd, p.side), p.crowd && p.crowd.n, true)) hidden++;  // locked rows only
       }
       box.appendChild(el('p', 'p4-footline num',
         'Every pick is editable until that game kicks, and locks at kickoff. One rule, no exceptions, and it is per game rather than per week.'));

@@ -327,43 +327,47 @@ test('the parlay: both outcomes are drawn, legs lock independently, and a void r
 
 /* ------------------------------------------------------------------ the crowd rule */
 
-test('the crowd rule is fmt.js\'s, and both suppression causes are on the default route', () => {
+test('the crowd rule comes from fmt.js, and the gate is the LOCK', () => {
+  /* 🔴 REWRITTEN 2026-09-08. Jason: "Nobody sees anything until after the lock."
+   *
+   * This used to require BOTH suppression causes on the default route, because
+   * the old rule revealed a split as soon as the viewer had picked and the floors
+   * were the only protection. They are not the protection now - the kickoff is. */
   const d = data.ready;
-  const seen = new Set();
-  let shown = 0;
+  let editableWithLabel = 0, lockedShown = 0;
   for (const s of d.specs) {
     const p = d.picks[s.id];
     if (!p.side) continue;
     const share = mod.crowdShare(p.crowd, p.side);
-    const why = crowdSuppression(share, p.crowd.n, true);
-    if (why) seen.add(why); else shown++;
-    /* The two must agree: a suppressed split has no label, a shown one has one. */
-    assert.equal(crowdLabel(share, p.crowd.n) === null, why !== null, `${s.id}`);
+    const locked = s.kickoffUtc <= d.now;   // the screen's own gate
+    const label = crowdLabel(share, p.crowd.n, locked);
+    if (!locked && label !== null) editableWithLabel++;
+    if (locked && label !== null) lockedShown++;
+    assert.equal(label === null, crowdSuppression(share, p.crowd.n, locked) !== null, `${s.id}`);
   }
-  assert.ok(seen.has('small_n'), 'no game below the five-member floor');
-  assert.ok(seen.has('lone_dissenter'), 'no game where the minority is exactly one');
-  assert.ok(shown > 10, 'almost every split should be showable, or the rule is not a rule');
+  assert.equal(editableWithLabel, 0, 'a game that has not kicked shows no split to anybody');
+  console.log(`    ${lockedShown} locked games show a split; every editable one shows none`);
 });
 
-test('moving a pick moves the pool\'s split by one, and can flip suppression in either direction', () => {
-  /* 🔴 THE REASON CROWD IS COUNTS AND NOT A FROZEN PERCENTAGE. Leave a side where you
-   * were the second of two and the person behind you becomes a minority of exactly
-   * one, so the figure must disappear for that game. Verified in the browser as well:
-   * on the `ready` route, swapping every open pick made two splits vanish and lifted
-   * one, and the footer count moved from 2 to 3. */
+test('swapping a pick can never reveal a split, because the gate is the kickoff', () => {
+  /* The old version of this test moved a pick and watched suppression flip. That
+   * was the right check for the old rule and it is the EXPLOIT under the new one:
+   * the split used to be purchasable with a tap. It is not now. */
+  const d = data.ready;
+  const open = d.specs.filter((s) => s.kickoffUtc > d.now && d.picks[s.id].side);
+  assert.ok(open.length > 0, 'the route needs editable rows for this to mean anything');
+  for (const s of open) {
+    const p = d.picks[s.id];
+    const flipped = p.side === 'home' ? 'away' : 'home';
+    assert.equal(crowdLabel(mod.crowdShare(p.crowd, p.side), p.crowd.n, false), null);
+    assert.equal(crowdLabel(mod.crowdShare(p.crowd, flipped), p.crowd.n, false), null);
+  }
+  /* swapCrowd itself is unchanged and still moves one person, never the total. */
   const before = { home: 2, away: 6, n: 8 };
   const after = mod.swapCrowd(before, 'home', 'away');
   assert.deepEqual(after, { home: 1, away: 7, n: 8 });
-  assert.equal(after.n, before.n, 'moving your own pick never changes how many people picked');
-
-  assert.equal(crowdSuppression(before.home / before.n, before.n, true), null);
-  assert.equal(crowdSuppression(after.home / after.n, after.n, true), 'lone_dissenter');
-  assert.equal(crowdLabel(after.home / after.n, after.n), null);
-
-  /* And back the other way. */
-  const back = mod.swapCrowd(after, 'away', 'home');
-  assert.deepEqual(back, before);
-  assert.equal(crowdLabel(back.home / back.n, back.n), '25%');
+  assert.equal(after.n, before.n, 'moving your own pick never changes how many picked');
+  console.log(`    ${open.length} editable rows: no split before or after a swap`);
 });
 
 /* ------------------------------------------------------------------ pure helpers */

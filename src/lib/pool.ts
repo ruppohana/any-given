@@ -190,7 +190,7 @@ export const DEFAULT_SCORING: Scoring = Object.freeze({
 export const CROWD_MIN_N = 5;
 export const CROWD_MIN_MINORITY = 2;
 
-export type CrowdSuppression = 'not_picked' | 'small_n' | 'lone_dissenter' | null;
+export type CrowdSuppression = 'not_locked' | 'small_n' | 'lone_dissenter' | null;
 
 /* ------------------------------------------------------------------ *
  * 🔴 THE ONE VOID PATH
@@ -279,14 +279,42 @@ export function pickPointsFor(
 }
 
 /* ------------------------------------------------------------------ *
- * Crowd — the pool's own split, after the tap, with the small-n rule
+ * Crowd — NOBODY SEES ANYTHING UNTIL THE GAME LOCKS
  * ------------------------------------------------------------------ */
 
+/**
+ * 🔴 CHANGED 2026-09-08 by Jason: *"Nobody sees anything until after the lock."*
+ * This REPLACES the after-you-pick rule settled earlier the same day.
+ *
+ * The old rule showed a game's split as soon as the VIEWER had picked it. The new
+ * one shows nothing about anybody's pick until THAT GAME KICKS OFF, at which
+ * point it is visible to everyone at once and nobody can act on it.
+ *
+ * Why it is better, and it is not just stricter:
+ *
+ *  - IT REMOVES THE LEAK RATHER THAN THRESHOLDING IT. The old rule needed a
+ *    small-n floor and a lone-dissenter rule because a percentage among four
+ *    people names them. Both were guesses at where identification starts. After
+ *    kickoff there is nothing to protect: the pick is made, the game is running,
+ *    and knowing who took which side changes nothing anybody can do.
+ *  - IT IS ONE RULE INSTEAD OF THREE, and a rules screen can state it in a line.
+ *  - It is what a shipped product does. A live NCAA pick'em gates its whole recap
+ *    on exactly this — *"players only see each other's picks after each game
+ *    locks"* — reference/officepool-teardown/README.md.
+ *  - AND IT CANNOT BE GAMED BY EDITING. Under the old rule a viewer could pick a
+ *    game to reveal the split, read it, and change their pick — the number was
+ *    purchasable with a tap. That is gone.
+ *
+ * The floors below are KEPT, not deleted: after kickoff they never fire, because
+ * the gate is the lock. They exist for the one case that outlives this change —
+ * a screen that chooses to show a split before kickoff must still not name a
+ * lone dissenter — and deleting them would delete the reasoning with them.
+ */
 export function crowdSuppression(
   sides: readonly PickSide[],
-  viewerHasPicked: boolean,
+  gameHasLocked: boolean,
 ): CrowdSuppression {
-  if (!viewerHasPicked) return 'not_picked';
+  if (!gameHasLocked) return 'not_locked';
   const n = sides.length;
   if (n < CROWD_MIN_N) return 'small_n';
   const home = sides.reduce((a, s) => a + (s === 'home' ? 1 : 0), 0);
@@ -297,17 +325,23 @@ export function crowdSuppression(
 }
 
 /**
- * The POOL's own split, never global. `null` means DO NOT SHOW — the screen shows
- * nothing in that slot, not a count and not a placeholder percentage.
+ * The POOL's own split, never global, and NEVER BEFORE THE GAME LOCKS. `null`
+ * means DO NOT SHOW — the screen shows nothing in that slot, not a count and not
+ * a placeholder percentage.
  * `sides` is every pick made in THIS pool on THIS game, the viewer's included.
  */
 export function crowdSplit(
   sides: readonly PickSide[],
-  viewerHasPicked: boolean,
+  gameHasLocked: boolean,
 ): Crowd | null {
-  if (crowdSuppression(sides, viewerHasPicked) !== null) return null;
+  if (crowdSuppression(sides, gameHasLocked) !== null) return null;
   const home = sides.reduce((a, s) => a + (s === 'home' ? 1 : 0), 0);
   return { home, away: sides.length - home, n: sides.length };
+}
+
+/** Has this game locked? The one gate the crowd rule reads. */
+export function gameHasLocked(game: SlateGame, now: number): boolean {
+  return !isPickEditable(game, now);
 }
 
 /* ------------------------------------------------------------------ *

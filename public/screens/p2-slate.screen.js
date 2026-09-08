@@ -476,11 +476,16 @@ function zone(ctx, game, side) {
   const chip = teamChip(team, { size: 18, adjacentTo: game[side === 'home' ? 'away' : 'home'] });
   const rec = el('span', 'p2-rec num', game[side + 'Record'] || '');
   const crowdWrap = el('span', 'p2-meta');
-  /* CROWD IS THE POOL'S OWN AND APPEARS ONLY AFTER YOU PICK. crowd === null until then -
-   * a number before the tap is a nudge, after it a conversation. fmt.crowdLabel falls to
-   * a count rather than a percentage in a small pool, where `75%` is three people. */
-  if (pick && pick.side && pick.crowd) {
-    const c = el('span', 'p2-crowd num', crowdLabel(pick.crowd[side], pick.crowd.n));
+  /* 🔴 CROWD IS THE POOL'S OWN AND NOBODY SEES ANYTHING UNTIL THE GAME LOCKS.
+   * Jason, 2026-09-08 - this replaces the after-you-pick rule from earlier the same
+   * day. Before kickoff the slot is empty for everybody; at kickoff the split appears
+   * for everybody at once, and by then nobody can act on it.
+   *
+   * It also closes a hole the old rule had: the split used to be purchasable with a
+   * tap - pick the game, read the number, change your pick. */
+  const locked = !!(game && game.kickoffUtc != null && now >= game.kickoffUtc);
+  if (locked && pick && pick.crowd) {
+    const c = el('span', 'p2-crowd num', crowdLabel(pick.crowd[side], pick.crowd.n, true));
     if (side === pick.side) c.dataset.mine = 'true';
     crowdWrap.appendChild(c);
   }

@@ -261,8 +261,12 @@ test('§5 / the dispatch - one tiebreak field, and the spread is gated on pool.a
   const tb = (CODE.match(/input\.type = 'number'/g) || []).length;
   assert.equal(tb, 1, 'CBS ships four tiebreak fields. Ours is one');
   assert.ok(/if \(ctx\.pool\.ats\)/.test(CODE), 'the spread must be gated on pool.ats');
-  /* Crowd only after the pick: the guard is pick.side, and pick.crowd is null before it. */
-  assert.ok(/pick && pick\.side && pick\.crowd/.test(CODE), 'crowd must be gated on having picked');
+  /* 🔴 Crowd only after the GAME LOCKS (Jason, 2026-09-08) - not after the tap.
+   * The guard is the kickoff, which nobody can bring forward, rather than the
+   * viewer's own pick, which made the split purchasable with a tap. */
+  assert.ok(/const locked = /.test(CODE), 'the crowd guard must be the lock');
+  assert.ok(/if \(locked && pick && pick\.crowd\)/.test(CODE),
+    'crowd must be gated on the game having locked');
   assert.ok(/crowdLabel/.test(CODE), 'the small-n rule lives in fmt.crowdLabel, not here');
 });
 

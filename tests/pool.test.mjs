@@ -477,10 +477,14 @@ test('each game locks on its own clock — the slate is half-locked all Saturday
  * 5 · CROWD — the pool's own split, after the tap, with the small-n rule
  * ================================================================== */
 
-test('crowd is NEVER shown before the viewer has picked', () => {
+test('crowd is NEVER shown before the GAME LOCKS', () => {
+  /* CHANGED 2026-09-08 by Jason: "Nobody sees anything until after the lock."
+   * The gate used to be "has the viewer picked", which made the split
+   * purchasable with a tap - pick the game, read the number, change your pick.
+   * The gate is now the kickoff, which nobody can bring forward. */
   const sides = ['home', 'home', 'home', 'away', 'away', 'away'];
   assert.equal(crowdSplit(sides, false), null);
-  assert.equal(crowdSuppression(sides, false), 'not_picked');
+  assert.equal(crowdSuppression(sides, false), 'not_locked');
   assert.notEqual(crowdSplit(sides, true), null);
 });
 
