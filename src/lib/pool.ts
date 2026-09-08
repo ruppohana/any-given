@@ -279,6 +279,58 @@ export function pickPointsFor(
 }
 
 /* ------------------------------------------------------------------ *
+ * A queued edit — taken offline, ruled on by the server
+ * ------------------------------------------------------------------ */
+
+export type PendingEdit = { gameId: string; side: PickSide; madeAt: number };
+export type PendingVerdict = 'accepted' | 'rejected_kicked_off' | 'rejected_no_game';
+
+/**
+ * 🔴 THE SERVER RULES, ON ITS OWN CLOCK, ON ARRIVAL. Jason, 2026-09-08: "que and
+ * pending."
+ *
+ * Two screens made different offline promises - the slate said a change was saved
+ * and would go up later, my-picks disabled the control and said a change arriving
+ * after kickoff would not count. Same user, same pick, and one of them was lying.
+ * The separating case is ordinary: edit at 12:58 with no signal, kickoff at 13:00,
+ * reconnect at 13:05.
+ *
+ * `edit.madeAt` is the PHONE's clock and is evidence, never authority - it can be
+ * wrong by accident and it can be set on purpose, and a rule that trusts it hands
+ * every user a way to pick after kickoff. `receivedAt` is the server's clock and
+ * it is the only thing that decides.
+ *
+ * A screen therefore may never show a queued edit AS the pick. It shows it as
+ * pending, and this function is what ends that.
+ */
+export function rulePendingEdit(
+  edit: PendingEdit,
+  games: ReadonlyMap<string, SlateGame>,
+  receivedAt: number,
+): PendingVerdict {
+  const game = games.get(edit.gameId);
+  if (!game) return 'rejected_no_game';
+  return isPickEditable(game, receivedAt) ? 'accepted' : 'rejected_kicked_off';
+}
+
+/** Does this pick have a change that has not landed yet? */
+export function hasPendingEdit(pick: { pending?: PendingEdit | null } | null | undefined): boolean {
+  return !!(pick && pick.pending);
+}
+
+/**
+ * What a screen should DRAW for a pick with a queued edit: the confirmed side,
+ * plus the side that is waiting. 🔴 Never the pending side alone - a change that
+ * has not landed is not the pick, and drawing it as one is the promise that
+ * cannot be kept.
+ */
+export function pickDisplaySides(
+  pick: { side: PickSide | null; pending?: PendingEdit | null },
+): { confirmed: PickSide | null; pending: PickSide | null } {
+  return { confirmed: pick.side, pending: pick.pending ? pick.pending.side : null };
+}
+
+/* ------------------------------------------------------------------ *
  * Crowd — NOBODY SEES ANYTHING UNTIL THE GAME LOCKS
  * ------------------------------------------------------------------ */
 

@@ -68,10 +68,27 @@ export type Pick = {
   side: PickSide | null;
   state: PickState;
   lockedAt: number;
-  /** The POOL's own split. NULL until this viewer has picked, and null again when
-   *  the small-n rule suppresses it - a screen renders both as "no number". */
+  /** The POOL's own split. 🔴 NULL UNTIL THAT GAME KICKS OFF - nobody sees
+   *  anything until after the lock (Jason, 2026-09-08). Null again when a floor
+   *  suppresses it; a screen renders both as "no number". */
   crowd: { home: number; away: number; n: number } | null;
+  /** AMENDMENT 7 - AN EDIT MADE WITH NO CONNECTION. Jason, 2026-09-08:
+   *  "que and pending."
+   *
+   *  Two screens promised different things offline: the slate said the change was
+   *  saved and would go up later, my-picks disabled the control and said a change
+   *  arriving after kickoff would not count. Same user, same pick, one of them
+   *  lying - and the case that separates them is real: edit at 12:58 with no
+   *  signal, kickoff at 13:00, reconnect at 13:05.
+   *
+   *  So an offline edit is TAKEN, shown as PENDING, and ruled on by the SERVER on
+   *  arrival - never by the phone, whose clock can be wrong or set on purpose.
+   *  Until it lands, no screen may show it as the pick. */
+  pending?: { side: PickSide; madeAt: number } | null;
 };
+
+/** What the server did with a queued edit. `madeAt` is evidence, never authority. */
+export type PendingVerdict = 'accepted' | 'rejected_kicked_off' | 'rejected_no_game';
 
 /** AMENDMENT 3: 'void' is a real terminal state. */
 export type ParlayState =

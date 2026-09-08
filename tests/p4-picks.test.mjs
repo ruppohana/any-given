@@ -534,8 +534,24 @@ test('the screen declares no bar, and that is the finding rather than an oversig
   assert.match(CODE, /stateBlock\('error'/);
 });
 
-test('offline holds the list AND freezes the edit - the deadline does not wait for the connection', () => {
+test('offline QUEUES the edit rather than freezing it, and both screens say the same thing', () => {
+  /* 🔴 INVERTED 2026-09-08. This used to assert the swap was DISABLED offline,
+   * which was the honest half of a promise the slate was making differently: the
+   * slate said a change was saved and would go up later, this screen said a late
+   * change would not count. Same user, same pick, and the case that separates
+   * them is ordinary - edit at 12:58 with no signal, kickoff at 13:00, reconnect
+   * at 13:05.
+   *
+   * Jason settled it: queue it, show it as pending, and let the SERVER rule on
+   * arrival by its own clock. So the control stays live and the copy stops
+   * promising anything it cannot keep. */
   assert.match(CODE, /frozen: state === 'offline'/);
-  assert.match(CODE, /if \(ctx\.frozen\)[\s\S]{0,120}disabled = true/);
-  assert.match(SRC, /does not count/);
+  assert.doesNotMatch(CODE, /if \(ctx\.frozen\)[\s\S]{0,120}disabled = true/,
+    'the swap is queued offline, never disabled');
+  assert.match(CODE, /dataset\.queued = 'true'/);
+  assert.match(SRC, /queued on this phone/);
+  assert.match(SRC, /by our clock rather than the one in/,
+    'the server clock decides, and the copy says so');
+  assert.doesNotMatch(SRC, /does not count/,
+    'the old promise is gone - a queued change may still count');
 });

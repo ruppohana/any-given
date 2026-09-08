@@ -589,7 +589,12 @@ export function render(root, data, state) {
   if (state === 'offline') {
     head(root, data, null);
     root.appendChild(stateBlock('offline', {
-      body: 'Your picks are saved on this phone and will go up when you are back. Nothing you tapped has been lost.',
+      /* 🔴 ONE PROMISE, BOTH SCREENS. This said the picks were SAVED and would go
+       * up later; P4 disabled editing and said a late change would not count. Same
+       * user, same pick, and one of them was lying - edit at 12:58 with no signal,
+       * kickoff at 13:00, reconnect at 13:05. Jason settled it 2026-09-08: queue it,
+       * show it as pending, and let the SERVER rule on arrival. */
+      body: 'Your changes are queued on this phone and go up when you are back. Each one counts only if it reaches us before that game kicks off, and we rule on that when it arrives, by our clock rather than the one in your pocket. Until it lands it is queued, not made.',
       since: Date.now() - 62000,
       action: { label: 'Try again' }
     }));

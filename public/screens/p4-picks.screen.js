@@ -684,8 +684,13 @@ function row(ctx, spec) {
     b.setAttribute('aria-label', 'Change your pick to ' + to);
     b.setAttribute('title', 'Change your pick to ' + to);
     if (ctx.frozen) {
-      b.disabled = true;
-      b.setAttribute('title', 'You are offline – a change cannot go up right now');
+      /* 🔴 THE SWAP STAYS LIVE OFFLINE. It used to be disabled here, which was the
+       * honest half of a promise the slate was making differently - and it cost a
+       * real case, a stadium or a basement with no bars. Jason, 2026-09-08: queue
+       * it. The edit is taken, marked pending, and ruled on by the server when it
+       * lands. */
+      b.setAttribute('title', 'Queued - it counts if it reaches us before kickoff');
+      b.dataset.queued = 'true';
     } else {
       b.addEventListener('click', () => ctx.onSwap(spec.id));
     }
@@ -848,7 +853,7 @@ export function render(root, data, state) {
        * wait for the connection. Saying only the first half would be a promise. */
       host.appendChild(stateBlock('offline', {
         title: 'You are offline',
-        body: 'These are your picks as of your last update, and they are safe. Changing one is turned off until you are back — a change that goes up after kickoff does not count, and the deadline does not wait for the connection.',
+        body: 'Your changes are queued on this phone and go up when you are back. Each one counts only if it reaches us before that game kicks off, and we rule on that when it arrives, by our clock rather than the one in your pocket. Until it lands it is queued, not made.',
         since: data.asOf,
         action: { label: 'Try again' }
       }));
