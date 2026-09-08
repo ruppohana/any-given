@@ -86,7 +86,8 @@ anygiven/
   src/worker.ts                  SESSION. Routes
   src/do/GameRoom.ts             SESSION. One live game, websocket fan-out, alarm poll
   src/do/PoolRoom.ts             SESSION. One pool
-  src/lib/teams.ts               SESSION. Team identity, null-primary state
+  src/lib/types.ts               SESSION. THE SHARED TYPES. Import, never re-declare
+  src/lib/teams.ts               SESSION. Team identity, and the model-key resolver
 
   src/lib/parse.ts               M1
   src/lib/detect.ts              M2
@@ -174,6 +175,22 @@ paid for once.**
 ---
 
 ## 6 · Types — the whole vocabulary
+
+**🔴 AMENDED 2026-09-08, after the module wave. `src/lib/types.ts` IS NOW THE TYPES, and it is
+session-owned. IMPORT FROM IT. Do not re-declare a type in your own file** — four module agents
+did, independently, and TypeScript's structural typing hides the drift until it bites.
+
+**Five amendments are recorded in that file's header and they change what you may assume:**
+
+| | |
+|---|---|
+| **1** | **`StandingsRow` is the POOL board only.** The live board is **`LiveStandingsRow`** — Marbles, ranked on `profit`. They share their presentation fields and **no quantity**, so nothing can sum them |
+| **2** | **`price.ts` is the only producer of a `CallOffer`.** `calls.ts` consumes one. Confidence comes from the model's **sample count and back-off level**, never from `\|p − 0.5\|` |
+| **3** | **`ParlayState` includes `'void'`** |
+| **4** | **`StarRole` includes `returner` and `interceptor`.** It still never includes `tackler` |
+| **5** | **`GameFacts` exists** — the score, the post-play spot and the scoring flag, keyed by play id. The parser does not emit it. Without it `close_game` does not fire, which is a **defined degradation, not a silence** |
+
+**The listing below is the shape, kept for reading. `src/lib/types.ts` is what compiles.**
 
 ```ts
 // ---------- identity ----------
@@ -350,7 +367,7 @@ themselves.** That is not negotiable and it is the reason the original exists.
 | `call` | client → DO | `{ snapId, side, stake }` |
 | `call:ack` | DO → client | `{ call: Call }` — **one call per snap, enforced here (7.4)** |
 | `settle` | DO → client | `{ snapId, landed, delta, bank }` |
-| `board` | DO → client | `{ rows: StandingsRow[] }` |
+| `board` | DO → client | `{ rows: LiveStandingsRow[] }` — **amended. Marbles, not points** |
 
 **🔴 The broadcast delay is applied CLIENT-SIDE**, by holding the event queue. The DO sends in real
 time; the client is deliberately behind. **Every notification is held by the same delay, or carries
