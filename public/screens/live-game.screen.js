@@ -1036,7 +1036,7 @@ function modeCard(wrap, compact) {
   const row = el('div', 'lg-mode-row');
   const opts = [
     { id: 'marbles', h: 'Play the marbles', b: 'Stake marbles at a price you see first. Live, or a card for the week.' },
-    { id: 'pool', h: 'Run a pool', b: 'Your group, a week at a time, scored in points. Nothing staked.' }
+    { id: 'pool', h: 'Group pool', b: 'Your group, a week at a time, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');
@@ -1085,30 +1085,9 @@ function modeCard(wrap, compact) {
     }
     c.appendChild(sr);
 
-    /* 🔴 THE THIRD ROW EXISTS ONLY ON THE MARBLES SIDE, because only that side
-     * has two speeds. The pool is a week by definition, so asking it "live or
-     * weekly?" would be a question with one answer — the kind of fork that made
-     * the first card three-wide and wrong.
-     *
-     * These two DO navigate. By this row every question has been answered, so a
-     * tap here is a door rather than a setting, and repainting the hub in place
-     * would leave somebody who has said everything still standing on the
-     * landing. That mistake has now been made three times in this file. */
-    if (S.mode === 'marbles' && S.sport) {
-      const gr = el('div', 'lg-mode-row lg-gorow');
-      const go = [
-        { h: 'Call it live', b: 'Snap by snap, 45s behind', to: '#/live' },
-        { h: "The week's card", b: 'Every game, priced', to: '#/slate' }
-      ];
-      for (const o of go) {
-        const b = el('button', 'lg-mode lg-go');
-        b.appendChild(el('span', 'lg-mode-h', o.h));
-        b.appendChild(el('span', 'lg-mode-b', o.b));
-        b.onclick = () => { location.hash = o.to; };
-        gr.appendChild(b);
-      }
-      c.appendChild(gr);
-    }
+    /* The doors used to be a third row here. They moved to homeScreen's step 3,
+     * because this card is reached from the live board too - where the question
+     * "live or weekly?" is being answered by the screen you are already on. */
   }
   return c;
 }
@@ -1117,8 +1096,76 @@ function modeCard(wrap, compact) {
  * The landing. Everything a person needs to decide what they are doing, and
  * nothing they have to scroll past to get there.
  */
+/* 🔴 HOME IS A SEQUENCE OF PAGES, NOT ONE STACKED HUB. Jason, 2026-09-09:
+ * "First page is play for the marbles or group pool, only."
+ *
+ * The hub put every question on one card - mode, then league, then speed, three
+ * rows deep - and called that progressive because the later rows only appeared
+ * once the earlier ones were answered. It is not progressive, it is a form. The
+ * first thing somebody sees on the first screen of this app should be ONE
+ * question with two answers and nothing else competing for the tap.
+ *
+ * So each step owns the screen:
+ *
+ *   1 · marbles or group pool     - and nothing else on the page
+ *   2 · NFL or College            - and nothing else on the page
+ *   3 · the game, how to enter it, and the invite
+ *
+ * Step 3 does NOT re-draw steps 1 and 2 as rows. It carries a single line
+ * saying what you picked, which changes it. That is the difference between a
+ * landing and a settings page, and it is why the earlier orphan "NFL · change"
+ * chip was wrong in a way this is not: that chip floated beside a hub that was
+ * already asking the same question two rows below it. */
 function homeScreen(wrap, state, now) {
-  wrap.appendChild(modeCard(wrap, true));
+  /* Steps 1 and 2. paint()'s own gates catch these before Home is reached on a
+   * cold start, but not when somebody clears a choice from here - and a screen
+   * that depends on a caller's gate to be correct is one refactor from showing
+   * a page with a hole in it. */
+  if (!S.mode) { wrap.appendChild(modeCard(wrap)); return; }
+  if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
+
+  /* STEP 3. The mark, then one line saying what was picked, then the game. */
+  const hub = el('div', 'card lg-sport is-compact');
+  const mk = el('div', 'lg-sport-h lg-mark');
+  mk.appendChild(el('span', 'lg-mark-stem', 'Any Given…'));
+  mk.appendChild(el('span', 'lg-mark-end', ' Snap'));
+  hub.appendChild(mk);
+
+  /* 🔴 WHAT YOU PICKED, AND HOW TO UNPICK IT — one line, not two rows of
+   * buttons. A landing that keeps asking the questions you already answered is
+   * a settings page wearing a landing's clothes. */
+  const pickedLine = el('div', 'lg-picked');
+  pickedLine.appendChild(el('span', 'lg-picked-w',
+    (S.mode === 'pool' ? 'Group pool' : 'Playing the marbles')
+    + ' · ' + (SPORT_LABEL[S.sport] || '')));
+  const chg = el('button', 'lg-picked-c', 'Change');
+  chg.onclick = () => {
+    /* Clearing BOTH is deliberate. Clearing only the mode would drop somebody at
+     * step 1 and then skip step 2, because the sport is still set - so "Change"
+     * would answer a question they never got asked. */
+    S.mode = null; S.sport = null;
+    store.set('mode', null); store.set('sport', null);
+    paint(wrap);
+  };
+  pickedLine.appendChild(chg);
+  hub.appendChild(pickedLine);
+
+  /* The two doors, on the marbles side only - the pool has one destination. */
+  const gr = el('div', 'lg-mode-row lg-gorow');
+  const go = S.mode === 'pool'
+    ? [{ h: 'Open the pool', b: 'Pick the week for points', to: '#/slate' }]
+    : [{ h: 'Call it live', b: 'Snap by snap, 45s behind', to: '#/live' },
+       { h: "The week's card", b: 'Every game, priced', to: '#/slate' }];
+  for (const o of go) {
+    const b = el('button', 'lg-mode lg-go');
+    b.appendChild(el('span', 'lg-mode-h', o.h));
+    b.appendChild(el('span', 'lg-mode-b', o.b));
+    b.onclick = () => { location.hash = o.to; };
+    gr.appendChild(b);
+  }
+  if (go.length === 1) gr.classList.add('is-one');
+  hub.appendChild(gr);
+  wrap.appendChild(hub);
 
   /* Tonight's game as a summary, not as the game itself — crests, score if it
    * has started, and when it kicks. */
@@ -1713,9 +1760,19 @@ const CSS = `
    backtick CLOSED THE STRING. What followed parsed as arithmetic on undefined
    identifiers, so node --check passed and every screen died at runtime on
    "mode is not defined". Second time tonight. See the parse guard. */
-/* Every row on the hub is two across now that the first card is a pair. The
-   third row only appears on the marbles side, and it is a pair too. */
+/* Every row on the hub is two across now that the first card is a pair. */
 .lg-sport.is-compact .lg-mode-row { grid-template-columns: 1fr 1fr; }
+/* The pool has one door, not two, so its row is full width rather than a button
+   beside a gap. */
+.lg-gorow.is-one { grid-template-columns: 1fr; }
+/* One line: what you picked on the left, the way out of it on the right. */
+.lg-picked { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin: 2px 0 4px; }
+.lg-picked-w { font-size: var(--t-micro); font-weight: 700; color: var(--dim);
+  letter-spacing: .04em; text-transform: uppercase; }
+.lg-picked-c { font: inherit; font-size: var(--t-micro); font-weight: 700;
+  background: none; border: 0; padding: 6px 2px; color: var(--accent);
+  text-decoration: underline; }
 /* The GO row is the only place on the hub that navigates, so it carries its
    subtitle where the rows above it hide theirs - a door says where it leads. */
 .lg-sport.is-compact .lg-gorow .lg-mode-b { display: block; }

@@ -89,3 +89,42 @@ test('how many real teams collapse from two colors to one', () => {
   console.log(`    ${collapsed} of ${two} nominally two-color teams collapse to one`);
   assert.equal(collapsed, 6);
 });
+
+/* 🔴 THE MARKS KEY HAS ONE FORMAT. Added 2026-09-09.
+ *
+ * Logos defaulted on at boot and turned themselves off the moment anybody
+ * opened the settings sheet, because two writers disagreed: setMarks() writes
+ * the raw string `on`, and the generic settings writer JSON-stringified it to
+ * `"on"` with quotes. Boot assigns whatever is stored straight to
+ * dataset.marks, and marksOn() compares it to the bare string - so choosing
+ * "On" was the action that broke it, and choosing "Off" worked. That is why it
+ * read as a bad default rather than as a broken toggle.
+ *
+ * This asserts over app.js as text because the boot path needs a real document
+ * and a real localStorage. It is a guard against the two writers coming back,
+ * not a test of the DOM. */
+test('nothing JSON-stringifies the marks key, and only "off" means off', async () => {
+  const { readFileSync } = await import('node:fs');
+  const raw = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  /* 🔴 STRIP THE COMMENTS FIRST. The first version of this test failed against
+   * correct code, because the comment explaining the bug QUOTES the bad call -
+   * "setMarks(), NOT set('marks', v)". A guard that reads source as text has to
+   * read the code, or the clearest possible explanation of a mistake becomes
+   * indistinguishable from the mistake. */
+  const app = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  /* The generic writer must never be handed 'marks'. */
+  assert.ok(!/set\(\s*['"]marks['"]/.test(app),
+    "the generic JSON writer is writing ag.marks again - use setMarks(), which writes the raw format boot reads");
+
+  /* setMarks writes raw, and it is the only thing that writes the key. */
+  const writers = (app.match(/localStorage\.setItem\(\s*['"]ag\.marks['"]/g) || []).length;
+  assert.equal(writers, 1, 'ag.marks must have exactly one writer');
+  assert.ok(/localStorage\.setItem\('ag\.marks', on \? 'on' : 'off'\)/.test(app),
+    'setMarks must write the bare strings, not JSON');
+
+  /* And the reader defaults ON, treating anything unrecognised as on so the
+   * phones already holding '"on"' repair themselves. */
+  assert.ok(/stored === 'off' \|\| stored === '"off"'/.test(app),
+    'boot must read only an explicit off as off, in either stored format');
+});

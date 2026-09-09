@@ -92,9 +92,19 @@ export function applyTeamVars(el, team) {
  * primary on --card:#ffffff and a navy primary on --bg:#120a0e without knowing
  * which theme it is in: the shape has an outline whatever the fill does.
  */
-/* MARKS. Held PROVISIONAL 2026-09-08 - Jason reversed the no-logos decision and
- * then said he needed to see it run first, so THE TOGGLE IS THE DELIVERABLE AND
- * THE DEFAULT IS NOT DECIDED. Both paths are built; he picks after looking.
+/* MARKS. NO LONGER PROVISIONAL. Jason reversed the no-logos decision on
+ * 2026-09-08, said he wanted to see it run before committing to a default, saw
+ * it, and settled it on 2026-09-09: "Logos keep defaulting off. Turn them on."
+ *
+ * 🔴 SO THE DEFAULT IS ON, and this reverses a settled-doctrine line that used
+ * to read "No logos. Marks default OFF." That decision was made on PRICE -
+ * ~$16,875 to license the college marks - and it is his to reverse. Recorded
+ * here rather than flipped quietly, because the next session will otherwise
+ * read the old rule and turn them back off.
+ *
+ * The two-color chip is not deleted and never will be: it is the fallback for
+ * marks-off, for a team with no logo, for a logo that fails to load, and it is
+ * what ships if a school, a conference or CLC ever writes.
  *
  * The URL derives from the team id, which is the CFBD id and the ESPN id at once
  * - verified 2026-09-08 against a.espncdn.com for Oregon, Ohio State, Oklahoma
@@ -105,8 +115,15 @@ export function applyTeamVars(el, team) {
  * if a school, a conference or CLC ever writes. */
 export function marksOn(doc) {
   /* Defensive on every hop: a test DOM shim has no documentElement, and a chip
-   * that throws takes the whole screen with it. Marks off is the safe answer -
-   * the two-color chip needs nothing but the team. */
+   * that throws takes the whole screen with it.
+   *
+   * 🔴 THE FALLBACK IS OFF AND THAT IS STILL RIGHT, even though the product
+   * default is now on. This function answers "did the app ASK for marks", not
+   * "should the app have marks" - app.js owns the default and writes it to
+   * dataset.marks at boot. A missing dataset means we are somewhere app.js
+   * never ran: a test shim, a share-card canvas, a fragment rendered out of
+   * context. In all of those the drawn chip is the correct answer and a network
+   * image is the wrong one. */
   const d = doc || (typeof document !== 'undefined' ? document : null);
   const el = d && d.documentElement;
   return !!(el && el.dataset && el.dataset.marks === 'on');

@@ -431,7 +431,17 @@ export async function previewData(fixtures, state) {
     const nfl = live || [];
     const tb = nfl.find((g) => g.status === 'scheduled') || nfl[nfl.length - 1];
     return {
-      now, sport: 'nfl', mode, games: nfl, picks: {},
+      /* 🔴 Date.now(), NOT the `now` below. That binding is a `let` declared ~110
+       * lines further down, so naming it here is a temporal dead zone reference
+       * that throws "Cannot access 'now' before initialization" and takes the
+       * whole screen with it.
+       *
+       * And the two are not interchangeable even once it exists: the college
+       * route deliberately ANCHORS its clock to the captured Saturday so the
+       * designed preview sits in the middle of a real week. The NFL route is
+       * reading a live feed, so its clock is the actual wall clock. Reusing the
+       * anchored one would date a real slate to a fixture's afternoon. */
+      now: Date.now(), sport: 'nfl', mode, games: nfl, picks: {},
       /* No pool exists yet in either sport, and an NFL slate must not inherit
        * the college mock's Big Ten scope on its way past. */
       pool: {

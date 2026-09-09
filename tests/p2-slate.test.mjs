@@ -342,3 +342,52 @@ test('the price is bounded at both ends, and a game with no line has no price', 
   assert.ok(mod.priceFromSpread(-3, 'home', 'college-football')
           > mod.priceFromSpread(-3, 'home', 'nfl'), 'the sport scales are the wrong way round');
 });
+
+/* 🔴 THE NFL ROUTE ACTUALLY RUNS. Added 2026-09-09 after it shipped broken.
+ *
+ * `previewData` returned an object naming `now` - a `let` declared a hundred
+ * lines below the return - so the NFL branch threw "Cannot access 'now' before
+ * initialization" and the slate rendered its error state. Every other test in
+ * this file reads the SOURCE as text or calls a pure helper; not one of them
+ * called previewData, so 555 passing tests said nothing about whether the
+ * function could be executed at all.
+ *
+ * That is the same hole the screen-parse guard was written for, one level down:
+ * a check that reads code is not a check that runs it. */
+test('previewData runs on both sports and returns a usable shape', async () => {
+  const realFetch = globalThis.fetch;
+  const realLS = globalThis.localStorage;
+  const games = [{
+    id: '401872656', kickoffUtc: Date.UTC(2026, 8, 10, 0, 20), status: 'scheduled',
+    homeTeamId: '26', awayTeamId: '17', spread: -3, homeScore: null, awayScore: null,
+    teams: [{ id: '26', abbrev: 'SEA', name: 'Seahawks', short: 'Seahawks', primary: '002244', secondary: '69be28' },
+            { id: '17', abbrev: 'NE', name: 'Patriots', short: 'Patriots', primary: '002a5c', secondary: 'c60c30' }]
+  }];
+  try {
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ games }) });
+    const store = { 'ag.sport': '"nfl"', 'ag.mode': '"marbles"' };
+    globalThis.localStorage = { getItem: (k) => (k in store ? store[k] : null) };
+
+    const fixtures = { teams: { teams: {} }, games: [], load: async () => { throw new Error('no fixture'); } };
+    const d = await mod.previewData(fixtures, 'ready');
+
+    assert.equal(d.sport, 'nfl', 'the NFL route did not run');
+    assert.equal(d.mode, 'week', 'marbles on the slate is the week card');
+    assert.equal(typeof d.now, 'number', 'now must be a real clock, not undefined');
+    assert.ok(d.now > Date.UTC(2026, 0, 1), 'now looks unset');
+    assert.equal(d.games.length, 1);
+    assert.equal(d.games[0].home.abbrev, 'SEA');
+    assert.equal(d.games[0].away.abbrev, 'NE');
+    assert.equal(d.pool.memberCount, 0, 'an NFL slate must not inherit the college mock pool');
+    assert.equal(d.synthetic, 0, 'the NFL route must never synthesize');
+
+    /* And the office pool reads the same feed with no price attached. */
+    store['ag.mode'] = '"pool"';
+    const p = await mod.previewData(fixtures, 'ready');
+    assert.equal(p.mode, 'pool');
+    assert.equal(p.games.length, 1, 'the pool sees the same real games');
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = realLS;
+  }
+});

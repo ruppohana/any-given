@@ -220,8 +220,20 @@ async function boot() {
 
   fixtures.teams = await (await fetch('/fixtures/teams.json')).json();
 
-  let marks = 'on';   /* 🔴 DEFAULT ON, Jason 2026-09-08 after seeing it run */
-  try { marks = localStorage.getItem('ag.marks') || 'on'; } catch {}
+  /* 🔴 DEFAULT ON, Jason 2026-09-08 after seeing it run, and re-confirmed
+   * 2026-09-09: "Logos keep defaulting off. Turn them on."
+   *
+   * Anything that is not exactly 'off' is read as on. That is deliberate rather
+   * than sloppy: the key was being written in two formats (see the settings
+   * sheet below), so every phone that ever opened that panel is holding '"on"'
+   * with quotes. Treating an unrecognised value as ON repairs those in place
+   * instead of leaving them dark until somebody clears their storage. Only the
+   * one string that means off, means off. */
+  let marks = 'on';
+  try {
+    const stored = localStorage.getItem('ag.marks');
+    marks = (stored === 'off' || stored === '"off"') ? 'off' : 'on';
+  } catch {}
   document.documentElement.dataset.marks = marks;
   const marksBox = document.getElementById('marks');
   if (marksBox) {
@@ -299,7 +311,23 @@ function buildSettings() {
   /* --- marks --- */
   box.appendChild(seg('Team logos', [['on', 'On'], ['off', 'Off']],
     () => document.documentElement.dataset.marks || 'on',
-    (v) => { document.documentElement.dataset.marks = v; set('marks', v); cache.clear(); mount(); }));
+      /* 🔴 setMarks(), NOT set('marks', v). Jason, 2026-09-09: "Logos keep
+     * defaulting off. Turn them on."
+     *
+     * They were on at boot and turned themselves off the first time anybody
+     * opened this panel, because TWO WRITERS DISAGREED ABOUT THE FORMAT.
+     * `set()` is the generic settings writer and it JSON-stringifies, so it
+     * stored the five characters "on" WITH QUOTES. Boot reads the key raw and
+     * assigns it straight to `dataset.marks`, and marksOn() compares that to the
+     * bare string `on` - which '"on"' is not. So one visit to the settings sheet
+     * poisoned the key permanently, and choosing "On" was the action that did
+     * it. Choosing Off worked, which is why it looked like the default was off
+     * rather than like the toggle was broken.
+     *
+     * setMarks() is the one that already writes the raw format boot reads. The
+     * generic writer is right for every other setting here and wrong for this
+     * one, and the fix is to stop having two. */
+  (v) => { setMarks(v === 'on'); cache.clear(); mount(); }));
 
   /* --- the delay, which is why this exists --- */
   const d = document.createElement('div'); d.className = 'ag-set';
