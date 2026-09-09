@@ -54,6 +54,7 @@
  * cannot import a .ts file, so the shape is honored and the field names are exact.
  */
 import { stateBlock, STATES_CSS } from '/components/states.js';
+import { pageHeader } from '/components/header.js';
 /* The badge is the shared component - read the header of badge.js for why a
  * person's row does not carry a team's two colors. */
 import { badgePin, BADGE_CSS } from '/components/badge.js';
@@ -618,14 +619,15 @@ export function render(root, data, state) {
     host.innerHTML = '';
     const pool = (data && data.pool) || { name: 'Pool', week: 0, memberCount: 0 };
 
-    const h = el('h1', 'p5-h', 'Standings');
-    const sub = el('p', 'p5-sub num',
-      /* "1 members". The option list below got this right and the header did not,
-       * which is what happens when the same sentence is built twice. */
-      pool.name + ' · ' + pool.memberCount
-        + (pool.memberCount === 1 ? ' member · ' : ' members · ')
-        + (pool.scope || ''));
-    host.append(h, sub);
+    /* THE SHARED HEADER. "1 members" is fixed here as well - the option list
+     * got the plural right and this line built the same sentence a second time
+     * and got it wrong, which is the argument for one template in miniature. */
+    host.appendChild(pageHeader({
+      title: 'Standings',
+      league: data.sport === 'nfl' ? 'nfl' : 'ncaa',
+      sub: pool.name + ' · ' + pool.memberCount
+        + (pool.memberCount === 1 ? ' member' : ' members')
+    }));
 
     if (state === 'loading') {
       host.appendChild(stateBlock('loading', { rows: 8, body: 'Counting the week…' }));

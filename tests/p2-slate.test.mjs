@@ -224,7 +224,11 @@ test('§5 - no dependency, no icon font, no chart library, inline SVG only', () 
 test('§5 - every number is tabular', () => {
   /* The .num class in tokens.css does the font work. Every element carrying a figure -
    * record, spread, crowd, score, time, progress, the tiebreak input - must have it. */
-  for (const cls of ['p2-rec', 'p2-spread', 'p2-crowd', 'p2-center', 'p2-bar-p', 'p2-tb-in', 'p2-day-n', 'p2-grp-n', 'p2-sub']) {
+  /* `p2-sub` is gone: the meta line it named described a pool the week's card
+   * does not have, and the shared page header replaced it. Its rule - figures
+   * are tabular so a header cannot jitter - moved to the template and is
+   * asserted below rather than dropped. */
+  for (const cls of ['p2-rec', 'p2-spread', 'p2-crowd', 'p2-center', 'p2-bar-p', 'p2-tb-in', 'p2-day-n', 'p2-grp-n']) {
     const re = new RegExp(`['"\`]${cls}[^'"\`]*num`);
     assert.ok(re.test(CODE), `${cls} is not marked .num`);
   }
@@ -264,7 +268,11 @@ test('§5 - the words. Marbles is the balance and none of the dead words appear'
    * the last one is the one that matters: "pool" is what you are in with money
    * in most of the world, and this product spends its life not being that.
    * "Group" says people you know and says nothing about a stake. */
-  const poolCopy = (CODE.match(/'Your group[^']*'/g) || []).join(' ');
+  /* The words moved into the shared page header on 2026-09-09, so this reads the
+   * header's sub line rather than a kicker this screen no longer owns. The rule
+   * is unchanged and is the legal position: the group half never speaks the
+   * language of a balance. */
+  const poolCopy = (CODE.match(/'[^']*your group[^']*'/g) || []).join(' ');
   assert.ok(poolCopy.length > 0, 'the group section must name itself on the screen');
   assert.ok(!/Marble/i.test(poolCopy), 'the group copy must not mention a balance it does not have');
   assert.ok(!/stake|payout|bank/i.test(poolCopy), 'a group stakes nothing');
@@ -540,4 +548,44 @@ test('the pool settles on the winner and the week card on the cover', () => {
   assert.equal(mod.priceAts(-7), 2);
   assert.equal(mod.priceAts(56.5), 2);
   assert.equal(mod.priceAts(null), null, 'no line means no ATS price');
+});
+
+/* 🔴 THE SHARED PAGE HEADER. Added 2026-09-09 - Jason: "How about a universal
+ * header on every page. A template if you will. So it looks more consistant."
+ *
+ * Four screens had invented four tops: different type scales, different vertical
+ * rhythms, and the three-dot menu floating in absolute position over whatever
+ * each one happened to put in its top right. On a phone that strip is the only
+ * thing on screen the whole time and it is what says WHICH SCREEN YOU ARE ON -
+ * four answers to that question is why the slate and My picks read as the same
+ * list. */
+test('every product screen uses the shared header, and it carries the league mark', async () => {
+  const { readFileSync } = await import('node:fs');
+  const HEAD = readFileSync(new URL('../public/components/header.js', import.meta.url), 'utf8');
+
+  /* The sub line carries a week, a member count and a payout, so it is tabular
+   * for the same reason every other figure in this app is: numbers that change
+   * width as they change value make a header jitter on a timer-driven screen. */
+  assert.match(HEAD, /\.ag-hd-s[^}]*tabular-nums/s, 'the header sub line must be tabular');
+
+  /* 🔴 THE MENU IS MOVED INTO THE HEADER, NOT CLONED. There is exactly one #gear
+   * in the document; cloning it would need a second listener and the two would
+   * drift the first time one was changed. */
+  assert.match(HEAD, /getElementById\('gear'\)/, 'the header must adopt the one menu button');
+  assert.match(HEAD, /\.ag-hd \.ag-gear[^}]*position:\s*static/s,
+    'the menu must stop floating once it is inside the header');
+
+  /* 🔴 THE LEAGUE IS A MARK, NOT THE WORD. Jason: "can we consistently have the
+   * ncaa logo and an icon of a football? Consistency and anchoring?" A pill
+   * reading "College" is a label somebody has to read, in the one place that is
+   * supposed to be recognised without reading. */
+  assert.match(HEAD, /logos\/leagues\//, 'the header must draw the self-hosted league mark');
+  assert.ok(!/ag-hd-tag/.test(HEAD), 'the text pill is replaced by the mark, not kept beside it');
+
+  const dir = new URL('../public/screens/', import.meta.url);
+  for (const f of ['p2-slate.screen.js', 'p4-picks.screen.js', 'p5-standings.screen.js']) {
+    const src = readFileSync(new URL(f, dir), 'utf8');
+    assert.match(src, /pageHeader\(\{/, f + ' does not use the shared header');
+    assert.match(src, /league:/, f + ' does not pass its league to the header');
+  }
 });

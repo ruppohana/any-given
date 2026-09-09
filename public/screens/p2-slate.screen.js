@@ -46,6 +46,7 @@
  */
 import { teamChip, TEAM_CHIP_CSS, applyTeamVars } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
+import { pageHeader } from '/components/header.js';
 import { progress, crowdLabel } from '/components/fmt.js';
 
 export const id = 'p2-slate';
@@ -1211,43 +1212,41 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College' };
 
 function head(root, data, _) {
-  const h = el('h1', 'p2-h', (data && data.pool && data.pool.name) || 'The slate');
-  root.appendChild(h);
-  /* 🔴 THE SCREEN SAYS WHICH SPORT IT IS SHOWING. The bug was invisible for as
-   * long as it was because nothing on the slate ever named a league — sixteen
-   * college games and sixteen NFL games are the same screen until one of them
-   * says so. A row that can be wrong has to be a row that can be READ as wrong. */
+  /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
+   * were four separate elements invented on this screen; they are now the
+   * template's title, tag and sub, at the same size they are on every other
+   * screen. */
   const sp = (data && data.sport) || 'college-football';
-  const tag = el('span', 'p2-league', SPORT_NAME[sp] || 'College');
-  h.appendChild(tag);
-  /* 🔴 THE SCREEN SAYS WHICH HALF OF THE APP IT IS. Jason, 2026-09-08: "is this
-   * the office pool or the betting for the marbles?" — and that he had to ask
-   * is the finding. Two halves, one bottom nav, and nothing on the screen
-   * distinguished them.
+  const wk = (data && data.week) || '';
+  /* 🔴 "No pool yet" IS GONE FROM THIS HEADER. Jason, 2026-09-09: "What is no
+   * pool yet and college in the header for."
    *
-   * It is the pool: a group picking winners for a week, scored against each
-   * other in POINTS. No price, no payout, no bank, and the two boards never sum.
+   * Nothing, on this screen. The pool NAME was the h1 here because this started
+   * as a group-pool screen, and on the week's card - a marbles product with no
+   * pool anywhere in it - the title said "No pool yet" over sixteen priced
+   * games. A header that names something the screen does not contain is worse
+   * than a plain one.
    *
-   * 🔴 AND IT SAYS SO WITHOUT NAMING THE OTHER HALF. The first draft of this
-   * line ended "no marbles" and a test caught it: a pool screen that mentions
-   * the balance to deny it is still a pool screen with the balance written on
-   * it. The separation is defended by the word that IS here — "group pool",
-   * "points" — never by a disclaimer about the word that is not. */
-  const kicker = el('p', 'p2-half', (data && data.mode) === 'week'
-    ? "The week's card · against the spread · every pick pays 2.00×"
-    /* "Group pools" is the section's name (Jason, 2026-09-09). The kicker names
-     * the section, not this one pool - the pool's own name is the h1 above it. */
-    : 'Your group · a week at a time · scored in points');
-  root.insertBefore(kicker, h);
-  const p = data && data.pool;
-  if (p) {
-    const bits = [SCOPE_LABEL[p.scope] || 'All games'];
-    if (p.scopeArg) bits[0] = p.scopeArg;
-    bits.push(p.ats ? 'Against the spread' : 'Straight up');
-    bits.push(p.memberCount + (p.memberCount === 1 ? ' member' : ' members'));
-    const sub = el('p', 'p2-sub num', bits.join(' \u00b7 '));
-    root.appendChild(sub);
-  }
+   * The title is now what the screen IS, and the league is a mark rather than
+   * the word "College" in a pill. */
+  root.appendChild(pageHeader({
+    title: (data && data.mode) === 'week' ? "The week's card" : 'The slate',
+    league: sp === 'nfl' ? 'nfl' : 'ncaa',
+    sub: (data && data.mode) === 'week'
+      ? 'Week ' + wk + ' · against the spread · every pick pays 2.00×'
+      : 'Week ' + wk + ' · your group · scored in points'
+  }));
+  /* 🔴 THE OLD HEADER IS DELETED, NOT HIDDEN BEHIND THE NEW ONE. It was four
+   * elements invented on this screen - a kicker in caps, an h1 carrying the
+   * POOL NAME, a league pill and a meta line - and the template now says all of
+   * it in a title, a league mark and one sub line.
+   *
+   * Keeping them and hiding the h1 was my first attempt and it is the trap a
+   * template exists to avoid: a shared header that ADDS to each screen's own
+   * header makes the page longer and less consistent than what it replaced. */
+  /* The pool's own meta line is gone too: "All games - Straight up - 0 members"
+   * described a pool the week's card does not have, and the group's scoring
+   * mode is now in the header's sub line where it belongs. */
 }
 
 const SCOPE_LABEL = {

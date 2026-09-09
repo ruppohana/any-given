@@ -90,6 +90,7 @@
  */
 import { teamChip, TEAM_CHIP_CSS } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
+import { pageHeader } from '/components/header.js';
 import { crowdLabel, crowdSuppression, progress } from '/components/fmt.js';
 import {
   pickState, isPickEditable, voidReason,
@@ -1162,11 +1163,22 @@ export function render(root, data, state) {
   }
 
   function head() {
-    host.appendChild(el('h1', 'p4-h', 'My picks'));
-    const p = data.pool;
-    const bits = ['Week ' + data.week, p.name, p.ats ? 'Against the spread' : 'Straight up',
-                  p.memberCount + ' members'];
-    host.appendChild(el('p', 'p4-sub num', bits.join(' · ')));
+    /* The shared header, so this screen's top matches every other one. */
+    host.appendChild(pageHeader({
+      title: 'My picks',
+      league: data.sport === 'nfl' ? 'nfl' : 'ncaa',
+      sub: 'Week ' + (data.week || '')
+        + ((data.mode === 'week') ? ' · against the spread' : ' · your group, in points')
+    }));
+    /* 🔴 THE OLD META LINE IS DELETED, NOT KEPT UNDER THE NEW HEADER. It said
+     * "Week 2 · No pool yet · Against the spread · 0 members" - the pool name of
+     * a pool that does not exist, and a member count of nobody, on a screen
+     * about YOUR card. Every fact in it was either already in the header above
+     * or a statement about something this screen is not.
+     *
+     * Leaving it would have made the shared header an addition rather than a
+     * replacement, which is how a template ends up making a page longer and less
+     * consistent than the thing it replaced. */
   }
 
   /* ---- THE TWO FIGURES.

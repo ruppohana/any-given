@@ -21,6 +21,7 @@ import { navBar, NAV_CSS } from '/components/nav.js';
 import { STATES_CSS } from '/components/states.js';
 import { TEAM_CHIP_CSS } from '/components/team-chip.js';
 import { adSlot, AD_CSS } from '/components/ad.js';
+import { HEADER_CSS } from '/components/header.js';
 
 /* Every route is a screen module and one of its own declared states. Nothing here
  * invents a screen; if a piece was never built, the route says so out loud. */

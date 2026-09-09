@@ -734,7 +734,15 @@ function paint(wrap) {
    * is holding a scoreboard. `if it is` is the whole condition: no channel in the
    * feed means no line, never a guess. */
   if (state.broadcast) head.appendChild(el('span', 'lg-tv', state.broadcast));
-  wrap.appendChild(head);
+  /* 🔴 NOT BEFORE KICKOFF. The head is the live scoreboard - two crests, the
+   * score, the quarter and the channel - and before a game has started it says
+   * "0 - 0, Not started" directly above an Upcoming card carrying the same two
+   * crests and the same channel. Two versions of one fact, the smaller one
+   * first, and the 0-0 is a score that does not exist yet.
+   *
+   * The Upcoming card IS the pre-game head. This one appears when there is
+   * something to put in it. */
+  if (state.status !== 'pre') wrap.appendChild(head);
 
   if (state.status === 'pre') {
     wrap.appendChild(pregame(state, now, wrap));
@@ -751,7 +759,6 @@ function paint(wrap) {
      * THREE, not all of them. A pre-game screen that turns into a second slate
      * has stopped being about a game; the slate already exists and is better at
      * being a slate. Three is enough to say "there is more than this one". */
-    alsoOn(wrap, state, now);
     /* 🔴 THE THINGS THAT USED TO BE ON HOME LIVE HERE NOW, because Home became
      * the front door and a front door carries one question. Everything ABOUT a
      * game belongs on the game: the week's card for the same league, the invite
@@ -771,6 +778,11 @@ function paint(wrap) {
      * survives because both copies work. Found by reading the rendered text
      * rather than the code: "Invite a friend ... Post it ... The week's card ...
      * Invite a friend". */
+    /* 🔴 THE LIST GOES AFTER THE ACTIONS. It was drawn straight after the
+     * Upcoming card, which pushed the week's card - a primary action - below
+     * six rows of other fixtures. A list of what else is on is a browsing
+     * aid; it never outranks the two things this screen is asking you to do. */
+    alsoOn(wrap, state, now);
     wrap.appendChild(adSlot('banner', 'Your ad here · reserved, nothing sold yet'));
     return;
   }
@@ -1362,6 +1374,14 @@ function introCard(wrap) {
  */
 /** "5h 42m" / "18m" / "any second now". Coarse on purpose: a second-by-second
  *  countdown to something four hours away is a fidget, not information. */
+/* "Thursday - 5:00 PM". The old countdown card built this inline; the Upcoming
+ * card needs it in a single meta line. */
+function dayTime(ms) {
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, { weekday: 'long' }) + ' · '
+    + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 function untilLabel(ms) {
   if (ms <= 0) return 'any second now';
   const m = Math.round(ms / 60000);
@@ -1421,27 +1441,65 @@ function alsoOn(wrap, state, now) {
       S.alsoBusy = true;
       fetch('/api/state/slate:' + sport + ':2026:' + (SLATE_WEEK[sport] || 1))
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (d) S.also = { sport, at: Date.now(), games: d.games || [] }; })
+        .then((d) => {
+          if (!d) return;
+          S.also = { sport, at: Date.now(), games: d.games || [] };
+          /* 🔴 AND WAKE THE SCREEN. The pre-game repaint guard means nothing
+           * redraws while the countdown sits on the same minute - so a card that
+           * arrives after the first paint would never be drawn at all, which is
+           * exactly what happened the first time these two fixes met. A cache
+           * that fills silently on a screen that has stopped repainting is a
+           * feature that works everywhere except in production. */
+          S.lastSig = null;
+          paint(wrap);
+        })
         .catch(() => {})
         .then(() => { S.alsoBusy = false; });
     }
   }
   if (!cached || cached.sport !== sport) return;
 
-  const games = (cached.games || [])
+  /* 🔴 THE SAME DAY FIRST. Jason, 2026-09-09: "Do all the games for the DAY show
+   * up here when there is more than 1?"
+   *
+   * They did not - it was the next three kickoffs, whichever day they landed on,
+   * which is the wrong grouping for the question somebody is actually asking. On
+   * a Wednesday with one opener the answer is "nothing else tonight" and the
+   * card should say so rather than advertising Saturday. On a Saturday with
+   * twenty games the whole point is what else is on TODAY.
+   *
+   * So the list is the rest of THIS day, all of it, and it falls back to the
+   * next day only when today has nothing left. A game at 9am and a game at 8pm
+   * are the same day to a person planning an afternoon. */
+  const dayKey = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const thisDay = dayKey(state.kickoffUtc || now);
+
+  const upcoming = (cached.games || [])
     .filter((g) => g && g.status !== 'final' && g.kickoffUtc > (state.kickoffUtc || now)
                    && String(g.id) !== String((key || '').split(':')[1]))
     .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
-  if (!games.length) return;
+  if (!upcoming.length) return;
+
+  const sameDay = upcoming.filter((g) => dayKey(g.kickoffUtc) === thisDay);
+  const games = sameDay.length ? sameDay : upcoming;
+  /* 🔴 A CAP EVEN ON THE SAME DAY. Twenty rows here is a second slate on a
+   * screen that is about ONE game, and the slate already exists and is better at
+   * being a slate. Six is enough to read at a glance; the rest is a link. */
+  const CAP = 6;
+  const sameDayCount = sameDay.length;
 
   const box = el('div', 'card lg-also');
   const h = el('div', 'lg-also-h');
-  h.appendChild(el('span', 'lg-also-k', 'Also on'));
+  /* The heading names the day when the list IS the day, so "Also on Saturday"
+   * beside six rows cannot be mistaken for the whole week. */
+  h.appendChild(el('span', 'lg-also-k', sameDayCount
+    ? 'Also on ' + new Date(state.kickoffUtc || now).toLocaleDateString(undefined, { weekday: 'long' })
+    : 'Next up'));
   h.appendChild(el('span', 'lg-also-n num',
     games.length === 1 ? '1 more game' : games.length + ' more games'));
   box.appendChild(h);
 
-  for (const g of games.slice(0, 3)) {
+  for (const g of games.slice(0, CAP)) {
     const teams = {};
     for (const t of (g.teams || [])) if (t && t.id) teams[t.id] = t;
     const a = teams[g.awayTeamId], hm = teams[g.homeTeamId];
@@ -1457,7 +1515,7 @@ function alsoOn(wrap, state, now) {
     box.appendChild(row);
   }
 
-  if (games.length > 3) {
+  if (games.length > CAP) {
     const more = el('a', 'lg-also-more', 'See the whole week →');
     more.href = '#/slate';
     box.appendChild(more);
@@ -1469,15 +1527,42 @@ function pregame(state, now, wrap) {
   const box = el('div', 'lg-pre');
 
   if (state.kickoffUtc) {
-    const c = el('div', 'card lg-count');
-    c.appendChild(el('div', 'lg-count-k', 'KICKOFF'));
-    c.appendChild(el('div', 'lg-count-v num', untilLabel(state.kickoffUtc - now)));
-    const when = new Date(state.kickoffUtc);
-    const bits = [when.toLocaleDateString(undefined, { weekday: 'long' }),
-                  when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })];
+    /* 🔴 THE UPCOMING CARD, NOT A COUNTDOWN CARD. Jason, 2026-09-09: "I always
+     * liked the other game card not the one we are using. The days seems like
+     * the most important thing here, which it is not."
+     *
+     * Exactly right, and the old card made the argument for him: KICKOFF over
+     * "1 day" at the largest size on the screen, with the teams reduced to two
+     * small crests and a 0-0 above it. The biggest type on a screen is a claim
+     * about what matters most, and "1 day" is the least useful fact here - it is
+     * true of twenty other games, it changes nothing you can act on, and it was
+     * shouting while the actual fixture whispered.
+     *
+     * So the card is the one he liked: crests, a quiet "at", the MATCHUP as the
+     * headline, and the when/where/channel as one line under it. The countdown
+     * stays - it is the reason to come back - as part of that line rather than
+     * as the headline. */
+    const c = el('div', 'card lg-hgame lg-pre');
+    c.appendChild(el('div', 'lg-hgame-k', 'Upcoming'));
+
+    const gh = el('div', 'lg-head');
+    const aw = state.teams[state.awayTeamId], hm = state.teams[state.homeTeamId];
+    const lg = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+    if (aw) gh.appendChild(teamChip({ id: state.awayTeamId, ...aw }, { size: 44, league: lg }));
+    gh.appendChild(el('span', 'lg-at', 'at'));
+    if (hm) gh.appendChild(teamChip({ id: state.homeTeamId, ...hm }, { size: 44, league: lg }));
+    c.appendChild(gh);
+
+    if (aw && hm) {
+      c.appendChild(el('div', 'lg-hgame-t',
+        (aw.short || aw.name) + ' at ' + (hm.short || hm.name)));
+    }
+
+    const bits = ['Kicks in ' + untilLabel(state.kickoffUtc - now)];
+    if (state.kickoffUtc) bits.push(dayTime(state.kickoffUtc));
     if (state.venue) bits.push(state.venue);
     if (state.broadcast) bits.push('on ' + state.broadcast);
-    c.appendChild(el('div', 'lg-count-b', bits.join(' · ')));
+    c.appendChild(el('div', 'lg-hgame-b', bits.join(' · ')));
     box.appendChild(c);
   }
 
