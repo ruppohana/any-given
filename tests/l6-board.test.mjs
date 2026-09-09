@@ -393,3 +393,44 @@ test('the screen never fetches at render time', () => {
   const render = SCREEN_SRC.slice(SCREEN_SRC.indexOf('export function render'));
   assert.ok(!/fetch\(/.test(render), 'a screen that fetches fails its piece');
 });
+
+/* ------------------------------------------------------------------ *
+ * The live board ranks on PROFIT — 2026-09-08
+ * ------------------------------------------------------------------ */
+
+test('🔴 the live board sorts on profit, and breaks ties on how much was resolved', async () => {
+  /* What this replaces. Until 2026-09-08 the live screen's board counted CALLS:
+   * "Jason · 3 calls" beside "Mike · 3 calls", which is an attendance sheet. Two
+   * people watching the same game learned nothing about which of them was
+   * reading it better. Settled doctrine has always said the live board ranks on
+   * PROFIT (balance − start) and the screen simply did not do it — every number
+   * it needed was already on the wire.
+   *
+   * The comparator is lifted from the screen and run, because a screen needs a
+   * DOM and cannot be imported here. That is honest about what is under test:
+   * the ordering rule, not the markup. The markup was driven in a real browser
+   * at 375px with two devices on one board. */
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8');
+
+  const m = src.match(/\.sort\((\(a, b\) => [^;]+)\)/);
+  assert.ok(m, 'the board must still sort — if this match fails, read the file before trusting it');
+  const cmp = new Function('return ' + m[1])();
+
+  const row = (name, profit, won, lost) => ({ name, profit, won, lost });
+
+  /* Profit first, highest at the top. */
+  const ranked = [row('Ann', -20, 1, 3), row('Bo', 55, 4, 1), row('Cy', 0, 0, 0)].sort(cmp);
+  assert.deepEqual(ranked.map((r) => r.name), ['Bo', 'Cy', 'Ann']);
+
+  /* 🔴 A TIE BREAKS ON WHAT HAS BEEN RESOLVED, so somebody sitting on one lucky
+   * call does not outrank somebody who has been playing all night for the same
+   * number. This is the case the browser run happened to land on — both players
+   * finished at +13 — so it is pinned here rather than left to chance. */
+  const tied = [row('OneLucky', 13, 1, 0), row('AllNight', 13, 6, 5)].sort(cmp);
+  assert.deepEqual(tied.map((r) => r.name), ['AllNight', 'OneLucky']);
+
+  /* A loss is below break-even, and break-even is below any profit at all. */
+  const spread = [row('Down', -5, 0, 1), row('Flat', 0, 1, 1), row('Up', 1, 1, 0)].sort(cmp);
+  assert.deepEqual(spread.map((r) => r.name), ['Up', 'Flat', 'Down']);
+});

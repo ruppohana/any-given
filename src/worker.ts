@@ -158,7 +158,32 @@ export default {
          * requirement 7.4 holds without the server having to remember anything. */
         const id = `call:${b.key}:${b.deviceId}:${b.afterPlayId}`;
         const existing = await env.LIVE.get(id);
-        if (existing) return json({ ok: true, alreadyCalled: true, call: JSON.parse(existing) });
+        if (existing) {
+          /* 🔴 A LATE NAME MAY LAND. THE PICK MAY NOT.
+           *
+           * The name is asked for AFTER the first call — doctrine, and the only
+           * way a stranger reaches the game without a wall in front of it — so a
+           * call is necessarily made before there is a name to put on it. When
+           * the name arrives, the rows already on the board have to take it, or
+           * the person who just named themselves still sits there as a stranger
+           * beside their own results.
+           *
+           * Everything else is frozen. The choice, the stake and the price are
+           * read from what is already stored and never from this request, so a
+           * re-post cannot change a call after the play that answers it. That is
+           * requirement 7.4 holding under a second write rather than in spite of
+           * one — and it works precisely because the key is the game, the device
+           * and the play, so a second tap addresses the same record by
+           * construction. */
+          const prev = JSON.parse(existing);
+          const name = (b.name || '').slice(0, 24);
+          if (name && name !== prev.name) {
+            const renamed = { ...prev, name };
+            await env.LIVE.put(id, JSON.stringify(renamed), { expirationTtl: 60 * 60 * 6 });
+            return json({ ok: true, alreadyCalled: true, renamed: true, call: renamed });
+          }
+          return json({ ok: true, alreadyCalled: true, call: prev });
+        }
 
         const call = {
           key: b.key, deviceId: b.deviceId, name: (b.name || 'Someone').slice(0, 24),

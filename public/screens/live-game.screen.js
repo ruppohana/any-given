@@ -161,43 +161,103 @@ function priceFor(type, state, offenseTeamId) {
  * Settling — against the play that actually arrived
  * ------------------------------------------------------------------ */
 
+/**
+ * ONE settlement path, used for my own bank and for everybody else's row on the
+ * board. Two paths would drift, and the day they drifted the board would say
+ * somebody was winning while their own phone said otherwise.
+ *
+ * 🔴 THE PAYOUT IS DERIVED FROM p WHEN IT HAS TO BE. A call made on this device
+ * carries the price it was shown; a call read back off the board carries only
+ * `p`, because that is what the server was sent. Same formula either way —
+ * stake / p, capped — so the two cannot disagree.
+ */
+function payoutOf(call) {
+  if (typeof call.pays === 'number') return call.pays;
+  const p = typeof call.p === 'number' && call.p > 0 ? call.p : 0.5;
+  return Math.min(MAX_PAYOUT, Math.round((1 / p) * 100) / 100);
+}
+
+function settleOne(call, state) {
+  const pays = payoutOf(call);
+
+  /* 🔴 A DRIVE CALL RUNS FOR MINUTES AND LANDS ONCE. It is not settled by the
+   * next snap — it is settled by the drive ending, against the result the feed
+   * states. While the drive is live the call sits open underneath whatever snap
+   * question is being asked on top of it, which is the whole reason the catalog
+   * has two timescales. */
+  if (call.scope === 'drive') {
+    const drive = (state.drives || []).find((d) => d.id === call.driveId);
+    if (!drive || !drive.ended) return { open: true, delta: -call.stake };
+    const dp = state.plays.filter((p) => p.driveId === call.driveId);
+    const r = settleDrive(call.type, call.choice, { result: drive.result, plays: dp });
+    if (r.landed === null) return { void: true, because: r.because, delta: 0 };
+    return { landed: r.landed, because: r.because,
+             delta: r.landed ? Math.round(call.stake * pays) - call.stake : -call.stake };
+  }
+
+  const i = state.plays.findIndex((p) => p.id === call.afterPlayId);
+  const next = i >= 0 ? state.plays[i + 1] : null;
+  if (!next) return { open: true, delta: -call.stake };
+
+  /* 🔴 THE LEAGUE IS PART OF THE SETTLEMENT, not decoration. A sack is a pass in
+   * the NFL and a rush in college — every operator rulebook says so in the same
+   * words — and a sack turns up on 16% of real drives. Passing the wrong league
+   * here does not error; it quietly grades the call the other way. */
+  const r = settle(call.type, call.choice, { text: next.text, typeText: next.typeText || '' },
+                   { down: call.down, distance: call.distance, sport: state.sport });
+  if (r.landed === null) return { void: true, because: r.because, delta: 0, play: next };
+  return { landed: r.landed, because: r.because, play: next,
+           delta: r.landed ? Math.round(call.stake * pays) - call.stake : -call.stake };
+}
+
 function settleAll(state) {
   let bank = START_BANK;
   const rows = [];
   for (const [afterPlayId, call] of Object.entries(S.calls)) {
-    /* 🔴 A DRIVE CALL RUNS FOR MINUTES AND LANDS ONCE. It is not settled by the
-     * next snap - it is settled by the drive ending, against the result the feed
-     * states. While the drive is live the call sits open underneath whatever
-     * snap question is being asked on top of it, which is the whole reason the
-     * catalog has two timescales. */
-    if (call.scope === 'drive') {
-      const drive = (state.drives || []).find((d) => d.id === call.driveId);
-      if (!drive || !drive.ended) { rows.push({ ...call, afterPlayId, open: true }); bank -= call.stake; continue; }
-      const dp = state.plays.filter((p) => p.driveId === call.driveId);
-      const r = settleDrive(call.type, call.choice, { result: drive.result, plays: dp });
-      if (r.landed === null) { rows.push({ ...call, afterPlayId, void: true, because: r.because }); continue; }
-      const dd = r.landed ? Math.round(call.stake * call.pays) - call.stake : -call.stake;
-      bank += dd;
-      rows.push({ ...call, afterPlayId, landed: r.landed, delta: dd, because: r.because });
-      continue;
-    }
-
-    const i = state.plays.findIndex((p) => p.id === afterPlayId);
-    const next = i >= 0 ? state.plays[i + 1] : null;
-    if (!next) { rows.push({ ...call, afterPlayId, open: true }); bank -= call.stake; continue; }
-    /* 🔴 THE LEAGUE IS PART OF THE SETTLEMENT, not decoration. A sack is a pass
-     * in the NFL and a rush in college - every operator rulebook says so in the
-     * same words - and a sack turns up on 16% of real drives. Passing the wrong
-     * league here does not error; it quietly grades the call the other way. */
-    const r = settle(call.type, call.choice, { text: next.text, typeText: next.typeText || '' },
-                     { down: call.down, distance: call.distance, sport: state.sport });
-    if (r.landed === null) { rows.push({ ...call, afterPlayId, void: true, because: r.because }); continue; }
-    const delta = r.landed ? Math.round(call.stake * call.pays) - call.stake : -call.stake;
-    bank += delta;
-    rows.push({ ...call, afterPlayId, landed: r.landed, delta, because: r.because, play: next });
+    const c = { ...call, afterPlayId };
+    const r = settleOne(c, state);
+    if (r.open) { rows.push({ ...c, open: true }); bank -= call.stake; continue; }
+    if (r.void) { rows.push({ ...c, void: true, because: r.because }); continue; }
+    bank += r.delta;
+    rows.push({ ...c, landed: r.landed, delta: r.delta, because: r.because, play: r.play });
   }
   S.bank = bank;
   return rows.reverse();
+}
+
+/**
+ * 🔴 THE BOARD RANKS ON PROFIT. Not on how many times somebody tapped.
+ *
+ * It counted calls until 2026-09-08, which is an attendance sheet: "Jason · 3
+ * calls" beside "Mike · 3 calls" tells two people watching the same game
+ * absolutely nothing about which of them is reading it better. Settled doctrine
+ * has always said the live board ranks on PROFIT — balance minus start — and the
+ * screen simply did not do it. Every number it needed was already on the wire.
+ *
+ * 🔴 AND THE ARITHMETIC BEING LOCAL IS NOT THE THING THE DOCTRINE FORBIDS. The
+ * rule is that a client must not decide its own outcome. Here every input is
+ * server-held — the calls come from /api/board, the plays from /api/state — and
+ * every viewer recomputes the same board from the same data. Nobody can change
+ * what anybody else sees. It is one deterministic function over shared inputs,
+ * which is exactly why it must be the SAME function my own bank uses.
+ */
+function boardRows(state) {
+  const byPerson = new Map();
+  for (const c of S.board) {
+    const row = byPerson.get(c.deviceId)
+      || { deviceId: c.deviceId, name: c.name, at: 0, profit: 0, open: 0, won: 0, lost: 0, voided: 0 };
+    /* The newest name a device sent wins, so naming yourself after your first
+     * call renames you on the board rather than leaving a stranger up there. */
+    if (c.at > row.at && c.name) { row.name = c.name; row.at = c.at; }
+    const r = settleOne(c, state);
+    if (r.open) row.open++;
+    else if (r.void) row.voided++;
+    else { row.profit += r.delta; if (r.landed) row.won++; else row.lost++; }
+    byPerson.set(c.deviceId, row);
+  }
+  /* Profit first. A tie breaks on who has resolved more, so somebody sitting on
+   * one lucky call does not outrank somebody who has been playing all night. */
+  return [...byPerson.values()].sort((a, b) => b.profit - a.profit || (b.won + b.lost) - (a.won + a.lost));
 }
 
 /* ------------------------------------------------------------------ *
@@ -349,22 +409,31 @@ function paint(wrap) {
     wrap.appendChild(list);
   }
 
-  /* ---- the board: everybody on this game ---- */
-  if (S.board.length) {
-    const byPerson = {};
-    for (const c of S.board) {
-      byPerson[c.deviceId] = byPerson[c.deviceId] || { name: c.name, calls: 0 };
-      byPerson[c.deviceId].calls++;
-    }
+  /* ---- who are you? asked AFTER the first call, never before ---- */
+  if (!S.name && Object.keys(S.calls).length) wrap.appendChild(nameCard(wrap));
+
+  /* ---- the board: everybody on this game, ranked on what they have made ---- */
+  const board = boardRows(state);
+  if (board.length) {
+    const me = deviceId();
     const b = el('div', 'card lg-board');
-    b.appendChild(el('div', 'lg-board-h', 'On this game'));
-    for (const [dev, p] of Object.entries(byPerson)) {
-      const row = el('div', 'lg-row');
-      row.appendChild(el('span', 'lg-row-label', p.name + (dev === deviceId() ? ' · you' : '')));
-      row.appendChild(el('span', 'lg-row-why', ''));
-      row.appendChild(el('span', 'lg-row-delta num', String(p.calls) + ' calls'));
+    b.appendChild(el('div', 'lg-board-h', board.length === 1 ? 'On this game' : 'On this game · by profit'));
+    board.forEach((p, i) => {
+      const row = el('div', 'lg-brow' + (p.deviceId === me ? ' is-me' : ''));
+      row.appendChild(el('span', 'lg-brank num', String(i + 1)));
+      row.appendChild(el('span', 'lg-bname', p.name + (p.deviceId === me ? ' · you' : '')));
+      /* The record is the context the profit needs. A +40 off one call and a +40
+       * off eleven are not the same person, and the board should say so. */
+      const rec = [];
+      if (p.won || p.lost) rec.push(`${p.won}-${p.lost}`);
+      if (p.open) rec.push(`${p.open} open`);
+      if (p.voided) rec.push(`${p.voided} void`);
+      row.appendChild(el('span', 'lg-brec num', rec.join(' · ')));
+      const v = el('span', 'lg-bprofit num ' + signClass(p.profit));
+      v.textContent = signed(p.profit);
+      row.appendChild(v);
       b.appendChild(row);
-    }
+    });
     wrap.appendChild(b);
   }
 
@@ -372,12 +441,21 @@ function paint(wrap) {
     `feed ${age}s old · holding ${state.holding} play${state.holding === 1 ? '' : 's'} behind your ${S.delayMs / 1000}s delay`));
 }
 
+/**
+ * 🔴 NOTHING STANDS BETWEEN A STRANGER AND THEIR FIRST CALL.
+ *
+ * This used to open `prompt()` — a browser dialog, as the very first thing
+ * somebody handed the link would ever see, and one that several mobile browsers
+ * suppress outright. When it is suppressed the function returns early and the
+ * TAP DOES NOTHING, silently, forever. Your friend would have concluded the app
+ * was broken and they would have been right.
+ *
+ * Settled doctrine already had the answer and it was not being followed: a
+ * display name is the most that may be asked, AND IT COMES AFTER THE FIRST PICK.
+ * So the call lands first, unnamed, and the name is asked for afterwards — in
+ * the page, as a real field, and skippable.
+ */
 async function makeCall(wrap, type, offer, afterPlay, state) {
-  if (!S.name) {
-    const n = prompt('What should we call you?');
-    if (!n) return;
-    S.name = n.slice(0, 24); store.set('name', S.name);
-  }
   S.calls[afterPlay.id] = {
     type: type.id, choice: offer.choice.id, label: offer.choice.label,
     stake: S.stake, pays: offer.pays, p: offer.p,
@@ -441,6 +519,71 @@ function staleBar(state, now) {
   return bar;
 }
 
+/**
+ * The name field. A real input in the page — not a browser dialog — because a
+ * dialog is suppressible, unstyleable, and arrives before the person has any
+ * reason to answer it.
+ *
+ * It appears only once a call has actually been made, which is the moment the
+ * question earns itself: there is now a row on the board that says "Someone",
+ * and naming it is obviously worth doing. Skipping is a real option and leaves
+ * them as Someone, which is a perfectly good way to play.
+ */
+function nameCard(wrap) {
+  const c = el('div', 'card lg-name');
+  c.appendChild(el('div', 'lg-name-h', "You're on the board as Someone"));
+  c.appendChild(el('div', 'lg-name-b', 'Put a name to it so the others know who they are up against.'));
+
+  const rowEl = el('div', 'lg-name-row');
+  const input = el('input', 'lg-name-i');
+  input.type = 'text';
+  input.maxLength = 24;
+  input.placeholder = 'Your name';
+  /* No autofocus: it would throw the keyboard up over the call card mid-drive,
+   * which is the opposite of what somebody watching a game wants. */
+  input.autocomplete = 'nickname';
+
+  const save = el('button', 'lg-name-go', 'Save');
+  const commit = () => {
+    const v = input.value.trim().slice(0, 24);
+    if (!v) return;
+    S.name = v;
+    store.set('name', v);
+    claimCalls();          // rename the rows already on the board
+    paint(wrap);
+  };
+  save.onclick = commit;
+  input.onkeydown = (e) => { if (e.key === 'Enter') commit(); };
+
+  const skip = el('button', 'lg-name-skip', 'Stay anonymous');
+  skip.onclick = () => { S.name = 'Someone'; store.set('name', 'Someone'); paint(wrap); };
+
+  rowEl.append(input, save);
+  c.append(rowEl, skip);
+  return c;
+}
+
+/**
+ * 🔴 A NAME ARRIVING LATE HAS TO REACH THE CALLS ALREADY MADE, or the person who
+ * just named themselves still shows up as a stranger beside their own results.
+ *
+ * Re-posting a call the server already has is safe by construction: the key is
+ * game + device + the play it was made after, so the choice, the stake and the
+ * price cannot be changed by this. Only the name can. That is the whole reason
+ * one-call-per-snap was enforced by the KEY rather than by a check.
+ */
+function claimCalls() {
+  for (const [afterPlayId, call] of Object.entries(S.calls)) {
+    fetch('/api/call', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        key: S.key, deviceId: deviceId(), name: S.name,
+        afterPlayId, type: call.type, choice: call.choice, stake: call.stake, p: call.p
+      })
+    }).catch(() => { /* the next call carries the name anyway */ });
+  }
+}
+
 function delayBar() {
   const bar = el('div', 'lg-delay');
   const label = el('span', 'lg-delay-l', S.delayMs === 0 ? 'LIVE — no delay' : `BEHIND ON PURPOSE · ${S.delayMs / 1000}s`);
@@ -468,6 +611,25 @@ const CSS = `
   border: 1px solid var(--down); background: color-mix(in srgb, var(--down) 10%, var(--card)); }
 .lg-stale-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--down); }
 .lg-stale-b { font-size: var(--t-micro); color: var(--ink); }
+.lg-name { display: grid; gap: 6px; padding: 12px; }
+.lg-name-h { font-weight: 800; font-size: var(--t-emph); }
+.lg-name-b { font-size: var(--t-micro); color: var(--dim); }
+.lg-name-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 2px; }
+.lg-name-i { font: inherit; font-size: var(--t-body); padding: 10px; border: 1px solid var(--line);
+  border-radius: var(--radius-card); background: var(--bg); color: var(--ink); min-width: 0; }
+.lg-name-go { font: inherit; font-weight: 800; padding: 10px 16px; border: 0;
+  border-radius: var(--radius-card); background: var(--accent); color: var(--bg); }
+.lg-name-skip { font: inherit; font-size: var(--t-micro); color: var(--dim);
+  background: none; border: 0; padding: 4px 0 0; text-align: left; text-decoration: underline; }
+/* The board is a ranking now, so it is laid out as one: rank, name, record, profit. */
+.lg-brow { display: grid; grid-template-columns: 20px 1fr auto auto; gap: 10px; align-items: baseline;
+  padding: 9px 0; border-top: 1px solid var(--line); }
+.lg-brow:first-of-type { border-top: 0; }
+.lg-brow.is-me { font-weight: 800; }
+.lg-brank { color: var(--dim); font-size: var(--t-micro); }
+.lg-bname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-brec { color: var(--dim); font-size: var(--t-micro); }
+.lg-bprofit { font-weight: 800; }
 .lg-delay-l.is-live { color: var(--down); }
 .lg-delay input { width: 100%; accent-color: var(--accent); }
 .lg-head { display: flex; align-items: center; gap: 8px; }
