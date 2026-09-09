@@ -32,9 +32,18 @@ const tokenFile = fileURLToPath(new URL('../.push-token.local', import.meta.url)
 const token = process.env.PUSH_TOKEN || (existsSync(tokenFile) ? readFileSync(tokenFile, 'utf8').trim() : '');
 if (!token) { console.error('no push token'); process.exit(1); }
 
-const file = fileURLToPath(new URL(`../fixtures/${name}-260905-final.json`, import.meta.url));
+/* 🔴 THE SPORT IS AN ARGUMENT, because the two leagues are not interchangeable
+ * here. A sack settles as a pass in the NFL and a rush in college, the priors
+ * are measured separately, and ESPN writes the play text differently in each —
+ * college says "1st down OU" in the sentence and the NFL does not. Replaying an
+ * NFL game as college would grade every sack the wrong way and quietly prove
+ * nothing. */
+const sport = flag('sport', name.startsWith('nfl-') ? 'nfl' : 'college-football');
+const file = fileURLToPath(new URL(
+  name.startsWith('nfl-') ? `../fixtures/nfl/${name}.json` : `../fixtures/${name}-260905-final.json`,
+  import.meta.url));
 const raw = JSON.parse(readFileSync(file, 'utf8'));
-const full = readLive(raw, '999', 'college-football', Date.now());
+const full = readLive(raw, '999', sport, Date.now());
 console.log(`${name}: ${full.plays.length} plays, replaying from ${from} every ${every / 1000}s -> ${base}/api/state/${key}`);
 
 /* Which drives had ended by play N. A drive-scope call cannot settle until the

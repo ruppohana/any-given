@@ -398,9 +398,13 @@ export async function previewData(fixtures, state) {
 
   /* The picks. Deterministic so the preview does not change under you between reloads.
    * Every row state in the union is present in the first two groups on purpose. */
+  /* 🔴 NO INVENTED PICKS OVER REAL GAMES. Everything below seeds a deterministic
+   * set of picks and crowd splits so the preview shows every row state. That is
+   * right for a design surface and a lie on a real slate — it had Louisville
+   * highlighted as though somebody had chosen it. */
   const picks = {};
   const pr = lcg(77);
-  for (let i = 0; i < games.length; i++) {
+  for (let i = 0; !live && i < games.length; i++) {
     const g = games[i];
     const take = short ? i === 1 : pr() < 0.42;
     const side = take ? (pr() < 0.5 ? 'home' : 'away') : null;
@@ -441,7 +445,9 @@ export async function previewData(fixtures, state) {
    * on the winner in all three resolved games. A state with no route is a state nobody
    * ever draws. So the first two finals are pinned to a win and a miss. */
   const finals = games.filter((g) => g.status === 'final' && winnerOf(g));
-  if (finals.length >= 2) {
+  /* Same rule: on a real slate there is nobody to have picked these, so this
+   * block is skipped entirely rather than guarded field by field. */
+  if (!live && finals.length >= 2) {
     const w = winnerOf(finals[0]);
     picks[finals[0].id].side = w;
     picks[finals[1].id].side = winnerOf(finals[1]) === 'home' ? 'away' : 'home';
@@ -454,7 +460,25 @@ export async function previewData(fixtures, state) {
 
   return {
     now,
-    pool: {
+    /* 🔴 A REAL SLATE CANNOT WEAR AN INVENTED POOL. Jason: "From the nfl page,
+     * the pool goes to the ncaa page where Louisville is already selected...
+     * It also says big 10."
+     *
+     * Both are the same fault. The games came off the feed and everything AROUND
+     * them was still the mock: a pool called "Big Ten, eight of us" with a Big
+     * Ten scope over a slate containing Florida A&M and Howard, eight members
+     * who do not exist, and a pick already made on a game nobody chose.
+     *
+     * A fabricated pick is worse than a fabricated name. A name is wallpaper; a
+     * highlighted team is the app telling you what YOU did. */
+    pool: live ? {
+      id: null,
+      name: 'No pool yet',
+      commissionerId: null,
+      scope: 'all', scopeArg: null, rankingSource: null,
+      ats: false, season: 2026, scopeLockedAt: null,
+      memberCount: 0
+    } : {
       id: 'K7RQXZ',
       name: short ? 'Big Ten, eight of us' : 'Saturday Regulars',
       commissionerId: 'u1',

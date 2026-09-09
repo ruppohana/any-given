@@ -405,8 +405,24 @@ function paint(wrap) {
    * AND THE WORD IS NOT "BETTING". The balance is Marbles, it cannot be bought,
    * there is no cash-out — calling it betting hands over the first objection
    * anybody raises, for free, in our own UI. You call the game. */
+  /* 🔴 HOME IS A HOME SCREEN, NOT A DOOR THAT LOCKS BEHIND YOU. Jason said it
+   * twice — "Home should start here", then "Home still goes here" over the
+   * pre-game screen. The fork was a one-time gate: answered once, stored, never
+   * seen again, so Home dropped you straight into the game with no way to see
+   * the other half of the app existed.
+   *
+   * It shows every time now, and it does NOT block — the game renders underneath
+   * it. That is the difference between a hub and a wall: you always know both
+   * things are there, and you never have to answer anything to get to the one
+   * you came for.
+   *
+   * An invite link is exempt. `?game=` means somebody sent you a specific game
+   * and the choice is already made, which is doctrine: nothing sits in front of
+   * a link a friend sent. */
+  const invited = !!new URLSearchParams(location.search).get('game');
   if (!S.mode) { wrap.appendChild(modeCard(wrap)); return; }
   if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
+  if (!invited) wrap.appendChild(modeCard(wrap, true));
 
   /* 🔴 THE WAY OUT GOES ABOVE EVERY EARLY RETURN. It was appended near the
    * FOOTER, which paint() never reaches on a pre-kickoff game — it returns after
@@ -860,12 +876,14 @@ function sportCard(wrap) {
  * The second question. Sport first because it changes how calls SETTLE; mode
  * second because it changes which app you are in.
  */
-function modeCard(wrap) {
-  const c = el('div', 'card lg-sport');
-  c.appendChild(el('div', 'lg-sport-h', 'What are you here for?'));
-  c.appendChild(el('p', 'lg-sport-b',
-    'Two different games. Calling runs snap by snap while you watch; the pool runs '
-    + 'a week at a time with your group. They keep separate scores and never add together.'));
+function modeCard(wrap, compact) {
+  const c = el('div', 'card lg-sport' + (compact ? ' is-compact' : ''));
+  c.appendChild(el('div', 'lg-sport-h', compact ? 'Any Given Snap' : 'What are you here for?'));
+  if (!compact) {
+    c.appendChild(el('p', 'lg-sport-b',
+      'Two different games. Calling runs snap by snap while you watch; the pool runs '
+      + 'a week at a time with your group. They keep separate scores and never add together.'));
+  }
 
   const row = el('div', 'lg-mode-row');
   const opts = [
@@ -876,11 +894,12 @@ function modeCard(wrap) {
     const b = el('button', 'lg-mode');
     b.appendChild(el('span', 'lg-mode-h', o.h));
     b.appendChild(el('span', 'lg-mode-b', o.b));
+    if (compact && o.id === S.mode) b.classList.add('is-on');
     b.onclick = () => {
-      /* The sport question comes next either way — it is asked once and it means
-       * something on both sides. The pool leaves for the slate only after it has
-       * been answered. */
       S.mode = o.id; store.set('mode', o.id);
+      /* From the hub, choosing the pool leaves for it. Choosing calling is
+       * already where you are. */
+      if (o.id === 'pool' && S.sport) { location.hash = '#/slate'; return; }
       paint(wrap);
     };
     row.appendChild(b);
@@ -1016,8 +1035,26 @@ function commentary(state) {
       id: p.id, driveId: p.driveId, offenseTeamId: p.offenseTeamId,
       quarter: p.quarter, clock: p.clock, text: p.text, typeText: p.typeText,
       scoringPlay: p.scoringPlay, homeScore: p.homeScore, awayScore: p.awayScore,
-      statYardage: p.statYardage, down: p.startDown, distance: p.distance
-    })), { homeTeamId: state.homeTeamId, awayTeamId: state.awayTeamId });
+      statYardage: p.statYardage, down: p.startDown, distance: p.distance,
+      /* 🔴 PASSED THROUGH, NEVER RE-DERIVED. This was omitted and the star line
+       * rendered empty on every play — 7.2's whole point is that the parser says
+       * who the play was about and a view repeats it. */
+      star: p.star, yards: p.statYardage ?? 0
+    })), {
+      homeTeamId: state.homeTeamId, awayTeamId: state.awayTeamId,
+      /* 🔴 `abbrev` EXISTS FOR EXACTLY THIS and was never passed. detect.ts
+       * documents it as "team id → the abbreviation a headline uses", falls back
+       * to the raw id when it is missing, and that is how "Touchdown — 17"
+       * reached the screen.
+       *
+       * The first fix was a string substitution over the finished headline, and
+       * it was WORSE than the bug: New England's id is 17, so "4th & 17" became
+       * "4th & Patriots". Replacing ids inside prose replaces distances, yardage
+       * and scores that happen to share the digits. The detector already knew how
+       * to do this properly; it just had nothing to do it with. */
+      abbrev: Object.fromEntries(Object.entries(state.teams || {})
+        .map(([id, t]) => [id, t.abbrev || t.short || id]))
+    });
   } catch { return null; }
 
   const big = dets.filter((d) => (d.reasons || []).some((r) => r.severity >= 2)).slice(-4).reverse();
@@ -1039,7 +1076,12 @@ function commentary(state) {
      * parenthesised name at the end of a play is the TACKLER, and a view that
      * works that out for itself gets it wrong. */
     if (d.star && d.star.name) {
-      row.appendChild(el('div', 'lg-say-star', `${d.star.name} · ${d.star.role}${t ? ' · ' + t.abbrev : ''}`));
+      /* The role in the words a person uses, and the jersey where the feed gave
+       * one — the 2026 grammar carries numbers and the older one does not. */
+      const who = (d.star.jersey ? '#' + d.star.jersey + ' ' : '') + d.star.name;
+      const side = d.star.teamId && state.teams[d.star.teamId];
+      row.appendChild(el('div', 'lg-say-star',
+        `${who} · ${d.star.role}${side ? ' · ' + side.abbrev : ''}`));
     }
     card.appendChild(row);
   }
@@ -1419,6 +1461,16 @@ const CSS = `
   border: 1px solid var(--line); border-radius: var(--radius-card);
   background: var(--card); color: var(--fg); }
 .lg-mode-h { font-size: var(--t-emph); font-weight: 800; }
+/* The hub version is a strip, not a page: two choices, no essay, and the one you
+   are in is marked so the card reads as WHERE YOU ARE rather than as a question
+   being asked again. */
+.lg-sport.is-compact { padding: 12px; gap: 6px; }
+.lg-sport.is-compact .lg-mode-row { grid-template-columns: 1fr 1fr; }
+.lg-sport.is-compact .lg-mode { padding: 10px 12px; gap: 1px; }
+.lg-sport.is-compact .lg-mode-h { font-size: var(--t-body); }
+.lg-sport.is-compact .lg-mode-b { display: none; }
+.lg-mode.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+.lg-mode.is-on .lg-mode-h { color: var(--accent); }
 .lg-mode-b { font-size: var(--t-micro); color: var(--dim); line-height: 1.45; }
 .lg-sport-logo { display: block; margin: 0 auto 6px; object-fit: contain; }
 .lg-sport-name { display: block; font-size: var(--t-body); }

@@ -29,6 +29,14 @@
  */
 
 import { parseSlate, type Sport } from './feed/espn.ts';
+/* 🔴 THE STAR COMES FROM THE REAL PARSER. `readPlays` was a simpler duplicate
+ * that dropped it, so the commentary rendered "Touchdown — 17" with a raw team
+ * id and no player at all. Requirement 7.2 is that the parser EMITS the star
+ * explicitly and a view never derives it — the parenthesised group at the end of
+ * a play is the TACKLER, and the vault records that mistake costing real days.
+ * A second, simpler play reader that quietly omits it is the same failure with
+ * better manners. */
+import { roles } from './lib/parse.ts';
 
 export type LiveSituation = {
   playId: string;
@@ -120,6 +128,8 @@ export type LivePlay = {
   startTeamId: string | null;
   endTeamId: string | null;
   statYardage: number | null;
+  /** 7.2 — emitted by the parser, never worked out by a view. */
+  star: { name: string; jersey: string | null; teamId: string; role: string } | null;
 };
 
 export type Offer = {
@@ -216,6 +226,27 @@ export function readDrives(summary: any): LiveDrive[] {
   return out;
 }
 
+/**
+ * The person the play was about, in the parser's own words.
+ *
+ * 🔴 THE TEAM ID IS THE OFFENSE'S ONLY FOR AN OFFENSIVE STAR. A tackler or an
+ * interceptor belongs to the OTHER team, and labelling a defender with the
+ * offence's crest is the same class of error as naming the tackler as the
+ * carrier — it looks right and it is backwards.
+ */
+function starOf(text: string, typeText: string, offenseTeamId: string) {
+  try {
+    const r = roles(text, typeText);
+    if (!r.star || !r.star.name) return null;
+    return {
+      name: r.star.name,
+      jersey: r.star.number ?? null,
+      teamId: r.star.side === 'defense' ? '' : offenseTeamId,
+      role: r.star.role
+    };
+  } catch { return null; }
+}
+
 /** Flatten ESPN's drive/play tree into the order a game was played in. */
 export function readPlays(summary: any): LivePlay[] {
   const out: LivePlay[] = [];
@@ -242,7 +273,8 @@ export function readPlays(summary: any): LivePlay[] {
         endDown: n(p.end?.down),
         startTeamId: p.start?.team?.id != null ? String(p.start.team.id) : null,
         endTeamId: p.end?.team?.id != null ? String(p.end.team.id) : null,
-        statYardage: n(p.statYardage)
+        statYardage: n(p.statYardage),
+        star: starOf(p.text || '', p.type?.text || '', team)
       });
     }
   }

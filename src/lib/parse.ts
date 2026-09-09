@@ -126,6 +126,17 @@ const PLAYER_RE =
 const NAME_ONLY_RE =
   /\b([A-Z][a-z]+(?:\.[A-Z][a-z]+)?\s+[A-Z][A-Za-z'\-]+(?:\s+(?:Jr\.|Sr\.|III|IV|II|VI|V))?)\b/g;
 
+/* 🔴 7.1, A THIRD GRAMMAR: THE NFL'S. "D.Maye", "T.Henderson", "H.Henry" — an
+ * initial, a dot, a surname, as ONE token. NAME_ONLY_RE above requires two
+ * words, so a feed full of names produced `grammar: 'none'` and roles() returned
+ * NULL for every NFL play. Measured over 8 real NFL games: a star on ZERO plays.
+ * The commentary would have been nameless for all of tomorrow's game.
+ *
+ * Suffixes are included because "M.Harrison Jr." is on a real roster, and a
+ * matcher that stops at the surname resolves him to the wrong man or to none. */
+const INITIAL_NAME_RE =
+  /\b([A-Z]\.[A-Z][A-Za-z'\-]+(?:\s+(?:Jr\.|Sr\.|III|IV|II|VI|V))?)\b/g;
+
 // 7.2 — everything ESPN prints that names somebody who did NOT do the thing.
 const CREDIT_PHRASE_RE =
   /\b(QB hurried by|broken up by|sacked by|tackled by)\s+((?:#\d{1,2}\s+[A-Z][A-Za-z'\-]*\.?\s?[A-Z][A-Za-z'\-]+(?:\s+(?:Jr\.|Sr\.|III|IV|II|VI|V))?[,;\s]*)+)/gi;
@@ -141,8 +152,20 @@ const TAIL_RE =
 
 const RETURN_RE = /\breturn(?:ed)?\b/;
 
+/* 🔴 7.1, A THIRD GRAMMAR. The NFL writes a rush with NO VERB AT ALL — it names
+ * the gap instead: "T.Henderson left end pushed ob at LV 15 for 7 yards". None
+ * of the verbs below appear, so `hasVerb` was false, the name fallback never
+ * ran, and `roles()` returned NULL for every NFL running play.
+ *
+ * Measured, not guessed: over 8 real NFL games the parser found a star on ZERO
+ * plays before this list grew. The commentary would have been nameless for the
+ * whole of tomorrow's game. */
 const VERBS = ['run', 'rush', 'pass', 'punt', 'kickoff', 'kick', 'sack',
-  'intercept', 'field goal', 'return', 'fumble', 'reception'];
+  'intercept', 'field goal', 'return', 'fumble', 'reception',
+  /* the NFL's gap names, which ARE the verb in that grammar */
+  'left end', 'left tackle', 'left guard', 'up the middle', 'middle',
+  'right guard', 'right tackle', 'right end', 'scramble', 'kneel', 'spike',
+  'extra point', 'two-point'];
 const CLOCK_TYPES = ['timeout', 'end period', 'end of half', 'end of game',
   'coin toss', 'official timeout', 'two-minute', 'end of'];
 
@@ -226,6 +249,11 @@ export function roles(text: string, playType = ''): Roles {
     // "End of 1st quarter" both parse as a person and the board reports that
     // Timeout Oregon just carried the ball.
     persons = [...main.matchAll(NAME_ONLY_RE)].map((m) => [null, m[1]] as Pair);
+    /* The NFL grammar last, because a full name is more specific than an
+     * initial and matching it first would split "Kevin Riley" badly. */
+    if (!persons.length) {
+      persons = [...main.matchAll(INITIAL_NAME_RE)].map((m) => [null, m[1]] as Pair);
+    }
     grammar = persons.length ? 'named' : 'none';
   } else if (!persons.length) {
     grammar = 'none';
