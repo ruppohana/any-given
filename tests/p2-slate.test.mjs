@@ -259,10 +259,15 @@ test('§5 - the words. Marbles is the balance and none of the dead words appear'
    * pool." It went Run a pool -> Group pool -> Group pools, and the plural is
    * right because this names a SECTION somebody can hold several pools in, not
    * one pool object. The pool's own name is the h1 above the kicker. */
-  const poolCopy = (CODE.match(/'Group pools[^']*'/g) || []).join(' ');
-  assert.ok(poolCopy.length > 0, 'the pool section must name itself on the screen');
-  assert.ok(!/Marble/i.test(poolCopy), 'the pool copy must not mention a balance it does not have');
-  assert.ok(!/stake|payout|bank/i.test(poolCopy), 'a group pool stakes nothing');
+  /* The section is "Your group" - Jason, 2026-09-09: "This is a group, not a
+   * pool." It went Run a pool -> Group pool -> Group pools -> Your group, and
+   * the last one is the one that matters: "pool" is what you are in with money
+   * in most of the world, and this product spends its life not being that.
+   * "Group" says people you know and says nothing about a stake. */
+  const poolCopy = (CODE.match(/'Your group[^']*'/g) || []).join(' ');
+  assert.ok(poolCopy.length > 0, 'the group section must name itself on the screen');
+  assert.ok(!/Marble/i.test(poolCopy), 'the group copy must not mention a balance it does not have');
+  assert.ok(!/stake|payout|bank/i.test(poolCopy), 'a group stakes nothing');
 });
 
 test('§5 - the screen never fetches. Data arrives as an argument', () => {

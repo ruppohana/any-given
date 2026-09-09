@@ -264,6 +264,233 @@ export default {
         return json({ key, calls, fetchedAt: Date.now() });
       }
 
+      /* ================= THE POOL, IN D1 =================
+       *
+       * 🔴 EVERY WRITE HERE IS IDENTIFIED BY A DEVICE ID AND NOTHING ELSE. No
+       * account, no password, no email - doctrine: nothing sits in front of the
+       * slate, and the most that may be asked is a display name, after the first
+       * pick. The device id is generated on the phone and is the only identity
+       * this app has ever needed.
+       *
+       * 🔴 AND THAT IS A DELIBERATE, STATED WEAKNESS. Anyone can post any device
+       * id, so a determined person can write picks as somebody else. That is
+       * acceptable for a free pool scored in points with nothing purchasable and
+       * nothing redeemable, and it would NOT be acceptable the moment anything
+       * of value hung on it. If that ever changes, this is the paragraph that
+       * has to be answered first.
+       */
+      if (p === '/api/pool/pick' && req.method === 'POST') {
+        const b = await req.json() as {
+          poolId?: string; deviceId?: string; name?: string; gameId?: string;
+          side?: string; sport?: string; week?: number; spread?: number | null;
+          kickoffUtc?: number;
+        };
+        if (!b.deviceId || !b.gameId || (b.side !== 'home' && b.side !== 'away')) {
+          return json({ error: 'deviceId, gameId and a side are required' }, 400);
+        }
+        const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
+        const poolId = b.poolId || (sport === 'nfl' ? 'world-nfl' : 'world-cfb');
+        const week = Number(b.week) || 0;
+
+        /* 🔴 THE KICKOFF IS THE ONLY LOCK, AND THE SERVER OWNS THE CLOCK. A
+         * client that could pick after kickoff could pick a game it had already
+         * watched. The kickoff comes from the slate we captured, not from the
+         * request, so a client cannot move its own deadline. */
+        const g = await env.DB.prepare('SELECT kickoff_utc FROM game WHERE id = ?')
+          .bind(String(b.gameId)).first<{ kickoff_utc: number }>();
+        const kickoff = g ? g.kickoff_utc : Number(b.kickoffUtc) || 0;
+        if (kickoff && Date.now() >= kickoff) {
+          return json({ error: 'that game has kicked off', locked: true }, 409);
+        }
+
+        /* Membership is implicit: your first pick joins you. An explicit join
+         * step in front of a pick is the account wall wearing a different hat. */
+        await env.DB.prepare(
+          `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
+           VALUES (?, ?, ?, ?, 'player')
+           ON CONFLICT(pool_id, user_id) DO UPDATE SET
+             display_name = CASE WHEN excluded.display_name <> ''
+                                 THEN excluded.display_name ELSE member.display_name END`
+        ).bind(poolId, b.deviceId, String(b.name || '').slice(0, 24), week).run();
+
+        /* 🔴 ONE PICK PER PERSON PER GAME, ENFORCED BY THE PRIMARY KEY rather
+         * than by a check - the same trick one-call-per-snap uses. A second pick
+         * addresses the same row by construction, so it overwrites instead of
+         * double-counting and the rule holds with the server remembering
+         * nothing. */
+        await env.DB.prepare(
+          `INSERT INTO pick (pool_id, user_id, game_id, side, made_at, locked_at,
+                             week, sport, spread_at)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+           ON CONFLICT(pool_id, user_id, game_id) DO UPDATE SET
+             side = excluded.side, made_at = excluded.made_at,
+             spread_at = excluded.spread_at`
+        ).bind(poolId, b.deviceId, String(b.gameId), b.side, Date.now(), week, sport,
+               typeof b.spread === 'number' ? b.spread : null).run();
+
+        return json({ ok: true, poolId });
+      }
+
+      /* 🔴 START A POOL. Jason, 2026-09-09: "Pools, if you are not in a pool,
+       * you have to start a pool or get in invite."
+       *
+       * Both routes are one endpoint apart and neither asks for an account. The
+       * code IS the pool id, so there is one string to share and nothing to look
+       * up - the same reasoning as the invite link carrying the game.
+       */
+      if (p === '/api/pool/create' && req.method === 'POST') {
+        const b = await req.json() as { deviceId?: string; name?: string; poolName?: string; sport?: string };
+        if (!b.deviceId) return json({ error: 'deviceId is required' }, 400);
+        const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
+
+        /* 🔴 NO VOWELS IN THE CODE. Six characters from a 26-letter alphabet
+         * will eventually spell something, and a pool code that has to be read
+         * aloud or typed by a friend cannot be a word somebody is embarrassed
+         * to say. Dropping the vowels makes that impossible rather than
+         * unlikely, and also removes the 0/O and 1/I confusions on paper. */
+        const AB = '23456789BCDFGHJKLMNPQRSTVWXYZ';
+        let code = '';
+        for (let i = 0; i < 6; i++) code += AB[Math.floor(Math.random() * AB.length)];
+
+        await env.DB.prepare(
+          `INSERT INTO pool (id, name, commissioner_id, scope, scope_arg, ranking_source,
+                             ats, season, scope_locked_at, created_at, sport)
+           VALUES (?, ?, ?, 'all', NULL, NULL, 0, 2026, NULL, ?, ?)`
+        ).bind(code, String(b.poolName || 'Our pool').slice(0, 40), b.deviceId, Date.now(), sport).run();
+
+        await env.DB.prepare(
+          `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
+           VALUES (?, ?, ?, 0, 'commissioner')`
+        ).bind(code, b.deviceId, String(b.name || '').slice(0, 24)).run();
+
+        return json({ ok: true, poolId: code, name: b.poolName || 'Our pool', sport });
+      }
+
+      /* Join by code. Idempotent: joining twice is joining. */
+      if (p === '/api/pool/join' && req.method === 'POST') {
+        const b = await req.json() as { deviceId?: string; code?: string; name?: string };
+        if (!b.deviceId || !b.code) return json({ error: 'deviceId and code are required' }, 400);
+        /* Uppercased and stripped, because somebody typing a code off a screen
+         * will send it in whatever case and spacing their keyboard produced. */
+        const code = String(b.code).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const pool = await env.DB.prepare('SELECT id, name, sport FROM pool WHERE id = ?')
+          .bind(code).first<{ id: string; name: string; sport: string }>();
+        if (!pool) return json({ error: 'no pool with that code' }, 404);
+
+        await env.DB.prepare(
+          `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
+           VALUES (?, ?, ?, 0, 'player')
+           ON CONFLICT(pool_id, user_id) DO NOTHING`
+        ).bind(code, b.deviceId, String(b.name || '').slice(0, 24)).run();
+
+        return json({ ok: true, poolId: pool.id, name: pool.name, sport: pool.sport });
+      }
+
+      /* Which pools is this device in? Drives the standings scope selector, and
+       * it is the question "am I in a pool" - which the screen must be able to
+       * answer before it can offer to start one. */
+      if (p === '/api/pool/mine') {
+        const device = url.searchParams.get('device') || '';
+        if (!device) return json({ pools: [] });
+        const rows = await env.DB.prepare(
+          `SELECT p.id, p.name, p.sport,
+                  (SELECT COUNT(*) FROM member m2 WHERE m2.pool_id = p.id) AS members
+             FROM member m JOIN pool p ON p.id = m.pool_id
+            WHERE m.user_id = ? AND p.id NOT LIKE 'world-%'
+            ORDER BY p.created_at DESC LIMIT 20`
+        ).bind(device).all();
+        return json({ pools: rows.results || [] });
+      }
+
+      /* 🔴 THE RESULTS TABLE, WRITTEN BY THE POLLER AND BY NOTHING ELSE.
+       *
+       * Token-protected for the same reason /api/push is: a client that could
+       * write a final score could grade its own pick. The standings query reads
+       * `game` and never trusts anything a browser sent.
+       *
+       * It takes the whole week in one request rather than a game at a time -
+       * the poller already holds the week, and 24 round trips to write 24 rows
+       * is how a two-minute cron becomes a five-minute one. */
+      if (p === '/api/pool/games' && req.method === 'POST') {
+        if (req.headers.get('x-push-token') !== env.PUSH_TOKEN) {
+          return json({ error: 'no' }, 401);
+        }
+        const b = await req.json() as { sport?: string; season?: number; week?: number; games?: any[] };
+        const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
+        const list = Array.isArray(b.games) ? b.games : [];
+        if (!list.length) return json({ error: 'no games' }, 400);
+
+        const stmt = env.DB.prepare(
+          `INSERT INTO game (id, season, week, kickoff_utc, home_team_id, away_team_id,
+                             spread, status, home_score, away_score, void, sport)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             kickoff_utc = excluded.kickoff_utc,
+             spread      = excluded.spread,
+             status      = excluded.status,
+             home_score  = excluded.home_score,
+             away_score  = excluded.away_score`
+        );
+        /* 🔴 `void` IS NOT UPDATED HERE. A game marked void has been ruled on -
+         * one void path, decided once - and a poller that reset it on every tick
+         * would silently un-void a cancelled game the moment the feed changed
+         * its mind about the status string. */
+        await env.DB.batch(list.slice(0, 200).map((g: any) => stmt.bind(
+          String(g.id), Number(b.season) || 2026, Number(b.week) || 0,
+          Number(g.kickoffUtc) || 0, String(g.homeTeamId || ''), String(g.awayTeamId || ''),
+          typeof g.spread === 'number' ? g.spread : null,
+          String(g.status || 'scheduled'),
+          g.homeScore == null ? null : Number(g.homeScore),
+          g.awayScore == null ? null : Number(g.awayScore),
+          sport
+        )));
+        return json({ ok: true, wrote: Math.min(list.length, 200) });
+      }
+
+      /* The board. Straight up, which is what a group pool is (Jason,
+       * 2026-09-09) - the against-the-spread product is the week's card and it
+       * is not a pool. */
+      if (p === '/api/pool/standings') {
+        const sport = url.searchParams.get('sport') === 'nfl' ? 'nfl' : 'college-football';
+        const week = Number(url.searchParams.get('week')) || 0;
+        const poolId = url.searchParams.get('pool')
+          || (sport === 'nfl' ? 'world-nfl' : 'world-cfb');
+
+        /* 🔴 SCORED IN THE QUERY, FROM RESULTS THE CLIENT CANNOT WRITE. A client
+         * that could report a final score could grade its own pick. `game` is
+         * written by the slate poller on the host and by nothing else.
+         *
+         * A void game contributes to NOTHING - not a win, not a loss, not the
+         * played count. One void path: the game did not happen, for everybody. */
+        const rows = await env.DB.prepare(
+          `SELECT m.user_id AS id,
+                  m.display_name AS name,
+                  COUNT(p.game_id) AS picks,
+                  SUM(CASE WHEN g.status = 'final' AND g.void = 0
+                            AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
+                            AND g.home_score <> g.away_score
+                            AND p.side = CASE WHEN g.home_score > g.away_score
+                                              THEN 'home' ELSE 'away' END
+                       THEN 1 ELSE 0 END) AS wins,
+                  SUM(CASE WHEN g.status = 'final' AND g.void = 0
+                            AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
+                            AND g.home_score <> g.away_score
+                       THEN 1 ELSE 0 END) AS played
+             FROM member m
+             LEFT JOIN pick p
+               ON p.pool_id = m.pool_id AND p.user_id = m.user_id
+              AND p.sport = ? AND (? = 0 OR p.week = ?)
+             LEFT JOIN game g ON g.id = p.game_id
+            WHERE m.pool_id = ?
+            GROUP BY m.user_id, m.display_name
+            ORDER BY wins DESC, picks DESC
+            LIMIT 200`
+        ).bind(sport, week, week, poolId).all();
+
+        return json({ pool: poolId, sport, week, rows: rows.results || [],
+                      fetchedAt: Date.now() });
+      }
+
       /* ---- the slate: what is on tonight ----
        * 🔴 STILL 403 FROM CLOUDFLARE. Kept because it works the moment the feed
        * is one a Worker may call, and because deleting it would hide the fact

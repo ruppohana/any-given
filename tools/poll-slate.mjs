@@ -106,3 +106,18 @@ const res = await fetch(base + '/api/push', {
 });
 console.log(`\n${games.length} real games, ${games.filter((g) => g.spread != null).length} with a posted line`);
 console.log(res.ok ? `pushed -> ${base}/api/state/${key}` : `push failed ${res.status}`);
+
+/* 🔴 AND INTO D1, WHICH IS WHAT MAKES A POOL SCOREABLE. KV holds the slate the
+ * screens render; the `game` table is what the standings query joins to in order
+ * to decide who was right. Without this write the board can count picks and can
+ * never grade one - everybody sits on zero wins for ever, which reads as a
+ * scoring bug and is a missing write.
+ *
+ * Same payload, second destination, token-protected: a client that could report
+ * a final score could grade its own pick. */
+const d1 = await fetch(base + '/api/pool/games', {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-push-token': token },
+  body: JSON.stringify({ sport, season, week, games })
+});
+console.log(d1.ok ? `D1 <- ${games.length} games` : `D1 write failed ${d1.status}`);

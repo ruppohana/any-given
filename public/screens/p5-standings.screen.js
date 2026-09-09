@@ -185,6 +185,33 @@ function attachTeams(rows, byAbbrev) {
  *
  * A choice that only some screens honour is worse than no choice at all: it
  * makes the app look like it disagrees with itself. */
+/* THE SCOPE. Jason, 2026-09-09: "A dropdown on the standings page for the group
+ * or the world?" - two boards over the same picks.
+ *
+ * WORLD is everybody who picked this week: no invite, no setup, and you have a
+ * rank the moment you make your first pick. GROUP is a pool you started or were
+ * invited to.
+ *
+ * THE WORLD BOARD IS NOT A NICE EXTRA, IT IS THE COLD START. A group pool of one
+ * person is not a pool: if the only board were your group, this screen would be
+ * empty until somebody had talked three friends into installing the app, and an
+ * empty screen on day one is how an app stops being opened. The world has
+ * everybody in it from the first pick; the group is what you graduate to. */
+function deviceId() {
+  try {
+    let v = localStorage.getItem('ag.device');
+    if (!v) {
+      v = 'd' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('ag.device', v);
+    }
+    return v;
+  } catch (e) { return 'anon'; }
+}
+
+function storedScope() {
+  try { return localStorage.getItem('ag.scope') || 'world'; } catch (e) { return 'world'; }
+}
+
 function chosenSport() {
   try {
     const v = JSON.parse(localStorage.getItem('ag.sport'));
@@ -321,12 +348,50 @@ export async function previewData(fixtures, state) {
   const sport = chosenSport();
   if (state === 'ready') {
     const nfl = sport === 'nfl';
+    const week = nfl ? 1 : 2;
+    const device = deviceId();
+    let scope = storedScope();
+    let mine = [];
+    let rows = [];
+    try {
+      const r = await fetch('/api/pool/mine?device=' + encodeURIComponent(device));
+      mine = ((await r.json()).pools) || [];
+    } catch (e) { mine = []; }
+    /* A remembered group scope with no group left is not an error - it is
+     * somebody whose pool was deleted, or cleared storage. Fall back rather than
+     * heading an empty board with a pool that is gone. */
+    if (scope !== 'world' && !mine.some(function (x) { return x.id === scope; })) {
+      scope = mine.length ? mine[0].id : 'world';
+    }
+    try {
+      const q = '/api/pool/standings?sport=' + sport + '&week=' + week
+        + (scope === 'world' ? '' : '&pool=' + encodeURIComponent(scope));
+      rows = ((await (await fetch(q)).json()).rows) || [];
+    } catch (e) { rows = []; }
+
+    const here = scope === 'world' ? null : mine.filter(function (x) { return x.id === scope; })[0];
+    const board = rows.map(function (r, i) {
+      return {
+        userId: r.id,
+        displayName: r.name || 'Someone',
+        rank: i + 1,
+        /* A DASH, NOT A ZERO, for a week nothing has settled in. Empty and
+         * nought are different facts and this screen keeps them apart. */
+        weekPoints: r.played ? r.wins : null,
+        seasonPoints: r.played ? r.wins : null,
+        parlayPoints: 0, movement: 0, team: null,
+        picks: r.picks, played: r.played
+      };
+    });
     return Object.assign({}, base, {
       sport,
-      pool: { name: nfl ? 'No NFL pool yet' : 'No pool yet',
-              week: nfl ? 1 : 2, memberCount: 0, scope: 'All games' },
-      phase: 'pre',
-      weekRows: [], seasonRows: [], joinedWeek: {}, badges: {},
+      scope: scope, myPools: mine, deviceId: device,
+      pool: {
+        name: scope === 'world' ? 'The world' : (here ? here.name : 'Your group'),
+        week: week, memberCount: board.length, scope: 'All games'
+      },
+      phase: board.length ? 'live' : 'pre',
+      weekRows: board, seasonRows: board, joinedWeek: {}, badges: {},
       tiebreak: { label: null, actual: null, decided: false, myPrediction: null },
       /* 🔴 NOTHING ON THIS SCREEN IS INVENTED ANY MORE, so the shell's
        * sample-data banner must not appear over it. The banner reads this flag,
@@ -338,6 +403,168 @@ export async function previewData(fixtures, state) {
   }
   base.sport = sport;
   return base;
+}
+
+/* The scope control. A select rather than a segmented row, because the group
+ * list is unbounded - somebody can be in six pools - and a segmented control
+ * that grows is a row that eventually scrolls sideways. */
+function scopePicker(data) {
+  const wrap = el('div', 'p5-scope');
+  const sel = document.createElement('select');
+  sel.className = 'p5-scope-sel';
+  sel.setAttribute('aria-label', 'Which board');
+
+  const world = document.createElement('option');
+  world.value = 'world';
+  world.textContent = 'The world';
+  sel.appendChild(world);
+
+  for (const po of (data.myPools || [])) {
+    const o = document.createElement('option');
+    o.value = po.id;
+    o.textContent = po.name + ' · ' + po.members + (po.members === 1 ? ' member' : ' members');
+    sel.appendChild(o);
+  }
+  sel.value = data.scope || 'world';
+  sel.onchange = () => {
+    try { localStorage.setItem('ag.scope', sel.value); } catch (e) {}
+    /* A full reload, because the board is fetched in previewData - the screen
+     * itself never reaches the network, which is the contract. */
+    location.reload();
+  };
+  wrap.appendChild(sel);
+
+  /* THE WAY INTO A GROUP IS ALWAYS PRESENT, not only when the board is empty.
+   * Somebody looking at the world board is exactly the person who has not
+   * started a pool yet. */
+  /* THE WAY INTO A GROUP IS ALWAYS PRESENT, not only when the board is empty.
+   * Somebody looking at the world board is exactly the person who has not
+   * started a pool yet. */
+  const add = el('button', 'p5-scope-add', (data.myPools || []).length ? 'New group' : 'Start a group');
+  add.onclick = () => startFlow(data);
+  wrap.appendChild(add);
+  return wrap;
+}
+
+/* 🔴 IT IS A GROUP, NOT A POOL, IN EVERY WORD A PERSON READS. Jason,
+ * 2026-09-09: "This is a group, not a pool."
+ *
+ * He is right and it is not a synonym swap. "Pool" is the thing you are IN with
+ * money in most of the world - an office pool, a betting pool - and this product
+ * spends its whole life not being that. "Group" says people you know and says
+ * nothing about a stake. The storage still calls the row a pool, because the
+ * schema, the endpoints and the D1 tables are internal and renaming them buys
+ * nothing but a migration.
+ *
+ * THE INVITE, ON THE GROUP YOU ARE LOOKING AT. Jason, 2026-09-09: "Where is the
+ * add/invite. Etc for the pools?"
+ *
+ * Nowhere, which was the gap: you could create a pool and then had no way to get
+ * anybody into it. A pool of one is the failure state this whole screen is meant
+ * to avoid, and the app was manufacturing it.
+ *
+ * THE CODE IS SHOWN AS WELL AS COPIED. A copy button alone fails the case it
+ * exists for - somebody reading the code down the phone to their father, or
+ * typing it into a message on another device. The code is six characters with no
+ * vowels precisely so it can be read aloud, and hiding it behind a clipboard
+ * throws that away. */
+function inviteRow(data) {
+  const c = el('div', 'card p5-inv');
+  const left = el('div', 'p5-inv-l');
+  left.appendChild(el('div', 'p5-inv-k', 'Invite code'));
+  left.appendChild(el('div', 'p5-inv-code num', data.scope));
+  c.appendChild(left);
+
+  const b = el('button', 'p5-inv-go', 'Copy invite');
+  b.onclick = async () => {
+    /* The link carries the code, so a friend who taps it never types anything.
+     * The code stays visible for the friend who cannot tap it. */
+    const url = location.origin + '/?pool=' + encodeURIComponent(data.scope);
+    const text = 'Join my pool on Any Given - code ' + data.scope;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Any Given', text, url }); return; }
+    } catch (e) { /* dismissed the sheet: fall through to the clipboard */ }
+    try {
+      await navigator.clipboard.writeText(text + ' - ' + url);
+      b.textContent = 'Copied';
+      return;
+    } catch (e) { /* no permission */ }
+    /* A LINK THEY CAN STILL GET. If both routes are unavailable the button must
+     * not simply do nothing - it shows the URL to select by hand. */
+    b.textContent = url;
+  };
+  c.appendChild(b);
+  return c;
+}
+
+/* NO POOL YET: the two ways in, side by side, and nothing else. */
+function poolStart(data) {
+  const c = el('div', 'card p5-start');
+  c.appendChild(el('div', 'p5-start-h', 'You are not in a group yet'));
+  c.appendChild(el('p', 'p5-start-b',
+    'A group is people you know, scored against each other in points. Start one and '
+    + 'share the code, or put in a code somebody sent you. Your picks are already '
+    + 'counting on the world board either way.'));
+
+  const a = el('button', 'p5-start-go', 'Start a group');
+  a.onclick = () => startFlow(data);
+  c.appendChild(a);
+
+  const row = el('div', 'p5-join');
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'p5-join-in';
+  inp.placeholder = 'Invite code';
+  inp.maxLength = 8;
+  /* Uppercased as they type: the codes are printed uppercase, and a field that
+   * quietly disagrees with the thing being copied looks broken. */
+  inp.oninput = () => { inp.value = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+  const go = el('button', 'p5-join-go', 'Join');
+  const fail = (msg) => {
+    go.disabled = false; go.textContent = 'Join';
+    const old2 = c.querySelector('.p5-join-err');
+    if (old2) old2.remove();
+    /* THE ERROR GOES WHERE THE TYPING HAPPENED. An alert would take the code off
+     * screen while telling them it was wrong. */
+    c.appendChild(el('p', 'p5-join-err', msg));
+  };
+  go.onclick = async () => {
+    const code = inp.value.trim();
+    if (!code) { inp.focus(); return; }
+    go.disabled = true; go.textContent = 'Joining...';
+    try {
+      const r = await fetch('/api/pool/join', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ deviceId: data.deviceId, code })
+      });
+      const j = await r.json();
+      if (!r.ok) { fail(j.error || 'That code did not work.'); return; }
+      try { localStorage.setItem('ag.scope', j.poolId); } catch (e) {}
+      location.reload();
+    } catch (e) { fail('No connection. Try again in a moment.'); }
+  };
+  row.append(inp, go);
+  c.appendChild(row);
+  return c;
+}
+
+async function startFlow(data) {
+  /* ONE FIELD, AND IT IS OPTIONAL. Naming a pool is the only thing asked before
+   * it exists, and a blank name is a pool called "Our pool" rather than a form
+   * that refuses to submit. */
+  const name = prompt('Name your group', 'Our group');
+  if (name === null) return;
+  try {
+    const r = await fetch('/api/pool/create', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ deviceId: data.deviceId, poolName: name || 'Our group',
+                             sport: data.sport })
+    });
+    const j = await r.json();
+    if (!r.ok) return;
+    try { localStorage.setItem('ag.scope', j.poolId); } catch (e) {}
+    location.reload();
+  } catch (e) { /* offline: the button does not fire and the world board stands */ }
 }
 
 /* ------------------------------------------------------------------ *
@@ -393,7 +620,11 @@ export function render(root, data, state) {
 
     const h = el('h1', 'p5-h', 'Standings');
     const sub = el('p', 'p5-sub num',
-      pool.name + ' · ' + pool.memberCount + ' members · ' + (pool.scope || ''));
+      /* "1 members". The option list below got this right and the header did not,
+       * which is what happens when the same sentence is built twice. */
+      pool.name + ' · ' + pool.memberCount
+        + (pool.memberCount === 1 ? ' member · ' : ' members · ')
+        + (pool.scope || ''));
     host.append(h, sub);
 
     if (state === 'loading') {
@@ -422,12 +653,32 @@ export function render(root, data, state) {
       }));
     }
 
+    /* THE SCOPE SELECTOR, ABOVE THE TABLE. Two boards over the same picks: the
+     * world, which needs no invite and has you in it from your first pick, and a
+     * group you started or were invited to. */
+    host.appendChild(scopePicker(data));
+    /* Only on a group: there is no invite to the world, and offering one would
+     * imply the world board is something you can be left out of. */
+    if (data.scope && data.scope !== 'world') host.appendChild(inviteRow(data));
+
     const rows = basis === 'week' ? data.weekRows : data.seasonRows;
     if (!rows || rows.length === 0) {
+      /* NOT IN A POOL IS NOT AN EMPTY TABLE, IT IS A DIFFERENT SCREEN. Jason,
+       * 2026-09-09: "if you are not in a pool already, you have to start a pool
+       * or get in invite."
+       *
+       * "Nobody in this pool yet - copy invite link" is right for a pool you
+       * HAVE and nobody has joined. Shown to somebody with no pool at all it
+       * offers to share a link to nothing: a dead end that looks like a feature.
+       * Two different states, two sets of words, two buttons. */
+      if (data.scope !== 'world' || !(data.myPools || []).length) {
+        host.appendChild(poolStart(data));
+        return;
+      }
       host.appendChild(stateBlock('empty', {
-        title: 'Nobody in this pool yet',
-        body: 'Share the invite code and the table fills itself.',
-        action: { label: 'Copy invite link' }
+        title: 'Nobody has picked yet this week',
+        body: 'The world board fills as people make their first pick. Yours counts the moment you make it.',
+        action: { label: 'Go to the slate', onClick: () => { location.hash = '#/slate'; } }
       }));
       return;
     }
@@ -468,11 +719,17 @@ export function render(root, data, state) {
   /* THE PIN. Armchair's take, and the reason for it is in the LIVE capture: the
    * user's own score sat at 0 while the visible list bottomed out at 11,940. */
   function selfCard(rows, pool) {
-    const me = rows.find((r) => r.isSelf) || null;
+    /* 🔴 `isSelf` COMES FROM THE DEVICE ID, and nothing was setting it - so the
+     * person who had just created the group was told "You are watching this
+     * pool. Join it to appear in the table" while standing first in that very
+     * table. The flag exists on the preview's rows and was never derived for a
+     * real board. */
+    const me = rows.find((r) => r.isSelf || (data.deviceId && r.userId === data.deviceId)) || null;
     const card = el('div', 'card p5-self');
     if (!me) {
       card.classList.add('p5-self--none');
-      card.appendChild(el('p', 'p5-self-none', 'You are watching this pool. Join it to appear in the table.'));
+      card.appendChild(el('p', 'p5-self-none',
+        'You are looking at this group without being in it. Make a pick and you are on the table.'));
       return card;
     }
     const pts = basis === 'week' ? me.weekPoints : me.seasonPoints;
@@ -611,7 +868,12 @@ export function render(root, data, state) {
     const tb = data.tiebreak;
     const anyTie = rows.some((r) => r.rank > 0 && rows.filter((x) => x.rank === r.rank).length > 1);
 
-    if (tb) {
+    /* 🔴 A TIEBREAK WITH NO GAME IS NOT A TIEBREAK. It printed "Ties break on
+     * your predicted combined points in null" - a sentence built from a label
+     * that was never set, because the real board carries no tiebreak game yet.
+     * A missing value is a line that does not render, never a line with the word
+     * null in it. */
+    if (tb && tb.label) {
       const line = el('p', 'p5-footline num');
       if (tb.decided && tb.actual != null) {
         line.textContent = 'Ties break on your predicted combined points in ' + tb.label +

@@ -314,7 +314,19 @@ test('the screen fetches nothing, declares no types, and uses the SHARED chip', 
   /* The `bar` export is a path to a captured reference image and is the one .PNG
    * this file is allowed to name — strip it before scanning for marks. */
   const js = stripComments(SCREEN_SRC).replace(/export const bar = .*/, '');
-  assert.ok(!/\bfetch\s*\(/.test(js), 'data arrives as an argument');
+  /* SCOPED TO render(), 2026-09-09 - the same narrowing p2 and p4 already carry,
+   * for the same reason. The contract rule is that the SCREEN is pure: render()
+   * takes data as an argument and never reaches the network, so a layout can be
+   * driven from a fixture with no server. previewData is the data PROVIDER, not
+   * part of the rendered screen, and it is where the world board and this
+   * device's pools are read.
+   *
+   * Asserting over the whole file conflated the two, and would have forced the
+   * honest route - a real board off D1 - to be replaced by invented rows to
+   * satisfy a purity rule about a different function. */
+  const renderBody = js.slice(js.indexOf('export function render'));
+  assert.ok(!/fetch\s*\(|XMLHttpRequest|WebSocket/.test(renderBody),
+    'render() reached the network - data arrives as an argument');
   /* 🔴 THIS ASSERTION IS INVERTED ON PURPOSE, 2026-09-08. It used to demand the
    * shared TEAM CHIP in the mark slot, and it was enforcing the wrong thing.
    * Jason, on this exact row: "for the icons for each person, make up something

@@ -430,6 +430,50 @@ export function probFromSpread(spread, side, sport) {
  * rather than extended. Said here so the next session does not mistake it for
  * the pool.
  */
+/* 🔴 A DEVICE ID, WHICH IS THE ONLY IDENTITY THIS APP HAS. No account, no email,
+ * no password - doctrine says nothing sits in front of the slate and the most
+ * that may be asked is a display name, after the first pick. Generated once and
+ * kept; if storage is cleared you become a new person, which is the honest
+ * consequence of having asked for nothing. */
+function deviceId() {
+  try {
+    let v = localStorage.getItem('ag.device');
+    if (!v) {
+      v = 'd' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('ag.device', v);
+    }
+    return v;
+  } catch { return 'anon'; }
+}
+
+/* 🔴 THE PICK GOES TO THE SERVER AS WELL AS TO THIS PHONE, and the local write
+ * is NOT replaced by the network one.
+ *
+ * localStorage is what makes the row highlight instantly and survive a reload
+ * with no signal; D1 is what puts you on a board other people can see. Sending
+ * only to the server would make every tap wait on a round trip and vanish on a
+ * subway; storing only locally is what we had, and it is a note to yourself.
+ *
+ * Failure is deliberately silent HERE and visible nowhere else yet: the pick is
+ * already saved locally, so a dropped request costs a place on the world board
+ * and never the pick. When there is a pool worth being wrong about, this needs a
+ * retry queue - and that is a real gap, not a decision. */
+function postPick(sport, week, game, side) {
+  try {
+    fetch('/api/pool/pick', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: deviceId(),
+        name: (localStorage.getItem('ag.name') || '').replace(/^"|"$/g, ''),
+        gameId: String(game.id), side, sport, week,
+        spread: typeof game.spread === 'number' ? game.spread : null,
+        kickoffUtc: game.kickoffUtc
+      })
+    }).catch(() => {});
+  } catch { /* no storage, no network, no problem - the pick is still on screen */ }
+}
+
 function picksKey(sport, week) { return 'ag.picks.' + sport + '.' + week; }
 
 /* Stored picks carry only a side. Everything else a row needs is rebuilt against
@@ -1055,6 +1099,13 @@ export function render(root, data, state) {
        * "save" on this screen and there should not be one - the tap IS the
        * commit, so anything that does not survive it never happened. */
       savePicks(ctx.sport, ctx.week, ctx.picks);
+      /* Un-picking is a local state today: there is no DELETE, so the server
+       * keeps the last side you chose. Named rather than hidden - it is the
+       * next thing this endpoint needs. */
+      if (p.side) {
+        const g = (data.games || []).find((x) => x.id === gameId);
+        if (g) postPick(ctx.sport, ctx.week, g, p.side);
+      }
       /* The crowd arrives WITH the pick and leaves with it. It is not cached from a
        * previous tap, because the rule is about what you see before you commit. */
       p.crowd = p.side ? (p.crowd || seedCrowd(gameId, ctx.pool.memberCount)) : null;
@@ -1186,7 +1237,7 @@ function head(root, data, _) {
     ? "The week's card · against the spread · every pick pays 2.00×"
     /* "Group pools" is the section's name (Jason, 2026-09-09). The kicker names
      * the section, not this one pool - the pool's own name is the h1 above it. */
-    : 'Group pools · your group · scored in points');
+    : 'Your group · a week at a time · scored in points');
   root.insertBefore(kicker, h);
   const p = data && data.pool;
   if (p) {

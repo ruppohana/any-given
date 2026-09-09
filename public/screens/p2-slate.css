@@ -64,9 +64,21 @@
 
 /* The day header stacks directly under the bar, and takes the same treatment so
    the two read as one pinned block rather than as a stripe inside a margin. */
+/* THE JUMP HAS TO CLEAR BOTH PINNED BARS. Jason, 2026-09-09: "The bookmark is
+   still not hitting its mark."
+
+   Two things are stuck to the top - the 38px progress bar and this 30px day
+   header - and a browser scrolling an anchor into view puts it at y=0, which is
+   underneath both of them. So tapping "Sat 12" landed the first Saturday row
+   with its top 68px off screen: a clipped row with no logo, which reads as a
+   broken card rather than as a scroll that stopped early.
+
+   scroll-margin-top on every jump target is the fix, and it has to be the SUM of
+   both bars plus a hair, not the height of either one. */
 .scr-p2-slate .p2-grp {
   position: sticky; top: 38px; z-index: 3;
   margin-inline: -10px; padding-inline: 14px;
+  scroll-margin-top: 72px;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   min-height: 30px;
   background: var(--bg); border-bottom: 1px solid var(--line);
@@ -214,3 +226,10 @@
    fixture playable - so the rows it described are ordinary questions again and
    the styles that dimmed them would now be lying about them. */
 .p2-c-t { font-size: var(--t-micro); color: var(--dim); }
+
+/* Every row is a possible landing point too - a day chip scrolls to the group
+   header, but a link into one game scrolls to its row. Same clearance. */
+.scr-p2-slate .p2-row { scroll-margin-top: 72px; }
+/* And the container, so anything using scrollIntoView inherits the offset
+   without each call site having to know about the bars. */
+.scr-p2-slate { scroll-padding-top: 72px; }

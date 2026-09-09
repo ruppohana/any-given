@@ -745,7 +745,7 @@ function paint(wrap) {
      * the game starts and tiles carrying a price and a countdown appear, which
      * is the ad doctrine's actual rule rather than a place on the page. */
     const wk = el('button', 'lg-mode lg-go lg-wide');
-    wk.appendChild(el('span', 'lg-mode-h', S.mode === 'pool' ? 'Open the pool' : "The week's card"));
+    wk.appendChild(el('span', 'lg-mode-h', S.mode === 'pool' ? 'Open your group' : "The week's card"));
     wk.appendChild(el('span', 'lg-mode-b', S.mode === 'pool'
       ? 'Pick the week for points' : 'Against the spread, every pick pays 2.00×'));
     wk.onclick = () => { location.hash = '#/slate'; };
@@ -1211,7 +1211,7 @@ function modeCard(wrap, compact) {
   const row = el('div', 'lg-mode-row');
   const opts = [
     { id: 'marbles', h: 'Play the marbles', b: 'Stake marbles at a price you see first. Live, or a card for the week.' },
-    { id: 'pool', h: 'Group pools', b: 'Your group, a week at a time, scored in points. Nothing staked.' }
+    { id: 'pool', h: 'Your group', b: 'People you know, a week at a time, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');

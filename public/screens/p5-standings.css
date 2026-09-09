@@ -185,3 +185,42 @@
 @media (min-width: 900px) {
   .scr-p5-standings .p5-toggle { max-width: 320px; }
 }
+
+/* THE SCOPE CONTROL - which board am I looking at. A select rather than a
+   segmented row, because the group list is unbounded: somebody can be in six
+   pools, and a segmented control that grows eventually scrolls sideways. */
+.scr-p5-standings .p5-scope { display: flex; gap: 8px; align-items: stretch; margin: 0 0 10px; }
+.scr-p5-standings .p5-scope-sel { flex: 1 1 auto; font: inherit; font-size: var(--t-body);
+  min-height: var(--tap-min); padding: 0 10px; color: var(--fg);
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-chip); }
+.scr-p5-standings .p5-scope-add { font: inherit; font-size: var(--t-micro); font-weight: 800;
+  min-height: var(--tap-min); padding: 0 12px; white-space: nowrap; color: var(--accent);
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-chip); }
+
+/* NOT IN A POOL - the two ways in, and nothing else. */
+.scr-p5-standings .p5-start { display: grid; gap: 8px; padding: 16px; }
+.scr-p5-standings .p5-start-h { font-size: var(--t-section); font-weight: 800; }
+.scr-p5-standings .p5-start-b { margin: 0; font-size: var(--t-body); color: var(--dim); line-height: 1.5; }
+.scr-p5-standings .p5-start-go { font: inherit; font-size: var(--t-emph); font-weight: 800;
+  min-height: var(--tap-min); border-radius: var(--radius-chip); color: var(--bg);
+  background: var(--accent); border: 0; margin-top: 4px; }
+.scr-p5-standings .p5-join { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.scr-p5-standings .p5-join-in { font: inherit; font-size: var(--t-emph); letter-spacing: .12em;
+  min-height: var(--tap-min); padding: 0 12px; color: var(--fg); background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius-chip); }
+.scr-p5-standings .p5-join-go { font: inherit; font-size: var(--t-emph); font-weight: 800;
+  min-height: var(--tap-min); padding: 0 18px; color: var(--accent); background: var(--card);
+  border: 1px solid var(--accent); border-radius: var(--radius-chip); }
+.scr-p5-standings .p5-join-err { margin: 0; font-size: var(--t-micro); color: var(--down); }
+
+/* THE INVITE — the code shown AND copyable. A copy button alone fails the case
+   it exists for: reading six characters down the phone, or typing them into a
+   message on another device. That is why the code has no vowels. */
+.scr-p5-standings .p5-inv { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.scr-p5-standings .p5-inv-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dim); }
+.scr-p5-standings .p5-inv-code { font-size: var(--t-figure); font-weight: 800; letter-spacing: .16em; }
+.scr-p5-standings .p5-inv-go { font: inherit; font-size: var(--t-micro); font-weight: 800;
+  min-height: var(--tap-min); padding: 0 14px; white-space: nowrap; color: var(--accent);
+  background: var(--card); border: 1px solid var(--accent); border-radius: var(--radius-chip); }
