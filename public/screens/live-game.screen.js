@@ -64,6 +64,7 @@ const S = {
   name: store.get('name', ''),
   stake: store.get('stake', 10),
   calls: store.get('calls', {}),   // afterPlayId -> { type, choice, stake, p }
+  seenIntro: !!store.get('seenIntro', 0),
   bank: START_BANK,
   board: [],
   timer: null
@@ -302,6 +303,11 @@ function paint(wrap) {
 
   /* ---- the delay, first, because it is the thing that makes this work ---- */
   wrap.appendChild(delayBar());
+
+  /* Under the bar it explains, and above everything else, because it changes how
+   * to read the whole screen. It goes the moment they say so, or the moment they
+   * make a call - somebody who has already played does not need telling. */
+  if (!S.seenIntro && !Object.keys(S.calls).length) wrap.appendChild(introCard(wrap));
 
   if (!S.raw) {
     wrap.appendChild(stateBlock('loading', { rows: 3, body: 'Waiting for the first push from the poller…' }));
@@ -601,20 +607,63 @@ function claimCalls() {
   }
 }
 
+/**
+ * 🔴 THE COLD OPEN. What somebody sees when they have never been here before.
+ *
+ * Everything about this app hangs off ONE counter-intuitive fact and nothing on
+ * screen said it: THE DELAY IS THE GAME. A stranger handed the link finds a
+ * slider labelled "BEHIND ON PURPOSE · 45s" sitting above a football game, and
+ * the obvious move — the move anybody makes with a slider marked delay — is to
+ * drag it to zero and be live. That single tap turns the whole thing into a
+ * scoreboard that can only report what already happened, and they would conclude
+ * the app is pointless. They would be right about what they were holding.
+ *
+ * So it is explained once, before the first call, in the words the mechanic
+ * actually works in — and it is dismissible, because an explanation that keeps
+ * arriving is an obstacle. Jason, on a different panel: "i dont need this every
+ * fucking time either."
+ */
+function introCard(wrap) {
+  const c = el('div', 'card lg-intro');
+  c.appendChild(el('div', 'lg-intro-h', 'You are 45 seconds behind, and that is the point'));
+  c.appendChild(el('p', 'lg-intro-b',
+    'The feed only tells us a play happened after it happened. So the app shows you the game '
+    + 'as it stood 45 seconds ago — which means when it asks what happens next, on your '
+    + 'television the snap genuinely has not been taken yet. That gap is the whole game.'));
+  c.appendChild(el('p', 'lg-intro-b',
+    'Slide it to zero and there is no gap left to call into. It becomes a scoreboard.'));
+  const go = el('button', 'lg-intro-go', 'Got it');
+  go.onclick = () => { store.set('seenIntro', 1); S.seenIntro = true; paint(wrap); };
+  c.appendChild(go);
+  return c;
+}
+
 function delayBar() {
   const bar = el('div', 'lg-delay');
-  const label = el('span', 'lg-delay-l', S.delayMs === 0 ? 'LIVE — no delay' : `BEHIND ON PURPOSE · ${S.delayMs / 1000}s`);
+  const text = () => (S.delayMs === 0 ? 'LIVE — no delay' : `BEHIND ON PURPOSE · ${S.delayMs / 1000}s`);
+  const label = el('span', 'lg-delay-l', text());
   if (S.delayMs === 0) label.classList.add('is-live');
   const input = el('input');
   input.type = 'range'; input.min = '0'; input.max = '90'; input.step = '5';
   input.value = String(S.delayMs / 1000);
+  input.setAttribute('aria-label', 'How far behind the television you are, in seconds');
+
+  /* 🔴 ZERO IS ALLOWED AND IS NAMED. The slider is user-set and always on -
+   * settled doctrine, and it is not this screen's job to prevent a choice. It IS
+   * this screen's job to say what the choice costs, at the moment it is made,
+   * rather than letting somebody discover it by finding every question
+   * unanswerable. */
+  const warn = el('p', 'lg-delay-warn', 'No gap left to call into — this is a scoreboard now.');
+  warn.hidden = S.delayMs !== 0;
+
   input.oninput = () => {
     S.delayMs = Number(input.value) * 1000;
     store.set('delayMs', S.delayMs);
-    label.textContent = S.delayMs === 0 ? 'LIVE — no delay' : `BEHIND ON PURPOSE · ${S.delayMs / 1000}s`;
+    label.textContent = text();
     label.classList.toggle('is-live', S.delayMs === 0);
+    warn.hidden = S.delayMs !== 0;
   };
-  bar.append(label, input);
+  bar.append(label, input, warn);
   return bar;
 }
 
@@ -628,6 +677,13 @@ const CSS = `
   border: 1px solid var(--down); background: color-mix(in srgb, var(--down) 10%, var(--card)); }
 .lg-stale-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--down); }
 .lg-stale-b { font-size: var(--t-micro); color: var(--ink); }
+.lg-delay-warn { font-size: var(--t-micro); color: var(--down); font-weight: 700; margin: 2px 0 0; }
+.lg-intro { display: grid; gap: 8px; padding: 14px 12px; }
+.lg-intro-h { font-size: var(--t-emph); font-weight: 800; line-height: 1.25; }
+.lg-intro-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
+.lg-intro-go { justify-self: start; font: inherit; font-weight: 800; margin-top: 2px;
+  min-height: var(--tap-min); padding: 0 20px; border: 0;
+  border-radius: var(--radius-card); background: var(--accent); color: var(--bg); }
 .lg-done { display: grid; gap: 4px; padding: 14px 12px; }
 .lg-done-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--dim); }
 .lg-done-b { font-size: var(--t-emph); font-weight: 800; }
