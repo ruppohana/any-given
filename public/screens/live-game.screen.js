@@ -377,7 +377,13 @@ function saveCallSummary(rows) {
       if (r.landed) won++; else lost++;
       profit += (r.delta || 0);
     }
-    all[S.key] = { won, lost, voided, open, profit, at: Date.now() };
+    /* 🔴 THE SPORT AND THE WEEK TRAVEL WITH THE SUMMARY. Without them a weekly
+     * total has to parse the game key and guess which week an id belonged to -
+     * and would silently fold last week's games into this week's number the
+     * first time the week rolled over. */
+    const sport = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+    all[S.key] = { won, lost, voided, open, profit, at: Date.now(),
+                   sport, week: SLATE_WEEK[sport] || 1 };
     localStorage.setItem('ag.callsum', JSON.stringify(all));
   } catch { /* a private window is allowed to forget */ }
 }

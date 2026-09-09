@@ -964,12 +964,18 @@ function score(game) {
 /* Per-game summaries written by the live screen when it settles. Newest first.
  * Nothing here is recomputed - if the live screen never settled a game, there is
  * nothing to show for it, which is the honest answer rather than a zero. */
-function liveCalls() {
+function liveCalls(sport, week) {
   try {
     const all = JSON.parse(localStorage.getItem('ag.callsum') || '{}');
     return Object.keys(all)
       .map((k) => ({ key: k, ...all[k] }))
       .filter((r) => (r.won + r.lost + r.voided + r.open) > 0)
+      /* 🔴 THIS WEEK, THIS SPORT. A total that quietly included last week would
+       * be the one number on the screen that cannot be checked against anything.
+       * Summaries written before the sport and week were recorded have neither,
+       * and are counted rather than dropped - they are this device's own history
+       * and the alternative is somebody's results vanishing on an upgrade. */
+      .filter((r) => (!r.sport || r.sport === sport) && (!r.week || r.week === week))
       .sort((a, b) => (b.at || 0) - (a.at || 0));
   } catch { return []; }
 }
@@ -980,6 +986,49 @@ function liveCallBlock(rows) {
   h.appendChild(el('span', 'p4-live-k', 'Called live'));
   h.appendChild(el('span', 'p4-live-n', 'Snap by snap · scored on its own'));
   box.appendChild(h);
+
+  /* 🔴 THE WEEK'S PROFIT, AS THE HEADLINE. Jason, 2026-09-09: "Every game gets
+   * 200 marbles, but where does the pickup money come from? And if I do 1 game
+   * but don't pick anything I end up with 200 marbles. Which is 200 more than
+   * anyone who did not play. Should we just have a set amount for the week?"
+   *
+   * Half of that was already answered and half was a real hole.
+   *
+   * ANSWERED: the board ranks on PROFIT, not balance, so somebody who did not
+   * play scores 0 rather than 200. Sitting on the bank has never been a way to
+   * lead.
+   *
+   * THE HOLE: profit was only ever per-game. Watch five games and you have five
+   * banks of 200 to work with; watch one and you have one. Ranking on profit
+   * fixes the floor and not the ceiling, so the number still rewarded how much
+   * football somebody could watch.
+   *
+   * 🔴 A WEEKLY TOTAL, NOT A WEEKLY BANK. He asked whether the bank should be
+   * set for the week, and it should not: doctrine says the bank refills every
+   * game so NOBODY IS EVER ELIMINATED, and one weekly bank means busting on
+   * Wednesday and watching Saturday with nothing. Totalling the profit gets the
+   * comparable number without breaking that.
+   *
+   * WHERE THE MONEY COMES FROM: nowhere. Marbles are minted, not redistributed -
+   * there is no pot. That is exactly why nothing is purchasable and nothing is
+   * redeemable: there is no economy to protect, only a score. The moment marbles
+   * came out of a pot this would be a different legal object.
+   *
+   * 🔴 STILL NOT NEUTRAL ON VOLUME. Five games remain more chances to accumulate
+   * than one. The fix for that is profit PER MARBLE STAKED - a rate - and it is
+   * fairer and much harder to read at a glance. Recorded here rather than built,
+   * so the next session knows the total was chosen over the rate deliberately. */
+  let total = 0, open = 0;
+  for (const r of rows) { total += (r.profit || 0); open += (r.open || 0); }
+
+  const sum = el('div', 'p4-live-sum');
+  const v = el('div', 'p4-live-tot num', (total > 0 ? '+' : '') + total);
+  if (total > 0) v.dataset.result = 'won';
+  else if (total < 0) v.dataset.result = 'lost';
+  sum.appendChild(v);
+  sum.appendChild(el('div', 'p4-live-tl',
+    'Marbles this week' + (open ? ' · ' + open + ' still open' : '')));
+  box.appendChild(sum);
 
   for (const r of rows) {
     const a = el('a', 'p4-live-r');
@@ -1107,7 +1156,7 @@ export function render(root, data, state) {
      * snaps on Wednesday and has picked nothing for Saturday has not "not picked
      * anything yet" - and being told so with their own results one scroll away
      * would be the app forgetting what they did. */
-    const live = liveCalls();
+    const live = liveCalls(data.sport, data.week);
     if (live.length) host.appendChild(liveCallBlock(live));
 
     if (!specs.length) {

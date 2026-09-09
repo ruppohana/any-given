@@ -517,7 +517,35 @@ test('CONTRACT §5: the pool scores in POINTS - no balance vocabulary in its cop
    * escaped quotes, because a guard whose own regex needs escaping is the
    * next bug. Worst case it splits one literal into two, which cannot hide
    * a banned word - only ever reveal one. */
-  const literals = (code.match(/'[^']*'|"[^"]*"/g) || []).join(' ').toLowerCase();
+  /* 🔴 THE MARBLE BLOCK IS CUT OUT BEFORE SCANNING, 2026-09-09, and that makes
+   * this a STRONGER guard rather than a weaker one.
+   *
+   * This screen hosts both products: the group pool's card and, below it, what
+   * you called live - which is a marbles product and has to be able to say
+   * "Marbles this week" over its own total. A screen-wide ban could not tell the
+   * two apart and would have forced the marble block to describe its number
+   * without naming it.
+   *
+   * So the pool's copy is everything OUTSIDE liveCallBlock, and it is checked as
+   * before. Then the separation itself is asserted: the word appears in the
+   * marble block and nowhere else on the screen. That is the actual rule - not
+   * "this file never says marbles" but "the pool never does". */
+  const start = code.indexOf('function liveCallBlock');
+  /* String.fromCharCode(10) rather than a backslash-n: this file is edited
+   * by scripts, and a newline escape has already been flattened into a real
+   * line break once today - which produced a syntax error, not a wrong
+   * result, so it was at least loud. */
+  const NL = String.fromCharCode(10);
+  const end = start >= 0 ? code.indexOf(NL + 'function ', start + 10) : -1;
+  const marbleBlock = start >= 0 ? code.slice(start, end > 0 ? end : undefined) : '';
+  const poolCode = start >= 0
+    ? code.slice(0, start) + (end > 0 ? code.slice(end) : '')
+    : code;
+  const literals = (poolCode.match(/'[^']*'|"[^"]*"/g) || []).join(' ').toLowerCase();
+
+  assert.ok(marbleBlock.length > 0, 'liveCallBlock is gone - re-read this test before trusting it');
+  assert.match(marbleBlock, /Marbles this week/,
+    'the marble block must name what its total is');
 
   for (const w of ['marble', 'credit', 'coin', 'top-up', 'topup', 'purchase', ' buy ', 'refill', 'wager', 'odds']) {
     assert.ok(!literals.includes(w), `the pool must not say "${w.trim()}"`);

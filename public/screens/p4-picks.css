@@ -278,3 +278,14 @@
 .scr-p4-picks .p4-live-p { font-weight: 800; color: var(--dim); }
 .scr-p4-picks .p4-live-p[data-result="won"]  { color: var(--up); }
 .scr-p4-picks .p4-live-p[data-result="lost"] { color: var(--down); }
+
+/* THE WEEK'S MARBLE PROFIT — the headline of the live-call block. Large, signed,
+   and on the fixed result scale, because it is the answer to "how did I do" and
+   the only figure on this screen that sums anything. It never joins the pool's
+   points: two products, two scores. */
+.scr-p4-picks .p4-live-sum { display: flex; align-items: baseline; gap: 10px;
+  padding: 6px 0 10px; border-top: 1px solid var(--line); }
+.scr-p4-picks .p4-live-tot { font-size: var(--t-figure); font-weight: 800; color: var(--dim); }
+.scr-p4-picks .p4-live-tot[data-result="won"]  { color: var(--up); }
+.scr-p4-picks .p4-live-tot[data-result="lost"] { color: var(--down); }
+.scr-p4-picks .p4-live-tl { font-size: var(--t-micro); color: var(--dim); }
