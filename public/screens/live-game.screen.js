@@ -53,6 +53,41 @@ const MAX_PAYOUT = 6;
  * game, which is the build after this one. Tonight there is one NFL game on the
  * wire, which is the one being tested — and a college key that nothing is
  * pushing to is honest: the screen says nobody is polling it. */
+/* 🔴 THE GAME IS LOOKED UP, NOT WRITTEN DOWN. Jason, 2026-09-09: "All the card
+ * info is still stale and not the upcoming info."
+ *
+ * The table below is a pair of constants, and a constant is stale the moment its
+ * game kicks off. It was right on the day it was typed and it is wrong for every
+ * day after: on Thursday morning the NFL card would still be pointing at
+ * Wednesday's opener, showing a finished game as "what's on", with a countdown
+ * that had run out.
+ *
+ * The slate already knows. `slate:<sport>:<season>:<week>` is captured from the
+ * feed and carries every game with its real kickoff and its real status, so the
+ * next game is a query over data we already hold rather than a fact somebody has
+ * to remember to edit.
+ *
+ * 🔴 NOT-FINAL, ORDERED BY KICKOFF — never "the first scheduled one". A game
+ * that is IN PROGRESS is the one you want to be watching, and filtering to
+ * `scheduled` would skip past a live game to advertise tomorrow's.
+ *
+ * The constants stay as the fallback, because a network failure must not leave
+ * the home card with nothing to point at. */
+const SLATE_WEEK = { nfl: 1, 'college-football': 2 };
+
+async function nextGameKey(sport) {
+  try {
+    const wk = SLATE_WEEK[sport] || 1;
+    const res = await fetch('/api/state/slate:' + sport + ':2026:' + wk);
+    if (!res.ok) return null;
+    const d = await res.json();
+    const up = (d.games || [])
+      .filter((g) => g && g.id && g.status !== 'final')
+      .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
+    return up.length ? sport + ':' + up[0].id : null;
+  } catch { return null; }
+}
+
 const GAME_FOR = {
   /* NE @ SEA, Wed 9 Sep 5:20pm Pacific - the 2026 NFL opener. */
   'nfl': 'nfl:401872656',
@@ -111,7 +146,23 @@ const S = {
    * `null` means the choice has not been made, and the screen asks. */
   sport: store.get('sport', null),
   /* 'call' = the live layer, 'pool' = the weekly picks. Null until asked. */
-  mode: store.get('mode', null),
+  /* 🔴 MIGRATED, NOT READ RAW. The first card has been re-cut twice today and
+   * every phone that opened the app in between is holding a value this build no
+   * longer understands — 'call' and 'week' were the old three-way's ids.
+   *
+   * Left alone they are the worst possible state: truthy, so the mode gate is
+   * satisfied and the first card never draws, and unequal to 'marbles', so the
+   * speed row never draws either. Somebody who chose "Call the game" an hour ago
+   * would land on a hub with a question missing and no way to reach it.
+   *
+   * Both old marble ids fold into 'marbles'; anything else is dropped to null so
+   * the card asks again, which is the honest outcome for a value we cannot
+   * interpret. */
+  mode: (() => {
+    const v = store.get('mode', null);
+    if (v === 'call' || v === 'week' || v === 'marbles') return 'marbles';
+    return v === 'pool' ? 'pool' : null;
+  })(),
   bank: START_BANK,
   board: [],
   timer: null
@@ -326,7 +377,7 @@ function boardRows(state) {
   }
   /* Profit first. A tie breaks on who has resolved more, so somebody sitting on
    * one lucky call does not outrank somebody who has been playing all night. */
-  return [...byPerson.values()].sort((a, b) => b.profit - a.profit || (b.won + b.lost) - (a.won + a.lost));
+  return [...byPerson.values()].sort(BOARD_ORDER);
 }
 
 /* ------------------------------------------------------------------ *
@@ -349,12 +400,55 @@ export function render(root, _data, screenState) {
   const forced = new URLSearchParams(location.search).get('game');
   S.isHome = screenState === 'home';
   S.key = forced || (S.sport ? GAME_FOR[S.sport] : null);
+  /* Recorded on the state, not just held in this closure: the 5-minute
+   * re-check runs long after mount() has returned and has to know that this
+   * session came in on an invite link naming its own game. Reading an
+   * undefined S.forced there would silently retarget somebody's invite to
+   * whatever is next on the slate. */
+  S.forced = !!forced;
   if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
   paint(wrap);
   if (S.timer) clearInterval(S.timer);
   S.timer = setInterval(() => poll(wrap), POLL_MS);
   poll(wrap);
+
+  /* The constant gets the first paint out immediately; the lookup corrects it a
+   * moment later. Doing it the other way round would hold a blank screen behind
+   * a network round trip on every load, to fix a card that is only wrong once a
+   * week. An invite link is never overridden — it names its own game. */
+  if (!forced && S.sport) {
+    refreshKey(wrap, S.sport);
+    /* Re-checked on a slow cycle so a card left open through a kickoff moves on
+     * to the next game by itself rather than counting down past zero. */
+    if (S.keyTimer) clearInterval(S.keyTimer);
+    S.keyTimer = setInterval(() => { if (!S.forced && S.sport) refreshKey(wrap, S.sport); }, 300000);
+  }
+}
+
+/* 🔴 THE BOARD COMPARATOR, NAMED. Profit first, highest at the top; a tie breaks
+ * on how much has been RESOLVED, so somebody sitting on one lucky open call does
+ * not outrank somebody who has settled four.
+ *
+ * It is a named constant rather than an inline arrow because the test that owns
+ * this rule cannot import a screen — a screen needs a DOM — so it lifts the
+ * comparator out of the source and runs it. Its matcher took "the first .sort in
+ * the file", and on 2026-09-09 a slate lookup added an earlier one: the test
+ * quietly began asserting the ranking doctrine against a kickoff-time sort, and
+ * failed. It had warned about exactly this in its own comment.
+ *
+ * A rule that a test finds by POSITION is a rule that moves when unrelated code
+ * moves. Naming it is the fix; the test now matches the name. */
+const BOARD_ORDER = (a, b) => b.profit - a.profit || (b.won + b.lost) - (a.won + a.lost);
+
+async function refreshKey(wrap, sport) {
+  const k = await nextGameKey(sport);
+  /* Guard the sport as well as the value: the lookup is async and somebody can
+   * switch leagues while it is in flight, which would point the NFL card at a
+   * college game with no error anywhere. */
+  if (!k || k === S.key || sport !== S.sport) return;
+  S.key = k; S.raw = null; S.board = []; S.noGame = false;
+  paint(wrap); poll(wrap);
 }
 
 async function poll(wrap) {
@@ -882,6 +976,7 @@ function sportCard(wrap) {
       if (S.mode === 'pool') { location.hash = '#/slate'; return; }
       paint(wrap);
       poll(wrap);
+      refreshKey(wrap, id);
     };
     row.appendChild(b);
   }
@@ -908,34 +1003,40 @@ function modeCard(wrap, compact) {
   }
   if (!compact) {
     c.appendChild(el('p', 'lg-sport-b',
-      'Three ways in. Two of them spend marbles and share one balance; the office '
-      + 'pool spends nothing and keeps its own score. They never add together.'));
+      'Two halves. One stakes marbles at a price you can see before you tap; the '
+      + 'other is your group picking a week for points. They keep separate scores '
+      + 'and never add together.'));
   }
 
-  /* 🔴 THREE, NOT TWO. Jason, 2026-09-08: "Office pool is a completely separate
-   * section. And don't we also have the weeks picks for the marbles?"
+  /* 🔴 TWO ON THE FIRST CARD, AND THE SEAM IS WHAT IS AT STAKE. Jason,
+   * 2026-09-09: "First card, simulated betting or weekly group pools. You pick
+   * the title… Then ncaa or nfl… on the next card."
    *
-   * The two-way fork was drawn along the wrong seam. It split by TIME — live
-   * versus weekly — when the seam that actually matters is WHAT IS AT STAKE:
+   * The three-way version put calling, the week's card and the pool side by side
+   * and made somebody choose a SPEED and a PRODUCT in one tap. Wrong shape: two
+   * of those three are the same product, they share one balance, and the third
+   * shares nothing with either. So the first question is the only one that
+   * actually branches — marbles or points — and the speed is settled afterwards,
+   * inside the half that has two speeds.
    *
-   *   call  · marbles, snap by snap, priced on the tile before the tap
-   *   week  · marbles, one card for the week, priced off the posted line
-   *   pool  · POINTS, your group, nothing staked and nothing to spend
+   *   marbles · you stake marbles at a price. Live snap-by-snap, or a week's
+   *             card. Nothing purchasable, nothing redeemable, one bank that
+   *             refills every game
+   *   pool    · POINTS, your group, nothing staked and nothing to spend
    *
-   * Calling and the week's card are one product at two speeds and they share a
-   * balance. The office pool shares nothing with either — not the score, not the
-   * balance, not the board — which is why it is a separate section rather than a
-   * third tab on the same thing. That separation is the legal position, so the
-   * fork is where it gets stated, once, in the words somebody reads first.
+   * 🔴 THE TITLES ARE MINE TO PICK AND THEY ARE NOT "SIMULATED BETTING".
+   * "Simulated betting" is an accurate description and a terrible name: it
+   * volunteers the word this product spends the rest of its life not being, and
+   * it is the first word a reviewer reads. "Play the marbles" says the same
+   * thing using the app's own noun — the one that is deliberately not "credits",
+   * for the same reason.
    *
-   * Ordered by speed within the marbles pair, with the pool last. The pool is
-   * last because it is the one somebody arrives at through an invite rather than
-   * through this card. */
+   * "Weekly group pools" becomes "Run a pool", because the person on this screen
+   * is starting one rather than browsing a category. */
   const row = el('div', 'lg-mode-row');
   const opts = [
-    { id: 'call', h: 'Call the game', b: 'Live, snap by snap. You are 45 seconds behind on purpose.' },
-    { id: 'week', h: "The week's card", b: 'Stake marbles on the week, priced off the real line.' },
-    { id: 'pool', h: 'Office pool', b: 'Your group, scored in points. Nothing staked.' }
+    { id: 'marbles', h: 'Play the marbles', b: 'Stake marbles at a price you see first. Live, or a card for the week.' },
+    { id: 'pool', h: 'Run a pool', b: 'Your group, a week at a time, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');
@@ -944,20 +1045,23 @@ function modeCard(wrap, compact) {
     if (compact && o.id === S.mode) b.classList.add('is-on');
     b.onclick = () => {
       S.mode = o.id; store.set('mode', o.id);
-      /* Both pick-a-week modes land on the slate; the slate reads the mode and
-       * decides whether a row carries points or a price. */
-      if ((o.id === 'pool' || o.id === 'week') && S.sport) { location.hash = '#/slate'; return; }
-      /* 🔴 ON HOME, "Call the game" IS THE DOOR. Repainting Home in place left
-       * somebody who had just said what they wanted still standing on the
-       * landing — the third version of the same mistake. */
-      if (o.id === 'call' && S.isHome) { location.hash = '#/live'; return; }
+      /* 🔴 THE FIRST CARD NEVER NAVIGATES. It sets what you are playing; the
+       * SPORT card below it is the next question, and the speed card after that.
+       * Sending somebody straight to a screen here skipped both.
+       *
+       * The one exception is the pool with a sport already chosen — there is no
+       * third question on that side, so the slate IS the next screen. */
+      if (o.id === 'pool' && S.sport) { location.hash = '#/slate'; return; }
       paint(wrap);
     };
     row.appendChild(b);
   }
   c.appendChild(row);
 
-  /* The sport, as the second row of the same card. */
+  /* 🔴 THE SPORT IS THE SECOND CARD, and it is drawn whether or not the first
+   * one has been answered — Jason, 2026-09-09: "Then ncaa or nfl… on the next
+   * card." Kept inside the same hub because two taps that belong together read
+   * as one decision; the rows are what separate them, not two screens. */
   if (compact) {
     const sr = el('div', 'lg-mode-row lg-sportrow');
     for (const id of ['nfl', 'college-football']) {
@@ -971,14 +1075,40 @@ function modeCard(wrap, compact) {
       b.onclick = () => {
         if (id === S.sport) return;
         S.sport = id; store.set('sport', id);
+        /* The constant paints now; the slate lookup corrects it, same as mount. */
         S.key = GAME_FOR[id]; S.raw = null; S.board = []; S.noGame = false;
-        paint(wrap); poll(wrap);
+        paint(wrap); poll(wrap); refreshKey(wrap, id);
       };
       /* On Home the mode buttons navigate rather than gate: "Call the game" is a
        * door, not a setting. */
       sr.appendChild(b);
     }
     c.appendChild(sr);
+
+    /* 🔴 THE THIRD ROW EXISTS ONLY ON THE MARBLES SIDE, because only that side
+     * has two speeds. The pool is a week by definition, so asking it "live or
+     * weekly?" would be a question with one answer — the kind of fork that made
+     * the first card three-wide and wrong.
+     *
+     * These two DO navigate. By this row every question has been answered, so a
+     * tap here is a door rather than a setting, and repainting the hub in place
+     * would leave somebody who has said everything still standing on the
+     * landing. That mistake has now been made three times in this file. */
+    if (S.mode === 'marbles' && S.sport) {
+      const gr = el('div', 'lg-mode-row lg-gorow');
+      const go = [
+        { h: 'Call it live', b: 'Snap by snap, 45s behind', to: '#/live' },
+        { h: "The week's card", b: 'Every game, priced', to: '#/slate' }
+      ];
+      for (const o of go) {
+        const b = el('button', 'lg-mode lg-go');
+        b.appendChild(el('span', 'lg-mode-h', o.h));
+        b.appendChild(el('span', 'lg-mode-b', o.b));
+        b.onclick = () => { location.hash = o.to; };
+        gr.appendChild(b);
+      }
+      c.appendChild(gr);
+    }
   }
   return c;
 }
@@ -1574,16 +1704,23 @@ const CSS = `
    are in is marked so the card reads as WHERE YOU ARE rather than as a question
    being asked again. */
 .lg-sport.is-compact { padding: 12px; gap: 6px; }
-/* 🔴 THREE MODES, AND THE SPORT ROW BELOW IT IS STILL TWO. `.lg-mode-row` is on
-   both, so a bare 1fr 1fr sized the mode strip AND the sport strip together and
-   a third mode wrapped into a 2+1 orphan. The mode row is scoped by :not() so
-   the two grids can disagree, which they must. */
-.lg-sport.is-compact .lg-mode-row:not(.lg-sportrow) { grid-template-columns: repeat(3, 1fr); }
-.lg-sport.is-compact .lg-sportrow { grid-template-columns: 1fr 1fr; }
-/* At 393px three headings share ~110px each - the type steps down rather than
-   the words being cut, and it balances the strip against the sport row's two. */
-.lg-sport.is-compact .lg-mode-row:not(.lg-sportrow) .lg-mode-h { font-size: var(--t-micro); }
-.lg-sport.is-compact .lg-mode-row:not(.lg-sportrow) .lg-mode { padding: 10px 8px; text-align: center; }
+/* THE MODE ROW AND THE SPORT ROW SHARE A CLASS, so a bare 1fr 1fr sized both and
+   a third mode wrapped into a 2+1 orphan. The mode row is scoped by :not() so the
+   two grids can disagree, which they must.
+
+   NO BACKTICKS IN THIS COMMENT, and that is not a style note. The first version
+   quoted the class name in backticks, inside a template literal, and the
+   backtick CLOSED THE STRING. What followed parsed as arithmetic on undefined
+   identifiers, so node --check passed and every screen died at runtime on
+   "mode is not defined". Second time tonight. See the parse guard. */
+/* Every row on the hub is two across now that the first card is a pair. The
+   third row only appears on the marbles side, and it is a pair too. */
+.lg-sport.is-compact .lg-mode-row { grid-template-columns: 1fr 1fr; }
+/* The GO row is the only place on the hub that navigates, so it carries its
+   subtitle where the rows above it hide theirs - a door says where it leads. */
+.lg-sport.is-compact .lg-gorow .lg-mode-b { display: block; }
+.lg-gorow .lg-mode { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.lg-gorow .lg-mode-h { color: var(--accent); }
 .lg-sport.is-compact .lg-mode { padding: 10px 12px; gap: 1px; }
 .lg-sport.is-compact .lg-mode-h { font-size: var(--t-body); }
 .lg-sport.is-compact .lg-mode-b { display: none; }

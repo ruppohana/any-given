@@ -424,8 +424,16 @@ test('🔴 the live board sorts on profit, and breaks ties on how much was resol
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8');
 
-  const m = src.match(/\.sort\((\(a, b\) => [^;]+)\)/);
-  assert.ok(m, 'the board must still sort — if this match fails, read the file before trusting it');
+  /* 🔴 MATCHED BY NAME, NOT BY POSITION, since 2026-09-09. This used to take the
+   * FIRST `.sort((a, b) => ...)` in the file and the warning above it was
+   * prophetic: a slate lookup added an earlier sort, and this test began
+   * asserting the profit-ranking doctrine against a comparator that orders games
+   * by kickoff time. It failed loudly, which is the good outcome - but it could
+   * as easily have kept passing against the wrong function.
+   *
+   * The screen now declares `const BOARD_ORDER = ...` and this reads that. */
+  const m = src.match(/const BOARD_ORDER = (\(a, b\) => [^;]+);/);
+  assert.ok(m, 'BOARD_ORDER is gone from the screen - read the file before trusting this test');
   const cmp = new Function('return ' + m[1])();
 
   const row = (name, profit, won, lost) => ({ name, profit, won, lost });

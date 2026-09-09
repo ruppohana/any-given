@@ -533,3 +533,54 @@ test('🔴 every screen module parses — a blank page no unit test can see', as
   }
   console.log('    ' + files.length + ' screen modules parse');
 });
+
+test('🔴 no screen has a stray backtick inside its CSS template literal', async () => {
+  /* WHY A SECOND GUARD, when the parse check above exists and was written for
+   * exactly this bug: the parse check CANNOT SEE THIS CASE, and 2026-09-09
+   * proved it in production.
+   *
+   * A CSS comment quoted a class name in backticks:
+   *
+   *     const CSS = `
+   *     ... a bare 1fr 1fr sized both ... `.lg-mode-row` is on both ...
+   *
+   * The first backtick closes the template. What follows is
+   * `<string>.lg - mode - row`, which is a property access and two
+   * subtractions on undefined identifiers. That is PERFECTLY VALID SYNTAX.
+   * node --check passed, the deploy went out, and every screen in the app died
+   * on "mode is not defined" - a blank page behind a healthy-looking nav.
+   *
+   * So the parse guard catches a backtick that breaks the grammar, and this one
+   * catches a backtick that does not. Prose about CSS goes in plain quotes.
+   */
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../public/screens/', import.meta.url);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.screen.js'));
+
+  let checked = 0;
+  for (const f of files) {
+    const src = readFileSync(new URL(f, dir), 'utf8');
+    /* Find each `const <NAME>CSS = ` opener and read to the NEXT backtick. If
+     * that span contains a CSS brace or a selector, the string closed early. */
+    const re = /const\s+\w*CSS\w*\s*=\s*`/g;
+    let m;
+    while ((m = re.exec(src))) {
+      checked++;
+      const rest = src.slice(m.index + m[0].length);
+      const end = rest.indexOf('`');
+      assert.notEqual(end, -1, f + ': a CSS template literal is never closed');
+      const body = rest.slice(0, end);
+      const after = rest.slice(end + 1, end + 120);
+      /* The real tell: what comes immediately after the closing backtick. A
+       * genuine close is followed by a semicolon or a newline and then code. An
+       * accidental one is followed by more CSS or more prose. */
+      assert.ok(!/^\s*[.#:]|^\s*[a-z-]+\s*[:{]/i.test(after),
+        f + ': a backtick inside the CSS closed the string early, and what follows'
+          + ' still looks like CSS: ' + JSON.stringify(after.slice(0, 60)));
+      assert.ok(body.includes('{') && body.includes('}'),
+        f + ': the CSS literal ended before any rule - a stray backtick closed it');
+    }
+  }
+  assert.ok(checked > 0, 'no CSS literals found - this guard is checking nothing');
+  console.log('    ' + checked + ' CSS template literals close where they should');
+});

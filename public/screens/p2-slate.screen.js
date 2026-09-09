@@ -306,7 +306,15 @@ export function chosenSport() {
 export function chosenMode() {
   try {
     const v = JSON.parse(localStorage.getItem('ag.mode'));
-    return v === 'week' ? 'week' : 'pool';
+    /* 🔴 THE SLATE IN MARBLES MODE *IS* THE WEEK'S CARD. There is no third
+     * value: the first card asks marbles-or-pool, and a marbles player who
+     * reaches this screen has reached the weekly half of that product by
+     * definition — the live half is a different screen entirely. Reading a
+     * separate `ag.speed` here would let the two disagree. */
+    /* 'call' and 'week' are the retired three-way ids; a phone still holding
+     * one of them is a marbles player, and reading them as 'pool' would show a
+     * marbles player a points screen. */
+    return (v === 'marbles' || v === 'call' || v === 'week') ? 'week' : 'pool';
   } catch { return 'pool'; }
 }
 
