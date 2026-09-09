@@ -396,6 +396,17 @@ function chosenSport() {
  * screen draw its own `none-picked` state, which already exists and already
  * says the true thing.
  */
+/* Reads what the slate writes. Same key, same shape - the two screens share one
+ * store rather than each keeping their own idea of what you picked, which is how
+ * two tabs end up disagreeing about your own card. */
+function loadPicks(sport, week) {
+  try {
+    const raw = localStorage.getItem('ag.picks.' + sport + '.' + week);
+    const o = raw ? JSON.parse(raw) : null;
+    return (o && typeof o === 'object') ? o : {};
+  } catch { return {}; }
+}
+
 async function nflWeek(byId) {
   try {
     const res = await fetch('/api/state/slate:nfl:2026:1');
@@ -426,7 +437,29 @@ export async function previewData(fixtures, state) {
   const all = Object.values(db);
 
   if (chosenSport() === 'nfl') {
-    const specs = (await nflWeek(byId)) || [];
+    const all = (await nflWeek(byId)) || [];
+    /* 🔴 THIS SCREEN IS *YOUR CARD*, NOT THE WEEK. Jason, 2026-09-09: "What is
+     * the difference between slate and picks?"
+     *
+     * Until now, none worth having - both tabs listed the same sixteen games and
+     * the second one added nothing, which is why the question had to be asked.
+     * Two nav destinations showing one thing is not a navigation problem, it is
+     * a product with a redundant half.
+     *
+     * The difference is now real and it is the obvious one:
+     *   SLATE  - every game on the week. Where you choose.
+     *   PICKS  - only the ones you chose, and how they are doing.
+     *
+     * So this reads the SAME stored picks the slate writes, and lists only the
+     * games with a side on them. With nothing picked it draws its `none-picked`
+     * state, which is a true and useful screen: you have not started. */
+    const saved = loadPicks('nfl', 1);
+    const specs = all.filter((g) => saved[g.id] && saved[g.id].side);
+    const picks = {};
+    for (const g of specs) {
+      picks[g.id] = { gameId: g.id, side: saved[g.id].side, state: 'unpicked',
+                      lockedAt: g.kickoffUtc, crowd: null };
+    }
     return {
       sport: 'nfl',
       pool: {
@@ -435,8 +468,10 @@ export async function previewData(fixtures, state) {
         ats: false, season: 2026, scopeLockedAt: null, memberCount: 0
       },
       week: 1,
-      slateSize: specs.length,
-      specs, games: specs, picks: {}, legs: [],
+      /* The progress line counts against the WHOLE week, not against what has
+       * been picked - "3 of 16" is the useful sentence and "3 of 3" is not. */
+      slateSize: all.length,
+      specs, games: specs, picks, legs: [],
       userId: 'u_self',
       asOf: Date.now(),
       captured: specs.length,

@@ -353,6 +353,89 @@ export function probFromSpread(spread, side, sport) {
   return Math.min(0.90, Math.max(0.16, p));
 }
 
+/* 🔴 A BLOWOUT IS A GAME THE MODEL REFUSES TO PRICE. Jason, 2026-09-09: "Grey
+ * the out and put, blowout."
+ *
+ * When the spread pushes one side past the 0.90 clamp the two prices stop
+ * carrying information: every such game reads 6.00x against 1.11x, whether the
+ * line is 22 points or 56. On the college slate that is most of the card -
+ * Villanova at Louisville, Norfolk St at Virginia, Howard at Indiana, Florida
+ * A&M at Miami - FCS visitors against FBS hosts, and the model is right about
+ * every one of them.
+ *
+ * 🔴 GREYED AND LABELLED, NOT HIDDEN. Dropping the rows would have been the
+ * tidier screen and the wrong one: the games are really on the slate, somebody
+ * scanning for them would find a hole, and a card that silently omits fixtures
+ * is a card you cannot trust to be the week. Showing them as unplayable says
+ * the true thing - these are on, and there is no question here worth staking a
+ * marble on.
+ *
+ * 🔴 THE OFFICE POOL IS UNTOUCHED. Picking a blowout there is a legitimate free
+ * point, which is exactly what a straight-up pool is for. This is a statement
+ * about PRICING, so it only applies where there is a price.
+ */
+/* 🔴 PICKS SURVIVE A RELOAD. Jason, 2026-09-09: "My picks did not stick."
+ *
+ * They lived in a plain object built by previewData and thrown away on the next
+ * render - fine for a designed preview that ships its own picks, useless the
+ * moment somebody makes a real one. Closing the tab, or leaving for Home and
+ * coming back, lost the lot.
+ *
+ * 🔴 SCOPED BY SPORT AND WEEK, because the two slates are different cards and a
+ * game id is only unique within one. A single bucket would let last week's picks
+ * reappear on this week's rows, which is worse than losing them: it is the app
+ * telling you that you picked something you did not.
+ *
+ * 🔴 STILL NOT A SERVER. There is no pool backend yet, so this is a per-device
+ * memory and nothing more - not shared, not authoritative, and to be REPLACED by
+ * real storage rather than extended. Said here so the next session does not
+ * mistake it for the pool.
+ */
+function picksKey(sport, week) { return 'ag.picks.' + sport + '.' + week; }
+
+/* Stored picks carry only a side. Everything else a row needs is rebuilt against
+ * the games actually on the card, so a pick for a game that has left the slate
+ * is dropped rather than carried as a ghost. */
+function hydrate(stored, games) {
+  const out = {};
+  for (const g of games) {
+    const side = stored[g.id] && stored[g.id].side;
+    out[g.id] = { gameId: g.id, side: side || null, state: 'unpicked',
+                  lockedAt: g.kickoffUtc, crowd: null };
+  }
+  return out;
+}
+
+function loadPicks(sport, week) {
+  try {
+    const raw = localStorage.getItem(picksKey(sport, week));
+    const o = raw ? JSON.parse(raw) : null;
+    return (o && typeof o === 'object') ? o : {};
+  } catch { return {}; }
+}
+
+function savePicks(sport, week, picks) {
+  try {
+    /* Only the side is persisted. The crowd is derived and the state is computed
+     * from the clock, so a stored copy of either could contradict the live one -
+     * and a stored `state` would survive a kickoff it should not. */
+    const out = {};
+    for (const k of Object.keys(picks || {})) {
+      if (picks[k] && picks[k].side) out[k] = { side: picks[k].side };
+    }
+    localStorage.setItem(picksKey(sport, week), JSON.stringify(out));
+  } catch { /* a private window is allowed to forget */ }
+}
+
+export const BLOWOUT_AT = 1.12;
+
+export function isBlowout(game, sport) {
+  if (typeof game.spread !== 'number') return false;
+  const h = priceFromSpread(game.spread, 'home', sport);
+  const a = priceFromSpread(game.spread, 'away', sport);
+  return (h != null && h <= BLOWOUT_AT) || (a != null && a <= BLOWOUT_AT);
+}
+
 /** `stake / p`, capped at 6x - the doctrine payout, as a multiple. */
 export function priceFromSpread(spread, side, sport) {
   const p = probFromSpread(spread, side, sport);
@@ -397,6 +480,7 @@ export async function previewData(fixtures, state) {
    * captured games and the generated week below. */
   const sport = chosenSport();
   const mode = chosenMode();
+  const savedPicks = loadPicks(sport, WEEK[sport] || 1);
   const live = await realSlate(byId, sport);
 
   const real = [];
@@ -441,7 +525,8 @@ export async function previewData(fixtures, state) {
        * designed preview sits in the middle of a real week. The NFL route is
        * reading a live feed, so its clock is the actual wall clock. Reusing the
        * anchored one would date a real slate to a fixture's afternoon. */
-      now: Date.now(), sport: 'nfl', mode, games: nfl, picks: {},
+      now: Date.now(), sport: 'nfl', mode, games: nfl, week: WEEK.nfl,
+      picks: hydrate(loadPicks('nfl', WEEK.nfl), nfl),
       /* No pool exists yet in either sport, and an NFL slate must not inherit
        * the college mock's Big Ten scope on its way past. */
       pool: {
@@ -545,6 +630,18 @@ export async function previewData(fixtures, state) {
     };
   }
 
+  /* 🔴 A REAL SLATE'S PICKS COME FROM STORAGE, and this needs its own statement
+   * rather than a line inside the loop above - which is gated on `!live` and so
+   * never runs on a real slate at all. The first version of this fix put the
+   * restore inside that loop, wrote the stored pick correctly on every tap, and
+   * read it back never. It looked like a persistence bug and was a control-flow
+   * one: dead code in a branch that cannot execute.
+   *
+   * Caught by tapping a row on the deployed site, reloading, and finding the
+   * value in localStorage and no highlight on the row - which is exactly the
+   * check that the passing test suite could not make. */
+  if (live) Object.assign(picks, hydrate(savedPicks, games));
+
 
   /* THE CLOCK. `ready-short` sits after the three real finals. `ready` sits at 10:45 on
    * the Thursday - three of the six color probes have kicked off and three have not, so
@@ -600,6 +697,7 @@ export async function previewData(fixtures, state) {
     now,
     sport,
     mode,
+    week: WEEK[sport] || 1,
     /* 🔴 A REAL SLATE CANNOT WEAR AN INVENTED POOL. Jason: "From the nfl page,
      * the pool goes to the ncaa page where Louisville is already selected...
      * It also says big 10."
@@ -793,7 +891,10 @@ function zone(ctx, game, side) {
 
   if (mine) b.dataset.pick = 'on';
 
-  const open = st === 'unpicked' || st === 'picked';
+  /* A blowout is not pickable on the priced card - the row is greyed and the
+   * word says why, so a disabled button here is legible rather than mysterious. */
+  const blown = ctx.mode === 'week' && isBlowout(game, ctx.sport);
+  const open = (st === 'unpicked' || st === 'picked') && !blown;
   b.disabled = !open;
   b.setAttribute('aria-pressed', String(pick && pick.side === side));
   b.setAttribute('aria-label', (team.name || team.short) + (open ? '' : ' \u2013 locked'));
@@ -805,6 +906,18 @@ function zone(ctx, game, side) {
  *  time is REPLACED IN PLACE by the live state. Same slot, no badge, no extra column. */
 function center(ctx, game) {
   const c = el('div', 'p2-center num');
+  /* Before every other state EXCEPT the ones that describe a game already
+   * under way. A blowout that has kicked off is locked like any other row, and
+   * a final is a final - the label belongs to the window where somebody might
+   * otherwise be trying to pick it. */
+  if (ctx.mode === 'week' && game.status === 'scheduled' && ctx.now < game.kickoffUtc
+      && isBlowout(game, ctx.sport)) {
+    c.dataset.kind = 'blowout';
+    c.appendChild(el('span', 'p2-c-lo', 'Blowout'));
+    c.appendChild(el('span', 'p2-c-t', timeLabel(game.kickoffUtc)));
+    c.setAttribute('title', 'One side is over 90% - not a question worth a marble');
+    return c;
+  }
   if (game.status === 'void') {
     c.dataset.kind = 'void';
     c.appendChild(el('span', 'p2-c-lo', 'Void'));
@@ -842,6 +955,8 @@ function row(ctx, game) {
   const r = el('div', 'p2-row');
   r.dataset.state = pickStateOf(game, ctx.picks[game.id], ctx.now);
   r.dataset.gameId = game.id;
+  /* Only on the priced card. In the pool this row is an ordinary pick. */
+  if (ctx.mode === 'week' && isBlowout(game, ctx.sport)) r.dataset.blowout = 'true';
   r.append(zone(ctx, game, 'away'), center(ctx, game), zone(ctx, game, 'home'));
   return r;
 }
@@ -901,6 +1016,7 @@ export function render(root, data, state) {
      * price model is reading. Both travel in ctx so row() and zone() never touch
      * localStorage - render() stays pure DOM over its argument. */
     mode: data.mode || 'pool', sport: data.sport || 'college-football',
+    week: data.week || 1,
     onPick: (gameId, side) => {
       /* 🔴 CREATE THE ROW IF IT IS NOT THERE. Jason, 2026-09-09: "This weeks
        * card does not allow me to pick."
@@ -918,6 +1034,10 @@ export function render(root, data, state) {
        * preview data hid it. */
       const p = (ctx.picks[gameId] || (ctx.picks[gameId] = { side: null, crowd: null }));
       p.side = p.side === side ? null : side;
+      /* Written on every tap rather than on some later commit. There is no
+       * "save" on this screen and there should not be one - the tap IS the
+       * commit, so anything that does not survive it never happened. */
+      savePicks(ctx.sport, ctx.week, ctx.picks);
       /* The crowd arrives WITH the pick and leaves with it. It is not cached from a
        * previous tap, because the rule is about what you see before you commit. */
       p.crowd = p.side ? (p.crowd || seedCrowd(gameId, ctx.pool.memberCount)) : null;

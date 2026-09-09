@@ -443,3 +443,51 @@ test('no teamChip is created without a league', async () => {
   }
   assert.deepEqual(bad, [], 'these teamChip calls will resolve logos against the wrong league');
 });
+
+/* 🔴 A PICK SURVIVES A RELOAD, ON BOTH SPORTS. Added 2026-09-09 after "My picks
+ * did not stick" - and then after the FIRST fix for it did not work either.
+ *
+ * The first attempt put the restore inside the loop that seeds preview picks,
+ * which is gated on `!live` and therefore never runs on a real slate. The write
+ * was correct, the read was dead code in an unreachable branch, and it presented
+ * as a storage bug. Only tapping a row on the deployed site, reloading, and
+ * finding the value in localStorage with no highlight on the row told the
+ * difference - which is the kind of check a green suite cannot make for you.
+ *
+ * So this drives previewData twice with a stub localStorage: once to establish
+ * the shape, once with a pick already in the store. */
+test('a stored pick is restored onto a real slate', async () => {
+  const realFetch = globalThis.fetch;
+  const realLS = globalThis.localStorage;
+  const games = [
+    { id: 'g1', kickoffUtc: Date.now() + 864e5, status: 'scheduled',
+      homeTeamId: '26', awayTeamId: '17', spread: -3,
+      teams: [{ id: '26', abbrev: 'SEA', name: 'Seahawks', short: 'Seahawks', primary: '002244' },
+              { id: '17', abbrev: 'NE', name: 'Patriots', short: 'Patriots', primary: '002a5c' }] }
+  ];
+  try {
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ games }) });
+    const store = {
+      'ag.sport': '"nfl"', 'ag.mode': '"marbles"',
+      'ag.picks.nfl.1': JSON.stringify({ g1: { side: 'away' } })
+    };
+    globalThis.localStorage = {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = v; }
+    };
+    const fixtures = { teams: { teams: {} }, games: [], load: async () => { throw new Error('none'); } };
+
+    const d = await mod.previewData(fixtures, 'ready');
+    assert.equal(d.picks.g1.side, 'away', 'the stored pick was not restored');
+    assert.equal(mod.countPicked(d.games, d.picks), 1, 'progress must count a restored pick');
+
+    /* A pick for a game no longer on the card is dropped, never carried. */
+    store['ag.picks.nfl.1'] = JSON.stringify({ gone: { side: 'home' }, g1: { side: 'home' } });
+    const d2 = await mod.previewData(fixtures, 'ready');
+    assert.equal(d2.picks.g1.side, 'home');
+    assert.ok(!('gone' in d2.picks), 'a pick for a game off the slate must not survive');
+  } finally {
+    globalThis.fetch = realFetch;
+    if (realLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = realLS;
+  }
+});

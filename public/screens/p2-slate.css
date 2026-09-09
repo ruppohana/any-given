@@ -28,8 +28,21 @@
 
 /* ---- CBS's one element doing column labels and progress at once. Sticky: progress is
  * visible without leaving the screen, which is the whole requirement. */
+/* 🔴 IT STICKS FLUSH TO THE TOP, NOT INSIDE THE PADDING. Jason, 2026-09-09:
+   "The bookmark settles to far down."
+
+   `.ag-main` carries 10px of padding on a phone, so a sticky child pinned at
+   top:0 settles with that padding above it - a dead strip of background between
+   the top of the screen and the bar, with rows scrolling up into it. The bar is
+   the one element that has to touch the edge, because its whole job is to still
+   be there when everything else has gone.
+
+   Negative margins pull it out through the container's padding and the padding
+   is given back inside, so the bar spans edge to edge while its text stays
+   aligned with the rows below. */
 .scr-p2-slate .p2-bar {
   position: sticky; top: 0; z-index: 4;
+  margin-inline: -10px; padding-inline: 10px;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
   min-height: 38px; background: var(--bg);
   border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
@@ -49,10 +62,13 @@
  * half fixtures a screen for it. */
 .scr-p2-slate .p2-list { display: block; }
 
+/* The day header stacks directly under the bar, and takes the same treatment so
+   the two read as one pinned block rather than as a stripe inside a margin. */
 .scr-p2-slate .p2-grp {
   position: sticky; top: 38px; z-index: 3;
+  margin-inline: -10px; padding-inline: 14px;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  min-height: 30px; padding: 0 4px;
+  min-height: 30px;
   background: var(--bg); border-bottom: 1px solid var(--line);
 }
 .scr-p2-slate .p2-grp-d { font-size: var(--t-micro); font-weight: 700; color: var(--fg); }
@@ -191,3 +207,23 @@
    removed, because a row that vanishes reads as a missing game. */
 .p2-price { font-weight: 800; color: var(--accent); }
 .p2-price.is-thin { color: var(--dim); font-weight: 700; }
+
+/* 🔴 A BLOWOUT IS GREYED AND NAMED, NOT HIDDEN. Jason, 2026-09-09: "Grey the out
+   and put, blowout."
+
+   The row stays on the card because the game is really on the slate - a card
+   that silently omits fixtures is one you cannot trust to be the week. It is
+   dimmed and unpickable, and the middle column says the word, so an unusable
+   row is legible rather than mysterious.
+
+   Applies only where there is a price. In the group pool a blowout is an
+   ordinary pick, and a free point is what a straight-up pool is for. */
+.p2-row[data-blowout="true"] { opacity: .45; }
+.p2-row[data-blowout="true"] .p2-zone { cursor: default; }
+/* The price is the thing that is not on offer, so it loses the accent and stops
+   advertising a 6.00x nobody may take. */
+.p2-row[data-blowout="true"] .p2-price { color: var(--dim); font-weight: 700; }
+.p2-center[data-kind="blowout"] { gap: 1px; }
+.p2-center[data-kind="blowout"] .p2-c-lo { font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--dim); }
+.p2-c-t { font-size: var(--t-micro); color: var(--dim); }
