@@ -139,10 +139,42 @@ export function stripTypes(src) {
 }
 
 let BOARD_MODULE = null;
+
+/**
+ * 🔴 THE BUILT .js FIRST, THE STRIPPED .ts ONLY AS A FALLBACK.
+ *
+ * This fetched `/src/lib/board.ts` unconditionally, and it was BROKEN ON EVERY
+ * DEPLOY — found 2026-09-08 by walking all twenty screens on the live domain
+ * rather than on the preview server. `dist/` holds `board.js` and no `.ts` at
+ * all, by design: `build-static.mjs` emits JavaScript because no host strips
+ * types at request time. So the fetch 404'd, `stripTypes` was handed the 404
+ * body, the blob imported as an empty module, and the screen died on
+ * `startFor is not a function`.
+ *
+ * 🔴 AND IT FAILED IN THE ONE PLACE NOBODY LOOKS. The preview server DOES serve
+ * `.ts` type-stripped, so this path is perfect on every machine it was developed
+ * on and dead everywhere it actually runs. 551 tests never saw it either — no
+ * test imports a screen. The bug was visible only from the deployed URL.
+ *
+ * Both are kept because both are real: production has the built file, preview
+ * has the source. Trying the built one first means the deployed app never
+ * depends on a strip running in a browser.
+ */
 async function loadBoard() {
   if (BOARD_MODULE) return BOARD_MODULE;
-  const src = await (await fetch('/src/lib/board.ts')).text();
-  const url = URL.createObjectURL(new Blob([stripTypes(src)], { type: 'text/javascript' }));
+
+  /* The built module, as a normal import. Nothing to strip, nothing to blob. */
+  try {
+    BOARD_MODULE = await import('/src/lib/board.js');
+    if (typeof BOARD_MODULE.startFor === 'function') return BOARD_MODULE;
+  } catch { /* not built - we are on the preview server */ }
+
+  const res = await fetch('/src/lib/board.ts');
+  /* 🔴 A 404 BODY IS NOT SOURCE. Handing it to stripTypes produced an empty
+   * module and an error blaming the export rather than the fetch, which is what
+   * made this cost a walk of every screen to find. */
+  if (!res.ok) throw new Error(`board.ts ${res.status} and board.js is not built`);
+  const url = URL.createObjectURL(new Blob([stripTypes(await res.text())], { type: 'text/javascript' }));
   BOARD_MODULE = await import(url);
   return BOARD_MODULE;
 }

@@ -145,7 +145,19 @@ export function teamChip(team, opts) {
   const bAdj = adjacentTo ? normalizeColor(adjacentTo.primary) : null;
   if (tooClose(a, bAdj)) wrap.dataset.adjacentClash = 'true';
 
-  const url = marksOn() ? logoUrl(team, opts.league) : null;
+  /* 🔴 `drawn: true` FORCES THE DRAWN MARK, whatever the marks setting says.
+   *
+   * It exists because S4 nests this chip inside its own <svg> share card, and an
+   * <img> CANNOT live in an SVG — `wrap.querySelector('svg')` came back null and
+   * the whole screen died on "Cannot read properties of null". Found 2026-09-08
+   * by walking every screen on the deployed domain; it had been broken since the
+   * logo reversal and only ever with marks ON, which is why nothing caught it.
+   *
+   * And it is the right thing there independently of the crash: a share card is
+   * an image somebody screenshots and sends. A CDN logo inside it is a network
+   * dependency in a picture, and a licensing question in something designed to
+   * travel. The drawn chip is self-contained. */
+  const url = (!opts.drawn && marksOn()) ? logoUrl(team, opts.league) : null;
   if (url) {
     const img = document.createElement('img');
     img.className = 'tchip-logo';

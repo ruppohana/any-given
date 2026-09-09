@@ -483,7 +483,12 @@ function zone(ctx, game, side) {
    *
    * It also closes a hole the old rule had: the split used to be purchasable with a
    * tap - pick the game, read the number, change your pick. */
-  const locked = !!(game && game.kickoffUtc != null && now >= game.kickoffUtc);
+  /* 🔴 ctx.now, NOT now. A bare `now` here threw "now is not defined" and the
+   * error boundary swallowed the rest of the slate — the pool header and the
+   * first row drew, then nothing. Found 2026-09-08 by walking every screen on
+   * the deployed domain; two lines below this one already say `ctx.now`, which
+   * is what makes the typo invisible on a read. */
+  const locked = !!(game && game.kickoffUtc != null && ctx.now >= game.kickoffUtc);
   if (locked && pick && pick.crowd) {
     const c = el('span', 'p2-crowd num', crowdLabel(pick.crowd[side], pick.crowd.n, true));
     if (side === pick.side) c.dataset.mine = 'true';

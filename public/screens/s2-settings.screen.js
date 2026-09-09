@@ -550,7 +550,16 @@ function alertsSection(data) {
  *
  * Deleting it from here would be a change to the legal position, not an edit. */
 function balanceSection() {
-  const sec = section('The balance');
+  /* 🔴 `card`, not `section`. This called a function that does not exist and
+   * threw "section is not defined", and the error boundary ate the rest of the
+   * screen — including, of all things, THE SENTENCE THIS FILE EXISTS TO KEEP ON
+   * SCREEN: that Marbles cannot be bought. The comment directly above says
+   * deleting it would be a change to the legal position rather than an edit; a
+   * typo was deleting it on every load and nobody had looked.
+   *
+   * Found 2026-09-08 by walking every screen on the deployed domain. No test
+   * caught it because no test imports a screen. */
+  const sec = card('The balance');
   const row = el('div', 's2-row');
   row.appendChild(el('div', 's2-row-label', 'Marbles'));
   const v = el('div', 's2-row-value');

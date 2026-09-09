@@ -411,8 +411,12 @@ export function wrapText(str, maxChars) {
  *  a team with no color and the adjacency check - none of that is re-implemented
  *  here, which is the whole reason the component is shared. */
 function chipInto(g, team, x, y, size, adjacentTo) {
-  const wrap = teamChip(team, { withAbbrev: false, size: size, adjacentTo: adjacentTo });
+  /* `drawn: true` because this card IS an <svg> and an <img> cannot be nested in
+   * one — see the note in team-chip.js. Without it the query below returns null
+   * whenever marks are on, which is how this screen died on the live domain. */
+  const wrap = teamChip(team, { withAbbrev: false, size: size, adjacentTo: adjacentTo, drawn: true });
   const mark = wrap.querySelector('svg');
+  if (!mark) throw new Error('teamChip returned no <svg> — the share card cannot nest anything else');
   applyTeamVars(mark, team);
   mark.setAttribute('x', String(x));
   mark.setAttribute('y', String(y));
