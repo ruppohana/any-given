@@ -258,11 +258,55 @@ function fromFixture(raw, teamsById) {
   });
 }
 
+/**
+ * 🔴 THE REAL SLATE, OFF THE FEED. Jason: "Fix the stale ncaa cards, put in the
+ * real data... Put in the real data and schedule?"
+ *
+ * Everything below this used real TEAM IDENTITIES and invented the rest — the
+ * matchups, the kickoffs, the spreads, the finals. That is defensible for a
+ * design surface and indefensible in a product, because a fabricated final score
+ * set in the same type as a real one gives the reader no way to tell.
+ *
+ * `tools/poll-slate.mjs` reads the week off ESPN's core API on the host and
+ * pushes it to KV, exactly as the game poller does — real ids, real kickoffs,
+ * real posted lines with the book named, real scores as they land. This reads
+ * that.
+ *
+ * 🔴 AND A GAME WITH NO POSTED LINE STAYS null. A pool "against the spread" with
+ * an invented number is worse than one with no number: it looks authoritative
+ * and it is fiction.
+ */
+async function realSlate(byId) {
+  const season = 2026, week = 2;
+  try {
+    const res = await fetch(`/api/state/slate:college-football:${season}:${week}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!Array.isArray(d.games) || !d.games.length) return null;
+    return d.games.map((g) => {
+      /* Identity travels WITH the game, because the shipped team file is a
+       * snapshot and the feed is not. Fall back to it only for what is missing. */
+      for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
+      return slateGame({
+        id: g.id, kickoffUtc: g.kickoffUtc,
+        home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
+        spread: typeof g.spread === 'number' ? g.spread : null,
+        status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
+        homeScore: g.homeScore, awayScore: g.awayScore
+      });
+    }).filter((g) => g.home && g.away);
+  } catch { return null; }
+}
+
 export async function previewData(fixtures, state) {
   const db = fixtures.teams.teams;
   const byId = {};
   for (const k of Object.keys(db)) byId[db[k].id] = db[k];
   const all = Object.values(db);
+
+  /* The feed first. Only if it has nothing to say do we fall back to the
+   * captured games and the generated week below. */
+  const live = await realSlate(byId);
 
   const real = [];
   for (const n of fixtures.games) {
@@ -284,7 +328,14 @@ export async function previewData(fixtures, state) {
   const short = state === 'ready-short';
   const target = short ? real.length : 131;
   const ats = !short;
-  const games = short ? real.slice() : [];
+  /* 🔴 THE FEED WINS WHERE THERE IS ONE. `live` is the real week off ESPN,
+   * pushed to KV by tools/poll-slate.mjs. When it is there the generated week
+   * below never runs — no invented matchup, no invented line, no invented final.
+   * When it is not, the fallback still draws and the footer still says how many
+   * of the rows were captured, so the screen can never quietly claim more real
+   * data than it has. */
+  const games = live ? live.slice() : (short ? real.slice() : []);
+  const fromFeed = live ? live.length : 0;
 
   /* Week 2 runs Thu 3 Sep -> Sun 6 Sep 2026, anchored on the real fixtures' own Saturday. */
   const sat = new Date(real.length ? real[1].kickoffUtc : Date.UTC(2026, 8, 5, 16, 30));
@@ -334,6 +385,7 @@ export async function previewData(fixtures, state) {
     const status = forced || (r < 0.06 ? 'final' : r < 0.10 ? 'in_progress' : r < 0.115 ? 'void' : 'scheduled');
     const hs = status === 'scheduled' ? null : Math.floor(rnd() * 45);
     const as = status === 'scheduled' ? null : Math.floor(rnd() * 45);
+    if (live) break;                 // the feed already gave us the week
     games.push(slateGame({
       id: 'g' + (i + 1),
       kickoffUtc: d.getTime(),
@@ -419,8 +471,10 @@ export async function previewData(fixtures, state) {
      * feed" while carrying none of them - a footnote asserting real data that was not
      * there, which is the exact failure `_make.py` got away with. Caught by reading the
      * rendered line at 393px. */
-    captured: short ? real.length : 0,
-    synthetic: games.length - (short ? real.length : 0)
+    /* Counts what is ACTUALLY on the wire, never what was loaded. */
+    captured: fromFeed || (short ? real.length : 0),
+    synthetic: games.length - (fromFeed || (short ? real.length : 0)),
+    fromFeed: fromFeed > 0
   };
 }
 

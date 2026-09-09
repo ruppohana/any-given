@@ -116,9 +116,11 @@ async function mount() {
    *
    * The same trap the ad slot fell into one commit earlier, in a different
    * costume: code that runs and has no effect. */
+  let lastData = null;
   try {
     const mod = await screenModule(route.screen);
     const data = mod.previewData ? await mod.previewData(fixtures, route.state) : {};
+    lastData = data;
     mod.render(root, data, route.state);
   } catch (e) {
     const box = document.createElement('div');
@@ -128,7 +130,11 @@ async function mount() {
     box.append(h, p);
     root.appendChild(box);
   }
-  if (route.dest !== 'home' && route.screen !== 'live-game') {
+  /* 🔴 THE BANNER MUST NOT LIE IN EITHER DIRECTION. The slate now reads the real
+   * week off the feed, so calling those games made up would be as wrong as
+   * calling the invented ones real. The screen reports whether its rows came off
+   * the wire and this reads that — it does not guess from the route. */
+  if (route.dest !== 'home' && route.screen !== 'live-game' && !lastData?.fromFeed) {
     const b = document.createElement('p');
     b.className = 'ag-sample';
     b.textContent = 'Sample data — these games, spreads and scores are made up. '
