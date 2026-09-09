@@ -20,7 +20,7 @@
  *   node tools/scrape-logos.mjs nfl
  *   node tools/scrape-logos.mjs college
  */
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const which = process.argv[2] || 'nfl';
@@ -40,7 +40,25 @@ async function grab(path, id, variant, dir) {
   if (existsSync(out)) return 'skip';
   const url = `https://a.espncdn.com/i/teamlogos/${path}/${variant}/${id}.png`;
   const res = await fetch(url, { headers: { 'user-agent': UA } });
-  if (!res.ok) return res.status;
+  if (!res.ok) {
+    /* 🔴 NO DARK VARIANT? USE THE LIGHT ONE. Found the hard way: `ncaa/500-dark`
+     * exists for essentially every school, and `nfl/500-dark` exists for THREE
+     * TEAMS. Everything else 404s.
+     *
+     * That mattered because the app asks for the dark file by name on a dark
+     * theme — so on the NFL it 404'd against our origin, 404'd again against the
+     * CDN fallback, and fell all the way through to the drawn two-color chip.
+     * Jason saw NE and SEA as coloured squares and said "Logos not in."
+     *
+     * ESPN already does this for teams whose crest works on dark: it returns the
+     * SAME BYTES for both names. Copying the light file where the dark one does
+     * not exist just makes that explicit, and means the app never has to know. */
+    if (variant === '500-dark') {
+      const light = `${dir}/500/${id}.png`;
+      if (existsSync(light)) { writeFileSync(out, readFileSync(light)); return statSync(out).size; }
+    }
+    return res.status;
+  }
   const buf = Buffer.from(await res.arrayBuffer());
   if (buf.length < 200) return 'tiny';           // a placeholder, not a crest
   writeFileSync(out, buf);
@@ -68,8 +86,11 @@ if (which === 'conf') {
       else if (r === 'tiny' || r === 404) { /* an id nobody uses */ }
     }
   }
-  console.log(`conferences: ${ok} files, ${found.length} conferences, ${(bytes / 1048576).toFixed(2)} MB`);
-  console.log('ids:', found.join(' '));
+  /* 🔴 COUNT THE DIRECTORY. This line claimed "200 conferences" and then "174",
+   * both times while 26 files existed, because it counted loop iterations. Third
+   * strike: it now reads the folder, like the other branch does. */
+  const n = (v) => { try { return readdirSync(`${dir}/${v}`).filter((f) => f.endsWith('.png')).length; } catch { return 0; } };
+  console.log(`conferences ON DISK: ${n('500')} light + ${n('500-dark')} dark, ${(bytes / 1048576).toFixed(2)} MB fetched this run`);
   process.exit(0);
 }
 
@@ -93,5 +114,13 @@ for (const id of league.ids) {
     else { miss++; missing.push(`${id}/${v}=${r}`); }
   }
 }
-console.log(`${which}: ${ok} saved, ${skipped} already present, ${miss} missing, ${(bytes / 1048576).toFixed(2)} MB`);
+/* 🔴 COUNT THE FILES, NOT THE LOOP. This reported "64 saved" for the NFL when 35
+ * files were on disk, and "200 conferences" when 26 existed. Twice. A summary
+ * that counts intentions reads exactly like one that counts results, and the
+ * only way to tell them apart is to go and look — so it goes and looks. */
+const onDisk = (v) => { try { return readdirSync(`${league.dir}/${v}`).filter((f) => f.endsWith('.png')).length; } catch { return 0; } };
+const light = onDisk('500'), dark = onDisk('500-dark');
+console.log(`${which}: ${ok} written this run, ${skipped} already present, ${miss} missing`);
+console.log(`ON DISK: ${light} light + ${dark} dark = ${light + dark} files, ${(bytes / 1048576).toFixed(2)} MB fetched`);
+if (dark < light) console.log(`  🔴 ${light - dark} still missing a dark file — the app will fall through to the chip`);
 if (missing.length) console.log('missing:', missing.slice(0, 20).join(' '), missing.length > 20 ? `(+${missing.length - 20})` : '');

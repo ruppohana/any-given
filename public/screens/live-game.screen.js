@@ -19,6 +19,16 @@
  */
 
 import { CALL_TYPES, byId, offerFor, settle, settleDrive, movedChains } from '/src/catalog.js';
+/* 🔴 THE COMMENTARY COMES OUT OF detect.ts, which already existed and was never
+ * shown. Jason, 2026-09-08: "Are we giving color commentary during the game? As
+ * cards as well?" We were not, and every piece of it was already built:
+ * detect() ranks each play by severity, names the event, writes a headline and a
+ * detail, and carries a per-play STAR with a ROLE — carrier, passer, receiver,
+ * kicker — which is requirement 7.2 done properly rather than a view guessing at
+ * the name in the parentheses.
+ *
+ * Nothing here writes commentary. It renders what the detector already said. */
+import { detect } from '/src/lib/detect.js';
 import { teamChip, applyTeamVars } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { signed, signClass, clock } from '/components/fmt.js';
@@ -96,6 +106,8 @@ const S = {
    * graded the opposite way by league. Guessing wrong grades calls wrong.
    * `null` means the choice has not been made, and the screen asks. */
   sport: store.get('sport', null),
+  /* 'call' = the live layer, 'pool' = the weekly picks. Null until asked. */
+  mode: store.get('mode', null),
   bank: START_BANK,
   board: [],
   timer: null
@@ -138,6 +150,15 @@ function questionFor(state) {
   return offerFor({
     down: state.situation?.down ?? null,
     distance: state.situation?.distance ?? null,
+    /* The red zone asks its own question, and the router cannot know it without
+     * this. */
+    yardsToGoal: state.situation?.yardsToGoal ?? null,
+    /* 🔴 THE SEED. The question rotates so a snap is not the same bet 120 times a
+     * night, and it rotates DETERMINISTICALLY on the play everybody is calling
+     * after — so two people watching one game are answering the same thing and
+     * the board compares like with like. Forget this and the rotation still
+     * "works", silently, per device. */
+    afterPlayId: last.id,
     isKickoff: /kickoff/.test(s),
     isPunt: /punt/.test(s),
     isFieldGoalAttempt: /field goal/.test(s),
@@ -360,7 +381,44 @@ function paint(wrap) {
    * settings: the two sports grade a sack the opposite way and the tendency
    * model is college-only, so a wrong guess does not look wrong — it just
    * settles calls the other way. */
+  /* 🔴 MODE FIRST, THEN SPORT. Jason worked through both orders in one minute —
+   * "ncaa football then pools or betting?" and then "Or pools vs betting then the
+   * sports" — and the second is right.
+   *
+   * WHAT ARE YOU HERE FOR is the bigger fork and the more human question. It
+   * decides which app you are in: two different rhythms, a week against a snap,
+   * and two boards that settled doctrine says NEVER SUM. Sport is the narrower
+   * question underneath it, and it means something different on each side — for
+   * the pool it picks a slate, for calling it decides how a sack SETTLES.
+   *
+   * Asking sport first made somebody answer a rules question before they knew
+   * which rules they were choosing.
+   *
+   * 🔴 BOTH ARE SKIPPED ENTIRELY FOR AN INVITE. Doctrine: nothing sits in front
+   * of the slate, and an invite link opens the actual slate. A friend's link has
+   * already answered both by existing.
+   *
+   * AND THE WORD IS NOT "BETTING". The balance is Marbles, it cannot be bought,
+   * there is no cash-out — calling it betting hands over the first objection
+   * anybody raises, for free, in our own UI. You call the game. */
+  if (!S.mode) { wrap.appendChild(modeCard(wrap)); return; }
   if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
+
+  /* 🔴 THE WAY OUT GOES ABOVE EVERY EARLY RETURN. It was appended near the
+   * FOOTER, which paint() never reaches on a pre-kickoff game — it returns after
+   * the empty state. So a phone with College stored sat on "Kickoff has not
+   * happened" for a game the owner did not want, with no visible way to change
+   * it: the same dead end as before, moved four inches down the file.
+   *
+   * Anything whose job is to get somebody UNSTUCK cannot live after a return
+   * that only fires when they are stuck. */
+  const sw = el('button', 'lg-switch', `${SPORT_LABEL[S.sport] || 'Sport'} · change`);
+  sw.onclick = () => {
+    S.sport = null; S.mode = null; S.noGame = false; S.raw = null;
+    store.set('sport', null); store.set('mode', null);
+    paint(wrap);
+  };
+  wrap.appendChild(sw);
 
   /* Under the bar it explains, and above everything else, because it changes how
    * to read the whole screen. It goes the moment they say so, or the moment they
@@ -404,21 +462,28 @@ function paint(wrap) {
   const away = state.teams[state.awayTeamId], home = state.teams[state.homeTeamId];
   /* The league goes with the chip, because a team id is only unique inside one. */
   const league = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
-  if (away) head.appendChild(teamChip({ id: state.awayTeamId, ...away }, { size: 22, league }));
+  /* 🔴 THE GAME HEAD IS WHERE A CREST DOES ITS JOB, so it is sized for that and
+   * not for a list row. 22 was the slate's number, carried over — and a slate row
+   * is one of sixty while this is the only place on screen that says WHICH GAME
+   * you are in. Jason: "Logos not in and to small." */
+  if (away) head.appendChild(teamChip({ id: state.awayTeamId, ...away }, { size: 34, league }));
   head.appendChild(el('span', 'lg-score num', `${state.awayScore} – ${state.homeScore}`));
-  if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 22, league }));
+  if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 34, league }));
   const meta = el('span', 'lg-meta num');
   meta.textContent = state.status === 'pre' ? 'Not started'
     : state.situation ? `Q${state.situation.quarter} ${state.situation.clock}` : state.status;
   head.appendChild(meta);
+  /* 🔴 WHERE IT IS ON. Jason: "Do we also want to add where the game is
+   * televised, if it is." Yes — and it belongs on the LIVE header, not only
+   * before kickoff, because this app is useless without the game on a screen in
+   * front of you. Somebody who opens it mid-game and cannot find the broadcast
+   * is holding a scoreboard. `if it is` is the whole condition: no channel in the
+   * feed means no line, never a guess. */
+  if (state.broadcast) head.appendChild(el('span', 'lg-tv', state.broadcast));
   wrap.appendChild(head);
 
   if (state.status === 'pre') {
-    wrap.appendChild(stateBlock('empty', {
-      title: 'Kickoff has not happened',
-      body: 'The poller is running and this screen will fill in on the first play. '
-          + 'Set your delay now — it has to be set before the first play is ever shown.'
-    }));
+    wrap.appendChild(pregame(state, now, wrap));
     return;
   }
 
@@ -522,6 +587,10 @@ function paint(wrap) {
     wrap.appendChild(card);
   }
 
+  /* ---- what just happened, in words ---- */
+  const said = commentary(state);
+  if (said) wrap.appendChild(said);
+
   /* ---- what happened ---- */
   if (rows.length) {
     const list = el('div', 'card lg-rows');
@@ -565,12 +634,7 @@ function paint(wrap) {
     wrap.appendChild(b);
   }
 
-  /* The sport is changeable from the screen it governs, not from a settings page
-   * two taps away. Somebody who watches both should never have to clear a
-   * browser to switch. */
-  const sw = el('button', 'lg-switch', `${SPORT_LABEL[S.sport] || 'Sport'} · change`);
-  sw.onclick = () => { S.sport = null; S.noGame = false; S.raw = null; store.set('sport', null); paint(wrap); };
-  wrap.appendChild(sw);
+  wrap.appendChild(inviteButton());
 
   wrap.appendChild(el('p', 'lg-foot',
     `feed ${age}s old · holding ${state.holding} play${state.holding === 1 ? '' : 's'} behind your ${S.delayMs / 1000}s delay`));
@@ -750,9 +814,10 @@ function claimCalls() {
 function sportCard(wrap) {
   const c = el('div', 'card lg-sport');
   c.appendChild(el('div', 'lg-sport-h', 'Which are you watching?'));
-  c.appendChild(el('p', 'lg-sport-b',
-    'It changes how calls are settled and how they are priced — a sack counts as a pass in the NFL '
-    + 'and as a run in college, and the model behind the prices is built on college play-by-play.'));
+  c.appendChild(el('p', 'lg-sport-b', S.mode === 'pool'
+    ? 'Which slate your group is picking from.'
+    : 'It changes how calls are settled and how they are priced — a sack counts as a pass in the NFL '
+      + 'and as a run in college, and the model behind the prices is built on college play-by-play.'));
   const row = el('div', 'lg-sport-row');
   for (const id of ['nfl', 'college-football']) {
     const b = el('button', 'lg-sport-pick');
@@ -768,8 +833,43 @@ function sportCard(wrap) {
       S.sport = id; store.set('sport', id);
       S.key = GAME_FOR[id];
       S.raw = null; S.board = [];
+      /* Pool mode has its own screen. This one owns the live layer only. */
+      if (S.mode === 'pool') { location.hash = '#/slate'; return; }
       paint(wrap);
       poll(wrap);
+    };
+    row.appendChild(b);
+  }
+  c.appendChild(row);
+  return c;
+}
+
+/**
+ * The second question. Sport first because it changes how calls SETTLE; mode
+ * second because it changes which app you are in.
+ */
+function modeCard(wrap) {
+  const c = el('div', 'card lg-sport');
+  c.appendChild(el('div', 'lg-sport-h', 'What are you here for?'));
+  c.appendChild(el('p', 'lg-sport-b',
+    'Two different games. Calling runs snap by snap while you watch; the pool runs '
+    + 'a week at a time with your group. They keep separate scores and never add together.'));
+
+  const row = el('div', 'lg-mode-row');
+  const opts = [
+    { id: 'call', h: 'Call the game', b: 'Live, snap by snap. You are 45 seconds behind on purpose.' },
+    { id: 'pool', h: 'The pool', b: 'Pick games for the week against your group.' }
+  ];
+  for (const o of opts) {
+    const b = el('button', 'lg-mode');
+    b.appendChild(el('span', 'lg-mode-h', o.h));
+    b.appendChild(el('span', 'lg-mode-b', o.b));
+    b.onclick = () => {
+      /* The sport question comes next either way — it is asked once and it means
+       * something on both sides. The pool leaves for the slate only after it has
+       * been answered. */
+      S.mode = o.id; store.set('mode', o.id);
+      paint(wrap);
     };
     row.appendChild(b);
   }
@@ -803,6 +903,173 @@ function introCard(wrap) {
  * again. The delay is still the mechanic and still has to be VISIBLE, because a
  * person needs to know they are behind. Visible is one line. Adjustable is a tap.
  */
+/** "5h 42m" / "18m" / "any second now". Coarse on purpose: a second-by-second
+ *  countdown to something four hours away is a fidget, not information. */
+function untilLabel(ms) {
+  if (ms <= 0) return 'any second now';
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ${m % 60}m` : `${Math.round(h / 24)} days`;
+}
+
+/**
+ * 🔴 THE SCREEN NOBODY DESIGNED, AND IT IS ON FOR NINETEEN HOURS.
+ *
+ * Jason, 2026-09-08: "This page looks pretty lame... Uninspiring." He was
+ * looking at the state the app spends the ENTIRE TIME BEFORE A GAME in — the
+ * one he and the friend he invites will open first — and it was a heading
+ * saying kickoff had not happened, a paragraph apologising for that, and a wall
+ * of black.
+ *
+ * The pre-game screen has plenty that is true to say. When it starts. Where, and
+ * on what channel. What you will be given. What you are going to be asked. Who
+ * else is already here. None of it needed a feed we did not have; it needed
+ * somebody to write the screen instead of an empty state.
+ */
+function pregame(state, now, wrap) {
+  const box = el('div', 'lg-pre');
+
+  if (state.kickoffUtc) {
+    const c = el('div', 'card lg-count');
+    c.appendChild(el('div', 'lg-count-k', 'KICKOFF'));
+    c.appendChild(el('div', 'lg-count-v num', untilLabel(state.kickoffUtc - now)));
+    const when = new Date(state.kickoffUtc);
+    const bits = [when.toLocaleDateString(undefined, { weekday: 'long' }),
+                  when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })];
+    if (state.venue) bits.push(state.venue);
+    if (state.broadcast) bits.push('on ' + state.broadcast);
+    c.appendChild(el('div', 'lg-count-b', bits.join(' · ')));
+    box.appendChild(c);
+  }
+
+  /* 🔴 WHAT YOU WILL BE ASKED, BEFORE YOU ARE ASKED IT. The catalog is the
+   * product and it was completely invisible until the first snap. Showing the
+   * questions in advance is the difference between waiting for an app to load
+   * and waiting for a game to start. Frequencies are the measured ones. */
+  const q = el('div', 'card lg-what');
+  q.appendChild(el('div', 'lg-what-h', `You start with ${START_BANK} Marbles`));
+  q.appendChild(el('p', 'lg-what-b',
+    'Everybody starts on the same number and it resets next game, so nobody is ever out. '
+    + 'They cannot be bought.'));
+  const ul = el('div', 'lg-qlist');
+  const preview = ['script', 'drive_end', 'direction', 'fourth_down', 'kickoff_return', 'three_and_out'];
+  for (const id of preview) {
+    const t = byId(id);
+    if (!t) continue;
+    const row = el('div', 'lg-qrow');
+    row.appendChild(el('span', 'lg-qtext', t.question));
+    row.appendChild(el('span', 'lg-qn num', t.perGame >= 100 ? 'every snap' : `~${t.perGame}×`));
+    ul.appendChild(row);
+  }
+  q.appendChild(ul);
+  q.appendChild(el('p', 'lg-what-b', 'The question changes with the situation — a fourth down is a '
+    + 'coach’s decision, a kickoff is a returner’s.'));
+  box.appendChild(q);
+
+  box.appendChild(inviteButton());
+
+  /* Who is already here, if anybody. Silence when nobody is, rather than an
+   * empty box announcing that nobody came. */
+  if (S.board.length) {
+    const names = [...new Set(S.board.map((c) => c.name).filter(Boolean))];
+    if (names.length) {
+      const w = el('div', 'card lg-waiting');
+      w.appendChild(el('div', 'lg-what-h', names.length === 1 ? '1 person is here' : `${names.length} people are here`));
+      w.appendChild(el('p', 'lg-what-b', names.join(' · ')));
+      box.appendChild(w);
+    }
+  }
+  return box;
+}
+
+/**
+ * 🔴 THE CALL IS THE GAME; THE COMMENTARY IS WHY IT WAS A GAME.
+ *
+ * A board of numbers tells you that you lost ten Marbles. It does not tell you
+ * that a 38-yard completion on 3rd and 9 is why. detect.ts has ranked every play
+ * by severity since it was written and nothing had ever drawn the result.
+ *
+ * ONLY SEVERITY 2 AND 3. Every snap is an event to a detector; three or four a
+ * quarter are a MOMENT. A commentary feed that speaks on every play is a
+ * transcript, and nobody reads a transcript during a game.
+ *
+ * And it obeys the delay like everything else — it is fed the HELD plays, so the
+ * app never tells you about a play your television has not shown you.
+ */
+function commentary(state) {
+  let dets = [];
+  try {
+    dets = detect(state.plays.map((p) => ({
+      id: p.id, driveId: p.driveId, offenseTeamId: p.offenseTeamId,
+      quarter: p.quarter, clock: p.clock, text: p.text, typeText: p.typeText,
+      scoringPlay: p.scoringPlay, homeScore: p.homeScore, awayScore: p.awayScore,
+      statYardage: p.statYardage, down: p.startDown, distance: p.distance
+    })), { homeTeamId: state.homeTeamId, awayTeamId: state.awayTeamId });
+  } catch { return null; }
+
+  const big = dets.filter((d) => (d.reasons || []).some((r) => r.severity >= 2)).slice(-4).reverse();
+  if (!big.length) return null;
+
+  const card = el('div', 'card lg-say');
+  card.appendChild(el('div', 'lg-say-h', 'What just happened'));
+  for (const d of big) {
+    const r = (d.reasons || []).filter((x) => x.severity >= 2).sort((a, b) => b.severity - a.severity)[0];
+    if (!r) continue;
+    const row = el('div', 'lg-sayrow');
+    const t = state.teams[d.offenseTeamId];
+    const head = el('div', 'lg-say-line');
+    head.appendChild(el('span', 'lg-say-when num', `Q${d.quarter} ${d.clock}`));
+    head.appendChild(el('b', 'lg-say-head', r.headline));
+    row.appendChild(head);
+    row.appendChild(el('div', 'lg-say-detail', r.detail));
+    /* The star, with the role the parser gave it. Never re-derived here — the
+     * parenthesised name at the end of a play is the TACKLER, and a view that
+     * works that out for itself gets it wrong. */
+    if (d.star && d.star.name) {
+      row.appendChild(el('div', 'lg-say-star', `${d.star.name} · ${d.star.role}${t ? ' · ' + t.abbrev : ''}`));
+    }
+    card.appendChild(row);
+  }
+  return card;
+}
+
+/**
+ * 🔴 INVITE A FRIEND. Jason, 2026-09-08: "We also need to put an invite a friend
+ * button somewhere." It is the whole product — a board with one person on it is
+ * a solitaire game with extra steps — and until now the only way to get somebody
+ * else in was for Jason to paste a URL himself.
+ *
+ * THE LINK CARRIES THE GAME, so a friend lands on the thing you are watching
+ * rather than on whatever sport their own device last chose. That is the same
+ * `?game=` parameter the fixtures replay uses, and it is why it exists.
+ *
+ * navigator.share is the native sheet on a phone — the one that offers Messages,
+ * which is how this actually gets sent. Clipboard is the desktop fallback, and
+ * neither is assumed: a browser with neither still gets a link it can select.
+ */
+function inviteButton() {
+  const url = `${location.origin}/?game=${encodeURIComponent(S.key)}`;
+  const b = el('button', 'lg-invite');
+  b.appendChild(el('span', 'lg-invite-h', 'Invite a friend'));
+  b.appendChild(el('span', 'lg-invite-b', 'They land on this game. No account, no install.'));
+  b.onclick = async () => {
+    const text = 'Call the game with me — no account, nothing to install.';
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Any Given', text, url }); return; }
+    } catch { return; /* they cancelled the sheet; that is not a failure */ }
+    try {
+      await navigator.clipboard.writeText(url);
+      b.querySelector('.lg-invite-b').textContent = 'Link copied — paste it to them';
+      return;
+    } catch { /* no clipboard permission */ }
+    /* 🔴 A LINK THEY CAN STILL GET. If both routes are unavailable the button
+     * must not simply do nothing — it shows the URL to select by hand. */
+    b.querySelector('.lg-invite-b').textContent = url;
+  };
+  return b;
+}
+
 function delayBar() {
   if (S.delayOpen || !S.seenIntro) return delayPanel();
   const line = el('button', 'lg-delayline');
@@ -870,18 +1137,56 @@ const CSS = `
 .lg-delayline-l { font-weight: 700; letter-spacing: .04em; color: var(--accent); }
 .lg-delayline.is-live .lg-delayline-l { color: var(--down); }
 .lg-delayline-a { text-decoration: underline; }
+.lg-invite { display: grid; gap: 2px; text-align: left; font: inherit; width: 100%;
+  padding: 13px 12px; border: 1px solid var(--accent); border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: var(--fg); }
+.lg-invite-h { font-size: var(--t-emph); font-weight: 800; color: var(--accent); }
+.lg-invite-b { font-size: var(--t-micro); color: var(--dim); overflow-wrap: anywhere; }
+/* The channel reads as a label, not as a score. */
+.lg-tv { font-size: var(--t-micro); font-weight: 700; letter-spacing: .04em; color: var(--dim);
+  border: 1px solid var(--line); border-radius: var(--radius-chip); padding: 1px 6px; }
+.lg-say { display: grid; gap: 0; padding: 4px 12px 8px; }
+.lg-say-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--dim); padding: 8px 0 2px; }
+.lg-sayrow { padding: 9px 0; border-top: 1px solid var(--line); }
+.lg-say-line { display: flex; gap: 8px; align-items: baseline; }
+.lg-say-when { font-size: var(--t-micro); color: var(--dim); white-space: nowrap; }
+.lg-say-head { font-size: var(--t-body); }
+.lg-say-detail { font-size: var(--t-micro); color: var(--dim); margin-top: 2px; line-height: 1.45; }
+.lg-say-star { font-size: var(--t-micro); color: var(--accent); margin-top: 3px; font-weight: 700; }
+.lg-pre { display: grid; gap: 10px; }
+.lg-count { display: grid; gap: 2px; padding: 16px 12px; }
+.lg-count-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em; color: var(--dim); }
+.lg-count-v { font-size: var(--t-bank); font-weight: 800; line-height: 1.05; color: var(--accent); }
+.lg-count-b { font-size: var(--t-micro); color: var(--dim); margin-top: 2px; }
+.lg-what { display: grid; gap: 6px; padding: 14px 12px; }
+.lg-what-h { font-size: var(--t-emph); font-weight: 800; }
+.lg-what-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
+.lg-qlist { display: grid; margin: 6px 0 4px; }
+.lg-qrow { display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  padding: 7px 0; border-top: 1px solid var(--line); }
+.lg-qrow:first-child { border-top: 0; }
+.lg-qtext { font-size: var(--t-body); }
+.lg-qn { font-size: var(--t-micro); color: var(--dim); white-space: nowrap; }
+.lg-waiting { display: grid; gap: 4px; padding: 14px 12px; }
 .lg-nogame { display: grid; gap: 8px; padding: 16px 12px; }
 .lg-nogame-h { font-size: var(--t-emph); font-weight: 800; }
 .lg-nogame-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
 .lg-nogame-go { justify-self: start; font: inherit; font-weight: 800; margin-top: 4px;
   min-height: var(--tap-min); padding: 0 18px; border: 0;
   border-radius: var(--radius-card); background: var(--accent); color: var(--bg); }
-.lg-switch { justify-self: start; font: inherit; font-size: var(--t-micro); color: var(--dim);
-  background: none; border: 0; padding: 2px 0; text-decoration: underline; }
+.lg-switch { justify-self: start; font: inherit; font-size: var(--t-micro); font-weight: 700;
+  color: var(--accent); background: none; border: 1px solid var(--line);
+  border-radius: var(--radius-chip); padding: 4px 10px; min-height: 30px; }
 .lg-sport { display: grid; gap: 8px; padding: 16px 12px; }
 .lg-sport-h { font-size: var(--t-section); font-weight: 800; }
 .lg-sport-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
 .lg-sport-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.lg-mode-row { display: grid; gap: 10px; margin-top: 6px; }
+.lg-mode { display: grid; gap: 3px; text-align: left; font: inherit; padding: 14px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); color: var(--fg); }
+.lg-mode-h { font-size: var(--t-emph); font-weight: 800; }
+.lg-mode-b { font-size: var(--t-micro); color: var(--dim); line-height: 1.45; }
 .lg-sport-logo { display: block; margin: 0 auto 6px; object-fit: contain; }
 .lg-sport-name { display: block; font-size: var(--t-body); }
 .lg-sport-pick { font: inherit; font-size: var(--t-emph); font-weight: 800; min-height: 52px;
@@ -943,7 +1248,15 @@ const CSS = `
    of them ended the string and took the whole screen down. */
 .lg-tiles { display: grid; grid-auto-flow: column; gap: 8px; }
 .lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-.lg-tile { display: grid; gap: 2px; padding: 10px; min-height: 76px; text-align: left; }
+/* 🔴 THE TILE HAD NO RADIUS AT ALL. Jason: "maybe round the corners?" It went
+   unnoticed while the tiles were borderless — with nothing drawn at the edge
+   there were no corners to see. The moment the taken one got a 2px accent
+   border, the square box appeared in a card whose own corners are rounded and
+   in an app where every other surface is.
+   Every tile takes the radius, not just the lit one, so the shape does not
+   change when you tap. */
+.lg-tile { display: grid; gap: 2px; padding: 10px; min-height: 76px; text-align: left;
+  border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); }
 /* 🔴 THE CHOICE IS THE BIGGEST THING ON THE TILE. Jason: "make the word 'Run'
    and 'Pass' larger." It was set at --t-emph, the same size as a card heading,
    while the PAYOUT below it was --t-figure and won the tile. The number matters
@@ -956,7 +1269,11 @@ const CSS = `
    than disappear, so the choice still reads as a choice that was made. */
 .lg-tile.is-mine { border: 2px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
-.lg-tile.is-faded { opacity: .38; }
+/* 🔴 THE ONES NOT TAKEN STAY VISIBLE AS TILES. At .38 opacity with no border
+   they read as loose grey text rather than as the options they were — you could
+   no longer see that it had been a choice between four things. They keep their
+   outline and recede instead. */
+.lg-tile.is-faded { opacity: .55; border-style: dashed; background: transparent; }
 .lg-call.is-called .lg-tile { cursor: default; }
 .lg-note { font-size: var(--t-micro); color: var(--dim); margin: 8px 0 0; }
 .lg-rows, .lg-board { padding: 4px 12px; }

@@ -20,6 +20,7 @@
 import { navBar, NAV_CSS } from '/components/nav.js';
 import { STATES_CSS } from '/components/states.js';
 import { TEAM_CHIP_CSS } from '/components/team-chip.js';
+import { adSlot, AD_CSS } from '/components/ad.js';
 
 /* Every route is a screen module and one of its own declared states. Nothing here
  * invents a screen; if a piece was never built, the route says so out loud. */
@@ -96,6 +97,25 @@ async function mount() {
 
   ensureCss(route.screen);
   root.classList.add('scr-' + route.screen);
+
+  /* 🔴 SAY WHEN THE GAMES ARE NOT REAL. Jason, 2026-09-08, looking at My picks:
+   * "These are not correct games, right?" They are not. Notre Dame did not beat
+   * Auburn 24-20 last Thursday — the pool screens run on PREVIEW DATA: real team
+   * identities out of teams.json, invented matchups, spreads and finals.
+   *
+   * That is correct for a design surface and indefensible without a label. A
+   * fabricated final score presented in the same type as a real one is the
+   * "never invent a fixture" rule leaking out of the test suite and into the
+   * product, where the person reading it has no way to tell.
+   *
+   * The live layer is exempt: it is the only route on the feed. */
+  if (route.dest !== 'home' && route.screen !== 'live-game') {
+    const b = document.createElement('p');
+    b.className = 'ag-sample';
+    b.textContent = 'Sample data — these games, spreads and scores are made up. '
+      + 'Only the live game is on the real feed.';
+    root.appendChild(b);
+  }
   try {
     const mod = await screenModule(route.screen);
     const data = mod.previewData ? await mod.previewData(fixtures, route.state) : {};
@@ -108,6 +128,15 @@ async function mount() {
     box.append(h, p);
     root.appendChild(box);
   }
+  /* 🔴 THE AD SLOT IS PART OF THE LAYOUT, drawn by the shell so every screen is
+   * built knowing the bottom of the viewport is not entirely its own. It is NOT
+   * drawn on the live game: the tiles carry a price and a clock, and an
+   * advertisement beside a decision somebody has forty seconds to make is the
+   * one place this app must never put one. */
+  if (route.screen !== 'live-game') {
+    root.appendChild(adSlot('banner'));
+  }
+
   drawNav(route.dest);
 }
 
@@ -201,8 +230,109 @@ async function boot() {
     location.replace(location.pathname + location.search + '#/live');
   }
 
+  buildSettings();
+
   window.addEventListener('hashchange', mount);
   await mount();
+}
+
+/**
+ * 🔴 THE WHEEL. Everything that is a SETTING rather than the game.
+ *
+ * Jason, 2026-09-08: "We will need a wheel at the top for all the 'stuff' like
+ * light vs dark, faq, user info, all that shit... As well as the adjust in
+ * there." The delay slider is the reason this is not just tidiness — it had been
+ * living permanently at the top of the live screen, on every render, for a
+ * control set once. Things you touch once belong behind a wheel; the game does
+ * not.
+ *
+ * It floats over the shell rather than being drawn by any screen, so every route
+ * has it and no route has to know about it.
+ */
+function buildSettings() {
+  const dlg = document.getElementById('settings');
+  const gear = document.getElementById('gear');
+  if (!dlg || !gear) return;
+
+  const get = (k, d) => { try { const v = localStorage.getItem('ag.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } };
+  const set = (k, v) => { try { localStorage.setItem('ag.' + k, JSON.stringify(v)); } catch {} };
+
+  const box = document.createElement('div');
+  box.className = 'ag-sheet-in';
+  const h = document.createElement('h2'); h.textContent = 'Settings';
+  box.appendChild(h);
+
+  /* --- theme --- */
+  box.appendChild(seg('Appearance', [['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']],
+    () => document.documentElement.dataset.theme || 'system',
+    (v) => { if (v === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; }));
+
+  /* --- marks --- */
+  box.appendChild(seg('Team logos', [['on', 'On'], ['off', 'Off']],
+    () => document.documentElement.dataset.marks || 'on',
+    (v) => { document.documentElement.dataset.marks = v; set('marks', v); cache.clear(); mount(); }));
+
+  /* --- the delay, which is why this exists --- */
+  const d = document.createElement('div'); d.className = 'ag-set';
+  const dl = document.createElement('div'); dl.className = 'ag-set-l'; dl.textContent = 'BROADCAST DELAY';
+  const dv = document.createElement('div'); dv.className = 'ag-row';
+  const dvL = document.createElement('span');
+  const r = document.createElement('input');
+  r.type = 'range'; r.min = '0'; r.max = '90'; r.step = '5'; r.value = String((get('delayMs', 45000)) / 1000);
+  const label = () => { dvL.textContent = r.value === '0' ? 'Live — no gap to call into' : r.value + ' seconds behind'; };
+  label();
+  r.oninput = () => { set('delayMs', Number(r.value) * 1000); label(); };
+  dv.appendChild(dvL);
+  d.append(dl, dv, r);
+  box.appendChild(d);
+
+  /* --- who you are --- */
+  const n = document.createElement('div'); n.className = 'ag-set';
+  const nl = document.createElement('div'); nl.className = 'ag-set-l'; nl.textContent = 'YOUR NAME ON THE BOARD';
+  const ni = document.createElement('input'); ni.type = 'text'; ni.maxLength = 24;
+  ni.placeholder = 'Someone'; ni.value = get('name', '') || '';
+  ni.oninput = () => set('name', ni.value.trim().slice(0, 24));
+  n.append(nl, ni);
+  box.appendChild(n);
+
+  /* --- the FAQ, short, and the one line that is not optional --- */
+  const f = document.createElement('div'); f.className = 'ag-set';
+  const fl = document.createElement('div'); fl.className = 'ag-set-l'; fl.textContent = 'HOW IT WORKS';
+  const fp = document.createElement('p'); fp.className = 'ag-faq';
+  fp.textContent = 'You are shown the game a few seconds behind on purpose, so when it asks what '
+    + 'happens next the snap genuinely has not been taken. Marbles cannot be bought, sold or cashed '
+    + 'out, everybody starts each game on the same number, and it resets at the next kickoff — so '
+    + 'nobody is ever out. No account: this is your device.';
+  f.append(fl, fp);
+  box.appendChild(f);
+
+  const close = document.createElement('button');
+  close.className = 'ag-close'; close.textContent = 'Done';
+  close.onclick = () => { dlg.close(); mount(); };
+  box.appendChild(close);
+
+  dlg.appendChild(box);
+  gear.addEventListener('click', () => { gear.setAttribute('aria-expanded', 'true'); dlg.showModal(); });
+  dlg.addEventListener('close', () => gear.setAttribute('aria-expanded', 'false'));
+  /* Clicking the backdrop closes it, which is what everybody expects and what
+     <dialog> does not do on its own. */
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
+  function seg(labelText, opts, read, write) {
+    const wrapEl = document.createElement('div'); wrapEl.className = 'ag-set';
+    const l = document.createElement('div'); l.className = 'ag-set-l'; l.textContent = labelText.toUpperCase();
+    const g = document.createElement('div'); g.className = 'ag-seg';
+    const paint = () => { for (const b of g.children) b.setAttribute('aria-pressed', String(b.dataset.v === read())); };
+    for (const [v, t] of opts) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.v = v; b.textContent = t;
+      b.onclick = () => { write(v); paint(); };
+      g.appendChild(b);
+    }
+    paint();
+    wrapEl.append(l, g);
+    return wrapEl;
+  }
 }
 
 boot();

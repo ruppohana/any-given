@@ -71,6 +71,12 @@ export type LiveState = {
   offers: Offer[] | null;
   /** Server time when this was read, so a client can hold it by its own delay. */
   fetchedAt: number;
+  /** 🔴 KICKOFF, so a screen with no plays yet has something true to say. The
+   *  pre-game state used to know only that the game had not started, which is
+   *  why it read as an apology rather than as anticipation. */
+  kickoffUtc: number | null;
+  venue: string | null;
+  broadcast: string | null;
 };
 
 export type LiveDrive = {
@@ -304,6 +310,10 @@ export function readLive(summary: any, gameId: string, sport: Sport, now: number
     teams,
     homeScore: Number(home.score) || 0,
     awayScore: Number(away.score) || 0,
+    kickoffUtc: Date.parse(comp.date || header.competitions?.[0]?.date || '') || null,
+    venue: comp.venue?.fullName || summary?.gameInfo?.venue?.fullName || null,
+    broadcast: (comp.broadcasts || [])[0]?.media?.shortName
+      || (comp.broadcasts || [])[0]?.names?.[0] || null,
     plays,
     drives: readDrives(summary),
     situation,

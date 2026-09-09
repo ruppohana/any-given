@@ -657,30 +657,76 @@ export function offerFor(ctx: {
   /** What is already running on this drive, so a drive call is not offered twice
    *  and a slow call can ride under a fast one rather than replacing it. */
   openDriveCall?: boolean;
+  /** Distance to the end zone, so the red zone can ask its own question. */
+  yardsToGoal?: number | null;
+  /** The play this call is being made AFTER. It seeds the rotation, which is why
+   *  the same snap always asks the same thing for everybody. */
+  afterPlayId?: string | null;
 }): CallType | null {
   if (ctx.isKickoff) return byId('kickoff_return');
   if (ctx.isPunt) return byId('punt_fair_catch');
   if (ctx.isFieldGoalAttempt) return byId('field_goal');
 
-  /* 🔴 THE DRIVE QUESTION COMES FIRST, and this line is the whole correction.
-   * "Drive Exact Result" was the single most-played market in Simplebet's college
-   * football catalog and next-drive result led the NFL playoffs. We shipped that
-   * question weeks ago and this function never offered it once - every snap fell
-   * through to run-or-pass. The catalog was not missing the best market; the
-   * router was hiding it.
-   *
-   * It rides UNDER the play calls rather than replacing them, which is what the
-   * two timescales were built for: take the drive at first down, then keep
-   * calling snaps while it runs. */
-  if (ctx.isDriveStart && !ctx.openDriveCall) return byId('drive_end');
+  /* ---- DRIVE SCOPE, at the start of a possession ---- */
+  if (ctx.isDriveStart && !ctx.openDriveCall) {
+    /* 🔴 THREE DRIVE QUESTIONS, NOT ONE. `drive_end` is the most-played market in
+     * football and it was still the only drive question this router could reach —
+     * so every possession all night asked the identical thing, which is the
+     * complaint that started this catalog: "you are limiting yourself."
+     *
+     * The other two were built, measured and never offered. `drive_breakout` is
+     * 39% college / 53% NFL and `three_and_out` is the catalog's one long shot at
+     * 17% / 12%. They rotate rather than compete, so a drive is not always the
+     * same shape of bet. */
+    const drives = ['drive_end', 'drive_end', 'drive_breakout', 'three_and_out'];
+    return byId(drives[pick(ctx, drives.length)]);
+  }
+
+  /* ---- THE RED ZONE IS ITS OWN MOMENT ---- */
+  if (ctx.yardsToGoal != null && ctx.yardsToGoal <= 20 && !ctx.openDriveCall) {
+    /* Offered the moment a drive crosses the 20 and settled when it ends — a
+     * third timescale, and asked at the tensest point in the sport. */
+    return byId('redzone_outcome');
+  }
 
   if (ctx.down === 4) return byId('fourth_down');
   if (ctx.down === 3) return byId('third_down');
 
-  /* 🔴 SCRIPT REPLACES RUN-OR-PASS AS THE DEFAULT SNAP. Same tap, four answers
-   * instead of two, measured at 38/35/16/12 over 370 real snaps, and #2 by handle
-   * in the real market at $1.3m over three playoff rounds. `run_pass` stays in the
-   * catalog because it is the honest fallback when a screen wants two tiles, but
-   * nothing should be asking a coin flip a hundred and twenty times a night. */
-  return byId('script');
+  /* ---- ORDINARY SNAPS, AND THEY MUST NOT ALL BE THE SAME ----
+   *
+   * 🔴 THIS IS THE WHOLE ARGUMENT OF THE FILE, AND THE ROUTER WAS LOSING IT.
+   * Eight of twelve types were unreachable: `direction`, `explosive`,
+   * `first_down`, `run_pass`, `drive_breakout`, `drive_redzone`,
+   * `three_and_out`, `redzone_outcome`. Every first and second down, all night,
+   * asked `script` — which is one binary asked 120 times wearing four tiles.
+   * "The second hour is the first hour again," which this file's own header
+   * calls the failure it exists to prevent.
+   *
+   * `direction` is the best-measured question we have and reads DIFFERENTLY by
+   * league — 29/38/33 in college against 40/19/41 in the NFL — so middle is the
+   * safe answer in one sport and the long one in the other. It had never been
+   * asked.
+   *
+   * The rotation is DETERMINISTIC on the snap, not random: the same moment
+   * always asks the same question, so two people watching the same game are
+   * answering the same thing and the board compares like with like. A random
+   * pick would quietly make the board meaningless. */
+  const snaps = ['script', 'direction', 'script', 'explosive', 'script', 'first_down'];
+  return byId(snaps[pick(ctx, snaps.length)]);
+}
+
+/**
+ * Which of N, decided by the snap itself.
+ *
+ * 🔴 DETERMINISTIC, AND THAT IS A CORRECTNESS PROPERTY RATHER THAN A PREFERENCE.
+ * Everybody watching one game must be asked the same question at the same snap,
+ * or the board is comparing people who answered different things. `Math.random`
+ * here would have been invisible in testing with one person and wrong the moment
+ * a second one joined.
+ */
+function pick(ctx: { afterPlayId?: string | null; down?: number | null; distance?: number | null }, n: number): number {
+  const key = String(ctx.afterPlayId ?? '') + ':' + String(ctx.down ?? '') + ':' + String(ctx.distance ?? '');
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return Math.abs(h) % n;
 }
