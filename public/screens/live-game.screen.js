@@ -35,6 +35,7 @@ import { detect } from '/src/lib/detect.js';
 import { shareResult, shareReaction, MOMENTS } from '/components/sharecard.js';
 import { teamChip, applyTeamVars } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
+import { adSlot } from '/components/ad.js';
 import { signed, signClass, clock } from '/components/fmt.js';
 
 export const id = 'live-game';
@@ -441,6 +442,17 @@ export function render(root, _data, screenState) {
  * moves. Naming it is the fix; the test now matches the name. */
 const BOARD_ORDER = (a, b) => b.profit - a.profit || (b.won + b.lost) - (a.won + a.lost);
 
+/* What Home actually shows: which game, its status, the score, and the countdown
+ * rounded to the minute it displays. Anything not in here cannot change a pixel
+ * on that screen, and anything in here forces a redraw. */
+function homeSignature() {
+  const r = S.raw;
+  if (!r) return 'none:' + String(S.key) + ':' + String(S.noGame);
+  const mins = r.kickoffUtc ? Math.floor((r.kickoffUtc - Date.now()) / 60000) : 0;
+  return [S.key, r.status, r.awayScore, r.homeScore, mins,
+          r.situation && r.situation.clock, S.mode, S.sport].join('|');
+}
+
 async function refreshKey(wrap, sport) {
   const k = await nextGameKey(sport);
   /* Guard the sport as well as the value: the lookup is async and somebody can
@@ -464,6 +476,29 @@ async function poll(wrap) {
      * from loading — forever. */
     else if (stateRes.status === 404) S.noGame = true;
     if (boardRes.ok) S.board = (await boardRes.json()).calls || [];
+
+    /* 🔴 A REPAINT THAT CHANGES NOTHING IS THE BLINK. Jason, twice: "The logos
+     * blink." / "Logos still blink."
+     *
+     * The first fix - dropping loading="lazy" and holding decoded bitmaps in a
+     * module cache - treated the symptom and left the cause standing: paint()
+     * does `wrap.innerHTML = ''` and rebuilds every node every 5 seconds. Fresh
+     * <img> elements enter the document each cycle, and even a warm cache cannot
+     * make that free. It got quieter and it did not stop.
+     *
+     * So the screen only repaints when something a viewer could SEE has changed.
+     * The signature is deliberately coarse - the countdown is at minute
+     * resolution, because "Kicks in 17h 15m" is identical for sixty seconds and
+     * repainting it twelve times inside that minute buys nothing.
+     *
+     * 🔴 Home only. The live board has a running clock, a play feed and a stale
+     * indicator that all want the tick, and this must never be the reason a
+     * called snap is late on screen. */
+    if (S.isHome) {
+      const sig = homeSignature();
+      if (sig === S.lastSig) return;
+      S.lastSig = sig;
+    }
     paint(wrap);
   } catch { /* offline is a state the screen draws, not an exception */ }
 }
@@ -472,8 +507,19 @@ function paint(wrap) {
   wrap.innerHTML = '';
   const now = Date.now();
 
-  /* ---- the delay, first, because it is the thing that makes this work ---- */
-  wrap.appendChild(delayBar());
+  /* ---- the delay, first, because it is the thing that makes this work ----
+   *
+   * 🔴 EXCEPT ON HOME. Jason, 2026-09-09: "why the 45 seconds again?"
+   *
+   * Because it was drawn unconditionally at the top of every paint, including a
+   * landing page where there is no live feed, nothing being held back and
+   * nothing to be behind. "45s BEHIND ON PURPOSE" above a menu is a boast about
+   * a mechanic the person has not reached yet, and it reads as an error - behind
+   * WHAT? The delay is the most important idea in this product and putting it
+   * where it cannot be true is the fastest way to make it look like noise.
+   *
+   * It belongs on the game, where it is a live fact about what you are seeing. */
+  if (!S.isHome) wrap.appendChild(delayBar());
 
   /* 🔴 THE SPORT IS ASKED BEFORE ANYTHING ELSE IS SHOWN, and nothing below it
    * renders until it is answered. Not a default with a switch buried in
@@ -1129,16 +1175,27 @@ function homeScreen(wrap, state, now) {
   if (!S.mode) { wrap.appendChild(modeCard(wrap)); return; }
   if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
 
-  /* STEP 3. The mark, then one line saying what was picked, then the game. */
-  const hub = el('div', 'card lg-sport is-compact');
-  const mk = el('div', 'lg-sport-h lg-mark');
-  mk.appendChild(el('span', 'lg-mark-stem', 'Any Given…'));
-  mk.appendChild(el('span', 'lg-mark-end', ' Snap'));
-  hub.appendChild(mk);
+  /* 🔴 STEP 3, REBUILT. Jason, 2026-09-09: "This page seems a little lost. Any
+   * given snap seems lost. Same with playing with marbles. Call it live is the
+   * same game card below, yes?"
+   *
+   * Yes it is, and that was the whole problem. The page had FOUR competing
+   * things at the top - a delay bar about a game not on screen, the mark in a
+   * card, a status line, and two buttons - and one of those buttons went to
+   * exactly where the big card below it went. Nothing was the subject of the
+   * page, so everything read as a fragment of one.
+   *
+   * The fix is to say what the page is about. The mark is the PAGE TITLE, out of
+   * its card and at the top where a title goes. What you picked is a quiet line
+   * under it. Then one thing labelled UPCOMING, which IS the live game and IS
+   * the way into it - the duplicate button is deleted rather than restyled.
+   * Then the week's card, full width, because it is the second thing and not the
+   * other half of a pair. */
+  const title = el('div', 'lg-home-mark');
+  title.appendChild(el('span', 'lg-mark-stem', 'Any Given…'));
+  title.appendChild(el('span', 'lg-mark-end', ' Snap'));
+  wrap.appendChild(title);
 
-  /* 🔴 WHAT YOU PICKED, AND HOW TO UNPICK IT — one line, not two rows of
-   * buttons. A landing that keeps asking the questions you already answered is
-   * a settings page wearing a landing's clothes. */
   const pickedLine = el('div', 'lg-picked');
   pickedLine.appendChild(el('span', 'lg-picked-w',
     (S.mode === 'pool' ? 'Group pools' : 'Playing the marbles')
@@ -1150,27 +1207,11 @@ function homeScreen(wrap, state, now) {
      * would answer a question they never got asked. */
     S.mode = null; S.sport = null;
     store.set('mode', null); store.set('sport', null);
+    S.lastSig = null;
     paint(wrap);
   };
   pickedLine.appendChild(chg);
-  hub.appendChild(pickedLine);
-
-  /* The two doors, on the marbles side only - the pool has one destination. */
-  const gr = el('div', 'lg-mode-row lg-gorow');
-  const go = S.mode === 'pool'
-    ? [{ h: 'Open the pool', b: 'Pick the week for points', to: '#/slate' }]  /* singular HERE on purpose: this door opens ONE pool */
-    : [{ h: 'Call it live', b: 'Snap by snap, 45s behind', to: '#/live' },
-       { h: "The week's card", b: 'Every game, priced', to: '#/slate' }];
-  for (const o of go) {
-    const b = el('button', 'lg-mode lg-go');
-    b.appendChild(el('span', 'lg-mode-h', o.h));
-    b.appendChild(el('span', 'lg-mode-b', o.b));
-    b.onclick = () => { location.hash = o.to; };
-    gr.appendChild(b);
-  }
-  if (go.length === 1) gr.classList.add('is-one');
-  hub.appendChild(gr);
-  wrap.appendChild(hub);
+  wrap.appendChild(pickedLine);
 
   /* Tonight's game as a summary, not as the game itself — crests, score if it
    * has started, and when it kicks. */
@@ -1178,6 +1219,12 @@ function homeScreen(wrap, state, now) {
   const league = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
   const g = el('a', 'card lg-hgame');
   g.href = '#/live';
+  /* 🔴 "Title the card upcoming..." - Jason, 2026-09-09. A card with a crest, a
+   * name and a countdown is legible but unlabelled, and an unlabelled card on a
+   * landing page is a thing you have to work out. One word says what it is, and
+   * it is the word that stays true when the game goes live - see below. */
+  g.appendChild(el('div', 'lg-hgame-k', state.status === 'pre' ? 'Upcoming'
+    : state.status === 'final' ? 'Final' : 'Live now'));
 
   /* 🔴 BUILT TO THE SHARE CARD'S PROPORTIONS. Jason, 2026-09-09: "Make the text
    * larger like the card."
@@ -1228,10 +1275,30 @@ function homeScreen(wrap, state, now) {
   if (state.venue) meta.push(state.venue);
   if (state.broadcast) meta.push('on ' + state.broadcast);
   g.appendChild(el('div', 'lg-hgame-b', meta.join(' · ')));
-  g.appendChild(el('div', 'lg-hgame-go', state.status === 'live' ? 'Call it →' : 'Open the game →'));
+  /* This line is the old "Call it live" button, now attached to the card it
+   * always duplicated. */
+  g.appendChild(el('div', 'lg-hgame-go',
+    state.status === 'live' ? 'Call it live →' : 'Call it live, snap by snap →'));
   wrap.appendChild(g);
 
+  /* The week's card, edge to edge - Jason: "Make this weeks card stretch edge to
+   * edge." It is the second door, not the other half of a pair, so it gets a
+   * full-width row rather than a half-width button beside a gap.
+   *
+   * The pool side has only ever had one door and takes the same treatment. */
+  const wk = el('button', 'lg-mode lg-go lg-wide');
+  wk.appendChild(el('span', 'lg-mode-h', S.mode === 'pool' ? 'Open the pool' : "The week's card"));
+  wk.appendChild(el('span', 'lg-mode-b', S.mode === 'pool'
+    ? 'Pick the week for points' : 'Every game, priced off the real line'));
+  wk.onclick = () => { location.hash = '#/slate'; };
+  wrap.appendChild(wk);
+
   wrap.appendChild(inviteButton(state));
+
+  /* 🔴 THE AD GOES LAST, BELOW EVERYTHING. Jason: "Add an add at the bottom."
+   * Home is a browsing screen, which is exactly where the ad doctrine says a
+   * slot may live - never beside a tile carrying a price and a countdown. */
+  wrap.appendChild(adSlot('banner', 'Your ad here · reserved, nothing sold yet'));
 }
 
 function introCard(wrap) {
@@ -1720,9 +1787,16 @@ const CSS = `
   background: var(--card); color: var(--fg); }
 .lg-x-mark { font-size: 18px; line-height: 1; text-align: center; }
 .lg-x-l { font-size: var(--t-micro); color: var(--dim); }
+/* 🔴 THE INVITE IS QUIET. Jason, 2026-09-09: "The card for the game is more
+   important than the invite a friend, but the outline suggests otherwise."
+   Exactly right, and it was the one loud element on the page: a gold border AND
+   a tinted fill, against a game card wearing the same hairline as everything
+   else. Emphasis is a ranking, and this had the third thing on the page winning
+   it. The accent stays on the WORDS so it still reads as an action; the box
+   goes back to the standard card treatment. */
 .lg-invite { display: grid; gap: 2px; text-align: left; font: inherit; width: 100%;
-  padding: 13px 12px; border: 1px solid var(--accent); border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: var(--fg); }
+  padding: 13px 12px; border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); color: var(--fg); }
 .lg-invite-h { font-size: var(--t-emph); font-weight: 800; color: var(--accent); }
 .lg-invite-b { font-size: var(--t-micro); color: var(--dim); overflow-wrap: anywhere; }
 /* The channel reads as a label, not as a score. */
@@ -1804,6 +1878,19 @@ const CSS = `
 .lg-sport.is-compact .lg-mode-h { font-size: var(--t-body); }
 .lg-sport.is-compact .lg-mode-b { display: none; }
 .lg-hgame { display: grid; gap: 6px; padding: 14px 12px; text-decoration: none; color: var(--fg); }
+/* 🔴 THE GAME CARD IS THE SUBJECT OF THE PAGE, so it carries the emphasis the
+   invite used to steal: the accent border and the tint. It is also the tallest
+   and the widest thing here, which is the other half of saying so. */
+.lg-hgame { border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
+/* One word above the crests saying what the card is. */
+.lg-hgame-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+/* The page title, out of a card and at the top where a title belongs. */
+.lg-home-mark { display: flex; align-items: baseline; gap: 0;
+  font-size: var(--t-score); font-weight: 800; padding: 2px 2px 0; }
+/* The second door, edge to edge. */
+.lg-wide { width: 100%; text-align: left; }
 /* The matchup is the card's HEADLINE, at the share card's proportions - figure
    size, which is the largest type outside the live layer's own bank strip. */
 .lg-hgame-t { font-size: var(--t-figure); font-weight: 800; line-height: 1.2;
