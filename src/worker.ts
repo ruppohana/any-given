@@ -292,6 +292,15 @@ export default {
             : when ? `Kickoff ${when}.` : '';
           const desc = `${live} Call the plays as they happen. Free, no account, nothing to install.`.trim();
 
+          /* HEAD, not GET: we need to know the card exists without paying for
+           * its body on every crawl. */
+          const cardUrl = `${url.origin}/og/${key.replace(':', '-')}.png`;
+          let ogImage = `${url.origin}/og.png`;
+          try {
+            const probe = await env.ASSETS.fetch(new Request(cardUrl, { method: 'GET' }));
+            if (probe.ok) ogImage = cardUrl;
+          } catch { /* the generic card is a perfectly good fallback */ }
+
           /* Escaped, because a team name is feed data landing in an HTML
            * attribute. `St. John's` would otherwise end the attribute early. */
           const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -301,7 +310,17 @@ export default {
             .replace(/(<meta name="twitter:title" content=")[^"]*/, `$1${esc(match)} · Any Given Snap`)
             .replace(/(<meta property="og:description" content=")[^"]*/, `$1${esc(desc)}`)
             .replace(/(<meta name="twitter:description" content=")[^"]*/, `$1${esc(desc)}`)
-            .replace(/(<meta property="og:url" content=")[^"]*/, `$1${esc(url.toString())}`);
+            .replace(/(<meta property="og:url" content=")[^"]*/, `$1${esc(url.toString())}`)
+            /* 🔴 THE PICTURE, TOO. X's intent cannot attach media — the image in
+             * a post comes from the CARD, so a per-game og:image is the only way
+             * a shared link shows the teams playing. tools/og-images.mjs renders
+             * these on the host with headless Chrome and they ship as static
+             * files; a Worker cannot run Chrome and a crawler will not wait on
+             * one that tried. A game with no card falls back to the generic
+             * og.png rather than to a broken image. */
+            .replace(/(<meta property="og:image" content=")[^"]*/, `$1${esc(ogImage)}`)
+            .replace(/(<meta name="twitter:image" content=")[^"]*/, `$1${esc(ogImage)}`)
+            .replace(/(<meta property="og:image:alt" content=")[^"]*/, `$1${esc(match)}`);
           return new Response(html, {
             headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate' }
           });

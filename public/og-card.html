@@ -17,6 +17,10 @@ p { font-size:30px; line-height:1.4; color:#b6a8ac; }
 .t.on span { color:#E0A93B; }
 .foot { display:flex; justify-content:space-between; align-items:baseline; font-size:22px; color:#b6a8ac; }
 .foot b { color:#f4eff0; font-weight:700; }
+.vs { display:flex; align-items:center; gap:34px; }
+.vs img { width:150px; height:150px; object-fit:contain; }
+.at { font-size:34px; color:#b6a8ac; }
+h1.mu { font-size:64px; line-height:1.05; max-width:20ch; }
 </style></head><body>
 <!-- 🔴 THE MARK COMPLETES. Jason: "any given... weekend" / "any given... snap".
      The wordmark is a STEM and a completion — that is the whole argument the
@@ -24,7 +28,7 @@ p { font-size:30px; line-height:1.4; color:#b6a8ac; }
      a dead label. SNAP is the completion for the live layer, because a snap is
      the unit this app actually asks about. -->
 <div class="mark">ANY GIVEN <em>SNAP</em></div>
-<div class="mid">
+<div class="mid" id="mid">
   <h1>Call the play <em>before the snap</em></h1>
   <!-- 🔴 THE EXPLANATION IS GONE. Jason: "do we need to tell them we are 45
        seconds behind? that is just to much to read." No. A share card is glanced
@@ -40,4 +44,39 @@ p { font-size:30px; line-height:1.4; color:#b6a8ac; }
   </div>
 </div>
 <div class="foot"><span><b>anygiven.app</b></span><span>NFL &amp; college</span></div>
+<script>
+/* 🔴 THE SAME CARD, TAILORED TO A GAME. Jason: "Can we pregenerate images for
+   the kickoff and load into the x?" X's web intent CANNOT attach media — there
+   is no image parameter and uploading needs OAuth. But the picture in a post
+   does not come from the intent, it comes from the CARD, so the way to put a
+   game in the tweet is to give that game its own og:image. This page renders it
+   and tools/og-images.mjs screenshots it.
+
+   No feed call: the state arrives in the query string, because a headless render
+   that depends on a live fetch is a render that can silently produce a blank
+   card at 5:19. */
+(async () => {
+  const q = new URLSearchParams(location.search);
+  const key = q.get('game');
+  if (!key) return;
+  try {
+    const st = await (await fetch('/api/state/' + key)).json();
+    const away = st.teams[st.awayTeamId], home = st.teams[st.homeTeamId];
+    if (!away || !home) return;
+    const league = key.split(':')[0] === 'nfl' ? 'nfl' : 'ncaa';
+    const when = st.kickoffUtc
+      ? new Date(st.kickoffUtc).toLocaleString('en-US',
+          { weekday: 'long', hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }) + ' PT'
+      : null;
+    document.getElementById('mid').innerHTML =
+      '<div class="vs">'
+      + '<img src="/logos/' + league + '/500-dark/' + st.awayTeamId + '.png" alt="">'
+      + '<span class="at">at</span>'
+      + '<img src="/logos/' + league + '/500-dark/' + st.homeTeamId + '.png" alt="">'
+      + '</div>'
+      + '<h1 class="mu">' + away.short + ' at ' + home.short + '</h1>'
+      + '<p>' + (when ? 'Kickoff ' + when + ' · ' : '') + 'call the plays before they happen.</p>';
+  } catch (e) { /* the generic card is a perfectly good fallback */ }
+})();
+</script>
 </body></html>
