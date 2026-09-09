@@ -150,6 +150,29 @@ export function cdnLogoUrl(team, league, variant) {
   return `https://a.espncdn.com/i/teamlogos/${path}/${variant || '500'}/${team.id}.png`;
 }
 
+/* 🔴 THE DECODED CACHE — the other half of the blink fix.
+ *
+ * An off-DOM Image per URL, held for the life of the page and never inserted
+ * anywhere. Its only job is to keep the bytes AND the decoded bitmap resident,
+ * so that when a repaint mints a fresh <img> with the same src the browser has
+ * nothing left to do and paints it in the same frame.
+ *
+ * This is a cache of pixels, not of elements. Handing the same NODE back would
+ * be cheaper still and is wrong: one team appears in the summary card and in
+ * the board on the same screen, and a node cannot be in two places — the second
+ * insertion silently steals it from the first. That failure looks like a
+ * missing logo, which is the bug this is fixing, arriving by another road. */
+const DECODED = new Map();
+function warm(url) {
+  if (!url || DECODED.has(url)) return;
+  const i = new Image();
+  DECODED.set(url, i);
+  i.src = url;
+  /* decode() is best-effort — a 404 rejects, and the <img> error handler is
+   * what owns the fallback. Swallow it here or it is an unhandled rejection. */
+  if (i.decode) i.decode().catch(function () {});
+}
+
 /**
  * 🔴 A DARK LOGO ON A DARK GROUND IS NO LOGO. Jason, 2026-09-08: "the icons dont
  * work on the dark background." He is right, and it is most of the file: club
@@ -257,7 +280,23 @@ export function teamChip(team, opts) {
      * size it measured for its own row. */
     const px = Math.round(size * LOGO_SCALE);
     img.width = px; img.height = px;
-    img.alt = ''; img.loading = 'lazy';
+    img.alt = '';
+    /* 🔴 NOT `loading="lazy"`, AND `decoding="sync"`. Jason, 2026-09-08:
+     * "The logos blink."
+     *
+     * Two causes, and the fix needs both halves. paint() rebuilds this screen
+     * on every tick — a countdown and a staleness line both want a second — so
+     * every mark on screen is a BRAND NEW <img> element once a second. A new
+     * element decodes from scratch even when the bytes are in the HTTP cache,
+     * and `lazy` puts that decode behind the browser's own scheduler. The
+     * result is a mark that is absent for a frame, every frame: a blink.
+     *
+     * `lazy` was wrong here whatever else is true — these marks are 1–3 KB and
+     * ABOVE THE FOLD. Deferring the fetch of the thing already on screen is the
+     * attribute working exactly as designed against the one case it should
+     * never apply to. */
+    img.decoding = 'sync';
+    warm(img.dataset.logoLight); warm(img.dataset.logoDark);
     /* 🔴 TWO CHANCES BEFORE THE FALLBACK. A local miss means we have not scraped
      * that school yet, which is a gap in our asset set and NOT a team without a
      * crest — so it retries the CDN once before giving up and drawing the chip.

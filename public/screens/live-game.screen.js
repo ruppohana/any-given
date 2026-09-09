@@ -335,7 +335,7 @@ function boardRows(state) {
 
 export async function previewData() { return {}; }
 
-export function render(root, _data, _state) {
+export function render(root, _data, screenState) {
   root.innerHTML = '';
   const style = el('style');
   style.textContent = STATES_CSS + CSS;
@@ -347,6 +347,7 @@ export function render(root, _data, _state) {
   /* An explicit ?game= always wins - that is how a specific game is shared and
    * how the fixtures are replayed. Otherwise the key follows the chosen sport. */
   const forced = new URLSearchParams(location.search).get('game');
+  S.isHome = screenState === 'home';
   S.key = forced || (S.sport ? GAME_FOR[S.sport] : null);
   if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
@@ -422,7 +423,15 @@ function paint(wrap) {
   const invited = !!new URLSearchParams(location.search).get('game');
   if (!S.mode) { wrap.appendChild(modeCard(wrap)); return; }
   if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
-  if (!invited) wrap.appendChild(modeCard(wrap, true));
+
+  /* 🔴 HOME IS A DESTINATION, AND IT STOPS HERE. Jason said "Home should start
+   * here" three times and each time I put the hub ON TOP of the game — which is
+   * still the game, with a card above it. A landing you scroll straight through
+   * is not a landing.
+   *
+   * Home shows the two halves, the sport, what is on and when, and how to bring
+   * somebody. Calling the game is a TAP AWAY rather than the thing underneath. */
+  if (!invited && !S.isHome) wrap.appendChild(modeCard(wrap, true));
 
   /* 🔴 THE WAY OUT GOES ABOVE EVERY EARLY RETURN. It was appended near the
    * FOOTER, which paint() never reaches on a pre-kickoff game — it returns after
@@ -432,13 +441,11 @@ function paint(wrap) {
    *
    * Anything whose job is to get somebody UNSTUCK cannot live after a return
    * that only fires when they are stuck. */
-  const sw = el('button', 'lg-switch', `${SPORT_LABEL[S.sport] || 'Sport'} · change`);
-  sw.onclick = () => {
-    S.sport = null; S.mode = null; S.noGame = false; S.raw = null;
-    store.set('sport', null); store.set('mode', null);
-    paint(wrap);
-  };
-  wrap.appendChild(sw);
+  /* 🔴 THE ORPHAN CHIP IS GONE. Jason: "NFL change button?" It sat directly under
+   * a card that already asks what you are doing, doing the same job in a
+   * different shape — two controls, two visual languages, one question. The
+   * sport now lives INSIDE the hub as a second row, so the card answers both
+   * halves of "where am I" in one place. */
 
   /* Under the bar it explains, and above everything else, because it changes how
    * to read the whole screen. It goes the moment they say so, or the moment they
@@ -475,6 +482,16 @@ function paint(wrap) {
   if (stale) wrap.appendChild(stale);
 
   const state = held(S.raw, S.delayMs, now);
+
+  /* 🔴 AFTER `state` EXISTS. The first version called this from the top of
+   * paint(), above `const state = held(...)` — a temporal dead zone reference
+   * that threw before anything rendered, so Home drew the delay line and
+   * nothing else. That is the THIRD time tonight a block was placed above the
+   * thing it reads: the stale bar, the sport switch, and now this.
+   *
+   * Home is a destination and it stops here — it does not fall through into the
+   * game. */
+  if (S.isHome) { homeScreen(wrap, state, now); return; }
   const age = Math.round((now - (S.raw.pushedAt || now)) / 1000);
 
   /* ---- the game ---- */
@@ -878,7 +895,17 @@ function sportCard(wrap) {
  */
 function modeCard(wrap, compact) {
   const c = el('div', 'card lg-sport' + (compact ? ' is-compact' : ''));
-  c.appendChild(el('div', 'lg-sport-h', compact ? 'Any Given Snap' : 'What are you here for?'));
+  if (compact) {
+    /* 🔴 THE MARK COMPLETES, WITH THE PAUSE IN IT. Jason: "Any Given… Snap". The
+     * ellipsis is the whole joke — the stem is a setup and the completion is the
+     * punchline, and printing "Any Given Snap" flat throws the beat away. */
+    const h = el('div', 'lg-sport-h lg-mark');
+    h.appendChild(el('span', 'lg-mark-stem', 'Any Given…'));
+    h.appendChild(el('span', 'lg-mark-end', ' Snap'));
+    c.appendChild(h);
+  } else {
+    c.appendChild(el('div', 'lg-sport-h', 'What are you here for?'));
+  }
   if (!compact) {
     c.appendChild(el('p', 'lg-sport-b',
       'Two different games. Calling runs snap by snap while you watch; the pool runs '
@@ -897,15 +924,76 @@ function modeCard(wrap, compact) {
     if (compact && o.id === S.mode) b.classList.add('is-on');
     b.onclick = () => {
       S.mode = o.id; store.set('mode', o.id);
-      /* From the hub, choosing the pool leaves for it. Choosing calling is
-       * already where you are. */
       if (o.id === 'pool' && S.sport) { location.hash = '#/slate'; return; }
+      /* 🔴 ON HOME, "Call the game" IS THE DOOR. Repainting Home in place left
+       * somebody who had just said what they wanted still standing on the
+       * landing — the third version of the same mistake. */
+      if (o.id === 'call' && S.isHome) { location.hash = '#/live'; return; }
       paint(wrap);
     };
     row.appendChild(b);
   }
   c.appendChild(row);
+
+  /* The sport, as the second row of the same card. */
+  if (compact) {
+    const sr = el('div', 'lg-mode-row lg-sportrow');
+    for (const id of ['nfl', 'college-football']) {
+      const b = el('button', 'lg-mode lg-sportpick' + (id === S.sport ? ' is-on' : ''));
+      const img = document.createElement('img');
+      img.className = 'lg-sportpick-logo';
+      img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
+      img.alt = ''; img.width = 22; img.height = 22;
+      b.appendChild(img);
+      b.appendChild(el('span', 'lg-mode-h', SPORT_LABEL[id]));
+      b.onclick = () => {
+        if (id === S.sport) return;
+        S.sport = id; store.set('sport', id);
+        S.key = GAME_FOR[id]; S.raw = null; S.board = []; S.noGame = false;
+        paint(wrap); poll(wrap);
+      };
+      /* On Home the mode buttons navigate rather than gate: "Call the game" is a
+       * door, not a setting. */
+      sr.appendChild(b);
+    }
+    c.appendChild(sr);
+  }
   return c;
+}
+
+/**
+ * The landing. Everything a person needs to decide what they are doing, and
+ * nothing they have to scroll past to get there.
+ */
+function homeScreen(wrap, state, now) {
+  wrap.appendChild(modeCard(wrap, true));
+
+  /* Tonight's game as a summary, not as the game itself — crests, score if it
+   * has started, and when it kicks. */
+  const away = state.teams[state.awayTeamId], home = state.teams[state.homeTeamId];
+  const league = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+  const g = el('a', 'card lg-hgame');
+  g.href = '#/live';
+
+  const head = el('div', 'lg-head');
+  if (away) head.appendChild(teamChip({ id: state.awayTeamId, ...away }, { size: 34, league }));
+  head.appendChild(el('span', 'lg-score num',
+    state.status === 'pre' ? 'vs' : `${state.awayScore} – ${state.homeScore}`));
+  if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 34, league }));
+  g.appendChild(head);
+
+  const line = state.status === 'pre'
+    ? (state.kickoffUtc ? `Kicks in ${untilLabel(state.kickoffUtc - now)}` : 'Not started')
+    : state.status === 'final' ? 'Final'
+    : state.situation ? `Live · Q${state.situation.quarter} ${state.situation.clock}` : 'Live';
+  const meta = [line];
+  if (state.venue) meta.push(state.venue);
+  if (state.broadcast) meta.push('on ' + state.broadcast);
+  g.appendChild(el('div', 'lg-hgame-b', meta.join(' · ')));
+  g.appendChild(el('div', 'lg-hgame-go', state.status === 'live' ? 'Call it →' : 'Open the game →'));
+  wrap.appendChild(g);
+
+  wrap.appendChild(inviteButton(state));
 }
 
 function introCard(wrap) {
@@ -1133,38 +1221,21 @@ function inviteButton(state) {
   };
   wrapEl.appendChild(b);
   wrapEl.appendChild(postToX(state, url));
-  wrapEl.appendChild(postToReddit(state, url));
   return wrapEl;
 }
 
-/**
- * 🔴 REDDIT, AND ONLY REDDIT ALONGSIDE X. Jason: "Any other platform other than
- * x?" The honest answer is that navigator.share already covers every one of
- * them — the native sheet on a phone offers Messages, WhatsApp, Instagram,
- * Threads, Reddit, mail, AirDrop, whatever is installed. A row of branded
- * buttons re-implements the operating system, worse.
+/* 🔴 NO REDDIT BUTTON, AND NO SECOND PLATFORM AT ALL. Jason asked twice —
+ * "Really, Redit?" then "Again, Redit?" — and the second ask is the answer.
  *
- * A web intent only earns a button where the destination is a PLACE rather than
- * a person, and for football there is exactly one more of those: an r/nfl or
- * r/CFB game thread is where the conversation about a live game actually
- * happens, it is public, and it is searchable afterwards. Facebook's sharer
- * strips your text and posts a bare link; LinkedIn is not watching the game.
+ * The argument for it was that a game thread is a PLACE rather than a person.
+ * True, and it does not survive the objection: navigator.share already offers
+ * Reddit on a phone alongside every other installed app, so the button bought a
+ * second route to somewhere the OS sheet already goes. X keeps its button
+ * because the pre-filled text plus hashtags is the thing the native sheet
+ * cannot do.
  *
- * Reddit's submit intent takes a title, which is the whole point — the post is
- * the sentence, not the URL.
+ * A row of branded buttons re-implements the operating system, worse.
  */
-function postToReddit(state, url) {
-  const a = el('a', 'lg-x lg-reddit');
-  /* The first line only. xText carries the hashtags on their own line and a
-   * Reddit TITLE is one sentence, not a post body. */
-  const title = xText(state).split(String.fromCharCode(10))[0];
-  a.href = 'https://www.reddit.com/submit?' + new URLSearchParams({ url, title });
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  a.appendChild(el('span', 'lg-x-mark', '⬤'));
-  a.appendChild(el('span', 'lg-x-l', 'Reddit'));
-  return a;
-}
 
 /**
  * 🔴 X's WEB INTENT — no API key, no SDK, no script from their origin.
@@ -1406,7 +1477,6 @@ const CSS = `
 .lg-brag-h { font-size: var(--t-emph); font-weight: 800; color: var(--up); }
 .lg-brag-b { font-size: var(--t-micro); color: var(--dim); }
 .lg-invite-wrap { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: stretch; }
-.lg-reddit .lg-x-mark { color: #ff4500; font-size: 15px; }
 .lg-x { display: grid; place-content: center; gap: 2px; text-decoration: none;
   padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-card);
   background: var(--card); color: var(--fg); }
@@ -1469,6 +1539,15 @@ const CSS = `
 .lg-sport.is-compact .lg-mode { padding: 10px 12px; gap: 1px; }
 .lg-sport.is-compact .lg-mode-h { font-size: var(--t-body); }
 .lg-sport.is-compact .lg-mode-b { display: none; }
+.lg-hgame { display: grid; gap: 6px; padding: 14px 12px; text-decoration: none; color: var(--fg); }
+.lg-hgame-b { font-size: var(--t-micro); color: var(--dim); }
+.lg-hgame-go { font-size: var(--t-body); font-weight: 800; color: var(--accent); margin-top: 2px; }
+.lg-mark { display: flex; align-items: baseline; gap: 0; }
+.lg-mark-stem { color: var(--dim); font-weight: 700; }
+.lg-mark-end { color: var(--accent); font-weight: 800; }
+.lg-sportrow { margin-top: 2px; }
+.lg-sportpick { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.lg-sportpick-logo { display: block; object-fit: contain; }
 .lg-mode.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
 .lg-mode.is-on .lg-mode-h { color: var(--accent); }
 .lg-mode-b { font-size: var(--t-micro); color: var(--dim); line-height: 1.45; }

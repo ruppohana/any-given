@@ -36,6 +36,11 @@ const ROUTES = [
   /* 🔴 THE ONLY ROUTE THAT IS NOT FIXTURES. It polls the Worker, holds what it
    * gets behind the user's own delay, and settles against the play that actually
    * happened. Everything else here is a design surface; this one is the product. */
+  /* 🔴 HOME IS ITS OWN SCREEN, NOT THE GAME WITH A CARD ON TOP. Jason said
+   * "Home should start here" three times, and each time I stapled the hub onto
+   * the live screen instead of building the thing he was pointing at. A landing
+   * that scrolls straight into the game IS the game. */
+  { id: 'home',      dest: 'home',      screen: 'live-game',       state: 'home',        label: 'Home' },
   { id: 'live',      dest: 'home',      screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
   { id: 'now',       dest: 'live',      screen: 'l4-now',          state: 'open',        label: 'The call (fixtures)' },
   { id: 'landed',    dest: 'live',      screen: 'l7-result',       state: 'landed',      label: 'Result — landed' },
@@ -77,8 +82,8 @@ function currentRoute() {
   /* 🔴 THE FALLBACK IS THE GAME, not the first row of the ROUTES table. An
    * unknown or empty hash used to land on the college slate, which is how the
    * real domain opened on a design surface instead of on the product. */
-  const id = (location.hash || '#/live').replace(/^#\//, '');
-  return ROUTES.find((r) => r.id === id) || ROUTES.find((r) => r.id === 'live') || ROUTES[0];
+  const id = (location.hash || '#/home').replace(/^#\//, '');
+  return ROUTES.find((r) => r.id === id) || ROUTES.find((r) => r.id === 'home') || ROUTES[0];
 }
 
 async function mount() {
@@ -169,7 +174,7 @@ function drawNav(active) {
      * was the only call card that existed. It stopped making sense the moment
      * the app had a real one, and nothing caught it because both screens look
      * almost identical — which is precisely why the mock was built. */
-    hrefFor: (d) => '#/' + ({ home: 'live', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
+    hrefFor: (d) => '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
   });
   document.querySelector('.ag-shell').appendChild(nav);
 }
@@ -248,7 +253,10 @@ async function boot() {
 
   /* 🔴 NO HASH MEANS THE GAME, not the first entry in a list. */
   if (!location.hash || location.hash === '#/' || location.hash === '#') {
-    location.replace(location.pathname + location.search + '#/live');
+    /* An invite carries a game, so it goes straight to it; anything else lands
+     * on Home. */
+    location.replace(location.pathname + location.search
+      + (new URLSearchParams(location.search).get('game') ? '#/live' : '#/home'));
   }
 
   buildSettings();
