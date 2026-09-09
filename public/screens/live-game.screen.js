@@ -445,6 +445,21 @@ export function render(root, _data, screenState) {
   S.forced = !!forced;
   /* Reset on arrival, so Home is a door and not a wizard somebody is stuck in. */
   S.homeStep = 'mode';
+  /* 🔴 AND THE REPAINT SIGNATURE, WHICH IS A HARD BLOCKER IF IT SURVIVES A MOUNT.
+   *
+   * Home -> marbles -> College left the app stuck on "Waiting for the first push
+   * from the poller" for ever. The sport button sets S.raw = null and navigates;
+   * the new screen mounts, paints its loading skeleton, and polls. The poll gets
+   * back the SAME game state Home had already been holding, so the signature it
+   * computes equals S.lastSig - left over from the previous screen - and the
+   * quiet-repaint guard decides nothing has changed and returns. The skeleton
+   * never gets replaced.
+   *
+   * The guard is right that the DATA did not change. It was wrong to assume the
+   * screen had not, and a cache that outlives the thing it describes is the bug
+   * every time. Cleared on every mount so the first paint after a navigation is
+   * unconditional. */
+  S.lastSig = null;
   if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
   paint(wrap);

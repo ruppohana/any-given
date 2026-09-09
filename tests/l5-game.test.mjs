@@ -584,3 +584,35 @@ test('🔴 no screen has a stray backtick inside its CSS template literal', asyn
   assert.ok(checked > 0, 'no CSS literals found - this guard is checking nothing');
   console.log('    ' + checked + ' CSS template literals close where they should');
 });
+
+/* 🔴 THE REPAINT GUARD MUST NOT OUTLIVE A MOUNT. Added 2026-09-09 after it left
+ * the main path dead: Home -> Play the marbles -> College showed "Waiting for
+ * the first push from the poller" for ever.
+ *
+ * The sport button nulls S.raw and navigates; the new screen mounts, paints a
+ * skeleton and polls; the poll returns the same state the previous screen was
+ * already holding, so the signature matches S.lastSig from before the
+ * navigation and the guard suppresses the one paint that mattered. The guard was
+ * right that the data had not changed and wrong to assume the screen had not.
+ *
+ * Asserted over the source because mount() needs a DOM. What is checked is the
+ * ordering rule: the signature is cleared in mount, before the first poll. */
+test('🔴 the quiet-repaint signature is cleared on every mount', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8');
+
+  const m = src.indexOf('export function render');
+  const mount = src.slice(src.indexOf('function mount', 0) >= 0 ? src.indexOf('function mount') : 0);
+  assert.match(src, /S\.lastSig = null;/, 'nothing clears the repaint signature');
+
+  /* It has to be cleared BEFORE the first poll of the new screen, or the first
+   * response is compared against the previous screen's signature. */
+  const clear = src.indexOf('S.lastSig = null;');
+  const firstPoll = src.indexOf('poll(wrap);', clear);
+  assert.ok(clear > 0 && firstPoll > clear,
+    'the signature must be cleared before the mount polls');
+
+  /* And the guard itself must still only apply before the snap - once the game
+   * is live the board has a running clock that wants every tick. */
+  assert.match(src, /S\.raw\.status === 'pre'/, 'the guard must be limited to the pre-game');
+});
