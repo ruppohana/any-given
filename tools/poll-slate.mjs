@@ -189,6 +189,31 @@ NO GAMES CAPTURED for ${sport} week ${week} - refusing to overwrite the last goo
   process.exit(1);
 }
 const key = `slate:${sport}:${season}:${week}`;
+
+/* 🔴 AND THE SLATE DOES NOT REWRITE ITSELF EITHER. Same finding, same day: this
+ * runs every ten minutes and wrote the whole week every time, which is 144
+ * writes a day per sport for a document that changes when a game kicks off, when
+ * a score moves, or when a book moves a line - a few dozen times a week.
+ *
+ * It compares against what is ALREADY PUBLISHED rather than against a local
+ * memory, so a restarted poller does not write once for free, and two pollers
+ * cannot take turns rewriting the same document. */
+const same = await (async () => {
+  try {
+    const cur = await (await fetch(`${base}/api/state/${key}`)).json();
+    if (!cur || !Array.isArray(cur.games) || cur.games.length !== games.length) return false;
+    const sig = (list) => list.map((g) => [g.id, g.status, g.homeScore, g.awayScore,
+                                           g.spread, g.kickoffUtc].join(',')).join('|');
+    return sig(cur.games) === sig(games);
+  } catch { return false; }
+})();
+
+if (same) {
+  console.log(`
+unchanged - ${games.length} games already published, not rewriting`);
+  process.exit(0);
+}
+
 const res = await fetch(base + '/api/push', {
   method: 'POST',
   headers: { 'content-type': 'application/json', 'x-push-token': token },

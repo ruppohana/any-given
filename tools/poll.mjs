@@ -60,7 +60,7 @@ const url = `https://site.api.espn.com/apis/site/v2/sports/football/${path}/summ
 const key = `${sport}:${gameId}`;
 
 let lastPlayId = null;
-let pushes = 0, failures = 0;
+let pushes = 0, failures = 0, skipped = 0, lastSig = null;
 let lastStatus = null;
 
 /* 🔴 A GAME THAT HAS NOT KICKED OFF DOES NOT NEED A POLL EVERY TEN SECONDS.
@@ -85,6 +85,69 @@ async function tick() {
     const newest = state.plays[state.plays.length - 1];
     const fresh = newest && newest.id !== lastPlayId;
     lastPlayId = newest ? newest.id : lastPlayId;
+
+    /* 🔴 ONLY WRITE WHEN SOMETHING CHANGED. Found 2026-09-09, seven hours before
+     * the opener, by a dry run that could not push:
+     *
+     *     502 {"error":"KV put() limit exceeded for the day."}
+     *
+     * KV's free tier allows 1,000 writes a day. This poller wrote on EVERY tick
+     * whether or not the game had moved - every 5 minutes before kickoff and
+     * every 10 seconds during play, per sport. Two pollers running all day is
+     * ~600 writes before a single snap, and a three-hour game at 10s is another
+     * 1,080. The quota was gone by mid-morning, and the way we would have found
+     * out is the live board freezing during the game with the poller reporting
+     * success - the exact failure mode the supervisor was built to prevent,
+     * arriving from the one direction it does not watch.
+     *
+     * A push that carries the same state as the last one buys nothing. Every
+     * phone re-reads the same document either way, and KV reads are a separate,
+     * far larger allowance. So the writes now track the GAME rather than the
+     * clock: a handful before kickoff, then roughly one per play - about 180 for
+     * a full game instead of 1,080.
+     *
+     * The signature is deliberately everything a client can see: the last play,
+     * the score, the clock, the status and the play count. If any of those move,
+     * this writes. */
+    /* 🔴 THE GAME CLOCK IS NOT IN THE SIGNATURE, AND THAT IS THE WHOLE FIX.
+     *
+     * My first version included it and would have changed nothing: the clock
+     * ticks every second, so every poll would still have found a difference and
+     * written. A dedupe keyed on a field that always differs is a dedupe that
+     * does not exist.
+     *
+     * Leaving it out means the on-screen clock steps with the PLAYS rather than
+     * running smoothly - it moves when a snap lands, roughly every 25 to 40
+     * seconds. For a scores app that would be a defect. For this one it is
+     * closer to correct: the app is deliberately 45 seconds behind and exists to
+     * ask a question between two snaps, so a clock that advances play by play is
+     * describing the thing it is actually showing.
+     *
+     * Down and distance stay in. They change with a play rather than with time,
+     * so they cost nothing - and they are the belt to the play id's braces, for
+     * the case where a play is corrected in place rather than appended. */
+    const sig = [
+      state.status, state.awayScore, state.homeScore, state.plays.length,
+      newest && newest.id,
+      state.situation && state.situation.down,
+      state.situation && state.situation.distance
+    ].join('|');
+
+    if (sig === lastSig) {
+      /* 🔴 STILL RECORD THAT THE FEED IS ALIVE. The screen's staleness indicator
+       * reads pushedAt, so a game that legitimately has not moved for two
+       * minutes must not start looking like a dead poller. That is why the
+       * heartbeat is written to the CONSOLE and the state is left alone: the
+       * feed being unchanged is not the same fact as the feed being gone, and
+       * the app already distinguishes them by the game clock. */
+      skipped++;
+      const q = [new Date().toLocaleTimeString(), state.status.padEnd(5),
+                 `${state.awayScore}-${state.homeScore}`, 'unchanged'].join('  ');
+      if (skipped % 10 === 1) console.log(q + `  (${skipped} skipped, ${pushes} written)`);
+      lastStatus = state.status;
+      return;
+    }
+    lastSig = sig;
 
     const push = await fetch(base + '/api/push', {
       method: 'POST',
