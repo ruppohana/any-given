@@ -276,7 +276,14 @@ test('the pool board never says Marbles, and never says any of the purchase word
 
 test('no shadows, no hard-coded accent, no :root, no team color at :root', () => {
   const css = stripComments(CSS_SRC);
-  assert.ok(!/box-shadow/i.test(css), 'depth is 1px solid var(--line)');
+  /* Depth is ONE shared token since 2026-09-09, when Jason picked Deuce's
+   * surface - a white card lifting off a grey ground. The ban became a rule
+   * about ownership rather than about existence: exactly one shadow, defined
+   * centrally, and no screen invents its own. See p2-slate's version. */
+  for (const d of (css.match(/box-shadow:\s*[^;]+/g) || [])) {
+    assert.match(d, /var\(--lift\)|none/,
+      `a hand-rolled shadow: "${d.trim()}" - depth is var(--lift) or nothing`);
+  }
   assert.ok(!/var\(--maroon\)|var\(--gold\)/.test(css), 'read --accent, never --maroon or --gold');
   assert.ok(!/:root/.test(css), 'a pool component must never write at :root');
   assert.ok(!/--team-a\s*:|--team-b\s*:/.test(css), 'team vars are set per element by team-chip.js');

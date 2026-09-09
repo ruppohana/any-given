@@ -202,9 +202,29 @@ test('§5 - no marks, no CDN image, no logo', () => {
   assert.ok(!/background-image|url\(/i.test(CSSCODE), 'an image url got into the CSS');
 });
 
-test('§5 - depth is a hairline. No box-shadow anywhere', () => {
-  assert.ok(!/box-shadow/i.test(CSSCODE));
-  assert.ok(!/box-shadow/i.test(CODE));
+test('§5 - depth is ONE shared token, never a shadow a screen invented', () => {
+  /* 🔴 THIS ASSERTION REVERSED ON 2026-09-09, and the reversal is Jason's:
+   * asked what we were designing towards, he picked orbix.studio's Deuce, whose
+   * depth comes from a white card lifting off a GREY ground.
+   *
+   * It used to be a flat ban - DESIGN.md: "There are no drop shadows in this
+   * interface and none are to be added" - and that was right for a system whose
+   * ground was a warm cream, where a card could only be found by its hairline.
+   * On a grey ground the card is found by tone, and the faintest lift is what
+   * makes it read as sitting ON something rather than as a colour swap.
+   *
+   * 🔴 SO THE RULE IS STRICTER, NOT LOOSER. A ban is easy to satisfy and easy
+   * to drift from once broken; what actually protects the system is that there
+   * is exactly ONE shadow, defined centrally, and no screen may invent its own.
+   * That is what is asserted here - and dark mode still has none at all, because
+   * a shadow on a near-black ground only muddies the edge, which was DESIGN.md's
+   * argument and is still correct there. */
+  const shadows = (CSSCODE.match(/box-shadow:\s*[^;]+/g) || [])
+    .concat((CODE.match(/box-shadow:\s*[^;]+/g) || []));
+  for (const d of shadows) {
+    assert.match(d, /var\(--lift\)|none/,
+      `a hand-rolled shadow: "${d.trim()}" - depth is var(--lift) or nothing`);
+  }
 });
 
 test('§5 - read --accent, never --maroon or --gold, and never set a team var at :root', () => {

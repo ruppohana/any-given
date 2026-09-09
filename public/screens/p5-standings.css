@@ -105,8 +105,12 @@
    slate's 24 rows sat directly on the background: two identical structures,
    two different answers, in one app. Hairlines between rows and a hairline
    above the header do the dividing; the page does the containing. */
+/* Same treatment as the slate: one white surface, hairlines inside it. A
+   standings table and a fixture list are the same shape and must not get two
+   different answers - which was the inconsistency that started all of this. */
 .scr-p5-standings .p5-table { padding: 0; overflow: hidden;
-  border-top: 1px solid var(--line); }
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-card); box-shadow: var(--lift); }
 
 .scr-p5-standings .p5-head,
 .scr-p5-standings .p5-row {

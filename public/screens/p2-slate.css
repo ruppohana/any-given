@@ -60,7 +60,24 @@
 /* ---- the list. NO CARD PER ROW. Hairline divided, AQB's density, and the group header
  * is per group - Sofascore pays a full competition header 131 times and gets four and a
  * half fixtures a screen for it. */
-.scr-p2-slate .p2-list { display: block; }
+/* 🔴 THE LIST IS A WHITE SURFACE ON THE GREY GROUND, which is how Deuce holds
+   content - and it is the one place its system and our density have to be
+   reconciled rather than chosen between.
+
+   Deuce puts each DAY in its own card and gets four or five matches a screen.
+   We need twenty-four, so a card per day - or worse, per match - is the
+   Sofascore mistake with different corners: a full header repeated down the
+   scroll until sixty games is fifteen screens.
+
+   So: ONE surface for the whole list, hairline-divided inside it. Deuce's
+   material, our density. The rule in tokens.css still holds - this is not a card
+   per row, it is the page's content sitting on something. */
+.scr-p2-slate .p2-list { display: block; background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius-card);
+  box-shadow: var(--lift); overflow: hidden; }
+/* The day header belongs to the list now, not to the ground, so it loses the
+   negative margin that pulled it out through the container's padding. */
+.scr-p2-slate .p2-grp { margin-inline: 0; padding-inline: 12px; }
 
 /* The day header stacks directly under the bar, and takes the same treatment so
    the two read as one pinned block rather than as a stripe inside a margin. */

@@ -1018,16 +1018,51 @@ function liveCallBlock(rows) {
    * than one. The fix for that is profit PER MARBLE STAKED - a rate - and it is
    * fairer and much harder to read at a glance. Recorded here rather than built,
    * so the next session knows the total was chosen over the rate deliberately. */
-  let total = 0, open = 0;
-  for (const r of rows) { total += (r.profit || 0); open += (r.open || 0); }
+  let total = 0, open = 0, won = 0, lost = 0;
+  for (const r of rows) {
+    total += (r.profit || 0); open += (r.open || 0);
+    won += (r.won || 0); lost += (r.lost || 0);
+  }
 
+  /* 🔴 THE ANALYTICS TREATMENT, from the dashboards Jason picked on 2026-09-09:
+   * a large figure, and under it a SIGNED DELTA CHIP saying what it is relative
+   * to. That pattern is the whole reason those screens read as analytics rather
+   * than as a list of numbers - a figure alone is trivia, a figure with a
+   * comparison is a fact about you.
+   *
+   * 🔴 AND THE COMPARISON HAS TO BE REAL. Those references put "12.5% from last
+   * month" under everything, and the temptation is to fill the slot. We have no
+   * last week yet - the app is one day old - so the chip says the thing we
+   * genuinely know: how many of the settled calls landed. When a previous week
+   * exists it can say that instead, and until then the slot stays honest rather
+   * than staying full.
+   *
+   * A hit rate is not shown until something has settled. "0 of 0" is a division
+   * by nothing dressed up as a statistic. */
+  const settled = won + lost;
   const sum = el('div', 'p4-live-sum');
+
+  const fig = el('div', 'p4-live-fig');
   const v = el('div', 'p4-live-tot num', (total > 0 ? '+' : '') + total);
   if (total > 0) v.dataset.result = 'won';
   else if (total < 0) v.dataset.result = 'lost';
-  sum.appendChild(v);
-  sum.appendChild(el('div', 'p4-live-tl',
+  fig.appendChild(v);
+  fig.appendChild(el('div', 'p4-live-tl',
     'Marbles this week' + (open ? ' · ' + open + ' still open' : '')));
+  sum.appendChild(fig);
+
+  if (settled) {
+    const chip = el('div', 'p4-live-chip num');
+    const pct = Math.round((won / settled) * 100);
+    /* The arrow is the same fixed result scale as everything else - never team
+     * color, and it points at the hit rate rather than at the profit, because
+     * they can disagree: four small wins and one large loss is 80% and negative. */
+    chip.dataset.result = pct >= 50 ? 'won' : 'lost';
+    chip.appendChild(el('span', 'p4-live-arrow', pct >= 50 ? '▲' : '▼'));
+    chip.appendChild(el('span', null, pct + '%'));
+    sum.appendChild(chip);
+    sum.appendChild(el('div', 'p4-live-sub', won + ' of ' + settled + ' landed'));
+  }
   box.appendChild(sum);
 
   for (const r of rows) {

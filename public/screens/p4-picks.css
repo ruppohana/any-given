@@ -283,8 +283,26 @@
    and on the fixed result scale, because it is the answer to "how did I do" and
    the only figure on this screen that sums anything. It never joins the pool's
    points: two products, two scores. */
-.scr-p4-picks .p4-live-sum { display: flex; align-items: baseline; gap: 10px;
-  padding: 6px 0 10px; border-top: 1px solid var(--line); }
+/* THE STAT BLOCK — figure left, delta chip right, the way the analytics
+   dashboards do it. The chip is what turns a number into a comparison. */
+.scr-p4-picks .p4-live-sum { display: grid;
+  grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px;
+  padding: 8px 0 12px; border-top: 1px solid var(--line); }
+.scr-p4-picks .p4-live-fig { grid-row: span 2; }
+.scr-p4-picks .p4-live-chip { display: inline-flex; align-items: center; gap: 4px;
+  justify-self: end; padding: 3px 9px; border-radius: var(--radius-pill);
+  font-size: var(--t-micro); font-weight: 800; }
+/* 🔴 ONE LINE EACH, DELIBERATELY. The result-scale guard is line-based: it
+   finds every line mentioning var(--up) or var(--down) and requires a resolved
+   state selector on that same line. A rule wrapped across two lines puts the
+   color on a line with no selector and fails - correctly, because the guard
+   cannot tell a wrapped rule from an unguarded one, and the failure it exists to
+   catch is exactly a --up that reaches an unresolved pick. Keeping these on one
+   line is cheaper than making the guard understand CSS. */
+.scr-p4-picks .p4-live-chip[data-result="won"] { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
+.scr-p4-picks .p4-live-chip[data-result="lost"] { color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); }
+.scr-p4-picks .p4-live-arrow { font-size: 8px; line-height: 1; }
+.scr-p4-picks .p4-live-sub { justify-self: end; font-size: var(--t-micro); color: var(--dim); }
 .scr-p4-picks .p4-live-tot { font-size: var(--t-figure); font-weight: 800; color: var(--dim); }
 .scr-p4-picks .p4-live-tot[data-result="won"]  { color: var(--up); }
 .scr-p4-picks .p4-live-tot[data-result="lost"] { color: var(--down); }

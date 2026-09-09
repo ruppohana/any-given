@@ -95,21 +95,41 @@ export function navBar(active, opts) {
 
 export const NAV_CSS = [
   /* Bottom bar on a phone, because one-handed at night is the design case. */
+  /* 🔴 A FLOATING PILL, WHICH IS THE MOST RECOGNISABLE THING ABOUT DEUCE. Jason
+     picked that system on 2026-09-09. Its nav is not a bar welded to the bottom
+     edge - it is a rounded white pill lifted off the ground with a margin all
+     round, and the current tab is a FILLED pill inside it rather than a colored
+     word under a 2px rule.
+
+     Why the filled pill is the better signal here and not just the fashionable
+     one: at 375px the four labels are 11px, and a 2px underline on 11px type is
+     a hairline under a whisper. A filled shape is legible at a glance in a dark
+     room at arm's length, which is the actual design case for this bar.
+
+     🔴 IT STILL RESERVES ITS OWN SPACE. `position: sticky` keeps it in the flow,
+     so content scrolls to a natural end above it rather than under it - the ad
+     doctrine's rule about a slot that overlays content, applied to the nav. */
   '.ag-nav { position: sticky; bottom: 0; z-index: 10; display: grid;',
-  '  grid-template-columns: repeat(4, 1fr); background: var(--card);',
-  '  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0); }',
+  '  grid-template-columns: repeat(4, 1fr); gap: 2px;',
+  '  background: var(--card); border: 1px solid var(--line);',
+  '  border-radius: var(--radius-pill); box-shadow: var(--lift);',
+  '  margin: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)); padding: 4px; }',
   '.ag-nav-item { display: flex; align-items: center; justify-content: center;',
-  '  min-height: var(--tap-min); font-size: var(--t-micro); font-weight: 600;',
-  '  text-decoration: none; color: var(--dim); }',
-  '.ag-nav-item[aria-current="page"] { color: var(--accent); box-shadow: none;',
-  '  border-top: 2px solid var(--accent); margin-top: -1px; }',
+  '  min-height: var(--tap-min); font-size: var(--t-micro); font-weight: 700;',
+  '  border-radius: var(--radius-pill); text-decoration: none; color: var(--dim); }',
+  /* The filled pill. Accent ground, page color on top - never accent-on-white,
+     which at 11px is the same whisper the underline was. */
+  '.ag-nav-item[aria-current="page"] { color: var(--bg); background: var(--accent);',
+  '  box-shadow: none; border-top: 0; margin-top: 0; }',
   '.ag-nav-item[data-unavailable="true"] { color: var(--dim); opacity: .45; pointer-events: none; }',
   /* S5: on a real window the bar moves to the side. Desktop is a SECOND LAYOUT,
    * not a variant - see shell.css. */
   '@media (min-width: 900px) {',
   '  .ag-nav { position: static; grid-template-columns: 1fr; align-content: start;',
-  '    border-top: 0; border-right: 1px solid var(--line); height: 100%; padding: 12px 0; }',
+  '    border: 0; border-right: 1px solid var(--line); border-radius: 0;',
+  '    box-shadow: none; margin: 0; height: 100%; padding: 12px 0; }',
   '  .ag-nav-item { justify-content: flex-start; padding: 0 16px; font-size: var(--t-body); }',
-  '  .ag-nav-item[aria-current="page"] { border-top: 0; border-left: 2px solid var(--accent); margin-top: 0; }',
+  '  .ag-nav-item[aria-current="page"] { background: none; color: var(--accent);',
+  '    border-radius: 0; border-left: 2px solid var(--accent); }',
   '}'
 ].join('\n');

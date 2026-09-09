@@ -23,12 +23,31 @@
   --maroon: #8C1D40;
   --gold:   #FFC627;
 
-  --bg:     #faf7f5;   /* warm off-white, never pure white - that is what cards are for */
+  /* 🔴 THE SURFACE IS DEUCE'S. Jason picked it on 2026-09-09 after asking "What
+   * are we designing towards? We have styles saved and available. Let's pick
+   * one." - and answering with orbix.studio's Deuce tennis dashboard.
+   *
+   * What that system actually is, read off the shots rather than described from
+   * memory: a NEUTRAL GREY GROUND with WHITE CARDS floating on it, a large soft
+   * radius, almost no borders, and separation carried by TONE rather than by a
+   * line. One accent, used sparingly. A repeated stat card of small grey label,
+   * large figure, small delta underneath.
+   *
+   * 🔴 THE OLD GROUND WAS WARM AND THE NEW ONE IS NEUTRAL, and that is the
+   * change that does the most work. #faf7f5 is a cream; against a white card it
+   * is nearly the same colour, so the card could only be found by its hairline.
+   * A grey ground lets the card be white and be SEEN, which is what lets the
+   * border go away.
+   *
+   * The hairline is kept and quietened rather than deleted - dark mode has no
+   * tone difference to fall back on, and a card with neither a line nor a
+   * contrast is not a card there. */
+  --bg:     #eff0ee;   /* neutral grey ground - cards are white ON something */
   --card:   #ffffff;   /* the only pure white in the system */
-  --fg:     #1a1416;
-  --dim:    #6f6165;
-  --line:   #e6ddd8;   /* DEPTH IS THIS. 1px. There are no shadows in this system */
-  --track:  #e6ddd8;
+  --fg:     #1a1c1a;
+  --dim:    #6b706c;
+  --line:   #e4e6e3;   /* quieter now: tone separates, the line only confirms */
+  --track:  #e4e6e3;
   --grass:  #d8e2d6;   /* the drive chart ground. The one literal color */
 
   /* FIXED SCALES. Never team color, in either theme. */
@@ -52,10 +71,25 @@
   --team-null:      #8a8a8a;
   --team-null-line: #b4b4b4;
 
-  --radius-chip:   5px;
-  --radius-button: 9px;   /* the dominant radius */
-  --radius-card:  12px;
-  --radius-pill:  22px;
+  /* 🔴 SOFTER, BECAUSE THAT IS MOST OF WHAT MAKES DEUCE LOOK LIKE DEUCE. Its
+   * cards are ~16-18px and its controls are pills. A 12px card on a grey ground
+   * still reads as a panel; a 16px one reads as an object sitting on it. */
+  --radius-chip:   8px;
+  --radius-button: 12px;
+  --radius-card:  16px;
+  --radius-pill:  999px;
+
+  /* 🔴 ONE SHADOW, AND IT IS A REVERSAL WORTH NAMING. DESIGN.md says "There are
+   * no drop shadows in this interface and none are to be added", and that was
+   * right for a system whose depth came from a hairline on a warm ground. Deuce
+   * gets its depth from a card lifting off a grey ground, and that needs the
+   * faintest lift to read as lifting rather than as a colour swap.
+   *
+   * It is deliberately almost invisible - 3% black, no spread, 2px down. Enough
+   * to separate, not enough to become a style. On dark it is removed entirely,
+   * because a shadow on #14161a does nothing but muddy the edge, which is the
+   * argument DESIGN.md made and it is still correct there. */
+  --lift: 0 1px 2px rgba(16, 20, 16, 0.04), 0 2px 8px rgba(16, 20, 16, 0.03);
   --tap-min:      44px;   /* one-handed, at night, possibly on a moving couch */
 
   --font: ui-sans-serif, system-ui, sans-serif;
@@ -76,12 +110,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg:    #120a0e;   /* near-black with the maroon cast held */
-    --card:  #1c1216;
-    --fg:    #f5eef0;
-    --dim:   #a8969c;
-    --line:  #33232a;
-    --track: #3a2a30;
+    /* 🔴 THE DARK GROUND LOSES ITS MAROON CAST TOO. It was #120a0e - near-black
+     * warmed towards the maroon - which was right while the light ground was a
+     * cream. With a neutral grey in light, a warm near-black in dark is two
+     * different products wearing one name: the theme toggle changed the mood
+     * rather than the luminance.
+     *
+     * 🔴 AND THE SHADOW IS REMOVED, not softened. A drop shadow on a near-black
+     * ground does nothing but muddy the edge - that is DESIGN.md's argument
+     * against shadows and it is still exactly right here. Dark keeps the
+     * hairline as its only separator, which is why the hairline was quietened in
+     * light rather than deleted. */
+    --bg:    #14161a;
+    --card:  #1d2025;
+    --fg:    #eef1ee;
+    --dim:   #9aa19b;
+    --line:  #2b2f34;
+    --track: #2b2f34;
+    --lift:  none;
     --grass: #14361f;
     --accent: var(--gold);          /* THE TOKEN SWAPS. Maroon is not legible here */
     --up:   #3fcf7a;                /* the light values go muddy on #120a0e */
@@ -96,12 +142,15 @@
 }
 
 :root[data-theme="dark"] {
-  --bg:    #120a0e;
-  --card:  #1c1216;
-  --fg:    #f5eef0;
-  --dim:   #a8969c;
-  --line:  #33232a;
-  --track: #3a2a30;
+  /* Same values as the media query above - a toggle and a system preference must
+   * not produce two different dark modes. */
+  --bg:    #14161a;
+  --card:  #1d2025;
+  --fg:    #eef1ee;
+  --dim:   #9aa19b;
+  --line:  #2b2f34;
+  --track: #2b2f34;
+  --lift:  none;
   --grass: #14361f;
   --accent: var(--gold);
   --up:   #3fcf7a;
@@ -164,6 +213,8 @@ body {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  padding: 14px 12px;
+  box-shadow: var(--lift);
 }
 
 button, .btn {
