@@ -33,6 +33,19 @@ const STAKES = [5, 10, 25];
 const START_BANK = 200;
 const MAX_PAYOUT = 6;
 
+/* 🔴 ONE GAME PER SPORT, NAMED, and this is a rig rather than a schedule. The
+ * poller pushes one game at a time and the key it writes is `<sport>:<espnId>`;
+ * a slate that lets you pick any game needs the pool routes and a poller per
+ * game, which is the build after this one. Tonight there is one NFL game on the
+ * wire, which is the one being tested — and a college key that nothing is
+ * pushing to is honest: the screen says nobody is polling it. */
+const GAME_FOR = {
+  'nfl': 'nfl:401872656',
+  'college-football': 'college-football:401752706'
+};
+
+const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College' };
+
 /* ------------------------------------------------------------------ */
 
 function el(tag, cls, text) {
@@ -65,6 +78,13 @@ const S = {
   stake: store.get('stake', 10),
   calls: store.get('calls', {}),   // afterPlayId -> { type, choice, stake, p }
   seenIntro: !!store.get('seenIntro', 0),
+  /* 🔴 NO DEFAULT. Jason, 2026-09-08: "the initial decision needs to pick between
+   * NFL and NCAA football." Defaulting to either one answers the question on the
+   * user's behalf and then hides it — and the two sports are not interchangeable
+   * here: the tendency model is 697,997 COLLEGE plays and the sack rule is
+   * graded the opposite way by league. Guessing wrong grades calls wrong.
+   * `null` means the choice has not been made, and the screen asks. */
+  sport: store.get('sport', null),
   bank: START_BANK,
   board: [],
   timer: null
@@ -276,8 +296,11 @@ export function render(root, _data, _state) {
   const wrap = el('div', 'lg');
   root.appendChild(wrap);
 
-  S.key = new URLSearchParams(location.search).get('game') || store.get('gameKey', 'nfl:401872656');
-  store.set('gameKey', S.key);
+  /* An explicit ?game= always wins - that is how a specific game is shared and
+   * how the fixtures are replayed. Otherwise the key follows the chosen sport. */
+  const forced = new URLSearchParams(location.search).get('game');
+  S.key = forced || (S.sport ? GAME_FOR[S.sport] : null);
+  if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
   paint(wrap);
   if (S.timer) clearInterval(S.timer);
@@ -303,6 +326,13 @@ function paint(wrap) {
 
   /* ---- the delay, first, because it is the thing that makes this work ---- */
   wrap.appendChild(delayBar());
+
+  /* 🔴 THE SPORT IS ASKED BEFORE ANYTHING ELSE IS SHOWN, and nothing below it
+   * renders until it is answered. Not a default with a switch buried in
+   * settings: the two sports grade a sack the opposite way and the tendency
+   * model is college-only, so a wrong guess does not look wrong — it just
+   * settles calls the other way. */
+  if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
 
   /* Under the bar it explains, and above everything else, because it changes how
    * to read the whole screen. It goes the moment they say so, or the moment they
@@ -410,11 +440,35 @@ function paint(wrap) {
         ? 'Priced off a prior — the model has barely seen this game yet'
         : `${priced[0].samples} snaps from this offense tonight`));
     wrap.appendChild(card);
-  } else if (already) {
-    const c = el('div', 'card lg-called');
-    c.appendChild(el('div', 'lg-q', `You called ${already.label}`));
-    c.appendChild(el('div', 'lg-sub', 'Waiting on the snap.'));
-    wrap.appendChild(c);
+  } else if (already && last) {
+    /* 🔴 THE TILES STAY, AND THE ONE YOU TOOK IS LIT. Jason, 2026-09-08: "when
+     * you select a run or pass, it should highlight, it does not do that now."
+     *
+     * It used to replace the whole card with a line of text, which throws away
+     * the two things worth looking at while you wait: WHAT YOU TOOK, in the same
+     * place you tapped it, and WHAT IT PAYS. A sentence saying "You called Run"
+     * is an acknowledgement; the lit tile is the bet. */
+    const type2 = byId(already.type);
+    const card = el('div', 'card lg-call is-called');
+    card.appendChild(el('div', 'lg-q', type2 ? type2.question : 'Your call'));
+    card.appendChild(el('div', 'lg-sub', 'Locked in — waiting on the snap.'));
+    if (type2) {
+      const tiles = el('div', 'lg-tiles' + (type2.choices.length > 3 ? ' is-4' : ''));
+      for (const ch of type2.choices) {
+        const mine = ch.id === already.choice;
+        const b = el('div', 'lg-tile' + (mine ? ' is-mine' : ' is-faded'));
+        b.appendChild(el('span', 'lg-tile-label', ch.label));
+        if (mine) {
+          b.appendChild(el('span', 'lg-tile-win num',
+            '+' + (Math.round(already.stake * payoutOf(already)) - already.stake)));
+          b.appendChild(el('span', 'lg-tile-x num',
+            payoutOf(already) + '× · ' + already.stake + ' Marbles'));
+        }
+        tiles.appendChild(b);
+      }
+      card.appendChild(tiles);
+    }
+    wrap.appendChild(card);
   }
 
   /* ---- what happened ---- */
@@ -623,6 +677,48 @@ function claimCalls() {
  * arriving is an obstacle. Jason, on a different panel: "i dont need this every
  * fucking time either."
  */
+/**
+ * The first question, and the only one asked before the game is shown.
+ *
+ * 🔴 IT IS NOT A COSMETIC PREFERENCE. A sack settles as a PASS in the NFL and a
+ * RUSH in college — every operator rulebook says so in the same words — and the
+ * tendency model behind the prices is 697,997 COLLEGE plays with no NFL
+ * equivalent. Picking the wrong one does not produce an error; it produces calls
+ * that grade the other way and prices drawn from the wrong sport.
+ *
+ * Changeable afterwards from the same place, because somebody who watches both
+ * should not have to clear their browser to switch.
+ */
+function sportCard(wrap) {
+  const c = el('div', 'card lg-sport');
+  c.appendChild(el('div', 'lg-sport-h', 'Which are you watching?'));
+  c.appendChild(el('p', 'lg-sport-b',
+    'It changes how calls are settled and how they are priced — a sack counts as a pass in the NFL '
+    + 'and as a run in college, and the model behind the prices is built on college play-by-play.'));
+  const row = el('div', 'lg-sport-row');
+  for (const id of ['nfl', 'college-football']) {
+    const b = el('button', 'lg-sport-pick');
+    /* The league's own mark, self-hosted like the club crests. Jason:
+     * "use the nfl logo and the ncaa logo." */
+    const img = document.createElement('img');
+    img.className = 'lg-sport-logo';
+    img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
+    img.alt = ''; img.width = 44; img.height = 44;
+    b.appendChild(img);
+    b.appendChild(el('span', 'lg-sport-name', SPORT_LABEL[id]));
+    b.onclick = () => {
+      S.sport = id; store.set('sport', id);
+      S.key = GAME_FOR[id];
+      S.raw = null; S.board = [];
+      paint(wrap);
+      poll(wrap);
+    };
+    row.appendChild(b);
+  }
+  c.appendChild(row);
+  return c;
+}
+
 function introCard(wrap) {
   const c = el('div', 'card lg-intro');
   c.appendChild(el('div', 'lg-intro-h', 'You are 45 seconds behind, and that is the point'));
@@ -678,6 +774,15 @@ const CSS = `
 .lg-stale-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--down); }
 .lg-stale-b { font-size: var(--t-micro); color: var(--ink); }
 .lg-delay-warn { font-size: var(--t-micro); color: var(--down); font-weight: 700; margin: 2px 0 0; }
+.lg-sport { display: grid; gap: 8px; padding: 16px 12px; }
+.lg-sport-h { font-size: var(--t-section); font-weight: 800; }
+.lg-sport-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
+.lg-sport-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.lg-sport-logo { display: block; margin: 0 auto 6px; object-fit: contain; }
+.lg-sport-name { display: block; font-size: var(--t-body); }
+.lg-sport-pick { font: inherit; font-size: var(--t-emph); font-weight: 800; min-height: 52px;
+  border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); color: var(--fg); }
 .lg-intro { display: grid; gap: 8px; padding: 14px 12px; }
 .lg-intro-h { font-size: var(--t-emph); font-weight: 800; line-height: 1.25; }
 .lg-intro-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
@@ -734,6 +839,12 @@ const CSS = `
 .lg-tile-label { font-weight: 800; font-size: var(--t-emph); }
 .lg-tile-win { font-size: var(--t-figure); font-weight: 800; }
 .lg-tile-x { font-size: var(--t-micro); color: var(--dim); }
+/* The taken tile keeps the accent it was tapped with; the others recede rather
+   than disappear, so the choice still reads as a choice that was made. */
+.lg-tile.is-mine { border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+.lg-tile.is-faded { opacity: .38; }
+.lg-call.is-called .lg-tile { cursor: default; }
 .lg-note { font-size: var(--t-micro); color: var(--dim); margin: 8px 0 0; }
 .lg-rows, .lg-board { padding: 4px 12px; }
 .lg-board-h { font-size: var(--t-micro); color: var(--dim); padding: 8px 0 2px; letter-spacing: .04em; }

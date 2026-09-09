@@ -63,6 +63,17 @@ import { stateBlock, STATES_CSS } from '/components/states.js';
 import { teamChip, TEAM_CHIP_CSS, applyTeamVars, teamVars } from '/components/team-chip.js';
 import { signed, signClass } from '/components/fmt.js';
 
+/* 🔴 FIELD PAINT IS FIXED AND IS NOT A THEME TOKEN. Every chalk line and yard
+ * number here was `var(--card)`, which is near-white on light and NEAR-BLACK on
+ * dark — so the whole field lost its markings on the dark theme. Jason,
+ * 2026-09-08: "the black version of the field has black text for the field
+ * markers."
+ *
+ * The grass is drawn green in BOTH themes, so anything painted ON the grass has
+ * to be fixed too. A token that swaps is correct for the app's surfaces and
+ * wrong for a picture of a football field. */
+const PAINT = '#f2f4f2';
+
 export const id = 'l4-now';
 export const title = 'Now - the bank strip and the call card';
 export const bar = 'reference/armchair-quarterback-teardown/screens/AQB-call-binary-run-pass.png';
@@ -446,7 +457,7 @@ function fieldStrip(snap) {
   for (let y = 0; y <= 100; y += 5) {
     const f = EZ + (y / 100) * (1 - EZ * 2);
     add('line', { x1: nearX(f), y1: NEAR_Y, x2: farX(f), y2: FAR_Y,
-                  stroke: 'var(--card)', 'stroke-width': y % 10 ? .5 : .9,
+                  stroke: PAINT, 'stroke-width': y % 10 ? .5 : .9,
                   opacity: y % 10 ? '.45' : '.8' });
   }
   /* Hash marks along the two inbound lines. */
@@ -457,11 +468,11 @@ function fieldStrip(snap) {
       if (y % 5 === 0) continue;
       const f = EZ + (y / 100) * (1 - EZ * 2);
       add('line', { x1: hx(f), y1: hy - 1, x2: hx(f), y2: hy + 1,
-                    stroke: 'var(--card)', 'stroke-width': .4, opacity: '.5' });
+                    stroke: PAINT, 'stroke-width': .4, opacity: '.5' });
     }
   }
   /* The touchlines, which close the shape. */
-  add('polygon', { points: quad(0, 1), fill: 'none', stroke: 'var(--card)',
+  add('polygon', { points: quad(0, 1), fill: 'none', stroke: PAINT,
                    'stroke-width': .9, opacity: '.85' });
 
   /* YARD NUMBERS. Jason, on two reference fields: "the second field is a little
@@ -478,7 +489,16 @@ function fieldStrip(snap) {
       y: FAR_Y + t * (NEAR_Y - FAR_Y),
       'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700,
       'font-family': 'ui-sans-serif, system-ui, sans-serif',
-      fill: 'var(--card)', opacity: '.92'
+      /* 🔴 FIELD PAINT IS NOT A THEME TOKEN. This was `var(--card)`, which is
+       * near-white on light and near-black on dark — so on the dark theme the
+       * yard numbers were black on green and simply were not there. Jason,
+       * 2026-09-08: "the black version of the field has black text for the field
+       * markers."
+       *
+       * A yard number is white paint on grass in the world. The grass here is
+       * drawn green in BOTH themes, so the number that sits on it must be fixed
+       * too. Nothing inside the field may read a token that swaps. */
+      fill: PAINT, opacity: '.92'
     });
     n.textContent = String(label);
   });

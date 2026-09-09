@@ -26,6 +26,18 @@ const file = fileURLToPath(new URL(`../fixtures/${name}-260905-final.json`, impo
 const state = readLive(JSON.parse(readFileSync(file, 'utf8')), '999', 'college-football', Date.now());
 if (upTo > 0) state.plays = state.plays.slice(0, upTo);
 
+/* 🔴 --live FORCES THE STATUS, and it is a TEST RIG rather than a lie the app
+ * can tell itself. A captured game is FINAL by definition, so replaying one can
+ * never exercise the states that only exist while a game is running - the call
+ * card, the price, the lit tile. Nothing else fabricates a status: the poller
+ * reads ESPN's own type name and this flag exists only on a tool that has to be
+ * run by hand with a fixture named on the command line. */
+if (args.includes('--live')) {
+  state.status = 'live';
+  const last = state.plays[state.plays.length - 1];
+  if (last) state.situation = { ...(state.situation || {}), offenseTeamId: last.offenseTeamId, down: 1, distance: 10 };
+}
+
 const res = await fetch(base + '/api/push', {
   method: 'POST',
   headers: { 'content-type': 'application/json', 'x-push-token': token },

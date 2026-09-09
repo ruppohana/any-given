@@ -122,7 +122,29 @@ export function marksOn(doc) {
  * is the only way this class of bug is ever found. */
 const LEAGUE_PATH = { nfl: 'nfl', 'college-football': 'ncaa', ncaa: 'ncaa' };
 
+/**
+ * 🔴 OUR ORIGIN FIRST, THE CDN AS FALLBACK.
+ *
+ * `tools/scrape-logos.mjs` writes `public/logos/<path>/<variant>/<id>.png`, and
+ * those are what ship. Hot-linking a.espncdn.com was three bets we did not need
+ * to take: ESPN ALREADY 403s our Worker on its data endpoints — that is the only
+ * reason the poller runs on the host — a 131-game slate is 262 requests to
+ * somebody else's origin on a phone during a game, and a crest that fails is a
+ * hole in the row.
+ *
+ * The CDN stays as the fallback rather than being deleted, because the college
+ * set is 760 schools and will be incomplete for a while. A team we have not
+ * scraped yet still draws.
+ */
 export function logoUrl(team, league, variant) {
+  if (!team || !team.id) return null;
+  const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
+  return `/logos/${path}/${variant || '500'}/${team.id}.png`;
+}
+
+/** Where the crest came from before we held our own copy. Used only when the
+ *  local one 404s, so a school we have not scraped is never a hole. */
+export function cdnLogoUrl(team, league, variant) {
   if (!team || !team.id) return null;
   const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
   return `https://a.espncdn.com/i/teamlogos/${path}/${variant || '500'}/${team.id}.png`;
@@ -236,7 +258,23 @@ export function teamChip(team, opts) {
     const px = Math.round(size * LOGO_SCALE);
     img.width = px; img.height = px;
     img.alt = ''; img.loading = 'lazy';
+    /* 🔴 TWO CHANCES BEFORE THE FALLBACK. A local miss means we have not scraped
+     * that school yet, which is a gap in our asset set and NOT a team without a
+     * crest — so it retries the CDN once before giving up and drawing the chip.
+     * `triedCdn` is on the element rather than in a closure so the handler
+     * cannot loop. */
     img.addEventListener('error', function () {
+      if (!img.dataset.triedCdn) {
+        img.dataset.triedCdn = '1';
+        const dark = isDark();
+        const alt = cdnLogoUrl(team, opts.league, dark ? '500-dark' : '500');
+        if (alt) {
+          img.dataset.logoLight = cdnLogoUrl(team, opts.league, '500');
+          img.dataset.logoDark = cdnLogoUrl(team, opts.league, '500-dark');
+          img.src = alt;
+          return;
+        }
+      }
       img.remove();
       wrap.dataset.markFailed = 'true';
       wrap.insertBefore(chipMark(state, size, team && team.abbrev), wrap.firstChild);
