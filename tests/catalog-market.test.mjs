@@ -330,3 +330,38 @@ test('the NFL priors are measured, and differ from college where the football di
   assert.ok(dir.ratesNfl.middle < 0.25, 'the NFL does not');
   assert.ok(byId('run_pass').ratesNfl.pass > byId('run_pass').rates.pass, 'the NFL passes more');
 });
+
+/* 🔴 THE QUESTION MUST BE ABOUT THE PLAY THAT HAS NOT HAPPENED YET.
+ *
+ * Found by the dry run on 2026-09-09. The screen derived isKickoff / isPunt /
+ * isFieldGoalAttempt from the text of the LAST play - the one already on screen
+ * - while every call settles against the play AFTER it. So a punt produced
+ * "Fair catch, or does he run it back?", whose answer was already printed in
+ * the sentence above the tiles ("punt 47 yards to the BSU50 fair catch by #7
+ * E.Stewart"), and which then settled against an ordinary snap and voided.
+ *
+ * The offer and the settlement have to be about the same play. This asserts the
+ * screen's side of that contract, because the bug was in the caller rather than
+ * in the router. */
+test('🔴 the offer flags describe the NEXT play, never the one just shown', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+
+  /* A kickoff IS predictable - after a score, the next play is a kickoff by rule
+   * - so that one is inferred from the scoring play and settles on the kickoff. */
+  assert.match(src, /isKickoff:\s*\/touchdown\|field goal is good\|safety\|extra point\/i\.test\(s\)/,
+    'the kickoff question must follow a SCORE, not a kickoff already played');
+
+  /* Nothing makes the next play a punt or a field goal attempt. Fourth down
+   * makes them likely, and the catalog already has the honest question for
+   * fourth down - "Go for it, or kick?" - which is a real decision rather than a
+   * prediction of one. */
+  assert.match(src, /isPunt:\s*false/, 'a punt already shown must not be asked about');
+  assert.match(src, /isFieldGoalAttempt:\s*false/);
+
+  /* And the router still reaches the fourth-down question, which is what now
+   * answers for those situations. */
+  const cat = readFileSync(new URL('../src/catalog.ts', import.meta.url), 'utf8');
+  assert.match(cat, /if \(ctx\.down === 4\) return byId\('fourth_down'\)/);
+});

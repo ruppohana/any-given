@@ -270,9 +270,31 @@ function questionFor(state) {
      * the board compares like with like. Forget this and the rotation still
      * "works", silently, per device. */
     afterPlayId: last.id,
-    isKickoff: /kickoff/.test(s),
-    isPunt: /punt/.test(s),
-    isFieldGoalAttempt: /field goal/.test(s),
+    /* 🔴 THESE THREE DESCRIBE THE PLAY THAT IS ABOUT TO HAPPEN, NOT THE ONE THAT
+     * JUST DID. Found by the dry run 2026-09-09, and it was asking questions
+     * whose answers were already on the screen.
+     *
+     * They used to read the LAST play's text: if it said "punt", the app offered
+     * "Fair catch, or does he run it back?". But the fair catch is IN that
+     * sentence - "punt 47 yards to the BSU50 fair catch by #7 E.Stewart" - and
+     * the call settles against the play AFTER it, which is an ordinary snap
+     * containing no punt at all. So it voided, every time, on a question the
+     * viewer could already answer by reading.
+     *
+     * The offer and the settlement have to be about the SAME play. The settler
+     * always looks forward one, so the offer must too.
+     *
+     * 🔴 A KICKOFF IS PREDICTABLE AND A PUNT IS NOT. After a touchdown, a field
+     * goal or a safety the next play is a kickoff - that is a rule of the sport,
+     * not a guess, so the kickoff question is offered there and settles on the
+     * kickoff itself. Nothing makes the NEXT play a punt: fourth down makes it
+     * likely, and the catalog already has the honest question for fourth down -
+     * "Go for it, or kick?" - which is a real decision rather than a prediction
+     * of one. So isPunt and isFieldGoalAttempt are retired rather than inverted;
+     * the down-based router below is what should have been answering there. */
+    isKickoff: /touchdown|field goal is good|safety|extra point/i.test(s),
+    isPunt: false,
+    isFieldGoalAttempt: false,
     isDriveStart,
     openDriveCall
   });
