@@ -134,6 +134,32 @@ body {
 .num, table, input[type="number"] { font-variant-numeric: tabular-nums; }
 
 /* Depth is a hairline. If you are reaching for a shadow, the answer is this. */
+/* 🔴 WHEN IS SOMETHING A CARD. Jason, 2026-09-09: "We are losing consistency
+   here. Are we using 'cards' or not."
+
+   Fair, and the answer was "sometimes", which is not an answer. Home wrapped a
+   card around two cards; the standings put a list in a card while the slate -
+   the same shape, in the same app - put the same list in nothing. Written down
+   now so it stops being decided per screen:
+
+     A CARD IS A DISCRETE OBJECT YOU CAN ACT ON.
+       one game, one choice, one person's summary, one invite. It has a border
+       because it has an edge: something is inside it and other things are not.
+
+     A LIST IS NOT A CARD.
+       repeated rows are divided by hairlines and sit directly on the page. The
+       slate is 24 rows and the standings is up to 200; a border around either
+       is a box around the whole screen, and a border around each ROW is 24
+       boxes. This is the AQB density decision and it is measured, not taste.
+
+     A PAGE IS NOT A CARD.
+       the header, the footnotes and the state blocks sit on the background. A
+       card containing everything is a second background.
+
+     🔴 AND NEVER A CARD INSIDE A CARD.
+       that is the specific thing that made Home look wrong: two bordered
+       choices inside a third border, so the eye cannot tell which edge means
+       "this is the thing you tap". */
 .card {
   background: var(--card);
   border: 1px solid var(--line);

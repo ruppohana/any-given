@@ -1165,7 +1165,7 @@ function marblesCard() {
 }
 
 function sportCard(wrap) {
-  const c = el('div', 'card lg-sport');
+  const c = el('div', 'lg-sport');
   c.appendChild(el('div', 'lg-sport-h', 'Which are you watching?'));
   c.appendChild(el('p', 'lg-sport-b', S.mode === 'pool'
     ? 'Which slate your group is picking from.'
@@ -1207,7 +1207,10 @@ function sportCard(wrap) {
  * second because it changes which app you are in.
  */
 function modeCard(wrap, compact) {
-  const c = el('div', 'card lg-sport' + (compact ? ' is-compact' : ''));
+  /* 🔴 NOT A CARD. The two choices below ARE the cards - they are the discrete
+   * things you act on - and wrapping them in a third border made the page a box
+   * inside a box. See the rule in tokens.css. */
+  const c = el('div', 'lg-sport' + (compact ? ' is-compact' : ''));
   if (compact) {
     /* 🔴 THE MARK COMPLETES, WITH THE PAUSE IN IT. Jason: "Any Given… Snap". The
      * ellipsis is the whole joke — the stem is a setup and the completion is the
@@ -2056,7 +2059,10 @@ const CSS = `
 .lg-switch { justify-self: start; font: inherit; font-size: var(--t-micro); font-weight: 700;
   color: var(--accent); background: none; border: 1px solid var(--line);
   border-radius: var(--radius-chip); padding: 4px 10px; min-height: 30px; }
-.lg-sport { display: grid; gap: 8px; padding: 16px 12px; }
+/* NOT A CARD any more - see the rule in tokens.css - so it supplies its own
+   rhythm rather than inheriting a card's padding. The two choices inside it are
+   the cards. */
+.lg-sport { display: grid; gap: 10px; }
 .lg-sport-h { font-size: var(--t-section); font-weight: 800; }
 .lg-sport-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
 .lg-sport-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
@@ -2121,9 +2127,10 @@ const CSS = `
 .lg-also-w { color: var(--dim); font-size: var(--t-micro); white-space: nowrap; }
 .lg-also-more { display: block; padding: 10px 0 2px; font-size: var(--t-micro);
   font-weight: 800; color: var(--accent); text-decoration: none; }
-/* The page title, out of a card and at the top where a title belongs. */
+/* The wordmark, at Section like every other page title. It was Score size,
+   which made the app's own name compete with the game it is about. */
 .lg-home-mark { display: flex; align-items: baseline; gap: 0;
-  font-size: var(--t-score); font-weight: 800; padding: 2px 2px 0; }
+  font-size: var(--t-section); font-weight: 800; padding: 2px 2px 0; }
 /* The second door, edge to edge. */
 .lg-wide { width: 100%; text-align: left; }
 /* The matchup is the card's HEADLINE, at the share card's proportions - figure

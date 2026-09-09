@@ -163,17 +163,30 @@ export const HEADER_CSS = `
 .ag-hd { display: flex; align-items: flex-start; justify-content: space-between;
   gap: 12px; margin: 0 0 12px; min-height: 44px; }
 .ag-hd-l { min-width: 0; }
-/* The screen's name, at one size everywhere. --t-score is the largest type
-   outside the live layer's bank strip, and a page title is the one thing that
-   earns it on every screen. */
-.ag-hd-t { margin: 0; font-size: var(--t-score); font-weight: 800; line-height: 1.15;
-  letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 8px;
-  flex-wrap: wrap; }
+/* 🔴 SECTION SIZE, NOT SCORE SIZE. Jason, 2026-09-09: "What are we designing
+   towards? We have styles saved and available. Let's pick one."
+
+   We already had one and I had been drifting from it. DESIGN.md - "Any Given -
+   Style Reference" - sets the scale and, more importantly, the RULE about it:
+   type runs small and tight, the working range is 11-13px, and it buys
+   legibility from contrast and whitespace rather than size, with THREE OR FOUR
+   DELIBERATE LARGE MOMENTS PER SCREEN: the score, the bank balance, the call.
+
+   I built this header at --t-score, which is 24px and is the SCORE's size, and
+   put it on every screen. That spends one of a page's three large moments on a
+   label that never changes and that nobody is reading twice - and on the slate,
+   a screen whose whole job is 24 dense rows, it was the loudest thing present.
+
+   17px is Section: panel headings, which is exactly what a page title is. The
+   large moments go back to the things that earn them - the score on the game,
+   the bank on the call card, the matchup on the Upcoming card. */
+.ag-hd-t { margin: 0; font-size: var(--t-section); font-weight: 800; line-height: 1.2;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 /* TABULAR, because this line carries numbers on every screen - a week, a
    member count, a payout multiple - and figures that change width as they change
    value make a header jitter on a timer-driven screen. The rule used to live on
    each screen's own sub line; it belongs to the template now. */
-.ag-hd-s { margin: 2px 0 0; font-size: var(--t-body); color: var(--dim);
+.ag-hd-s { margin: 1px 0 0; font-size: var(--t-micro); color: var(--dim);
   line-height: 1.35; font-variant-numeric: tabular-nums; }
 /* THE ANCHOR — the league mark and the football, same place on every screen.
    Above the title rather than beside it, so a long title can never push it off

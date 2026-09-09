@@ -763,7 +763,7 @@ export function render(root, data, state) {
   }
 
   function table(rows) {
-    const card = el('div', 'card p5-table');
+    const card = el('div', 'p5-table');
 
     /* Sofascore's header treatment: short caps, --dim, over the NUMERIC columns
      * only. Rank and name are unlabelled because they need no label. */

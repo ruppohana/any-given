@@ -100,7 +100,13 @@
 .scr-p5-standings .p5-self-none { margin: 0; font-size: var(--t-body); color: var(--dim); }
 
 /* ---------------------------------------------------------------- the table */
-.scr-p5-standings .p5-table { padding: 0 12px; overflow: hidden; }
+/* 🔴 A LIST ON THE PAGE, NOT A LIST IN A BOX - the same treatment the slate
+   gives the same shape. It carried a card border and 12px of inset while the
+   slate's 24 rows sat directly on the background: two identical structures,
+   two different answers, in one app. Hairlines between rows and a hairline
+   above the header do the dividing; the page does the containing. */
+.scr-p5-standings .p5-table { padding: 0; overflow: hidden;
+  border-top: 1px solid var(--line); }
 
 .scr-p5-standings .p5-head,
 .scr-p5-standings .p5-row {
