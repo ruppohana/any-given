@@ -1004,6 +1004,23 @@ function homeScreen(wrap, state, now) {
   if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 34, league }));
   g.appendChild(head);
 
+  /* 🔴 THE NAMES, LIKE THE SHARE CARD HAS. Jason, 2026-09-08: "Add the team
+   * names like the card."
+   *
+   * The card was two crests and the word "vs", which is the one thing a crest
+   * cannot do on its own: identify a team to somebody who does not already know
+   * the crest. FAMU's rattler and Miami's U are strong marks and they are still
+   * a guessing game to most people, and the app already had the sentence — the
+   * share card has drawn `${away.short} at ${home.short}` since it was built.
+   *
+   * `at`, not `vs`. The away team is named first, so "at" states the venue in
+   * the same breath and matches both the share card and the pre-game screen. A
+   * neutral-site game is the exception and it is not one this line has to solve
+   * before the opener. */
+  if (away && home) {
+    g.appendChild(el('div', 'lg-hgame-t', `${away.short || away.name} at ${home.short || home.name}`));
+  }
+
   const line = state.status === 'pre'
     ? (state.kickoffUtc ? `Kicks in ${untilLabel(state.kickoffUtc - now)}` : 'Not started')
     : state.status === 'final' ? 'Final'
@@ -1571,6 +1588,9 @@ const CSS = `
 .lg-sport.is-compact .lg-mode-h { font-size: var(--t-body); }
 .lg-sport.is-compact .lg-mode-b { display: none; }
 .lg-hgame { display: grid; gap: 6px; padding: 14px 12px; text-decoration: none; color: var(--fg); }
+/* The matchup reads as the card's title: the crests are the picture and this is
+   the caption, so it takes the emphasis size rather than the body size. */
+.lg-hgame-t { font-size: var(--t-emph); font-weight: 800; line-height: 1.25; }
 .lg-hgame-b { font-size: var(--t-micro); color: var(--dim); }
 .lg-hgame-go { font-size: var(--t-body); font-weight: 800; color: var(--accent); margin-top: 2px; }
 .lg-mark { display: flex; align-items: baseline; gap: 0; }
