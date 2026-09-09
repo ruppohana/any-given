@@ -157,7 +157,8 @@ export function daysOf(groups) {
 }
 
 /** `spread` is stored as the HOME number, ESPN's convention: negative means home is
- *  favored. RENDERED ONLY WHEN pool.ats IS TRUE, and only ever as a number on a game.
+ *  favored. Rendered on every game that HAS a posted line, in both scoring modes -
+ *  the number is information, and `ats` is only about whether it decides the pick.
  *  There are no odds on this screen and there never will be. */
 export function spreadText(spread, side) {
   if (spread == null) return null;
@@ -276,10 +277,90 @@ function fromFixture(raw, teamsById) {
  * an invented number is worse than one with no number: it looks authoritative
  * and it is fiction.
  */
-async function realSlate(byId) {
-  const season = 2026, week = 2;
+/* 🔴 THE SPORT IS THE ONE THE USER CHOSE, read from the same key the live layer
+ * writes. Jason, 2026-09-08: "NFL slate is college."
+ *
+ * It was: the sport gate set `ag.sport`, the live board honoured it, and this
+ * screen fetched a hardcoded `slate:college-football:2026:2` regardless. So
+ * picking NFL and tapping the slate produced Villanova at Louisville — the pool
+ * half silently answering a question about a different sport.
+ *
+ * Same shape as the pool-from-the-NFL-page bug: a fork that only half the app
+ * was told about. A choice the user makes has to reach every screen that could
+ * contradict it, or it is not a choice — it is a preference one screen keeps to
+ * itself. */
+export function chosenSport() {
   try {
-    const res = await fetch(`/api/state/slate:college-football:${season}:${week}`);
+    const v = JSON.parse(localStorage.getItem('ag.sport'));
+    return v === 'nfl' ? 'nfl' : 'college-football';
+  } catch { return 'college-football'; }
+}
+
+/* 🔴 THE WEEK'S CARD IS A MARBLE PRODUCT AND THE OFFICE POOL IS NOT. Jason,
+ * 2026-09-08: "Office pool is a completely separate section. And don't we also
+ * have the weeks picks for the marbles?"
+ *
+ * Both land on this screen, because both are "pick from the same sixteen
+ * games". Everything that differs is what a row COSTS and what it PAYS, so the
+ * mode is read once here and the row decides. */
+export function chosenMode() {
+  try {
+    const v = JSON.parse(localStorage.getItem('ag.mode'));
+    return v === 'week' ? 'week' : 'pool';
+  } catch { return 'pool'; }
+}
+
+/* 🔴 THE PRICE COMES OFF THE POSTED LINE, WHICH IS REAL, THROUGH A CONVERSION
+ * THAT IS AN APPROXIMATION — and the difference is stated rather than hidden.
+ *
+ * The spread on every one of the sixteen NFL games is captured from the feed
+ * with the book named. Turning points into a win probability is a model, and
+ * this is the standard logistic one: p = 1 / (1 + exp(spread / s)). The scale
+ * `s` differs by sport because a college point is worth less than an NFL point
+ * — college games are higher-variance and the same number moves the
+ * probability less far.
+ *
+ * 🔴 IT IS NOT A NO-VIG MONEYLINE AND MUST NOT BE PRINTED AS ONE. It is our
+ * price for our marbles, which is why the payout is capped at 6x per doctrine
+ * rather than running off to infinity on a 40-point mismatch. A 42-point
+ * favorite is not a 1.001x proposition, it is a question nobody should be
+ * offered, and the cap plus the floor is what says so.
+ */
+const SPREAD_SCALE = { nfl: 4.1, 'college-football': 5.6 };
+
+export function probFromSpread(spread, side, sport) {
+  if (typeof spread !== 'number') return null;
+  /* Stored as the HOME number, ESPN's convention: negative means home favored. */
+  const own = side === 'home' ? spread : -spread;
+  const s = SPREAD_SCALE[sport] || SPREAD_SCALE.nfl;
+  const p = 1 / (1 + Math.exp(own / s));
+  /* 🔴 CLAMPED AT 0.90, WHICH IS OUR OWN BAR AND NOT AN ARBITRARY NUMBER.
+   * "A question 90% one way is not a question" is the line the player market
+   * was measured against and killed by - 76% of NFL drives end with nobody
+   * scoring. Pricing a 14-point favorite at 1.06x would have this screen
+   * offering exactly the proposition that rule rejects, three rows down from a
+   * real one. The floor keeps the shape of the sentence honest: nothing here
+   * pays less than 1.11x, and a game that wants to is a game where the pick is
+   * not interesting. */
+  return Math.min(0.90, Math.max(0.16, p));
+}
+
+/** `stake / p`, capped at 6x - the doctrine payout, as a multiple. */
+export function priceFromSpread(spread, side, sport) {
+  const p = probFromSpread(spread, side, sport);
+  if (p == null) return null;
+  return Math.min(6, Math.round((1 / p) * 100) / 100);
+}
+
+/* The two sports are not on the same week. College is in week 2 on this date and
+ * the NFL is in week 1 — the opener is Wednesday. A single week number would put
+ * one of them on an empty key. */
+const WEEK = { 'college-football': 2, nfl: 1 };
+
+async function realSlate(byId, sport) {
+  const season = 2026, week = WEEK[sport] || 1;
+  try {
+    const res = await fetch(`/api/state/slate:${sport}:${season}:${week}`);
     if (!res.ok) return null;
     const d = await res.json();
     if (!Array.isArray(d.games) || !d.games.length) return null;
@@ -306,7 +387,9 @@ export async function previewData(fixtures, state) {
 
   /* The feed first. Only if it has nothing to say do we fall back to the
    * captured games and the generated week below. */
-  const live = await realSlate(byId);
+  const sport = chosenSport();
+  const mode = chosenMode();
+  const live = await realSlate(byId, sport);
 
   const real = [];
   for (const n of fixtures.games) {
@@ -325,7 +408,33 @@ export async function previewData(fixtures, state) {
    * future is exactly the kind of invented shape `_make.py` got away with while 306 tests
    * passed. So `ready` is built from REAL TEAM IDENTITIES with SYNTHETIC PAIRINGS and
    * SYNTHETIC KICKOFFS, said plainly in the footnote the screen renders. */
+  /* 🔴 THE NFL NEVER FALLS BACK. Everything below this line — the 131-row
+   * generated week, the color probes, the synthetic pairings — is drawn from
+   * `teams.json`, which is the COLLEGE database. There is no NFL team in it, so
+   * a fallback under an NFL heading cannot produce an NFL game; it produces
+   * Villanova at Louisville with the wrong label on top, which is precisely the
+   * bug being fixed and worse, because it would then be deliberate.
+   *
+   * 32 clubs and 16 games is a week that is either captured or not. When it is
+   * not, this returns nothing and the screen draws its EMPTY state, which is an
+   * honest answer. */
   const short = state === 'ready-short';
+  if (sport === 'nfl') {
+    const nfl = live || [];
+    const tb = nfl.find((g) => g.status === 'scheduled') || nfl[nfl.length - 1];
+    return {
+      now, sport: 'nfl', mode, games: nfl, picks: {},
+      /* No pool exists yet in either sport, and an NFL slate must not inherit
+       * the college mock's Big Ten scope on its way past. */
+      pool: {
+        id: null, name: 'No pool yet', commissionerId: null,
+        scope: 'all', scopeArg: null, rankingSource: null,
+        ats: false, season: 2026, scopeLockedAt: null, memberCount: 0
+      },
+      tiebreak: { gameId: tb && tb.id, predictedTotal: null },
+      captured: nfl.length, synthetic: 0, fromFeed: nfl.length > 0
+    };
+  }
   const target = short ? real.length : 131;
   const ats = !short;
   /* 🔴 THE FEED WINS WHERE THERE IS ONE. `live` is the real week off ESPN,
@@ -460,6 +569,8 @@ export async function previewData(fixtures, state) {
 
   return {
     now,
+    sport,
+    mode,
     /* 🔴 A REAL SLATE CANNOT WEAR AN INVENTED POOL. Jason: "From the nfl page,
      * the pool goes to the ncaa page where Louisville is already selected...
      * It also says big 10."
@@ -593,11 +704,42 @@ function zone(ctx, game, side) {
   const l2 = el('div', 'p2-l2');
   const nm = el('span', 'p2-name', team.short || team.name);
   const meta = el('span', 'p2-meta');
-  /* THE SPREAD RENDERS ONLY WHEN pool.ats IS TRUE. One number on a game, inboard, where
-   * CBS puts it. Nothing else on this screen is a market number and nothing ever will be. */
-  if (ctx.pool.ats) {
+/* 🔴 THE LINE IS PUBLISHED WHETHER OR NOT THE POOL SCORES BY IT. Jason,
+   * 2026-09-08: "Aren't we publishing the spread on the pool?"
+   *
+   * It was gated on `pool.ats`, and that conflated two different things. `ats`
+   * is a SCORING RULE — does beating the number win you the game. Showing the
+   * number is INFORMATION, and it is the single most useful thing on a pick row
+   * in a straight-up pool too: it is how you know Miami over Florida A&M is not
+   * a pick anybody gets credit for having made.
+   *
+   * The regression was mine and it came in sideways. Replacing the mock pool
+   * with a real "No pool yet" set `ats: false`, and a line captured off the feed
+   * with the book named — 16 of 16 NFL games carry one — stopped rendering
+   * because a scoring flag said so.
+   *
+   * A null spread still renders nothing. A game with no posted line shows no
+   * number, never a zero and never an invented one. */
+  {
     const sp = spreadText(game.spread, side);
     if (sp) meta.appendChild(el('span', 'p2-spread num', sp));
+    /* 🔴 THE PRICE IS ON THE ROW, BEFORE THE TAP. This is the differentiator
+     * doctrine names, applied to the week's card rather than to a live tile:
+     * Armchair's tile says nothing about what it pays and the figure appears in
+     * the banner that congratulates you afterwards. A payout somebody learns
+     * after choosing is not a price, it is a reveal.
+     *
+     * Only in `week`. The office pool has no price because it has no stake. */
+    if (ctx.mode === 'week') {
+      const px = priceFromSpread(game.spread, side, ctx.sport);
+      if (px != null) {
+        const b = el('span', 'p2-price num', px.toFixed(2) + '×');
+        /* At the floor the model is saying "this is not a question". Marked so
+         * the row reads as one to skip rather than one to take. */
+        if (px <= 1.12) b.classList.add('is-thin');
+        meta.appendChild(b);
+      }
+    }
   }
   if (side === 'home') { l2.append(meta, nm); } else { l2.append(nm, meta); }
   b.append(l1, l2);
@@ -708,6 +850,10 @@ export function render(root, data, state) {
   /* ---- ready ---- */
   const ctx = {
     pool: data.pool, picks: data.picks, now: data.now,
+    /* Which product this screen is being used as, and which league's points the
+     * price model is reading. Both travel in ctx so row() and zone() never touch
+     * localStorage - render() stays pure DOM over its argument. */
+    mode: data.mode || 'pool', sport: data.sport || 'college-football',
     onPick: (gameId, side) => {
       const p = ctx.picks[gameId];
       p.side = p.side === side ? null : side;
@@ -813,9 +959,35 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College' };
+
 function head(root, data, _) {
   const h = el('h1', 'p2-h', (data && data.pool && data.pool.name) || 'The slate');
   root.appendChild(h);
+  /* 🔴 THE SCREEN SAYS WHICH SPORT IT IS SHOWING. The bug was invisible for as
+   * long as it was because nothing on the slate ever named a league — sixteen
+   * college games and sixteen NFL games are the same screen until one of them
+   * says so. A row that can be wrong has to be a row that can be READ as wrong. */
+  const sp = (data && data.sport) || 'college-football';
+  const tag = el('span', 'p2-league', SPORT_NAME[sp] || 'College');
+  h.appendChild(tag);
+  /* 🔴 THE SCREEN SAYS WHICH HALF OF THE APP IT IS. Jason, 2026-09-08: "is this
+   * the office pool or the betting for the marbles?" — and that he had to ask
+   * is the finding. Two halves, one bottom nav, and nothing on the screen
+   * distinguished them.
+   *
+   * It is the pool: a group picking winners for a week, scored against each
+   * other in POINTS. No price, no payout, no bank, and the two boards never sum.
+   *
+   * 🔴 AND IT SAYS SO WITHOUT NAMING THE OTHER HALF. The first draft of this
+   * line ended "no marbles" and a test caught it: a pool screen that mentions
+   * the balance to deny it is still a pool screen with the balance written on
+   * it. The separation is defended by the word that IS here — "group pool",
+   * "points" — never by a disclaimer about the word that is not. */
+  const kicker = el('p', 'p2-half', (data && data.mode) === 'week'
+    ? "The week's card · staked in marbles · priced off the line"
+    : 'Office pool · your group · scored in points');
+  root.insertBefore(kicker, h);
   const p = data && data.pool;
   if (p) {
     const bits = [SCOPE_LABEL[p.scope] || 'All games'];

@@ -174,3 +174,20 @@
   .scr-p2-slate .p2-row { grid-template-columns: 1fr 110px 1fr; }
   .scr-p2-slate .p2-name { font-size: var(--t-body); }
 }
+
+/* The half-of-the-app kicker and the league tag. Both exist because two
+   different screens looked identical: NFL vs college, and pool vs calling. */
+.p2-half { margin: 0 0 2px; font-size: 11px; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.p2-league { margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: .06em;
+  vertical-align: middle; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* The week's-card price. Same weight as the spread it sits beside, in the accent
+   so the number a marble buys is distinguishable from the number a book posted.
+   `.is-thin` is the model saying the pick is not a question - dimmed rather than
+   removed, because a row that vanishes reads as a missing game. */
+.p2-price { font-weight: 800; color: var(--accent); }
+.p2-price.is-thin { color: var(--dim); font-weight: 700; }

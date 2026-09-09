@@ -908,14 +908,34 @@ function modeCard(wrap, compact) {
   }
   if (!compact) {
     c.appendChild(el('p', 'lg-sport-b',
-      'Two different games. Calling runs snap by snap while you watch; the pool runs '
-      + 'a week at a time with your group. They keep separate scores and never add together.'));
+      'Three ways in. Two of them spend marbles and share one balance; the office '
+      + 'pool spends nothing and keeps its own score. They never add together.'));
   }
 
+  /* 🔴 THREE, NOT TWO. Jason, 2026-09-08: "Office pool is a completely separate
+   * section. And don't we also have the weeks picks for the marbles?"
+   *
+   * The two-way fork was drawn along the wrong seam. It split by TIME — live
+   * versus weekly — when the seam that actually matters is WHAT IS AT STAKE:
+   *
+   *   call  · marbles, snap by snap, priced on the tile before the tap
+   *   week  · marbles, one card for the week, priced off the posted line
+   *   pool  · POINTS, your group, nothing staked and nothing to spend
+   *
+   * Calling and the week's card are one product at two speeds and they share a
+   * balance. The office pool shares nothing with either — not the score, not the
+   * balance, not the board — which is why it is a separate section rather than a
+   * third tab on the same thing. That separation is the legal position, so the
+   * fork is where it gets stated, once, in the words somebody reads first.
+   *
+   * Ordered by speed within the marbles pair, with the pool last. The pool is
+   * last because it is the one somebody arrives at through an invite rather than
+   * through this card. */
   const row = el('div', 'lg-mode-row');
   const opts = [
     { id: 'call', h: 'Call the game', b: 'Live, snap by snap. You are 45 seconds behind on purpose.' },
-    { id: 'pool', h: 'The pool', b: 'Pick games for the week against your group.' }
+    { id: 'week', h: "The week's card", b: 'Stake marbles on the week, priced off the real line.' },
+    { id: 'pool', h: 'Office pool', b: 'Your group, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');
@@ -924,7 +944,9 @@ function modeCard(wrap, compact) {
     if (compact && o.id === S.mode) b.classList.add('is-on');
     b.onclick = () => {
       S.mode = o.id; store.set('mode', o.id);
-      if (o.id === 'pool' && S.sport) { location.hash = '#/slate'; return; }
+      /* Both pick-a-week modes land on the slate; the slate reads the mode and
+       * decides whether a row carries points or a price. */
+      if ((o.id === 'pool' || o.id === 'week') && S.sport) { location.hash = '#/slate'; return; }
       /* 🔴 ON HOME, "Call the game" IS THE DOOR. Repainting Home in place left
        * somebody who had just said what they wanted still standing on the
        * landing — the third version of the same mistake. */
@@ -1535,7 +1557,16 @@ const CSS = `
    are in is marked so the card reads as WHERE YOU ARE rather than as a question
    being asked again. */
 .lg-sport.is-compact { padding: 12px; gap: 6px; }
-.lg-sport.is-compact .lg-mode-row { grid-template-columns: 1fr 1fr; }
+/* 🔴 THREE MODES, AND THE SPORT ROW BELOW IT IS STILL TWO. `.lg-mode-row` is on
+   both, so a bare 1fr 1fr sized the mode strip AND the sport strip together and
+   a third mode wrapped into a 2+1 orphan. The mode row is scoped by :not() so
+   the two grids can disagree, which they must. */
+.lg-sport.is-compact .lg-mode-row:not(.lg-sportrow) { grid-template-columns: repeat(3, 1fr); }
+.lg-sport.is-compact .lg-sportrow { grid-template-columns: 1fr 1fr; }
+/* At 393px three headings share ~110px each - the type steps down rather than
+   the words being cut, and it balances the strip against the sport row's two. */
+.lg-sport.is-compact .lg-mode-row:not(.lg-sportrow) .lg-mode-h { font-size: var(--t-micro); }
+.lg-sport.is-compact .lg-mode-row:not(.lg-sportrow) .lg-mode { padding: 10px 8px; text-align: center; }
 .lg-sport.is-compact .lg-mode { padding: 10px 12px; gap: 1px; }
 .lg-sport.is-compact .lg-mode-h { font-size: var(--t-body); }
 .lg-sport.is-compact .lg-mode-b { display: none; }

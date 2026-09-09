@@ -373,11 +373,76 @@ function clockFor(state, sat) {
   return at(sat, 0, 9, 0);           /* ready, none-picked, loading, offline, error */
 }
 
+/* 🔴 SPORT-AWARE, like the slate and the standings. Jason, 2026-09-08: "After I
+ * pick nfl. Than slate pics and standings should be nfl, right?" */
+function chosenSport() {
+  try {
+    const v = JSON.parse(localStorage.getItem('ag.sport'));
+    return v === 'nfl' ? 'nfl' : 'college-football';
+  } catch { return 'college-football'; }
+}
+
+/* 🔴 THE NFL WEEK IS REAL AND UNPICKED, and both halves of that are the point.
+ *
+ * REAL: the sixteen games come off `slate:nfl:2026:1` in KV — real ids, real
+ * kickoffs, real posted lines with the book named, captured by
+ * tools/poll-slate.mjs on the host. Nothing here is generated.
+ *
+ * UNPICKED: there is no pick, because nobody has made one. The college preview
+ * on this screen carries thirty-one picks in four different states, which is
+ * right for a designed preview of a mechanism and would be a LIE here — "my
+ * picks" listing picks the user never made is the app telling you what you did.
+ * So the NFL route hands back the games with an empty pick map and lets the
+ * screen draw its own `none-picked` state, which already exists and already
+ * says the true thing.
+ */
+async function nflWeek(byId) {
+  try {
+    const res = await fetch('/api/state/slate:nfl:2026:1');
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!Array.isArray(d.games) || !d.games.length) return null;
+    return d.games.map((g) => {
+      /* Identity travels with the game. teams.json is the college snapshot and
+       * has no clubs in it, so the feed is the ONLY source for an NFL team here
+       * — falling back to byId would silently produce a blank chip. */
+      for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
+      return {
+        id: g.id, week: 1, kickoffUtc: g.kickoffUtc,
+        home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
+        spread: typeof g.spread === 'number' ? g.spread : null,
+        homeScore: g.homeScore == null ? null : g.homeScore,
+        awayScore: g.awayScore == null ? null : g.awayScore,
+        voidAt: null, real: true
+      };
+    }).filter((g) => g.home && g.away);
+  } catch { return null; }
+}
+
 export async function previewData(fixtures, state) {
   const db = fixtures.teams.teams;
   const byId = {};
   for (const k of Object.keys(db)) byId[db[k].id] = db[k];
   const all = Object.values(db);
+
+  if (chosenSport() === 'nfl') {
+    const specs = (await nflWeek(byId)) || [];
+    return {
+      sport: 'nfl',
+      pool: {
+        id: null, name: 'No pool yet', commissionerId: null,
+        scope: 'all', scopeArg: null, rankingSource: null,
+        ats: false, season: 2026, scopeLockedAt: null, memberCount: 0
+      },
+      week: 1,
+      slateSize: specs.length,
+      specs, games: specs, picks: {}, legs: [],
+      userId: 'u_self',
+      asOf: Date.now(),
+      captured: specs.length,
+      synthetic: 0
+    };
+  }
 
   const real = [];
   for (const n of fixtures.games) {

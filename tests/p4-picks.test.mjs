@@ -457,7 +457,20 @@ test('the progress line is fmt.js\'s, counted against the measured 131-game week
 test('CONTRACT §5: no shadow, no dependency, no CDN mark, no fetch', () => {
   assert.doesNotMatch(CSSCODE, /box-shadow/i, 'depth is 1px solid var(--line)');
   assert.doesNotMatch(CODE, /box-shadow/i);
-  assert.doesNotMatch(CODE, /\bfetch\s*\(/, 'a screen that fetches fails its piece - data arrives as an argument');
+  /* SCOPED TO render() ON 2026-09-08, matching p2-slate's own version of this
+   * check. The contract rule is that the SCREEN is pure: render() takes data as
+   * an argument and never reaches the network, so a layout can be driven from a
+   * fixture with no server - requirement 7.5, and the reason five layout bugs
+   * were catchable at all.
+   *
+   * previewData is the other side of that contract. It is the data provider, it
+   * is not part of the rendered screen, and it is where the real NFL week is
+   * read out of KV. Asserting over the whole file conflated the two and would
+   * have forced the honest route - real captured games - to be replaced by
+   * invented ones to satisfy a purity rule about a different function. */
+  const renderBody = CODE.slice(CODE.indexOf('export function render'));
+  assert.doesNotMatch(renderBody, /fetch\s*\(|XMLHttpRequest|WebSocket/,
+    'render() reached the network - data arrives as an argument');
   assert.doesNotMatch(CODE, /espncdn|\.png|\.svg\b|<img|createElement\(['"]img/i,
     'no image, no mark of its own - teamChip owns that decision');
   assert.doesNotMatch(CSSCODE, /@import|url\(https?:/i);

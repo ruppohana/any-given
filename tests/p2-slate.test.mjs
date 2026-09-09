@@ -241,7 +241,24 @@ test('§5 - the words. Marbles is the balance and none of the dead words appear'
   const sizes = [...CSSCODE.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]));
   console.log('    literal font sizes in the CSS:', sizes.length ? sizes.join(', ') : 'none - all tokens');
   assert.ok(sizes.every((n) => n <= 17), 'the largest type on this screen is the pool name at 17px');
-  assert.ok(!/Marble/i.test(CODE), 'Marbles are the live layer. The pool does not use them');
+  /* 🔴 THIS ASSERTION CHANGED SHAPE ON 2026-09-08, on Jason's call: "Office pool
+   * is a completely separate section. And don't we also have the weeks picks for
+   * the marbles?"
+   *
+   * It used to be a flat ban on the word, on the theory that marbles are the
+   * live layer and this is the pool. The seam was wrong. TWO products render
+   * through this screen — the office pool, which stakes nothing, and the week's
+   * card, which is a marble product at weekly speed — so a blanket ban would
+   * have forced the week's card to hide its own price.
+   *
+   * What is enforced instead is the separation itself, which is the part the
+   * legal position rests on: a price exists ONLY under `mode === 'week'`, and
+   * the office pool's own copy never mentions a balance it does not have. */
+  assert.ok(/ctx\.mode === 'week'/.test(CODE), 'the price must be gated on the week card mode');
+  const poolCopy = (CODE.match(/'Office pool[^']*'/g) || []).join(' ');
+  assert.ok(poolCopy.length > 0, 'the office pool must name itself on the screen');
+  assert.ok(!/Marble/i.test(poolCopy), 'the office pool copy must not mention a balance it does not have');
+  assert.ok(!/stake|payout|bank/i.test(poolCopy), 'the office pool stakes nothing');
 });
 
 test('§5 - the screen never fetches. Data arrives as an argument', () => {
@@ -257,10 +274,24 @@ test('§5 - tap targets. Nothing a thumb hits is under 44px', () => {
   assert.ok(/\.p2-tb-in[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
 });
 
-test('§5 / the dispatch - one tiebreak field, and the spread is gated on pool.ats', () => {
+test('§5 / the dispatch - one tiebreak field, and the posted line is published', () => {
   const tb = (CODE.match(/input\.type = 'number'/g) || []).length;
   assert.equal(tb, 1, 'CBS ships four tiebreak fields. Ours is one');
-  assert.ok(/if \(ctx\.pool\.ats\)/.test(CODE), 'the spread must be gated on pool.ats');
+  /* 🔴 THIS ASSERTION REVERSED ON 2026-09-08, on Jason's call: "Aren't we
+   * publishing the spread on the pool?"
+   *
+   * It used to require `if (ctx.pool.ats)` around the spread, and that gate
+   * conflated a SCORING RULE with INFORMATION. `ats` decides whether beating the
+   * number wins the pick; it has nothing to say about whether a reader may see a
+   * line the feed already gave us with the book named. Under the old gate,
+   * turning a pool straight-up hid 16 of 16 real NFL lines.
+   *
+   * What is still enforced is the half that was always the point: a game with no
+   * posted line renders NOTHING. `spreadText` returns null on a null spread, and
+   * an invented number in a real row is the failure this screen exists to avoid. */
+  assert.ok(!/if \(ctx\.pool\.ats\)/.test(CODE), 'the posted line must not be gated on the scoring mode');
+  assert.ok(/const sp = spreadText\(game\.spread, side\)/.test(CODE), 'the spread still renders through spreadText');
+  assert.equal(mod.spreadText(null, 'home'), null, 'a game with no posted line shows no number');
   /* 🔴 Crowd only after the GAME LOCKS (Jason, 2026-09-08) - not after the tap.
    * The guard is the kickoff, which nobody can bring forward, rather than the
    * viewer's own pick, which made the split purchasable with a tap. */
@@ -277,4 +308,37 @@ test('the five contract states are all routes, plus the 3-row route', () => {
   assert.ok(mod.states.includes('ready-short'), 'a layout that only works at 131 rows is broken too');
   assert.equal(mod.id, 'p2-slate');
   assert.ok(mod.bar.startsWith('reference/cbs-pickem-teardown/'), 'the bar is a file on disk');
+});
+
+/* 🔴 THE PRICE MODEL. Added 2026-09-08 with the week's card. It converts a REAL
+ * captured spread into a payout multiple, and the thing that must hold is that
+ * it never produces a number the doctrine forbids: nothing over 6x, nothing
+ * that prices a lopsided game as though it were a question, and NOTHING AT ALL
+ * on a game with no posted line. */
+test('the price is bounded at both ends, and a game with no line has no price', () => {
+  assert.equal(mod.priceFromSpread(null, 'home', 'nfl'), null, 'no line means no price');
+  assert.equal(mod.priceFromSpread(undefined, 'away', 'nfl'), null);
+
+  for (const sp of [-42, -21, -14, -7, -3, -1.5, 0, 1.5, 3, 7, 14, 21, 42]) {
+    for (const side of ['home', 'away']) {
+      for (const sport of ['nfl', 'college-football']) {
+        const px = mod.priceFromSpread(sp, side, sport);
+        assert.ok(px <= 6, `${sp} ${side} ${sport} paid ${px}, over the 6x cap`);
+        /* The 0.90 clamp is our own "a question 90% one way is not a question"
+         * bar. It puts a hard floor under the payout at 1/0.90. */
+        assert.ok(px >= 1.11, `${sp} ${side} ${sport} paid ${px}, under the floor`);
+      }
+    }
+  }
+  /* A pick'em pays the same both ways. If this drifts, the sign convention on
+   * the stored HOME number has been read backwards somewhere. */
+  assert.equal(mod.priceFromSpread(0, 'home', 'nfl'), mod.priceFromSpread(0, 'away', 'nfl'));
+  /* The favorite is the cheaper side. Home is favored when the number is
+   * negative - ESPN's convention, and the one place a flipped sign would be
+   * invisible on screen while paying out backwards. */
+  assert.ok(mod.priceFromSpread(-7, 'home', 'nfl') < mod.priceFromSpread(-7, 'away', 'nfl'));
+  assert.ok(mod.priceFromSpread(7, 'away', 'nfl') < mod.priceFromSpread(7, 'home', 'nfl'));
+  /* A college point moves the price less than an NFL point: higher variance. */
+  assert.ok(mod.priceFromSpread(-3, 'home', 'college-football')
+          > mod.priceFromSpread(-3, 'home', 'nfl'), 'the sport scales are the wrong way round');
 });

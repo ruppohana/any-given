@@ -177,6 +177,21 @@ function attachTeams(rows, byAbbrev) {
   }));
 }
 
+/* 🔴 THE SPORT REACHES THIS SCREEN TOO. Jason, 2026-09-08: "After I pick nfl.
+ * Than slate pics and standings should be nfl, right?" Right, and it did not —
+ * the sport gate wrote `ag.sport`, the live board and the slate honoured it, and
+ * this table went on drawing an eight-person Big 12 office pool whatever the
+ * user had chosen.
+ *
+ * A choice that only some screens honour is worse than no choice at all: it
+ * makes the app look like it disagrees with itself. */
+function chosenSport() {
+  try {
+    const v = JSON.parse(localStorage.getItem('ag.sport'));
+    return v === 'nfl' ? 'nfl' : 'college-football';
+  } catch { return 'college-football'; }
+}
+
 export async function previewData(fixtures, state) {
   const all = Object.values(fixtures.teams.teams);
   const byAbbrev = {};
@@ -261,6 +276,33 @@ export async function previewData(fixtures, state) {
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
     base.seasonRows = base.weekRows;
   }
+  /* 🔴 NO NFL POOL EXISTS, SO THE NFL TABLE IS EMPTY — it is not the college one
+   * relabelled, and it is not eight invented people with NFL abbreviations
+   * beside their names.
+   *
+   * Everything above this line is built from `fixtures/teams.json`, which holds
+   * 760 COLLEGE schools and no clubs. There is no pool server yet in either
+   * sport; the college table is a designed preview standing in for one, and it
+   * is honest only because every identity in it is a real school.
+   *
+   * Ported to the NFL it would be neither: invented people, invented points, and
+   * team chips resolved out of a database that cannot answer. A standings table
+   * is the one screen whose entire content is a claim about what other people
+   * did, so a fabricated row here is not a placeholder — it is the app telling
+   * you your friends scored something.
+   *
+   * The empty state already exists and says the true thing: nobody in this pool
+   * yet, share the invite. */
+  if (chosenSport() === 'nfl') {
+    return Object.assign({}, base, {
+      sport: 'nfl',
+      pool: { name: 'No NFL pool yet', week: 1, memberCount: 0, scope: 'All games' },
+      phase: 'pre',
+      weekRows: [], seasonRows: [], joinedWeek: {}, badges: {},
+      tiebreak: { label: null, actual: null, decided: false, myPrediction: null }
+    });
+  }
+  base.sport = 'college-football';
   return base;
 }
 
