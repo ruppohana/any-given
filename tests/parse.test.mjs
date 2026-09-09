@@ -54,8 +54,25 @@ const star = (needle) => { const [k, t] = real(needle); return roles(t, k).star;
 // The fixtures themselves — CONTRACT 7.3
 // ---------------------------------------------------------------------------
 
-test('the three captured fixtures are present and are one real game each', () => {
-  assert.equal(FILES.length, 3, FILES.join(', '));
+test('the captured fixtures are present, are real games, and cover BOTH leagues', () => {
+  /* 🔴 IT WAS THREE COLLEGE GAMES AND NOTHING ELSE, on an app whose first live
+   * night is an NFL opener. Every verification in this repo - including the
+   * 2026-09-09 dry run - therefore ran on college text and college settlement
+   * rules, while the two leagues are deliberately not interchangeable here: a
+   * sack is a pass in the NFL and a run in college, and ESPN writes the
+   * sentences differently in each.
+   *
+   * The NFL fixture found three real bugs in its first hour: a defender named
+   * Kneeland voiding every play he tackled on, and the sack rule not being
+   * applied at all in either league.
+   *
+   * So the assertion is no longer a count - a count only ever says "somebody
+   * added a file" - it is COVERAGE. */
+  assert.ok(FILES.length >= 3, FILES.join(', '));
+  assert.ok(FILES.some((f) => /nfl/i.test(f)),
+    'no NFL fixture: every check would run on college text only');
+  assert.ok(FILES.some((f) => !/nfl/i.test(f)),
+    'no college fixture');
   assert.ok(CORPUS.length > 400, `only ${CORPUS.length} plays`);
   for (const [f, doc] of DOCS) {
     const drives = doc.drives?.previous || [];
@@ -68,12 +85,40 @@ test('the three captured fixtures are present and are one real game each', () =>
 // ---------------------------------------------------------------------------
 
 test('7.1 the grammar of each captured fixture is measured, never assumed', () => {
+  /* 🔴 THE GRAMMAR IS PER LEAGUE, AND THIS TEST USED TO ASSUME COLLEGE'S.
+   *
+   * It required every fixture to be >85% NUMBERED - "#5 D.Moore pass complete" -
+   * which is college's grammar. The first NFL fixture came back 0/169 and failed
+   * it, correctly: the NFL writes "(Shotgun) J.Hurts sacked at DAL 44", initials
+   * and a dot, no jersey number anywhere.
+   *
+   * That is requirement 7.1 itself - ESPN ships more than one play-text grammar
+   * - and the test was quietly encoding one of them as the truth. It is exactly
+   * the assumption that took the NFL star parser from 0% to 96%, reappearing in
+   * the thing meant to catch it.
+   *
+   * So each fixture is measured against the grammar ITS OWN LEAGUE uses, and
+   * both are asserted to exist somewhere in the corpus - because a suite that
+   * only ever sees one grammar cannot tell you the other one still works. */
+  let sawNumbered = false, sawNamed = false;
   for (const [f, doc] of DOCS) {
     const g = grammarProfile(doc);
+    const nfl = /nfl/i.test(f);
     console.log(`  7.1 ${f}  plays=${g.plays} numbered=${g.numbered} named=${g.named} none=${g.none}`);
-    assert.ok(g.numbered / g.plays > 0.85,
-      `${f}: numbered grammar is only ${g.numbered}/${g.plays}`);
+    if (nfl) {
+      sawNamed = true;
+      assert.ok(g.named / g.plays > 0.60,
+        `${f}: NFL text should be NAMED (J.Hurts), got only ${g.named}/${g.plays}`);
+      assert.ok(g.numbered / g.plays < 0.10,
+        `${f}: NFL text should not carry jersey numbers, got ${g.numbered}/${g.plays}`);
+    } else {
+      sawNumbered = true;
+      assert.ok(g.numbered / g.plays > 0.85,
+        `${f}: numbered grammar is only ${g.numbered}/${g.plays}`);
+    }
   }
+  assert.ok(sawNumbered && sawNamed,
+    'the corpus must contain BOTH grammars or 7.1 is being taken on trust');
 });
 
 test('7.1 the NAMED grammar is present in the captured 2026 feed too', () => {
@@ -321,12 +366,14 @@ const ROLES = ['carrier', 'passer', 'receiver', 'tackler', 'kicker'];
 test('every emitted Play matches the CONTRACT §6 shape', () => {
   const buckets = {}; const roleCount = {};
   let plays = 0, stars = 0;
+  const perFile = {};
   for (const [f, doc] of DOCS) {
+    perFile[f] = { plays: 0, stars: 0 };
     const out = parsePlays(doc);
     const ids = new Set(out.map((p) => p.id));
     assert.equal(ids.size, out.length, `${f}: duplicate play ids`);
     for (const p of out) {
-      plays++;
+      plays++; perFile[f].plays++;
       assert.equal(typeof p.id, 'string'); assert.ok(p.id.length);
       assert.equal(typeof p.driveId, 'string'); assert.ok(p.driveId.length);
       assert.ok(Number.isInteger(p.quarter) && p.quarter >= 1 && p.quarter <= 6, `${p.quarter}`);
@@ -341,7 +388,7 @@ test('every emitted Play matches the CONTRACT §6 shape', () => {
       assert.ok(TYPES.includes(p.type), p.type);
       buckets[p.type] = (buckets[p.type] || 0) + 1;
       if (p.star !== null) {
-        stars++;
+        stars++; perFile[f].stars++;
         assert.ok(ROLES.includes(p.star.role), p.star.role);
         assert.ok(typeof p.star.name === 'string' && p.star.name.length);
         assert.ok(p.star.jersey === null || typeof p.star.jersey === 'string');
@@ -353,8 +400,23 @@ test('every emitted Play matches the CONTRACT §6 shape', () => {
   console.log(`  §6 ${plays} plays, ${stars} stars`);
   console.log(`  §6 Play.type ${JSON.stringify(buckets)}`);
   console.log(`  §6 star.role ${JSON.stringify(roleCount)}`);
-  assert.equal(plays, 516);
-  assert.equal(stars, 462);
+  /* 🔴 A HARDCODED CORPUS TOTAL ONLY EVER ASSERTS "NOBODY ADDED A FIXTURE".
+   *
+   * This read `assert.equal(plays, 516)` - the sum of the three college games -
+   * so the first NFL capture failed it at 685. That is the test doing the
+   * opposite of its job: the corpus growing is the thing we WANT, and the
+   * assertion punished it while saying nothing about whether the parser works.
+   *
+   * What matters is the RATE, and that every fixture contributes. A file that
+   * parsed into zero stars would be invisible in a total and is the actual
+   * failure worth catching. */
+  assert.ok(plays > 600, `only ${plays} plays in the corpus`);
+  assert.ok(stars / plays > 0.80, `star rate ${stars}/${plays}`);
+  for (const [f, n] of Object.entries(perFile)) {
+    assert.ok(n.stars / n.plays > 0.70,
+      `${f}: only ${n.stars}/${n.plays} plays carry a star - that grammar is not being read`);
+  }
+  console.log('  §6 per file ' + JSON.stringify(perFile));
 });
 
 test('🔴 no play is ever attributed a tackler star', () => {

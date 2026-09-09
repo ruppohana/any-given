@@ -365,3 +365,64 @@ test('🔴 the offer flags describe the NEXT play, never the one just shown', as
   const cat = readFileSync(new URL('../src/catalog.ts', import.meta.url), 'utf8');
   assert.match(cat, /if \(ctx\.down === 4\) return byId\('fourth_down'\)/);
 });
+
+/* 🔴 A PLAYER'S NAME MUST NOT CHANGE HOW A PLAY SETTLES.
+ *
+ * Found 2026-09-09 on a real captured NFL game. The "not a run-or-pass snap"
+ * test matched /kneel/ as a SUBSTRING against the whole sentence, and the
+ * Cowboys have a defensive end called M. Kneeland - so three plays in one match
+ * were graded as though the quarterback had knelt:
+ *
+ *   Rush | S.Barkley right end to DAL 25 for 4 yards (M.Kneeland).
+ *   Sack | (Shotgun) J.Hurts sacked at DAL 44 for -8 yards (M.Kneeland).
+ *
+ * Nothing errors. The calls void, and the reason string states something plainly
+ * false about the play. Same shape as the team-id substitution that once printed
+ * "4th & Patriots": a substring match against text containing human names.
+ *
+ * The fix asks ESPN's typeText first - a controlled vocabulary - and only falls
+ * back to the prose with word boundaries. */
+test('🔴 a tackler called Kneeland does not turn a rush into a kneel-down', async () => {
+  const { settle } = await import('../src/catalog.ts');
+
+  const rush = { text: 'S.Barkley right end to DAL 25 for 4 yards (M.Kneeland).',
+                 typeText: 'Rush', startDown: 1, distance: 10, endDown: 2 };
+  const sack = { text: '(Shotgun) J.Hurts sacked at DAL 44 for -8 yards (M.Kneeland).',
+                 typeText: 'Sack', startDown: 2, distance: 6, endDown: 3 };
+
+  assert.match(settle('script', 'run_no', rush, { sport: 'nfl' }).because, /it was a run/,
+    'a rush tackled by Kneeland must settle as a run');
+
+  /* 🔴 AND THE LEAGUE RULE THE WHOLE CODEBASE TURNS ON: a sack is a PASS in the
+   * NFL and a RUN in college. It was voiding in both, so the distinction this
+   * app repeats everywhere was not actually being applied. */
+  assert.match(settle('script', 'pass_no', sack, { sport: 'nfl' }).because,
+    /a sack, which the NFL grades as a pass/);
+  assert.match(settle('script', 'run_no', sack, { sport: 'college-football' }).because,
+    /a sack, which college grades as a run/);
+
+  /* A real kneel-down still is one, and a real punt still is one. */
+  const kneel = { text: 'J.Hurts kneels at PHI 30 for -1 yards.', typeText: 'QB Kneel' };
+  assert.equal(settle('script', 'run_no', kneel, { sport: 'nfl' }).landed, null);
+  const punt = { text: 'B.Mann punts 48 yards to DAL 12.', typeText: 'Punt' };
+  assert.equal(settle('script', 'pass_no', punt, { sport: 'nfl' }).landed, null);
+
+  /* And with NO typeText the prose fallback is word-boundaried, so the surname
+   * still cannot satisfy it.
+   *
+   * 🔴 IT DOES NOT SETTLE AS A RUN THERE, AND THAT IS CORRECT RATHER THAN A
+   * SECOND BUG. NFL prose describes a run by DIRECTION - "S.Barkley right end
+   * to DAL 25" - and never uses the word "rush", which is requirement 7.1's two
+   * grammars showing up again. Without typeText the sentence genuinely does not
+   * say what kind of play it was, so the honest answer is "neither", and the
+   * call voids rather than being graded on a guess.
+   *
+   * What this asserts is the thing that matters: it is not mistaken for a
+   * KNEEL-DOWN. Voiding because the feed said too little is a different and much
+   * safer failure than voiding because a defender's surname was read as a verb. */
+  const noType = { text: 'S.Barkley right end to DAL 25 for 4 yards (M.Kneeland).', typeText: '' };
+  const r = settle('script', 'run_no', noType, { sport: 'nfl' });
+  assert.equal(r.landed, null);
+  assert.doesNotMatch(r.because, /not a run-or-pass snap/,
+    'a surname must never put a play on the kneel/punt/kickoff path');
+});

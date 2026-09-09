@@ -445,7 +445,35 @@ function runOrPass(
 ): { side: 'run' | 'pass' | null; because: string } {
   const t = (play.typeText || '').toLowerCase();
   const s = play.text.toLowerCase();
-  if (has(t + ' ' + s, /kickoff|punt|field goal|extra point|kneel|spike/)) {
+
+  /* 🔴 A DEFENDER NAMED KNEELAND WAS VOIDING EVERY PLAY HE MADE A TACKLE ON.
+   * Found 2026-09-09 on a real captured NFL game, three plays in one match:
+   *
+   *   Rush | S.Barkley right end to DAL 25 for 4 yards (M.Kneeland).
+   *   Sack | (Shotgun) J.Hurts sacked at DAL 44 for -8 yards (M.Kneeland).
+   *
+   * The "not a run-or-pass snap" test ran `/kneel/` against the whole sentence
+   * as a SUBSTRING, and "Kneeland" contains "kneel". Two ordinary Barkley rushes
+   * and a sack were graded as though the quarterback had knelt to run out the
+   * clock. Nothing errors; the calls simply void, and the reason string says
+   * something that is plainly false about the play.
+   *
+   * This is the same shape as the team-id substitution that once printed
+   * "4th & Patriots" - a substring match against text that contains human names.
+   *
+   * 🔴 TWO FIXES, AND THE FIRST IS THE REAL ONE. ESPN's typeText is the feed's
+   * OWN classification - "Sack", "Rush", "Pass Reception", "Punt", "Kickoff",
+   * "QB Kneel" - and it is a controlled vocabulary rather than prose with names
+   * in it. Ask it first and the question never reaches the sentence.
+   *
+   * The text remains a fallback for the case where typeText is missing, and
+   * there it is word-boundaried so a surname cannot satisfy it.  is not
+   * cosmetic here: it is the difference between "kneel" and "Kneeland". */
+  const NOT_A_SNAP = /^(kickoff|punt|field goal|extra point|qb kneel|kneel|spike|timeout|end period|end of half|end of game|two-minute warning|penalty)/;
+  if (t && NOT_A_SNAP.test(t)) {
+    return { side: null, because: 'not a run-or-pass snap' };
+  }
+  if (!t && has(s, /kickoff|punts?|field goal|extra point|kneels?|spikes? the ball/)) {
     return { side: null, because: 'not a run-or-pass snap' };
   }
   if (has(t, /sack/) || has(s, / sacked/)) {

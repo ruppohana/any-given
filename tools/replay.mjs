@@ -38,10 +38,33 @@ if (!token) { console.error('no push token'); process.exit(1); }
  * college says "1st down OU" in the sentence and the NFL does not. Replaying an
  * NFL game as college would grade every sack the wrong way and quietly prove
  * nothing. */
-const sport = flag('sport', name.startsWith('nfl-') ? 'nfl' : 'college-football');
-const file = fileURLToPath(new URL(
-  name.startsWith('nfl-') ? `../fixtures/nfl/${name}.json` : `../fixtures/${name}-260905-final.json`,
-  import.meta.url));
+const sport = flag('sport', /nfl/i.test(name) ? 'nfl' : 'college-football');
+
+/* 🔴 RESOLVE THE FILE, DO NOT ASSUME ITS NAME. This built a path from a naming
+ * convention - `<name>-260905-final.json`, or `fixtures/nfl/<name>.json` for
+ * anything starting `nfl-` - which was fine while the only fixtures were the
+ * three captured by hand on one day in September. The first fixture captured by
+ * a tool did not match either pattern and the replay died in readFileSync with
+ * a stack trace and no useful sentence.
+ *
+ * A convention that only the person who wrote it can satisfy is a convention
+ * that stops new evidence being added, which is the opposite of what a fixture
+ * directory is for. */
+const CANDIDATES = [
+  `../fixtures/${name}.json`,
+  `../fixtures/${name}-260905-final.json`,
+  `../fixtures/nfl/${name}.json`
+];
+let file = null;
+for (const c of CANDIDATES) {
+  const abs = fileURLToPath(new URL(c, import.meta.url));
+  if (existsSync(abs)) { file = abs; break; }
+}
+if (!file) {
+  console.error(`no fixture called "${name}". Tried:`);
+  for (const c of CANDIDATES) console.error('  ' + c.replace('../', ''));
+  process.exit(1);
+}
 const raw = JSON.parse(readFileSync(file, 'utf8'));
 const full = readLive(raw, '999', sport, Date.now());
 console.log(`${name}: ${full.plays.length} plays, replaying from ${from} every ${every / 1000}s -> ${base}/api/state/${key}`);
