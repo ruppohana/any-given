@@ -180,6 +180,10 @@ function watchTheme() {
   }
 }
 
+/** How much larger a logo is drawn than the box it replaces, to cancel the
+ *  transparent margin baked into the source PNGs. */
+const LOGO_SCALE = 1.4;
+
 export function teamChip(team, opts) {
   opts = opts || {};
   const size = opts.size || 22;
@@ -219,7 +223,18 @@ export function teamChip(team, opts) {
     img.dataset.logoLight = logoUrl(team, opts.league, '500');
     img.dataset.logoDark = logoUrl(team, opts.league, '500-dark');
     img.src = isDark() ? img.dataset.logoDark : img.dataset.logoLight;
-    img.width = size; img.height = size;
+    /* 🔴 A CREST IS DRAWN SMALLER THAN ITS BOX. Jason, 2026-09-08: "can the logos
+     * be a little larger?" — and the reason they look small at a size that is
+     * correct for the drawn chip is that ESPN's PNGs carry their own margin. The
+     * artwork sits inside transparent padding, so a 22px crest optically reads
+     * around 16 where a 22px solid chip reads 22. Matching the nominal number
+     * makes the logo the smaller of the two every time.
+     *
+     * So the LOGO is scaled and the CHIP is not — this is a correction for the
+     * file format, not a size change to the component. Every call site keeps the
+     * size it measured for its own row. */
+    const px = Math.round(size * LOGO_SCALE);
+    img.width = px; img.height = px;
     img.alt = ''; img.loading = 'lazy';
     img.addEventListener('error', function () {
       img.remove();

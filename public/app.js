@@ -73,8 +73,11 @@ function ensureCss(name) {
 }
 
 function currentRoute() {
-  const id = (location.hash || '#/slate').replace(/^#\//, '');
-  return ROUTES.find((r) => r.id === id) || ROUTES[0];
+  /* 🔴 THE FALLBACK IS THE GAME, not the first row of the ROUTES table. An
+   * unknown or empty hash used to land on the college slate, which is how the
+   * real domain opened on a design surface instead of on the product. */
+  const id = (location.hash || '#/live').replace(/^#\//, '');
+  return ROUTES.find((r) => r.id === id) || ROUTES.find((r) => r.id === 'live') || ROUTES[0];
 }
 
 async function mount() {
@@ -83,7 +86,13 @@ async function mount() {
   root.innerHTML = '';
   root.className = 'ag-main';
 
-  document.getElementById('picker').value = route.id;
+  /* 🔴 GUARDED, because the picker does not exist outside ?dev=1 — and this
+   * exact line blanked the entire app the first time the bar was removed:
+   * `null.value` threw before a single screen rendered, so every route drew
+   * nothing at all. The same shape as four of the five bugs found on the live
+   * domain an hour earlier, written by me while fixing them. */
+  const picker = document.getElementById('picker');
+  if (picker) picker.value = route.id;
 
   ensureCss(route.screen);
   root.classList.add('scr-' + route.screen);
@@ -116,10 +125,28 @@ function drawNav(active) {
 function setMarks(on) {
   document.documentElement.dataset.marks = on ? 'on' : 'off';
   try { localStorage.setItem('ag.marks', on ? 'on' : 'off'); } catch {}
-  document.getElementById('marks').checked = on;
+  const box = document.getElementById('marks');
+  if (box) box.checked = on;
   cache.clear();          // screens build their chips once, so re-mount to swap
   mount();
 }
+
+/**
+ * 🔴 WHAT anygiven.app OPENS ON. Jason, 2026-09-08: "i thought we were trying to
+ * push the nfl version since the game is tomorrow" — and the reason he had not
+ * seen it is that the root of the real domain opened a DESIGN HARNESS. A select
+ * with twenty entries, a Logos checkbox, a theme dropdown, and the actual game
+ * as one option in the middle of the list.
+ *
+ * That is the right front door for judging screens and the wrong one for a
+ * person handed a link during a game. A stranger opening it does not find the
+ * product; they find the workshop.
+ *
+ * So the default is THE LIVE GAME, and the harness moves behind ?dev=1. Nothing
+ * is deleted — every screen is still reachable, and the bar still appears for
+ * anyone who asks for it.
+ */
+const DEV = new URLSearchParams(location.search).has('dev');
 
 async function boot() {
   const style = document.createElement('style');
@@ -131,22 +158,38 @@ async function boot() {
   let marks = 'on';   /* 🔴 DEFAULT ON, Jason 2026-09-08 after seeing it run */
   try { marks = localStorage.getItem('ag.marks') || 'on'; } catch {}
   document.documentElement.dataset.marks = marks;
-  document.getElementById('marks').checked = marks === 'on';
-  document.getElementById('marks').addEventListener('change', (e) => setMarks(e.target.checked));
-
-  const picker = document.getElementById('picker');
-  for (const r of ROUTES) {
-    const o = document.createElement('option');
-    o.value = r.id; o.textContent = r.label;
-    picker.appendChild(o);
+  const marksBox = document.getElementById('marks');
+  if (marksBox) {
+    marksBox.checked = marks === 'on';
+    marksBox.addEventListener('change', (e) => setMarks(e.target.checked));
   }
-  picker.addEventListener('change', () => { location.hash = '#/' + picker.value; });
 
-  const theme = document.getElementById('theme');
-  theme.addEventListener('change', () => {
-    if (theme.value === 'system') delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = theme.value;
-  });
+  const bar = document.querySelector('.ag-bar');
+  if (!DEV) {
+    /* The bar is REMOVED, not hidden — a hidden toolbar is still in the tab
+     * order and still read aloud, and a person on a phone during a game should
+     * not be able to tab into a screen picker. */
+    if (bar) bar.remove();
+  } else {
+    const picker = document.getElementById('picker');
+    for (const r of ROUTES) {
+      const o = document.createElement('option');
+      o.value = r.id; o.textContent = r.label;
+      picker.appendChild(o);
+    }
+    picker.addEventListener('change', () => { location.hash = '#/' + picker.value; });
+
+    const theme = document.getElementById('theme');
+    theme.addEventListener('change', () => {
+      if (theme.value === 'system') delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = theme.value;
+    });
+  }
+
+  /* 🔴 NO HASH MEANS THE GAME, not the first entry in a list. */
+  if (!location.hash || location.hash === '#/' || location.hash === '#') {
+    location.replace(location.pathname + location.search + '#/live');
+  }
 
   window.addEventListener('hashchange', mount);
   await mount();
