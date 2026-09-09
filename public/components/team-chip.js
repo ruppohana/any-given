@@ -122,10 +122,62 @@ export function marksOn(doc) {
  * is the only way this class of bug is ever found. */
 const LEAGUE_PATH = { nfl: 'nfl', 'college-football': 'ncaa', ncaa: 'ncaa' };
 
-export function logoUrl(team, league) {
+export function logoUrl(team, league, variant) {
   if (!team || !team.id) return null;
   const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
-  return `https://a.espncdn.com/i/teamlogos/${path}/500/${team.id}.png`;
+  return `https://a.espncdn.com/i/teamlogos/${path}/${variant || '500'}/${team.id}.png`;
+}
+
+/**
+ * 🔴 A DARK LOGO ON A DARK GROUND IS NO LOGO. Jason, 2026-09-08: "the icons dont
+ * work on the dark background." He is right, and it is most of the file: club
+ * crests are drawn for white paper, so every navy and black one sinks into
+ * --bg:#120a0e and identifies nothing.
+ *
+ * ESPN publishes the answer itself. `/500-dark/<id>.png` exists for every id
+ * checked, and returns DIFFERENT bytes for most of them — a variant drawn to sit
+ * on a dark ground. Where a team's crest already works on dark the two files are
+ * byte-identical, so asking for the dark one is never worse.
+ *
+ * 🔴 AND THE THEME CANNOT BE READ ONCE AND FORGOTTEN. Two things move it: the
+ * system setting, and this app's own Auto/Light/Dark control, which sets
+ * `data-theme` on <html> and RE-RENDERS NOTHING. A src chosen at chip-creation
+ * would be stale the moment either changed — and the failure is silent, because
+ * a wrong-variant logo still loads. So one watcher, installed once, fixes every
+ * chip on the page whenever the effective theme moves.
+ *
+ * A CSS background would swap for free and is the wrong trade: it has no `error`
+ * event, and the error path is what turns a missing crest into the drawn chip
+ * rather than a hole.
+ */
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  if (t === 'dark') return true;
+  if (t === 'light') return false;
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+
+function paintLogos() {
+  const dark = isDark();
+  for (const img of document.querySelectorAll('img.tchip-logo')) {
+    const want = dark ? img.dataset.logoDark : img.dataset.logoLight;
+    if (want && img.getAttribute('src') !== want) img.setAttribute('src', want);
+  }
+}
+
+let watching = false;
+function watchTheme() {
+  if (watching || typeof document === 'undefined') return;
+  watching = true;
+  /* The app's own control writes data-theme on <html> and nothing else. */
+  new MutationObserver(paintLogos)
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    /* addEventListener is not on MediaQueryList in older Safari; addListener is. */
+    if (mq.addEventListener) mq.addEventListener('change', paintLogos);
+    else if (mq.addListener) mq.addListener(paintLogos);
+  }
 }
 
 export function teamChip(team, opts) {
@@ -157,11 +209,17 @@ export function teamChip(team, opts) {
    * an image somebody screenshots and sends. A CDN logo inside it is a network
    * dependency in a picture, and a licensing question in something designed to
    * travel. The drawn chip is self-contained. */
-  const url = (!opts.drawn && marksOn()) ? logoUrl(team, opts.league) : null;
-  if (url) {
+  const wantLogo = !opts.drawn && marksOn();
+  if (wantLogo) {
+    watchTheme();
     const img = document.createElement('img');
     img.className = 'tchip-logo';
-    img.src = url; img.width = size; img.height = size;
+    /* Both variants travel with the element, so the watcher can swap without
+     * knowing anything about teams or leagues. */
+    img.dataset.logoLight = logoUrl(team, opts.league, '500');
+    img.dataset.logoDark = logoUrl(team, opts.league, '500-dark');
+    img.src = isDark() ? img.dataset.logoDark : img.dataset.logoLight;
+    img.width = size; img.height = size;
     img.alt = ''; img.loading = 'lazy';
     img.addEventListener('error', function () {
       img.remove();
