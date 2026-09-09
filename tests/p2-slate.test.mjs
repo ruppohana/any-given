@@ -635,3 +635,34 @@ test('the market is part of the pick, and it decides both the price and the verd
   assert.equal(mod.pickStateOf(push, { side: 'home', market: 'spread' }, now, 'week'), 'void');
   assert.equal(mod.pickStateOf(push, { side: 'home', market: 'winner' }, now, 'week'), 'won');
 });
+
+/* 🔴 NO SPORTSBOOK BRAND ANYWHERE IN THE UI. Added 2026-09-09 - Jason: "Are we
+ * allowed to post, 'spread provided by drag kings'?"
+ *
+ * Probably, and it comes off anyway. The decisive reason is not the trademark:
+ * it is that a sportsbook's brand beside a payout multiple is the most
+ * book-looking thing this app could print, and the product spends its whole life
+ * establishing that it is not one. Nothing purchasable, nothing redeemable,
+ * Marbles rather than credits, no cash-out - and one borrowed logo undoes more
+ * of that than any feature has built.
+ *
+ * The provider is still CAPTURED - it is real data and a future decision might
+ * want it - so this guards the rendering, not the record. */
+test('no sportsbook is named in anything the screen draws', () => {
+  const code = CODE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const literals = (code.match(/'[^']*'|"[^"]*"/g) || []).join(' ');
+
+  for (const brand of ['DraftKings', 'Draft Kings', 'FanDuel', 'BetMGM', 'Caesars',
+                       'Bet365', 'PointsBet', 'ESPN BET']) {
+    assert.ok(!new RegExp(brand, 'i').test(literals), `"${brand}" is printed on the slate`);
+  }
+  /* And nothing interpolates whatever the feed happened to call the book. */
+  assert.ok(!/spreadProvider\s*\+|\+\s*game\.spreadProvider|\$\{[^}]*spreadProvider/.test(code),
+    'the provider name is being rendered into the UI');
+
+  /* The doctrine the removed line existed for still has to be stated: the number
+   * is not ours. Losing the attribution must not turn a market line into an
+   * unattributed one that reads as our own. */
+  assert.match(CODE, /never post a number of our own/,
+    'the card must still say the line is not ours');
+});

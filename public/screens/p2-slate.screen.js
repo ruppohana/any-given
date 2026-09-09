@@ -1168,11 +1168,37 @@ function openInfo(game, ctx) {
   }
   d.appendChild(t);
 
-  if (game.spreadProvider) {
-    /* 🔴 THE BOOK IS NAMED. A number with no source is our opinion; a number
-     * with a source is a fact about the market, and this app never posts a line
-     * of its own. */
-    d.appendChild(el('p', 'p2-dlg-n', 'Line posted by ' + game.spreadProvider + '.'));
+  if (typeof game.spread === 'number') {
+    /* 🔴 THE SOURCE IS NAMED. THE SPORTSBOOK IS NOT. Jason, 2026-09-09: "Are we
+     * allowed to post, 'spread provided by drag kings'?"
+     *
+     * Probably, and it comes off anyway. Three reasons, and the third is the one
+     * that decides it.
+     *
+     * 1. IT IS SECOND HAND. We do not have a relationship with any sportsbook
+     *    and we do not read one's feed. The line arrives from ESPN, which
+     *    attributes it onward. Printing the book's name states a provenance we
+     *    did not observe; naming our actual source is simply more accurate.
+     *
+     * 2. NAMING A COMPANY IMPLIES A RELATIONSHIP whether or not it creates one.
+     *    Factual use of a trademark is generally fine, and "generally fine" is a
+     *    thing you find out about in correspondence with somebody's lawyer. The
+     *    upside was one word.
+     *
+     * 3. 🔴 IT IS THE MOST SPORTSBOOK-LOOKING THING IN THE APP. This product
+     *    spends its entire life establishing that it is not a book: nothing is
+     *    purchasable, nothing is redeemable, the balance is Marbles rather than
+     *    credits, and there is no cash-out path. A sportsbook's brand printed
+     *    beside a payout multiple undoes more of that in one line than any
+     *    feature has built - to a regulator, an app reviewer, or somebody's
+     *    parent looking over their shoulder.
+     *
+     * The doctrine this line existed for is untouched: a number with no source
+     * is our opinion, and this app never posts a line of its own. That is said
+     * without borrowing anybody's name to say it. */
+    d.appendChild(el('p', 'p2-dlg-n',
+      'The line is the market’s, not ours — read from the public feed. '
+      + 'We never post a number of our own.'));
   }
 
   const close = el('button', 'p2-dlg-x', 'Close');
