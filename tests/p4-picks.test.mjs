@@ -532,8 +532,17 @@ test('CONTRACT §5: the pool scores in POINTS - no balance vocabulary in its cop
    * price on the tile a quote rather than a commitment. */
   assert.match(CODE, /const staked = ctx\.mode === 'week'/,
     'the marbles card must be identified before edit rights are decided');
-  assert.match(CODE, /isPickEditable\(game, ctx\.now\) && !staked/,
+  /* 🔴 The two facts stay separate. `open` is "has not kicked off" and drives
+   * the countdown on both products; `editable` is "may still be swapped" and is
+   * false on the card. Collapsing them once printed "Closes in null" beside a
+   * game two days away, because making a stake unswappable also told the status
+   * line the game had no time left. */
+  assert.match(CODE, /const open = isPickEditable\(game, ctx\.now\);/,
+    'the kickoff test must stand on its own');
+  assert.match(CODE, /const editable = open && !staked;/,
     'a staked pick must not be editable');
+  assert.match(CODE, /const left = open \? game\.kickoffUtc - ctx\.now : 0;/,
+    'the countdown must read the kickoff, not the swap right');
 });
 
 test('CONTRACT §5: tabular numbers, 44px taps, US spelling', () => {

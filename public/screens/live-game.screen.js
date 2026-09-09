@@ -343,7 +343,43 @@ function settleAll(state) {
     rows.push({ ...c, landed: r.landed, delta: r.delta, because: r.because, play: r.play });
   }
   S.bank = bank;
+  /* 🔴 THE GAME'S RESULT, WRITTEN WHERE ANOTHER SCREEN CAN READ IT. Jason,
+   * 2026-09-09: "On my picks, if I bet inside that game shown, the outcome will
+   * be shown as well."
+   *
+   * It did not, and the reason is structural rather than an oversight: a live
+   * call is settled HERE, on this screen, against plays this screen is holding.
+   * Nothing else in the app can reproduce that - My picks would have to fetch
+   * every game's whole play list and re-run the settler to learn that you got
+   * three of five right on Wednesday.
+   *
+   * So the screen that already knows writes down what it knows. A per-game
+   * summary, keyed by the game, updated on every settle: how many landed, how
+   * many missed, how many voided, and the profit. Small, and it is the only
+   * thing another screen actually needs.
+   *
+   * 🔴 A SUMMARY, NOT A LEDGER. It records what happened in a game you played;
+   * it is not a balance and nothing spends from it. The bank still resets every
+   * game, and these numbers never sum with the pool's points. */
+  saveCallSummary(rows);
   return rows.reverse();
+}
+
+/** Per-game, per-device. Read by My picks; never read back by this screen. */
+function saveCallSummary(rows) {
+  if (!S.key || !rows.length) return;
+  try {
+    const all = JSON.parse(localStorage.getItem('ag.callsum') || '{}');
+    let won = 0, lost = 0, voided = 0, open = 0, profit = 0;
+    for (const r of rows) {
+      if (r.open) { open++; continue; }
+      if (r.void) { voided++; continue; }
+      if (r.landed) won++; else lost++;
+      profit += (r.delta || 0);
+    }
+    all[S.key] = { won, lost, voided, open, profit, at: Date.now() };
+    localStorage.setItem('ag.callsum', JSON.stringify(all));
+  } catch { /* a private window is allowed to forget */ }
 }
 
 /**
@@ -523,6 +559,16 @@ function paint(wrap) {
    * It belongs on the game, where it is a live fact about what you are seeing. */
   if (!S.isHome) wrap.appendChild(delayBar());
 
+  /* 🔴 HOME IS DECIDED FIRST, BEFORE ANY GAME STATE IS CONSULTED. It used to sit
+   * below the loading guard, the no-game branch and the two choice gates, so on
+   * a cold Home with no sport chosen the poll 404'd, S.noGame went true, and the
+   * front door rendered "No game game is being polled" - an error about a game
+   * nobody had asked for yet.
+   *
+   * Home does not read the feed at all. It asks two questions and leaves, so
+   * every guard below this line is about a screen it is not. */
+  if (S.isHome) { homeScreen(wrap); return; }
+
   /* 🔴 THE SPORT IS ASKED BEFORE ANYTHING ELSE IS SHOWN, and nothing below it
    * renders until it is answered. Not a default with a switch buried in
    * settings: the two sports grade a sack the opposite way and the tendency
@@ -563,8 +609,14 @@ function paint(wrap) {
    * and the choice is already made, which is doctrine: nothing sits in front of
    * a link a friend sent. */
   const invited = !!new URLSearchParams(location.search).get('game');
-  if (!S.mode) { wrap.appendChild(modeCard(wrap)); return; }
-  if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
+  /* 🔴 HOME OWNS THESE TWO QUESTIONS NOW, so these gates must not answer them
+   * first. They ran before the isHome branch below and returned the bare card,
+   * which meant homeScreen's own version - the one that also shows the marbles
+   * explainer under the league question - could never execute. The gates stay
+   * for every OTHER route, where landing on a game with no sport chosen still
+   * has to ask rather than guess. */
+  if (!S.isHome && !S.mode) { wrap.appendChild(modeCard(wrap)); return; }
+  if (!S.isHome && !S.sport) { wrap.appendChild(sportCard(wrap)); return; }
 
   /* 🔴 HOME IS A DESTINATION, AND IT STOPS HERE. Jason said "Home should start
    * here" three times and each time I put the hub ON TOP of the game — which is
@@ -607,7 +659,10 @@ function paint(wrap) {
      * unmade is not a choice, it is a trap with a nice first screen. */
     if (S.noGame) {
       const c = el('div', 'card lg-nogame');
-      c.appendChild(el('div', 'lg-nogame-h', `No ${SPORT_LABEL[S.sport] || 'game'} game is being polled`));
+      /* "No game game is being polled" - the fallback already said "game". */
+      c.appendChild(el('div', 'lg-nogame-h', S.sport
+        ? `No ${SPORT_LABEL[S.sport]} game is being polled`
+        : 'No game is being polled'));
       c.appendChild(el('p', 'lg-nogame-b',
         'One game is on the wire at a time while this is a rig. Nothing is watching '
         + `${SPORT_LABEL[S.sport] || 'that sport'} right now.`));
@@ -638,7 +693,7 @@ function paint(wrap) {
    *
    * Home is a destination and it stops here — it does not fall through into the
    * game. */
-  if (S.isHome) { homeScreen(wrap, state, now); return; }
+  /* (Home is handled at the top of paint now - see there.) */
   const age = Math.round((now - (S.raw.pushedAt || now)) / 1000);
 
   /* ---- the game ---- */
@@ -668,6 +723,20 @@ function paint(wrap) {
 
   if (state.status === 'pre') {
     wrap.appendChild(pregame(state, now, wrap));
+    /* 🔴 WHAT ELSE IS ON. Jason, 2026-09-09: "What do you see when there are
+     * multiple games?" - and the honest answer was NOTHING. This screen followed
+     * one game, the front door offered one game, and on a Saturday with twenty
+     * kickoffs the app silently picked one and never mentioned the rest.
+     *
+     * That is fine on Wednesday, when the opener is the only game there is, and
+     * indefensible on Saturday. So the next few kickoffs after this one are
+     * listed under it, tappable, with the count so the number is never a
+     * surprise - and the full list is one tap away on the slate.
+     *
+     * THREE, not all of them. A pre-game screen that turns into a second slate
+     * has stopped being about a game; the slate already exists and is better at
+     * being a slate. Three is enough to say "there is more than this one". */
+    alsoOn(wrap, state, now);
     /* 🔴 THE THINGS THAT USED TO BE ON HOME LIVE HERE NOW, because Home became
      * the front door and a front door carries one question. Everything ABOUT a
      * game belongs on the game: the week's card for the same league, the invite
@@ -682,7 +751,11 @@ function paint(wrap) {
     wk.onclick = () => { location.hash = '#/slate'; };
     wrap.appendChild(wk);
 
-    wrap.appendChild(inviteButton(state));
+    /* 🔴 NO SECOND INVITE. pregame() already appends one, and adding another
+     * here put the same button on the screen twice - the kind of duplicate that
+     * survives because both copies work. Found by reading the rendered text
+     * rather than the code: "Invite a friend ... Post it ... The week's card ...
+     * Invite a friend". */
     wrap.appendChild(adSlot('banner', 'Your ad here · reserved, nothing sold yet'));
     return;
   }
@@ -1019,6 +1092,30 @@ function claimCalls() {
  * Changeable afterwards from the same place, because somebody who watches both
  * should not have to clear their browser to switch.
  */
+/* The marbles explainer, on the front door where somebody has just chosen to
+ * play them - not on every pre-game screen for the rest of the season. */
+function marblesCard() {
+  const q = el('div', 'card lg-what');
+  q.appendChild(el('div', 'lg-what-h', `You start with ${START_BANK} Marbles`));
+  q.appendChild(el('p', 'lg-what-b',
+    'Everybody starts on the same number and it resets next game, so nobody is ever out. '
+    + 'They cannot be bought.'));
+  const ul = el('div', 'lg-qlist');
+  const preview = ['script', 'drive_end', 'direction', 'fourth_down', 'kickoff_return', 'three_and_out'];
+  for (const id of preview) {
+    const t = byId(id);
+    if (!t) continue;
+    const row = el('div', 'lg-qrow');
+    row.appendChild(el('span', 'lg-qtext', t.question));
+    row.appendChild(el('span', 'lg-qn num', t.perGame >= 100 ? 'every snap' : `~${t.perGame}×`));
+    ul.appendChild(row);
+  }
+  q.appendChild(ul);
+  q.appendChild(el('p', 'lg-what-b', 'The question changes with the situation — a fourth down is a '
+    + 'coach’s decision, a kickoff is a returner’s.'));
+  return q;
+}
+
 function sportCard(wrap) {
   const c = el('div', 'card lg-sport');
   c.appendChild(el('div', 'lg-sport-h', 'Which are you watching?'));
@@ -1190,7 +1287,7 @@ function modeCard(wrap, compact) {
  * landing and a settings page, and it is why the earlier orphan "NFL · change"
  * chip was wrong in a way this is not: that chip floated beside a hub that was
  * already asking the same question two rows below it. */
-function homeScreen(wrap, state, now) {
+function homeScreen(wrap) {
   /* 🔴 HOME IS THE FORK. ALWAYS. Jason settled this on 2026-09-09, after saying
    * "Home button still goes here" seven times and my guessing wrong every time.
    *
@@ -1211,7 +1308,14 @@ function homeScreen(wrap, state, now) {
    * this a door rather than a wizard somebody can be stranded halfway down. The
    * stored mode and sport are NOT cleared - they still mark the current choice
    * and they are what every other screen reads. */
-  if (S.homeStep === 'sport') { wrap.appendChild(sportCard(wrap)); return; }
+  if (S.homeStep === 'sport') {
+    wrap.appendChild(sportCard(wrap));
+    /* The rules of the thing they just chose, under the question that follows
+     * it. Marbles only - the group pool has no bank and no price, and showing
+     * it here would be explaining a product they did not pick. */
+    if (S.mode === 'marbles') wrap.appendChild(marblesCard());
+    return;
+  }
   wrap.appendChild(modeCard(wrap));
 }
 
@@ -1265,6 +1369,60 @@ function untilLabel(ms) {
  * else is already here. None of it needed a feed we did not have; it needed
  * somebody to write the screen instead of an empty state.
  */
+/* The other games in this league, after this one, soonest first. */
+async function alsoOn(wrap, state, now) {
+  const key = S.key;
+  const sport = (key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+  let games = [];
+  try {
+    const res = await fetch('/api/state/slate:' + sport + ':2026:' + (SLATE_WEEK[sport] || 1));
+    if (!res.ok) return;
+    games = ((await res.json()).games || [])
+      .filter((g) => g && g.status !== 'final' && g.kickoffUtc > (state.kickoffUtc || now)
+                     && String(g.id) !== String((key || '').split(':')[1]))
+      .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
+  } catch { return; }
+  if (!games.length) return;
+
+  /* 🔴 APPENDED ONLY IF THE SCREEN IS STILL THE ONE THAT ASKED. This resumes
+   * after an await and paint() empties the container, so without the guard a
+   * slow response drops a list of college games at the foot of an NFL screen -
+   * or under a game that has since kicked off and repainted. The key is captured
+   * before the fetch and compared after it; nothing else is a reliable identity
+   * for "the screen I was drawing". */
+  if (S.key !== key || !wrap.isConnected) return;
+
+  const box = el('div', 'card lg-also');
+  const h = el('div', 'lg-also-h');
+  h.appendChild(el('span', 'lg-also-k', 'Also on'));
+  h.appendChild(el('span', 'lg-also-n num',
+    games.length === 1 ? '1 more game' : games.length + ' more games'));
+  box.appendChild(h);
+
+  for (const g of games.slice(0, 3)) {
+    const teams = {};
+    for (const t of (g.teams || [])) if (t && t.id) teams[t.id] = t;
+    const a = teams[g.awayTeamId], hm = teams[g.homeTeamId];
+    const row = el('a', 'lg-also-r');
+    /* 🔴 A REAL QUERY STRING, NOT ONE INSIDE THE HASH. mount() reads
+     * location.search, so '#/live?game=...' puts the parameter somewhere nothing
+     * looks - the link would navigate and then show whatever game was already
+     * loaded, silently. Same shape the invite button builds, colon and all. */
+    row.href = '/?game=' + encodeURIComponent(sport + ':' + g.id).replace(/%3A/g, ':');
+    row.appendChild(el('span', 'lg-also-t',
+      ((a && (a.short || a.abbrev)) || '?') + ' at ' + ((hm && (hm.short || hm.abbrev)) || '?')));
+    row.appendChild(el('span', 'lg-also-w num', untilLabel(g.kickoffUtc - now)));
+    box.appendChild(row);
+  }
+
+  if (games.length > 3) {
+    const more = el('a', 'lg-also-more', 'See the whole week →');
+    more.href = '#/slate';
+    box.appendChild(more);
+  }
+  wrap.appendChild(box);
+}
+
 function pregame(state, now, wrap) {
   const box = el('div', 'lg-pre');
 
@@ -1285,25 +1443,16 @@ function pregame(state, now, wrap) {
    * product and it was completely invisible until the first snap. Showing the
    * questions in advance is the difference between waiting for an app to load
    * and waiting for a game to start. Frequencies are the measured ones. */
-  const q = el('div', 'card lg-what');
-  q.appendChild(el('div', 'lg-what-h', `You start with ${START_BANK} Marbles`));
-  q.appendChild(el('p', 'lg-what-b',
-    'Everybody starts on the same number and it resets next game, so nobody is ever out. '
-    + 'They cannot be bought.'));
-  const ul = el('div', 'lg-qlist');
-  const preview = ['script', 'drive_end', 'direction', 'fourth_down', 'kickoff_return', 'three_and_out'];
-  for (const id of preview) {
-    const t = byId(id);
-    if (!t) continue;
-    const row = el('div', 'lg-qrow');
-    row.appendChild(el('span', 'lg-qtext', t.question));
-    row.appendChild(el('span', 'lg-qn num', t.perGame >= 100 ? 'every snap' : `~${t.perGame}×`));
-    ul.appendChild(row);
-  }
-  q.appendChild(ul);
-  q.appendChild(el('p', 'lg-what-b', 'The question changes with the situation — a fourth down is a '
-    + 'coach’s decision, a kickoff is a returner’s.'));
-  box.appendChild(q);
+  /* 🔴 THE MARBLES EXPLAINER MOVED TO THE SPORT CARD. Jason, 2026-09-09: "Add
+   * the marbles info on this page... and remove it from this page" - the sport
+   * card, and off the pre-game.
+   *
+   * Right, and the reason is that it is an ONBOARDING explanation wearing a
+   * game screen's clothes. "You start with 200 Marbles" and a list of the six
+   * questions is what somebody needs the first time they choose to play the
+   * marbles - which happens on the front door, one tap earlier. On the pre-game
+   * it was the tallest thing on the screen, every single game, forever,
+   * explaining the rules to somebody who had already read them. */
 
   box.appendChild(inviteButton(state));
 
@@ -1811,6 +1960,19 @@ const CSS = `
 /* One word above the crests saying what the card is. */
 .lg-hgame-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+/* What else is on tonight. A short list, not a second slate. */
+.lg-also { display: grid; gap: 2px; padding: 12px; }
+.lg-also-h { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 4px; }
+.lg-also-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dim); }
+.lg-also-n { font-size: var(--t-micro); color: var(--dim); }
+.lg-also-r { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; min-height: 44px; padding: 4px 0; text-decoration: none; color: var(--fg);
+  border-top: 1px solid var(--line); font-size: var(--t-body); }
+.lg-also-w { color: var(--dim); font-size: var(--t-micro); white-space: nowrap; }
+.lg-also-more { display: block; padding: 10px 0 2px; font-size: var(--t-micro);
+  font-weight: 800; color: var(--accent); text-decoration: none; }
 /* The page title, out of a card and at the top where a title belongs. */
 .lg-home-mark { display: flex; align-items: baseline; gap: 0;
   font-size: var(--t-score); font-weight: 800; padding: 2px 2px 0; }

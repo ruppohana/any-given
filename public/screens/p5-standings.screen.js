@@ -293,16 +293,50 @@ export async function previewData(fixtures, state) {
    *
    * The empty state already exists and says the true thing: nobody in this pool
    * yet, share the invite. */
-  if (chosenSport() === 'nfl') {
+  /* 🔴 NEITHER SPORT HAS A POOL, SO NEITHER GETS A TABLE. Jason, 2026-09-09:
+   * "Fix the ncaa standings."
+   *
+   * The NFL was emptied first and college was left on the designed preview -
+   * eight named people, week 6, a Big 12 scope, ranks and points. Every identity
+   * in it is a REAL school, which is exactly what made it dangerous: it does not
+   * read as a mock, it reads as your pool.
+   *
+   * 🔴 A STANDINGS TABLE IS THE ONE SCREEN WHOSE ENTIRE CONTENT IS A CLAIM ABOUT
+   * WHAT OTHER PEOPLE DID. A fabricated slate row is a wrong fixture; a
+   * fabricated standings row is the app telling you your friends scored
+   * something. There is no pool server yet in either sport, so the honest answer
+   * in both is the empty state that already exists and already says the true
+   * thing: nobody in this pool yet, share the invite.
+   *
+   * The preview is not deleted - it is what the design harness renders behind
+   * ?dev, and it is how this screen's layout was measured. It simply stops
+   * standing in for a pool that does not exist. */
+  /* 🔴 ONLY ON THE ROUTE A REAL PERSON REACHES. `ready` is what the bottom nav
+   * links to; every other state here is a design surface behind ?dev, and those
+   * exist to exercise settling, ties, a 200-person table and the tie-break -
+   * none of which can be demonstrated with an empty table.
+   *
+   * So the preview keeps its job as a preview and stops doing a job it was never
+   * meant to do, which was standing in for a pool on the live route. */
+  const sport = chosenSport();
+  if (state === 'ready') {
+    const nfl = sport === 'nfl';
     return Object.assign({}, base, {
-      sport: 'nfl',
-      pool: { name: 'No NFL pool yet', week: 1, memberCount: 0, scope: 'All games' },
+      sport,
+      pool: { name: nfl ? 'No NFL pool yet' : 'No pool yet',
+              week: nfl ? 1 : 2, memberCount: 0, scope: 'All games' },
       phase: 'pre',
       weekRows: [], seasonRows: [], joinedWeek: {}, badges: {},
-      tiebreak: { label: null, actual: null, decided: false, myPrediction: null }
+      tiebreak: { label: null, actual: null, decided: false, myPrediction: null },
+      /* 🔴 NOTHING ON THIS SCREEN IS INVENTED ANY MORE, so the shell's
+       * sample-data banner must not appear over it. The banner reads this flag,
+       * and an empty table carrying "these games, spreads and scores are made
+       * up" is a disclaimer about content that is not there - which teaches
+       * people to ignore the banner on the screens where it is true. */
+      fromFeed: true
     });
   }
-  base.sport = 'college-football';
+  base.sport = sport;
   return base;
 }
 

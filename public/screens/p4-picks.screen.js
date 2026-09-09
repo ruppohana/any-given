@@ -428,9 +428,20 @@ function loadPicks(sport, week) {
   } catch { return {}; }
 }
 
-async function nflWeek(byId) {
+/* 🔴 BOTH SPORTS, NOT JUST THE NFL. Jason, 2026-09-09: "My picks still needs to
+ * be fixed, yes?" - yes, because only the NFL route was rewired and the college
+ * one still drew the designed preview: 24 invented picks, a five-leg parlay and
+ * a Saturday in a week that has not happened.
+ *
+ * That was worse on college than the same bug would have been anywhere else,
+ * because every identity in it is a REAL school. A screen full of real logos,
+ * real names and real-looking spreads, listing picks nobody made, does not read
+ * as a placeholder - it reads as your card. */
+const WEEK = { nfl: 1, 'college-football': 2 };
+
+async function realWeek(byId, sport) {
   try {
-    const res = await fetch('/api/state/slate:nfl:2026:1');
+    const res = await fetch('/api/state/slate:' + sport + ':2026:' + (WEEK[sport] || 1));
     if (!res.ok) return null;
     const d = await res.json();
     if (!Array.isArray(d.games) || !d.games.length) return null;
@@ -440,7 +451,7 @@ async function nflWeek(byId) {
        * — falling back to byId would silently produce a blank chip. */
       for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
       return {
-        id: g.id, week: 1, kickoffUtc: g.kickoffUtc,
+        id: g.id, week: WEEK[sport] || 1, kickoffUtc: g.kickoffUtc,
         home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
         spread: typeof g.spread === 'number' ? g.spread : null,
         homeScore: g.homeScore == null ? null : g.homeScore,
@@ -457,8 +468,15 @@ export async function previewData(fixtures, state) {
   for (const k of Object.keys(db)) byId[db[k].id] = db[k];
   const all = Object.values(db);
 
-  if (chosenSport() === 'nfl') {
-    const all = (await nflWeek(byId)) || [];
+  const sport = chosenSport();
+  const wk = WEEK[sport] || 1;
+  const live = await realWeek(byId, sport);
+  /* 🔴 THE FEED WINS WHEREVER THERE IS ONE, for either sport. The designed
+   * preview below survives only as the offline/no-feed fallback - it is a
+   * demonstration of the mechanism, and it must never stand in for a real week
+   * that simply failed to load. */
+  if (live) {
+    const all = live;
     /* 🔴 THIS SCREEN IS *YOUR CARD*, NOT THE WEEK. Jason, 2026-09-09: "What is
      * the difference between slate and picks?"
      *
@@ -474,7 +492,7 @@ export async function previewData(fixtures, state) {
      * So this reads the SAME stored picks the slate writes, and lists only the
      * games with a side on them. With nothing picked it draws its `none-picked`
      * state, which is a true and useful screen: you have not started. */
-    const saved = loadPicks('nfl', 1);
+    const saved = loadPicks(sport, wk);
     const specs = all.filter((g) => saved[g.id] && saved[g.id].side);
     const picks = {};
     for (const g of specs) {
@@ -482,22 +500,44 @@ export async function previewData(fixtures, state) {
                       lockedAt: g.kickoffUtc, crowd: null };
     }
     return {
-      sport: 'nfl',
+      sport,
       mode: chosenMode(),
       pool: {
         id: null, name: 'No pool yet', commissionerId: null,
         scope: 'all', scopeArg: null, rankingSource: null,
-        ats: false, season: 2026, scopeLockedAt: null, memberCount: 0
+        /* 🔴 THE CARD'S SCORING MODE, not a constant. The week's card is against
+         * the spread (Jason, 2026-09-09) and the group pool is straight up, and
+         * `ats` is what makes this screen render the line and grade the cover.
+         * Hardcoding false printed "Straight up" over a card that pays on the
+         * spread - the header contradicting the rules the rows are settled by. */
+        ats: chosenMode() === 'week',
+        season: 2026, scopeLockedAt: null, memberCount: 0
       },
-      week: 1,
+      week: wk,
       /* The progress line counts against the WHOLE week, not against what has
        * been picked - "3 of 16" is the useful sentence and "3 of 3" is not. */
       slateSize: all.length,
       specs, games: specs, picks, legs: [],
       userId: 'u_self',
+      /* The real wall clock. The preview below anchors itself to a captured
+       * Saturday so its designed states are all reachable; using that anchor on
+       * a live card would lock games that have not kicked off and open ones
+       * that have. */
       asOf: Date.now(),
-      captured: specs.length,
-      synthetic: 0
+      now: Date.now(),
+      /* The week, so the empty state can talk about what is still open. */
+      slate: all,
+      /* 🔴 COUNTS THE WEEK, NOT YOUR PICKS. It read specs.length, so with nothing
+       * picked the footer said "0 of these games are real captures" under a
+       * screen built entirely from the feed - the sample-data disclaimer
+       * asserting the opposite of the truth. */
+      captured: all.length,
+      synthetic: 0,
+      /* 🔴 SAYS SO OUT LOUD, so the shell's sample-data banner does not call a
+       * real week made up. The banner reads this rather than guessing from the
+       * route, and a card built from the feed that forgot to set it would be
+       * labelled a fabrication on screen. */
+      fromFeed: true
     };
   }
 
@@ -753,8 +793,22 @@ function row(ctx, spec) {
    * there means a new stake at the current price, not a free rewrite of the old
    * one at the old price. */
   const staked = ctx.mode === 'week';
-  const editable = isPickEditable(game, ctx.now) && !staked;
-  const left = editable ? game.kickoffUtc - ctx.now : 0;
+  /* 🔴 TWO DIFFERENT FACTS, AND COLLAPSING THEM PRINTED "Closes in null".
+   *
+   *   open      - the game has not kicked off. Drives the countdown and the
+   *               lock state, and is true on BOTH products.
+   *   swappable - this pick may still be changed. False on the week's card at
+   *               all times, because a stake is committed at the price it was
+   *               taken at.
+   *
+   * They were one variable. Making a staked pick non-swappable therefore also
+   * told the status line the game had no time left, so `left` fell to 0 and
+   * remainingLabel returned null - rendered as the word "null" beside a game two
+   * days away. A boolean that answers two questions gives the wrong answer to
+   * one of them. */
+  const open = isPickEditable(game, ctx.now);
+  const editable = open && !staked;
+  const left = open ? game.kickoffUtc - ctx.now : 0;
 
   const r = el('div', 'p4-row');
   r.dataset.state = st;
@@ -906,6 +960,68 @@ function score(game) {
 
 /* ------------------------------------------------------------------ render */
 
+/* Per-game summaries written by the live screen when it settles. Newest first.
+ * Nothing here is recomputed - if the live screen never settled a game, there is
+ * nothing to show for it, which is the honest answer rather than a zero. */
+function liveCalls() {
+  try {
+    const all = JSON.parse(localStorage.getItem('ag.callsum') || '{}');
+    return Object.keys(all)
+      .map((k) => ({ key: k, ...all[k] }))
+      .filter((r) => (r.won + r.lost + r.voided + r.open) > 0)
+      .sort((a, b) => (b.at || 0) - (a.at || 0));
+  } catch { return []; }
+}
+
+function liveCallBlock(rows) {
+  const box = el('div', 'card p4-live');
+  const h = el('div', 'p4-live-h');
+  h.appendChild(el('span', 'p4-live-k', 'Called live'));
+  h.appendChild(el('span', 'p4-live-n', 'Snap by snap · scored on its own'));
+  box.appendChild(h);
+
+  for (const r of rows) {
+    const a = el('a', 'p4-live-r');
+    a.href = '/?game=' + encodeURIComponent(r.key).replace(/%3A/g, ':');
+    const settled = r.won + r.lost;
+    const parts = [];
+    if (settled) parts.push(r.won + ' of ' + settled);
+    if (r.open) parts.push(r.open + ' open');
+    if (r.voided) parts.push(r.voided + ' void');
+    a.appendChild(el('span', 'p4-live-g', gameLabel(r.key)));
+    a.appendChild(el('span', 'p4-live-s num', parts.join(' · ') || 'nothing settled'));
+    /* 🔴 PROFIT, WITH ITS SIGN, on the fixed result scale - never team color.
+     * Same component for up and down, which is the symmetry rule: a miss is a
+     * win with a different sign, not a different design. */
+    const p = el('span', 'p4-live-p num', (r.profit > 0 ? '+' : '') + r.profit);
+    /* 🔴 `data-result`, WHICH IS THE VOCABULARY THE RESULT-SCALE GUARD KNOWS.
+     * My first version invented `data-sign` and the guard failed it - correctly.
+     * The rule is that --up and --down may only be reached from a RESOLVED
+     * state, and it enforces that by recognising the attributes that mean
+     * resolved. An attribute it does not know is indistinguishable from one that
+     * paints a win onto an open pick, so widening the guard to admit mine would
+     * have been weakening it to fit a name I chose arbitrarily.
+     *
+     * And `won`/`lost` is the accurate word here, not a workaround: a game you
+     * finished up on is one you won. `flat` gets no result attribute at all,
+     * because breaking even is neither. */
+    if (r.profit > 0) p.dataset.result = 'won';
+    else if (r.profit < 0) p.dataset.result = 'lost';
+    a.appendChild(p);
+    box.appendChild(a);
+  }
+  return box;
+}
+
+/* The key is `<sport>:<espnId>` and that is all this screen has - it holds no
+ * team table for another league. The id alone is honest and unhelpful, so it is
+ * labelled by league and left short rather than dressed up as a matchup we
+ * cannot name here. */
+function gameLabel(key) {
+  const sport = String(key).split(':')[0] === 'nfl' ? 'NFL' : 'College';
+  return sport + ' game';
+}
+
 export function render(root, data, state) {
   root.innerHTML = '';
   const style = document.createElement('style');
@@ -972,11 +1088,40 @@ export function render(root, data, state) {
      * pinned elements is neither of them pinned. */
     host.appendChild(parlayPin());
 
+    /* 🔴 WHAT YOU DID INSIDE A GAME, on the screen called My picks. Jason,
+     * 2026-09-09: "On my picks, if I bet inside that game shown, the outcome
+     * will be shown as well."
+     *
+     * A live call is settled on the live screen, against plays only that screen
+     * holds, so this one cannot recompute it - it reads the per-game summary
+     * that screen writes when it settles.
+     *
+     * 🔴 A SEPARATE BLOCK THAT NEVER SUMS WITH THE PICKS ABOVE IT. Same games,
+     * two products, two scores: the week's card pays marbles against the spread
+     * and a live call pays marbles against a snap. Adding them would produce one
+     * number that means nothing, and the rule that the boards never sum is the
+     * whole reason the pool and the marbles side can coexist at all.
+     *
+     * It appears BEFORE the empty state, deliberately. Somebody who called forty
+     * snaps on Wednesday and has picked nothing for Saturday has not "not picked
+     * anything yet" - and being told so with their own results one scroll away
+     * would be the app forgetting what they did. */
+    const live = liveCalls();
+    if (live.length) host.appendChild(liveCallBlock(live));
+
     if (!specs.length) {
       /* NONE PICKED. The counter-example is in the CBS capture: `0/15 Picks` above
        * fifteen games all reading Final, with nothing said about what that cost or
        * what to do. So the deadline is the CONTENT of this state, not a footnote. */
-      const first = data.specs
+      /* 🔴 THE WHOLE WEEK, NOT YOUR PICKS. This mapped over `data.specs` - which
+       * on this branch is the list of games you HAVE picked, and is therefore
+       * empty, which is why this state is showing at all. With nothing to sort,
+       * `first` came back undefined and the screen announced "Every game this
+       * week has kicked" on a Wednesday with twenty-four games still to play.
+       *
+       * A message about what is still open cannot be derived from the set of
+       * things you have already done. `data.slate` is the week. */
+      const first = (data.slate || data.specs)
         .map((s) => gameAt(s, ctx.now))
         .filter((g) => isPickEditable(g, ctx.now))
         .sort((a, b) => a.kickoffUtc - b.kickoffUtc)[0];
@@ -986,7 +1131,12 @@ export function render(root, data, state) {
           ? 'The first game on this pool’s slate closes in ' + remainingLabel(first.kickoffUtc - ctx.now) +
             ', at ' + timeLabel(first.kickoffUtc) + '. Every pick stays editable until its own kickoff, so nothing is decided until then.'
           : 'Every game this week has kicked. Nothing can be picked now, and the week scored nothing.',
-        action: { label: 'Go to the slate' }
+        /* 🔴 A BUTTON WITH NO HANDLER IS A DEAD END WEARING A DOOR'S CLOTHES.
+         * Jason, 2026-09-09: "Go to. Slate does not work." stateBlock only wires
+         * a click when it is GIVEN one, and this passed a label alone - so the
+         * one action offered on the one screen that exists to send you somewhere
+         * did nothing at all. */
+        action: { label: 'Go to the slate', onClick: () => { location.hash = '#/slate'; } }
       }));
       host.appendChild(footer(0));
       return;
@@ -1190,10 +1340,17 @@ export function render(root, data, state) {
       box.appendChild(el('p', 'p4-footline num',
         'Parlay: 3 legs 3 points · 4 legs 6 · 5 legs 12 · 6 legs 20. A voided leg leaves the parlay and takes its worth down with it.'));
     }
-    /* SAYS PLAINLY WHAT IS REAL. */
-    box.appendChild(el('p', 'p4-footline p4-real num',
-      data.captured + ' of these games are real captures with their real final scores and their real lines. ' +
-      'The pool, the members, the picks, the crowd splits and the parlay are synthetic — no pool has ever been played.'));
+    /* 🔴 SAYS PLAINLY WHAT IS REAL, AND IT HAS TO BE RIGHT IN BOTH DIRECTIONS.
+     * This line was written when every game on the screen was invented and three
+     * were captures. On a real week it was calling the whole feed synthetic,
+     * which is the same failure as the sample-data banner and worse - a
+     * disclaimer that is wrong is not caution, it is misinformation somebody
+     * will believe precisely because it sounds careful. */
+    box.appendChild(el('p', 'p4-footline p4-real num', data.fromFeed
+      ? data.captured + ' real games off the feed — real kickoffs, real lines with the book named. '
+        + 'Your picks are stored on this device only; there is no pool server yet, so nobody else can see them.'
+      : data.captured + ' of these games are real captures with their real final scores and their real lines. '
+        + 'The pool, the members, the picks, the crowd splits and the parlay are synthetic — no pool has ever been played.'));
     return box;
   }
 }
