@@ -123,21 +123,53 @@ test('🔴 the drive question is offered at a drive start — it never was', () 
 
 test('a drive call already running is not offered twice, and does not block the snap', () => {
   /* The two timescales are the point: a slow call rides UNDER a fast one. */
-  assert.equal(offerFor({ isDriveStart: true, openDriveCall: true, down: 1 }).id, 'script');
+  const t = offerFor({ isDriveStart: true, openDriveCall: true, down: 1, afterPlayId: 'p1' });
+  assert.equal(t.scope, 'play', 'with a drive call open, the snap question is a play call');
 });
 
-test('🔴 script replaces run-or-pass as the default snap question', () => {
-  /* Same tap, four answers instead of two. #2 by handle in the real market at
-   * $1.3m over three playoff rounds, where run-or-pass alone was not a market at
-   * all - Simplebet bundles it WITH the first down. */
-  assert.equal(offerFor({ down: 1 }).id, 'script');
-  assert.equal(offerFor({ down: 2 }).id, 'script');
-  /* The rarer, more specific question still wins where there is one. */
-  assert.equal(offerFor({ down: 3 }).id, 'third_down');
-  assert.equal(offerFor({ down: 4 }).id, 'fourth_down');
+test('🔴 an ordinary snap rotates, and the same snap always asks the same thing', () => {
+  /* 🔴 EIGHT OF TWELVE TYPES WERE UNREACHABLE. Every first and second down, all
+   * night, asked `script` — one binary asked 120 times wearing four tiles, which
+   * is the exact failure this catalog's header exists to prevent: "the second
+   * hour is the first hour again."
+   *
+   * `direction` in particular had never once been offered, and it is the
+   * best-measured question we have — and it reads DIFFERENTLY by league, 29/38/33
+   * college against 40/19/41 NFL. */
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) seen.add(offerFor({ down: 1, afterPlayId: 'play' + i }).id);
+  assert.ok(seen.size >= 3, `an ordinary snap must vary, saw ${[...seen]}`);
+  assert.ok(seen.has('script'), 'script is still the most common');
+  assert.ok(seen.has('direction'), 'direction is finally reachable');
+
+  /* 🔴 DETERMINISTIC, AND THAT IS CORRECTNESS RATHER THAN TASTE. Everybody
+   * watching one game must be asked the same question at the same snap, or the
+   * board compares people who answered different things. Math.random here would
+   * have been invisible with one tester and wrong the moment a second joined. */
+  for (const id of ['p1', 'p2', 'p3']) {
+    const a = offerFor({ down: 1, afterPlayId: id }).id;
+    const b = offerFor({ down: 1, afterPlayId: id }).id;
+    assert.equal(a, b, 'the same snap must ask the same question every time');
+  }
+  /* Every rotation member is a real, settleable play-scope type. */
+  for (const id of seen) {
+    assert.equal(byId(id).scope, 'play', `${id} is offered on a snap`);
+  }
+});
+
+test('the rarer, more specific question still wins where there is one', () => {
+  assert.equal(offerFor({ down: 3, afterPlayId: 'x' }).id, 'third_down');
+  assert.equal(offerFor({ down: 4, afterPlayId: 'x' }).id, 'fourth_down');
   assert.equal(offerFor({ isKickoff: true }).id, 'kickoff_return');
   assert.equal(offerFor({ isPunt: true }).id, 'punt_fair_catch');
   assert.equal(offerFor({ isFieldGoalAttempt: true }).id, 'field_goal');
+  /* The red zone is its own moment and asks its own question. */
+  assert.equal(offerFor({ down: 1, yardsToGoal: 12, afterPlayId: 'x' }).id, 'redzone_outcome');
+  /* A drive start reaches all three drive questions, not just the famous one. */
+  const d = new Set();
+  for (let i = 0; i < 40; i++) d.add(offerFor({ isDriveStart: true, afterPlayId: 'd' + i }).id);
+  assert.ok(d.has('drive_end') && d.size >= 2, `drive questions must vary, saw ${[...d]}`);
+  for (const id of d) assert.equal(byId(id).scope, 'drive');
 });
 
 /* ------------------------------------------------------------------ *
