@@ -18,7 +18,7 @@
  * the app asks that instead.
  */
 
-import { CALL_TYPES, byId, offerFor, settle } from '/src/catalog.js';
+import { CALL_TYPES, byId, offerFor, settle, settleDrive } from '/src/catalog.js';
 import { teamChip, applyTeamVars } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { signed, signClass, clock } from '/components/fmt.js';
@@ -90,11 +90,27 @@ function questionFor(state) {
   const last = state.plays[state.plays.length - 1];
   if (!last) return null;
   const s = (last.text || '').toLowerCase();
+
+  /* A drive starts when the possession that is about to snap is not the one that
+   * snapped last - a kickoff, a punt, a turnover. That is read off the drive id
+   * the feed already gives every play, never inferred from the down. */
+  const prev = state.plays[state.plays.length - 2] || null;
+  const isDriveStart = !prev || prev.driveId !== last.driveId || /kickoff|punt|intercept|fumble/.test(s);
+
+  /* A drive call already running is not re-offered, and it does not block the
+   * snap questions underneath it - that is the point of two timescales. */
+  const openDriveCall = Object.values(S.calls).some(
+    (c) => c.scope === 'drive' && c.driveId === last.driveId
+  );
+
   return offerFor({
     down: state.situation?.down ?? null,
     distance: state.situation?.distance ?? null,
     isKickoff: /kickoff/.test(s),
-    isFieldGoalAttempt: false
+    isPunt: /punt/.test(s),
+    isFieldGoalAttempt: /field goal/.test(s),
+    isDriveStart,
+    openDriveCall
   });
 }
 
@@ -102,10 +118,33 @@ function questionFor(state) {
 function priceFor(type, state, offenseTeamId) {
   const rel = state.plays.filter((p) => p.offenseTeamId === offenseTeamId);
   const counts = {};
-  for (const c of type.choices) counts[c.id] = 1;      // the prior, one each
-  let n = type.choices.length;
+
+  /* 🔴 THE PRIOR IS MEASURED WHERE IT CAN BE, not one-each. A four-way question
+   * with a flat prior prices every tile at 25% and 4x - a made-up number wearing
+   * a decimal point, and on a drive question it says a punt and a field goal are
+   * equally likely, which 69 real drives say they are not (38% against 13%).
+   *
+   * So the prior is the catalog's counted distribution, weighted as four snaps
+   * of evidence, and the in-game counts move it from there. Where a type has no
+   * measured rates it falls back to one-each, which is the honest flat prior. */
+  const PRIOR_WEIGHT = 4;
+  for (const c of type.choices) {
+    counts[c.id] = type.rates?.[c.id] != null ? type.rates[c.id] * PRIOR_WEIGHT : 1;
+  }
+  let n = type.choices.reduce((a, c) => a + counts[c.id], 0);
+  const priorN = n;                                    // the prior is not evidence
+
   if (type.id === 'run_pass') {
     for (const p of rel) if (p.kind === 'run' || p.kind === 'pass') { counts[p.kind]++; n++; }
+  }
+  if (type.id === 'script') {
+    /* Both halves off the same play, so the tendency the model learns tonight is
+     * the one the tile is actually asking about. */
+    for (const p of rel) {
+      if (p.kind !== 'run' && p.kind !== 'pass') continue;
+      const got = /1st down|first down|touchdown/i.test(p.text || '');
+      counts[`${p.kind}_${got ? 'yes' : 'no'}`]++; n++;
+    }
   }
   return type.choices.map((c) => {
     const p = (counts[c.id] || 1) / n;
@@ -113,7 +152,7 @@ function priceFor(type, state, offenseTeamId) {
       choice: c,
       p: Math.round(p * 1000) / 1000,
       pays: Math.min(MAX_PAYOUT, Math.round((1 / p) * 100) / 100),
-      samples: Math.max(0, n - type.choices.length)
+      samples: Math.max(0, Math.round(n - priorN))
     };
   });
 }
@@ -126,11 +165,32 @@ function settleAll(state) {
   let bank = START_BANK;
   const rows = [];
   for (const [afterPlayId, call] of Object.entries(S.calls)) {
+    /* 🔴 A DRIVE CALL RUNS FOR MINUTES AND LANDS ONCE. It is not settled by the
+     * next snap - it is settled by the drive ending, against the result the feed
+     * states. While the drive is live the call sits open underneath whatever
+     * snap question is being asked on top of it, which is the whole reason the
+     * catalog has two timescales. */
+    if (call.scope === 'drive') {
+      const drive = (state.drives || []).find((d) => d.id === call.driveId);
+      if (!drive || !drive.ended) { rows.push({ ...call, afterPlayId, open: true }); bank -= call.stake; continue; }
+      const dp = state.plays.filter((p) => p.driveId === call.driveId);
+      const r = settleDrive(call.type, call.choice, { result: drive.result, plays: dp });
+      if (r.landed === null) { rows.push({ ...call, afterPlayId, void: true, because: r.because }); continue; }
+      const dd = r.landed ? Math.round(call.stake * call.pays) - call.stake : -call.stake;
+      bank += dd;
+      rows.push({ ...call, afterPlayId, landed: r.landed, delta: dd, because: r.because });
+      continue;
+    }
+
     const i = state.plays.findIndex((p) => p.id === afterPlayId);
     const next = i >= 0 ? state.plays[i + 1] : null;
     if (!next) { rows.push({ ...call, afterPlayId, open: true }); bank -= call.stake; continue; }
+    /* 🔴 THE LEAGUE IS PART OF THE SETTLEMENT, not decoration. A sack is a pass
+     * in the NFL and a rush in college - every operator rulebook says so in the
+     * same words - and a sack turns up on 16% of real drives. Passing the wrong
+     * league here does not error; it quietly grades the call the other way. */
     const r = settle(call.type, call.choice, { text: next.text, typeText: next.typeText || '' },
-                     { down: call.down, distance: call.distance });
+                     { down: call.down, distance: call.distance, sport: state.sport });
     if (r.landed === null) { rows.push({ ...call, afterPlayId, void: true, because: r.because }); continue; }
     const delta = r.landed ? Math.round(call.stake * call.pays) - call.stake : -call.stake;
     bank += delta;
@@ -244,7 +304,7 @@ function paint(wrap) {
     card.appendChild(ladder);
 
     const priced = priceFor(type, state, state.situation?.offenseTeamId || last.offenseTeamId);
-    const tiles = el('div', 'lg-tiles');
+    const tiles = el('div', 'lg-tiles' + (priced.length > 3 ? ' is-4' : ''));
     for (const o of priced) {
       const b = el('button', 'lg-tile');
       b.appendChild(el('span', 'lg-tile-label', o.choice.label));
@@ -314,6 +374,9 @@ async function makeCall(wrap, type, offer, afterPlay, state) {
   S.calls[afterPlay.id] = {
     type: type.id, choice: offer.choice.id, label: offer.choice.label,
     stake: S.stake, pays: offer.pays, p: offer.p,
+    /* A drive call is settled by the drive it belongs to, not by the next snap,
+     * so both travel with it. */
+    scope: type.scope, driveId: afterPlay.driveId,
     down: state.situation?.down ?? null, distance: state.situation?.distance ?? null
   };
   store.set('calls', S.calls);
@@ -366,7 +429,15 @@ const CSS = `
 .lg-stakes { display: flex; gap: 6px; margin: 10px 0; }
 .lg-stake { min-width: 56px; min-height: var(--tap-min); font-weight: 700; }
 .lg-stake.is-on { border-color: var(--accent); color: var(--accent); }
+/* 🔴 FOUR TILES DO NOT FIT ACROSS A PHONE. Column auto-flow was fine while every
+   question was a coin flip and silently crushes a four-way one: at 375px the
+   four columns measured 108 / 77 / 77 / 89, sized to their own text, so the
+   tiles are uneven AND too narrow. Requirement 7.5 exactly - a layout bug no
+   test can see. Two and three go across; four goes two-by-two.
+   And no backticks in this block: it lives inside a template literal, and one
+   of them ended the string and took the whole screen down. */
 .lg-tiles { display: grid; grid-auto-flow: column; gap: 8px; }
+.lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
 .lg-tile { display: grid; gap: 2px; padding: 10px; min-height: 76px; text-align: left; }
 .lg-tile-label { font-weight: 800; font-size: var(--t-emph); }
 .lg-tile-win { font-size: var(--t-figure); font-weight: 800; }

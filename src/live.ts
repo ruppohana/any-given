@@ -61,10 +61,25 @@ export type LiveState = {
   awayScore: number;
   /** Newest last, exactly as the feed orders them. */
   plays: LivePlay[];
+  /** 🔴 A DRIVE'S RESULT IS READ, NEVER DERIVED - the same rule the game's own
+   *  status has, for the same reason. ESPN says TD, FG, PUNT, DOWNS, END OF HALF
+   *  in its own words. A drive that ended at half time did not stall, and
+   *  inferring the result from its last play would say it did. Drive-scope calls
+   *  settle against this and nothing else. */
+  drives: LiveDrive[];
   situation: LiveSituation | null;
   offers: Offer[] | null;
   /** Server time when this was read, so a client can hold it by its own delay. */
   fetchedAt: number;
+};
+
+export type LiveDrive = {
+  id: string;
+  offenseTeamId: string;
+  /** ESPN's own word for how it ended, upper-cased. Empty while it is running -
+   *  which is exactly how a client knows a drive call is still open. */
+  result: string;
+  ended: boolean;
 };
 
 export type LivePlay = {
@@ -148,6 +163,30 @@ export function priceFrom(plays: LivePlay[], offenseTeamId: string): Offer[] {
     };
   };
   return [mk('run', run), mk('pass', pass)];
+}
+
+/** The drives themselves, with the result the feed states rather than one we
+ *  work out. `current` is the one still running, so it is never `ended`. */
+export function readDrives(summary: any): LiveDrive[] {
+  const drives = summary?.drives || {};
+  const out: LiveDrive[] = [];
+  for (const d of drives.previous || []) {
+    out.push({
+      id: String(d?.id ?? ''),
+      offenseTeamId: String(d?.team?.id ?? ''),
+      result: String(d?.result || d?.displayResult || '').toUpperCase(),
+      ended: true
+    });
+  }
+  if (drives.current) {
+    out.push({
+      id: String(drives.current?.id ?? ''),
+      offenseTeamId: String(drives.current?.team?.id ?? ''),
+      result: '',
+      ended: false
+    });
+  }
+  return out;
 }
 
 /** Flatten ESPN's drive/play tree into the order a game was played in. */
@@ -237,6 +276,7 @@ export function readLive(summary: any, gameId: string, sport: Sport, now: number
     homeScore: Number(home.score) || 0,
     awayScore: Number(away.score) || 0,
     plays,
+    drives: readDrives(summary),
     situation,
     offers: status === 'live' && offenseTeamId ? priceFrom(plays, offenseTeamId) : null,
     fetchedAt: now

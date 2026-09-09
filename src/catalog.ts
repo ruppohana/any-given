@@ -53,6 +53,19 @@ export type CallType = {
   /** How often the FIRST choice actually happened, over the same three games.
    *  A question whose answer is 90% one way is not a question. */
   baseRate?: number;
+  /**
+   * 🔴 THE MEASURED DISTRIBUTION ACROSS EVERY CHOICE, where it was counted rather
+   * than assumed. This is the honest prior: a four-way question with no rates
+   * prices every tile at 25% and 4x, which is a made-up number wearing a decimal
+   * point. With rates, the first snap of the night is priced off 370 real plays
+   * instead of off nothing.
+   *
+   * COLLEGE, all of it - three complete college games. Against an NFL game these
+   * are the wrong league's rates, and `basis` on the offer is what says so. They
+   * are still better than a uniform split, and they are replaced by in-game
+   * counts as the night gives the model something to look at.
+   */
+  rates?: Record<string, number>;
 };
 
 export const CALL_TYPES: CallType[] = [
@@ -118,7 +131,14 @@ export const CALL_TYPES: CallType[] = [
     ],
     perGame: 25,
     reads: 'situation',
-    scope: 'drive'
+    scope: 'drive',
+    /* 🔴 38 / 29 / 20 / 13 over 69 real drives, and this is the most-played
+     * micro-market in football by handle - #1 in Simplebet's whole college
+     * catalog, and next-drive result led the NFL playoffs. Four ways, nothing
+     * over 38%, and every tile pays. It was in this file all along and the
+     * router never offered it. */
+    baseRate: 0.29,
+    rates: { td: 0.29, fg: 0.13, punt: 0.377, turnover: 0.203 }
   },
 
   /* ---- DRIVE SCOPE. A different clock, and the reason the app has a pulse
@@ -166,7 +186,8 @@ export const CALL_TYPES: CallType[] = [
     /* 🔴 29 / 38 / 33 over 349 real snaps - the most evenly balanced question in
      * the whole catalog, and a three-way rather than a coin flip. This is the one
      * that makes run-or-pass look thin. */
-    baseRate: 0.29
+    baseRate: 0.29,
+    rates: { left: 0.29, middle: 0.38, right: 0.33 }
   },
   {
     id: 'first_down',
@@ -195,7 +216,83 @@ export const CALL_TYPES: CallType[] = [
      * 56 / 19 / 25 over 36 real red-zone trips. A genuine three-way spread: the
      * favourite is real, and a quarter of the time nobody scores at all. */
     scope: 'drive',
-    baseRate: 0.56
+    baseRate: 0.56,
+    rates: { td: 0.56, fg: 0.19, none: 0.25 }
+  },
+
+  /* ---- WHAT THE MARKET ACTUALLY SELLS. Jason, 2026-09-08: "ask what
+   * opportunities are there for betting, you have obviously not done that."
+   *
+   * He was right and the correction is specific. Everything above this line was
+   * reasoned outward from what the ESPN feed happens to expose. Four operator
+   * rulebooks - DraftKings 8/18/25, Fanatics 10/6/25, FanDuel, BetMGM, all filed
+   * with state regulators, all read in full - plus Simplebet's published handle
+   * say something the feed cannot: WHICH QUESTIONS PEOPLE ACTUALLY ANSWER.
+   *
+   * 🔴 THE HEADLINE, AND IT REORDERS THE CATALOG RATHER THAN EXTENDING IT.
+   * "Drive Exact Result" was the MOST-PLAYED micro-market in Simplebet's whole
+   * college football catalog, and next-drive result led the NFL playoffs too. We
+   * have that question - `drive_end` - and `offerFor` never once offered it. The
+   * biggest gap was not a missing type. It was a type we had and never asked.
+   *
+   * Second by handle was the SCRIPT market at $1.3m over three playoff rounds:
+   * run-or-pass AND first-down-or-not as ONE pick. We had both halves separately
+   * and never thought to multiply them. It is below, and measured.
+   *
+   * WHAT WE STILL DO NOT HAVE, named rather than quietly skipped: the PLAYER
+   * dimension. "Who scores a touchdown on this drive" took $1.5m and was played
+   * by 26% of one operator's customers - the single biggest micro-market in
+   * football, and we have nothing like it. It needs a per-play star the parser
+   * emits, which requirement 7.2 says is a real trap (the parenthesized group is
+   * the TACKLER). It is the next build, not a thing to half-do before a kickoff.
+   * ---- */
+  {
+    id: 'script',
+    question: 'Run or pass — and do they get the first down?',
+    choices: [
+      { id: 'run_yes', label: 'Run, first down' },
+      { id: 'run_no', label: 'Run, short' },
+      { id: 'pass_yes', label: 'Pass, first down' },
+      { id: 'pass_no', label: 'Pass, short' }
+    ],
+    perGame: 123,
+    reads: 'tendency',
+    scope: 'play',
+    /* 🔴 THE BEST-SPREAD QUESTION IN THE CATALOG, measured over 370 real snaps:
+     * run-short 41%, pass-short 32%, pass-first 16%, run-first 12%. Four ways,
+     * nothing above 38, and the two interesting outcomes pay real money. It beats
+     * `direction` (29/38/33) because it is four-way, and it beats `run_pass`
+     * outright - same tap, twice the question. */
+    /* First choice, per the field's definition. The spread that matters is in
+     * `rates`: the modal answer is run-and-short at 41%. */
+    baseRate: 0.115,
+    rates: { run_yes: 0.115, run_no: 0.405, pass_yes: 0.163, pass_no: 0.317 }
+  },
+  {
+    id: 'punt_fair_catch',
+    question: 'Fair catch, or does he run it back?',
+    choices: [{ id: 'fair', label: 'Fair catch' }, { id: 'return', label: 'He brings it back' }],
+    perGame: 9,
+    reads: 'personnel',
+    scope: 'play',
+    /* 42% over 26 real punts. Near even, and it settles the instant the ball is
+     * caught - which is the property Simplebet credited for the touchback
+     * market's success. Instant gratification beat sophistication there. */
+    baseRate: 0.423
+  },
+  {
+    id: 'three_and_out',
+    question: 'Three and out?',
+    choices: [{ id: 'yes', label: 'Three and out' }, { id: 'no', label: 'They move it' }],
+    perGame: 25,
+    reads: 'matchup',
+    scope: 'drive',
+    /* 17% over 75 real drives - the most lopsided thing that ships, and it ships
+     * because the payout is the point. At 17% it pays close to the 6x cap, so it
+     * is the catalog's one long shot rather than its one bad question. Compare
+     * the three that were REJECTED for the same measurement: a sack is 3%, a
+     * penalty on the play is 1%, crossing midfield is 83%. */
+    baseRate: 0.173
   }
 ];
 
@@ -227,11 +324,59 @@ export type Settled = { landed: boolean | null; because: string };
  * `landed: null` is a VOID - the one void path, in the live layer. The offense
  * never chose, so the stake comes back untouched.
  */
+/**
+ * 🔴 A SACK IS A PASS IN THE NFL AND A RUSH IN COLLEGE. Not a preference - the
+ * same physical event is graded oppositely by league, and every operator rulebook
+ * read says so in the same words. DraftKings: "A sack will be settled as a pass
+ * attempt for NFL Games. A sack will be settled as a rush attempt for NCAA
+ * Games." Fanatics, FanDuel and betr all concur.
+ *
+ * The catalog had it hardcoded to PASS, which is right for tomorrow's rig and
+ * WRONG for the actual product - college is the shipping sport. A sack is 16% of
+ * real drives, so this silently flipped the answer on roughly one drive in six.
+ *
+ * And an unknown league VOIDS rather than guessing. A sack graded the wrong way
+ * does not look wrong: it looks like a call that lost. That is the same silent
+ * fallback `teams.ts` returns null for, and it gets the same treatment.
+ */
+export type SettleSport = 'nfl' | 'college-football';
+
+export function sackCountsAs(sport: SettleSport | null | undefined): 'run' | 'pass' | null {
+  if (sport === 'nfl') return 'pass';
+  if (sport === 'college-football') return 'run';
+  return null;
+}
+
+/** One reading of run-or-pass, shared by every question that needs it, so the
+ *  sack rule cannot be right in one place and wrong in another. */
+function runOrPass(
+  play: { text: string; typeText?: string },
+  sport: SettleSport | null | undefined
+): { side: 'run' | 'pass' | null; because: string } {
+  const t = (play.typeText || '').toLowerCase();
+  const s = play.text.toLowerCase();
+  if (has(t + ' ' + s, /kickoff|punt|field goal|extra point|kneel|spike/)) {
+    return { side: null, because: 'not a run-or-pass snap' };
+  }
+  if (has(t, /sack/) || has(s, / sacked/)) {
+    const side = sackCountsAs(sport);
+    return side
+      ? { side, because: `a sack, which ${sport === 'nfl' ? 'the NFL' : 'college'} grades as a ${side}` }
+      : { side: null, because: 'a sack, and no league was given to grade it by' };
+  }
+  /* An interception is an incomplete pass, per every rulebook read. */
+  if (has(t, /pass|interception/) || has(s, /incomplete| pass |intercepted/)) {
+    return { side: 'pass', because: 'it was a pass' };
+  }
+  if (has(t, /rush/) || has(s, / rush | scramble/)) return { side: 'run', because: 'it was a run' };
+  return { side: null, because: 'neither a run nor a pass' };
+}
+
 export function settle(
   typeId: string,
   choice: string,
   play: { text: string; typeText?: string; statYardage?: number | null },
-  ctx?: { down?: number | null; distance?: number | null }
+  ctx?: { down?: number | null; distance?: number | null; sport?: SettleSport | null }
 ): Settled {
   const t = (play.typeText || '').toLowerCase();
   const s = play.text.toLowerCase();
@@ -244,13 +389,31 @@ export function settle(
 
   switch (typeId) {
     case 'run_pass': {
-      if (has(both, /kickoff|punt|field goal|extra point|kneel|spike/)) {
-        return { landed: null, because: 'not a run-or-pass snap' };
+      const r = runOrPass(play, ctx?.sport);
+      if (!r.side) return { landed: null, because: r.because };
+      return { landed: r.side === choice, because: r.because };
+    }
+
+    /* 🔴 THE SCRIPT MARKET. Two questions, one tap, and #2 by handle in the real
+     * market. It voids whenever EITHER half would - a play that was not a snap
+     * has no run-or-pass answer, so it has no script answer either. */
+    case 'script': {
+      const r = runOrPass(play, ctx?.sport);
+      if (!r.side) return { landed: null, because: r.because };
+      const got = has(s, /1st down|first down|touchdown/);
+      const actual = `${r.side}_${got ? 'yes' : 'no'}`;
+      return { landed: actual === choice, because: `${r.because}, ${got ? 'first down' : 'short of it'}` };
+    }
+
+    case 'punt_fair_catch': {
+      if (!has(both, /punt/)) return { landed: null, because: 'not a punt' };
+      /* A punt nobody caught - downed, out of bounds, touchback, blocked - was
+       * never a choice between fair-catching and running it back. */
+      if (has(s, /touchback|downed|out of bounds|blocked|no play/)) {
+        return { landed: null, because: 'nobody fielded it' };
       }
-      const isPass = has(t, /pass|sack/) || has(s, / sacked|incomplete| pass /);
-      const isRun = has(t, /rush/) || has(s, / rush | scramble/);
-      if (!isPass && !isRun) return { landed: null, because: 'neither a run nor a pass' };
-      return { landed: (isPass ? 'pass' : 'run') === choice, because: isPass ? 'it was a pass' : 'it was a run' };
+      const fc = has(s, /fair catch/);
+      return { landed: (fc ? 'fair' : 'return') === choice, because: fc ? 'fair catch' : 'he brought it back' };
     }
 
     case 'fourth_down': {
@@ -262,6 +425,12 @@ export function settle(
 
     case 'kickoff_return': {
       if (!has(both, /kickoff/)) return { landed: null, because: 'not a kickoff' };
+      /* 🔴 AN ONSIDE KICK VOIDS IT, and this is a borrowed rule rather than a
+       * derived one - DraftKings and Fanatics both void every kickoff market on
+       * an onside attempt. Nobody who called "past the 25" was answering a
+       * question about a ten-yard squib, and a penalty on a kick voids it too. */
+      if (has(s, /onside/)) return { landed: null, because: 'onside kick' };
+      if (has(both, /penalty/)) return { landed: null, because: 'a penalty on the kick' };
       /* A touchback is the 25 by rule, so it is never PAST it. A return is past
        * the 25 only if the sentence says where it ended. */
       if (has(s, /touchback/)) return { landed: choice === 'short', because: 'touchback' };
@@ -348,6 +517,16 @@ export function settleDrive(
     return { landed: actual === choice, because: result.toLowerCase() || 'no score' };
   }
 
+  if (typeId === 'three_and_out') {
+    if (/END OF/.test(result)) return { landed: null, because: 'the half ended' };
+    /* DraftKings defines it exactly: "exactly three valid plays from scrimmage
+     * followed by a punt." Three and a punt is four rows in the feed. */
+    const scrim = drive.plays.filter((p) => !/kickoff|extra point|timeout|end of/i.test(p.text));
+    const yes = result === 'PUNT' && scrim.length <= 4;
+    return { landed: (yes ? 'yes' : 'no') === choice,
+             because: yes ? 'three and out' : `${scrim.length} plays, ${result.toLowerCase() || 'no result'}` };
+  }
+
   if (typeId === 'drive_end') {
     /* A drive that ends the half ended nobody's way. The one void path again. */
     if (/END OF/.test(result)) return { landed: null, because: 'the half ended' };
@@ -355,7 +534,13 @@ export function settleDrive(
       TD: 'td', FG: 'fg', PUNT: 'punt',
       DOWNS: 'turnover', INT: 'turnover', FUMBLE: 'turnover', 'MISSED FG': 'turnover'
     };
-    const actual = map[result] || null;
+    /* 🔴 "PUNT TD" IS A PUNT, and it is a real drive result in the fixtures - a
+     * punt returned for a touchdown. The question asked how the OFFENSIVE drive
+     * ended, and it ended in a punt; what the other team then did with the ball
+     * is a different drive. DraftKings words it the same way. This voided before
+     * the fixtures were counted, which is a call nobody would have noticed
+     * losing. */
+    const actual = map[result] || map[result.split(' ')[0]] || null;
     if (!actual) return { landed: null, because: `unhandled drive result ${result}` };
     return { landed: actual === choice, because: result.toLowerCase() };
   }
@@ -375,11 +560,38 @@ export function offerFor(ctx: {
   down?: number | null;
   distance?: number | null;
   isKickoff?: boolean;
+  isPunt?: boolean;
   isFieldGoalAttempt?: boolean;
+  /** True on the first snap of a possession - the moment the drive question is
+   *  worth asking, and the only moment it can be. */
+  isDriveStart?: boolean;
+  /** What is already running on this drive, so a drive call is not offered twice
+   *  and a slow call can ride under a fast one rather than replacing it. */
+  openDriveCall?: boolean;
 }): CallType | null {
   if (ctx.isKickoff) return byId('kickoff_return');
+  if (ctx.isPunt) return byId('punt_fair_catch');
   if (ctx.isFieldGoalAttempt) return byId('field_goal');
+
+  /* 🔴 THE DRIVE QUESTION COMES FIRST, and this line is the whole correction.
+   * "Drive Exact Result" was the single most-played market in Simplebet's college
+   * football catalog and next-drive result led the NFL playoffs. We shipped that
+   * question weeks ago and this function never offered it once - every snap fell
+   * through to run-or-pass. The catalog was not missing the best market; the
+   * router was hiding it.
+   *
+   * It rides UNDER the play calls rather than replacing them, which is what the
+   * two timescales were built for: take the drive at first down, then keep
+   * calling snaps while it runs. */
+  if (ctx.isDriveStart && !ctx.openDriveCall) return byId('drive_end');
+
   if (ctx.down === 4) return byId('fourth_down');
   if (ctx.down === 3) return byId('third_down');
-  return byId('run_pass');
+
+  /* 🔴 SCRIPT REPLACES RUN-OR-PASS AS THE DEFAULT SNAP. Same tap, four answers
+   * instead of two, measured at 38/35/16/12 over 370 real snaps, and #2 by handle
+   * in the real market at $1.3m over three playoff rounds. `run_pass` stays in the
+   * catalog because it is the honest fallback when a screen wants two tiles, but
+   * nothing should be asking a coin flip a hundred and twenty times a night. */
+  return byId('script');
 }

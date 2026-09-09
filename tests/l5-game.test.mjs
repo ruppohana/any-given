@@ -491,3 +491,45 @@ test('team color survives navy, yellow and null — and an identical pair', () =
   const v = L5.buildGameView(load('real-ball-at-osu'), { teamsById: TEAMS, followTeamId: '2050' });
   assert.ok(v.home && v.away, 'the clash game does not resolve both teams');
 });
+
+
+/* ------------------------------------------------------------------ *
+ * A screen that does not PARSE is a blank page, and no unit test sees it
+ * ------------------------------------------------------------------ */
+
+test('🔴 every screen module parses — a blank page no unit test can see', async () => {
+  /* What this caught, 2026-09-08: a CSS comment written inside the live screen's
+   * CSS template literal quoted a property name in backticks. The first one
+   * ENDED the string. Nothing 404ed, nothing logged, nothing the app surfaced
+   * threw - the screen simply did not render, and the nav around it looked
+   * perfectly healthy.
+   *
+   * Every other test in this repo imports the pure modules. Not one imports a
+   * screen, because screens need a DOM - so 547 passing tests said nothing at
+   * all about a screen that could not be parsed. The cheapest possible check for
+   * the most expensive possible failure.
+   *
+   * `node --check` on a .mjs copy is a PARSE WITHOUT AN EXECUTE: it reads the
+   * module exactly as the browser's parser does, needs no DOM, and runs none of
+   * the code. The copy exists only so the extension says ESM. */
+  const { readdirSync, copyFileSync, mkdtempSync } = await import('node:fs');
+  const { execFileSync } = await import('node:child_process');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+
+  const dir = new URL('../public/screens/', import.meta.url);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.screen.js'));
+  assert.ok(files.length >= 10, 'the screens are where we think they are');
+
+  const tmp = mkdtempSync(join(tmpdir(), 'ag-parse-'));
+  for (const f of files) {
+    const to = join(tmp, f.replace('.js', '.mjs'));
+    copyFileSync(new URL(f, dir), to);
+    try {
+      execFileSync(process.execPath, ['--check', to], { stdio: 'pipe' });
+    } catch (e) {
+      assert.fail(f + ' does not parse: ' + String(e.stderr || e).split('\n').slice(0, 3).join(' '));
+    }
+  }
+  console.log('    ' + files.length + ' screen modules parse');
+});
