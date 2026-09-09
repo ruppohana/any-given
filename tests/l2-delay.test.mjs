@@ -194,3 +194,45 @@ test('the color-survival rail is real rows, not chosen colors', () => {
   assert.ok(p.navy.id !== p.navyB.id, 'navy-on-navy needs two different teams');
   assert.equal(p.none.primary === null || p.none.primary === '000000', true);
 });
+
+/* ------------------------------------------------------------------ *
+ * A frozen feed must LOOK frozen — 2026-09-08
+ * ------------------------------------------------------------------ */
+
+test('🔴 the stale rule fires on a dead poller and not on the pre-kickoff backoff', async () => {
+  /* What this defends. The poller died after 36 minutes with no error line. The
+   * Worker went on serving the last state it held, so the live screen rendered a
+   * score, a board and a delay bar over a game that had stopped. A blank screen
+   * sends somebody to find out why; a stale one does not.
+   *
+   * The threshold is derived rather than picked: live pushes are every 10s, so
+   * 45s is three missed pushes. Pre-kickoff the poller deliberately drops to a
+   * five-minute cycle, so the same rule there would cry wolf all evening. */
+  const src = await import('node:fs').then((fs) =>
+    fs.readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8'));
+
+  /* The screen cannot be imported here - it needs a DOM - so the rule is lifted
+   * and run. That is honest about what is being tested: the arithmetic, not the
+   * markup, and the markup is checked in the browser. */
+  const body = src.slice(src.indexOf('export function staleness'));
+  const fn = new Function('return ' + body.slice(body.indexOf('('), body.indexOf('\n}') + 2)
+    .replace(/^\(/, 'function ('))();
+
+  const NOW = 1_700_000_000_000;
+  const live = (ageMs) => fn({ status: 'live', pushedAt: NOW - ageMs }, NOW);
+  const pre = (ageMs) => fn({ status: 'pre', pushedAt: NOW - ageMs }, NOW);
+
+  assert.equal(live(10_000), null, 'one poll interval is not stale');
+  assert.equal(live(40_000), null, 'three intervals minus a network hiccup is not stale');
+  assert.ok(live(60_000), 'a minute with no push during a live game IS stale');
+  assert.ok(live(36 * 60_000), 'the actual failure - 36 minutes and gone');
+
+  assert.equal(pre(60_000), null, 'the pre-kickoff backoff is five minutes, not a fault');
+  assert.equal(pre(9 * 60_000), null, 'still inside two slow cycles');
+  assert.ok(pre(20 * 60_000), 'twenty minutes before kickoff with nothing pushed IS a fault');
+
+  /* No timestamp at all is not a staleness claim - it is a state we have never
+   * been given, and the empty screen already covers that. */
+  assert.equal(fn({ status: 'live' }, NOW), null);
+  assert.equal(fn(null, NOW), null);
+});

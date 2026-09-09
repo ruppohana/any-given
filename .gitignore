@@ -20,3 +20,6 @@ dist/
 # failing loudly, which is the worse half.
 
 .push-token.local
+
+.poll-done-*
+poll.log

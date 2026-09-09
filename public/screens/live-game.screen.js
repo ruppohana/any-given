@@ -248,6 +248,13 @@ function paint(wrap) {
     return;
   }
 
+  /* The staleness is read off the RAW push, never off the held copy - the delay
+   * is a thing we do on purpose and must never be mistaken for a dead feed. It
+   * sits under the delay bar and above the game, because it changes how to read
+   * everything below it. */
+  const stale = staleBar(S.raw, now);
+  if (stale) wrap.appendChild(stale);
+
   const state = held(S.raw, S.delayMs, now);
   const age = Math.round((now - (S.raw.pushedAt || now)) / 1000);
 
@@ -393,6 +400,47 @@ async function makeCall(wrap, type, offer, afterPlay, state) {
   } catch { /* the call is already local; the board catches up */ }
 }
 
+/**
+ * 🔴 A FROZEN FEED MUST LOOK FROZEN. This is the second half of the poller fix
+ * and it is the half that reaches the phone.
+ *
+ * On 2026-09-08 the poller died after 36 minutes with no error. The Worker kept
+ * serving the last state it had been pushed, so this screen went on rendering a
+ * game head, a score, a board and a delay bar that said BEHIND ON PURPOSE — a
+ * completely healthy-looking page in front of a game that had stopped existing.
+ * Nobody watching could have told.
+ *
+ * A blank screen sends somebody to find out why; a stale one does not. So the
+ * staleness is drawn, in the app, above everything else.
+ *
+ * THE THRESHOLD IS DERIVED, NEVER GUESSED. Live, the poller pushes every 10s, so
+ * anything past ~45s is three missed pushes and not a slow network. Before
+ * kickoff it deliberately pushes every five minutes — see the backoff in
+ * poll.mjs — so the same 45s rule there would cry wolf all evening. The bar
+ * knows which regime it is in because the state says so.
+ */
+export function staleness(state, now) {
+  const at = state?.pushedAt || state?.fetchedAt || 0;
+  if (!at) return null;
+  const age = Math.max(0, now - at);
+  /* Pre-kickoff the poller is on a five-minute cycle on purpose. Twelve minutes
+   * is two missed slow pushes, which is a real fault rather than the backoff. */
+  const limit = state.status === 'pre' ? 12 * 60 * 1000 : 45 * 1000;
+  return age > limit ? { age, limit } : null;
+}
+
+function staleBar(state, now) {
+  const s = staleness(state, now);
+  if (!s) return null;
+  const secs = Math.round(s.age / 1000);
+  const ago = secs < 90 ? `${secs}s` : `${Math.round(secs / 60)} min`;
+  const bar = el('div', 'lg-stale');
+  bar.appendChild(el('span', 'lg-stale-l', 'THE FEED HAS STOPPED'));
+  bar.appendChild(el('span', 'lg-stale-b',
+    `Nothing new for ${ago}. What is below is the last thing we were told, not the game.`));
+  return bar;
+}
+
 function delayBar() {
   const bar = el('div', 'lg-delay');
   const label = el('span', 'lg-delay-l', S.delayMs === 0 ? 'LIVE — no delay' : `BEHIND ON PURPOSE · ${S.delayMs / 1000}s`);
@@ -414,6 +462,12 @@ const CSS = `
 .lg { display: grid; gap: 10px; }
 .lg-delay { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); }
 .lg-delay-l { font-size: var(--t-micro); font-weight: 700; letter-spacing: .04em; color: var(--accent); }
+/* The stale bar reads as a fault, not as a status line. It borrows --down rather
+   than team color, which is the same rule the result components follow. */
+.lg-stale { display: grid; gap: 3px; padding: 10px; border-radius: var(--radius-card);
+  border: 1px solid var(--down); background: color-mix(in srgb, var(--down) 10%, var(--card)); }
+.lg-stale-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--down); }
+.lg-stale-b { font-size: var(--t-micro); color: var(--ink); }
 .lg-delay-l.is-live { color: var(--down); }
 .lg-delay input { width: 100%; accent-color: var(--accent); }
 .lg-head { display: flex; align-items: center; gap: 8px; }

@@ -16,7 +16,7 @@
  * tells you it is alive without you having to open anything.
  */
 import { readLive } from '../src/live.ts';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
@@ -44,12 +44,36 @@ if (!token) {
   process.exit(1);
 }
 
+/* 🔴 A FINISHED GAME MUST STAY FINISHED. The scheduled task that keeps this
+ * process alive fires every two minutes and relies on Task Scheduler's IgnoreNew
+ * to do nothing while it is already running — a supervisor for free, and one
+ * that would also cheerfully resurrect a poller for a game that ended three
+ * hours ago, forever.
+ *
+ * So the end of a game is recorded on disk. Smallest possible piece of state,
+ * and deliberately per-game: a done marker for last night must never stop
+ * tonight. Delete the file to poll the same game again. */
+const doneFile = fileURLToPath(new URL(`../.poll-done-${sport}-${gameId}`, import.meta.url));
+
 const path = sport === 'nfl' ? 'nfl' : 'college-football';
 const url = `https://site.api.espn.com/apis/site/v2/sports/football/${path}/summary?event=${gameId}`;
 const key = `${sport}:${gameId}`;
 
 let lastPlayId = null;
 let pushes = 0, failures = 0;
+let lastStatus = null;
+
+/* 🔴 A GAME THAT HAS NOT KICKED OFF DOES NOT NEED A POLL EVERY TEN SECONDS.
+ * Waiting overnight for a 5:20 kickoff at the live interval is ~7,500 requests
+ * to ESPN for a payload that says `pre` every time - which is how a free,
+ * undocumented endpoint starts refusing you on the one evening it matters.
+ *
+ * So the interval follows the STATUS THE FEED REPORTS, never a clock we keep:
+ * five minutes while it is scheduled, the live interval the moment it is not.
+ * The step down happens on the poll that first sees the change, so tightening
+ * costs at most one slow interval. */
+const PRE_EVERY = 5 * 60 * 1000;
+const intervalFor = (status) => (status === 'pre' ? PRE_EVERY : every);
 
 async function tick() {
   const t0 = Date.now();
@@ -82,8 +106,17 @@ async function tick() {
      * this is the moment a call closes and the next one opens. */
     console.log((fresh ? '▶ ' : '  ') + line + (fresh ? `  << ${newest.kind}: ${newest.text.slice(0, 60)}` : ''));
 
+    if (state.status !== lastStatus) {
+      if (lastStatus !== null) {
+        console.log(`   status ${lastStatus} -> ${state.status}, now polling every ${intervalFor(state.status) / 1000}s`);
+      }
+      lastStatus = state.status;
+    }
+
     if (state.status === 'final') {
+      writeFileSync(doneFile, new Date().toISOString() + '\n');
       console.log(`\nfinal. ${pushes} pushes, ${failures} failures.`);
+      console.log(`wrote ${doneFile} — delete it to poll this game again.`);
       process.exit(0);
     }
   } catch (e) {
@@ -92,6 +125,19 @@ async function tick() {
   }
 }
 
-console.log(`polling ${sport} ${gameId} every ${every / 1000}s -> ${base}/api/state/${key}`);
-await tick();
-setInterval(tick, every);
+/* Self-scheduling rather than setInterval, because the interval changes when the
+ * game does — and because a tick that overruns must not stack behind itself. */
+async function loop() {
+  await tick();
+  setTimeout(loop, intervalFor(lastStatus));
+}
+
+if (existsSync(doneFile)) {
+  console.log(`${sport} ${gameId} already finished (${readFileSync(doneFile, 'utf8').trim()}).`);
+  console.log(`Delete ${doneFile} to poll it again.`);
+  process.exit(0);
+}
+
+console.log(`polling ${sport} ${gameId} -> ${base}/api/state/${key}`);
+console.log(`  every ${PRE_EVERY / 1000}s until kickoff, then every ${every / 1000}s once it is live`);
+await loop();
