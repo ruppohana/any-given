@@ -109,13 +109,13 @@ async function mount() {
    * product, where the person reading it has no way to tell.
    *
    * The live layer is exempt: it is the only route on the feed. */
-  if (route.dest !== 'home' && route.screen !== 'live-game') {
-    const b = document.createElement('p');
-    b.className = 'ag-sample';
-    b.textContent = 'Sample data — these games, spreads and scores are made up. '
-      + 'Only the live game is on the real feed.';
-    root.appendChild(b);
-  }
+  /* 🔴 AFTER THE RENDER, NEVER BEFORE IT. This was appended here and then wiped
+   * on the very next line: every screen's render() opens with
+   * `root.innerHTML = ''`, so the banner was created, destroyed and never seen —
+   * on every screen, every time. Nothing errored. It simply was not there.
+   *
+   * The same trap the ad slot fell into one commit earlier, in a different
+   * costume: code that runs and has no effect. */
   try {
     const mod = await screenModule(route.screen);
     const data = mod.previewData ? await mod.previewData(fixtures, route.state) : {};
@@ -128,6 +128,14 @@ async function mount() {
     box.append(h, p);
     root.appendChild(box);
   }
+  if (route.dest !== 'home' && route.screen !== 'live-game') {
+    const b = document.createElement('p');
+    b.className = 'ag-sample';
+    b.textContent = 'Sample data — these games, spreads and scores are made up. '
+      + 'Only the live game is on the real feed.';
+    root.insertBefore(b, root.firstChild);
+  }
+
   /* 🔴 THE AD SLOT IS PART OF THE LAYOUT, drawn by the shell so every screen is
    * built knowing the bottom of the viewport is not entirely its own. It is NOT
    * drawn on the live game: the tiles carry a price and a clock, and an
@@ -189,7 +197,14 @@ const DEV = new URLSearchParams(location.search).has('dev');
 
 async function boot() {
   const style = document.createElement('style');
-  style.textContent = [NAV_CSS, STATES_CSS, TEAM_CHIP_CSS].join('\n');
+  /* 🔴 AD_CSS WAS IMPORTED AND NEVER JOINED. The ad slots rendered with no rules
+   * at all — "AD SPACEBanner · reserved, nothing sold yet" ran together as one
+   * unstyled line at the foot of the slate, which is exactly what a reserved
+   * rectangle looks like when nothing reserves it.
+   *
+   * An unused import is invisible: no error, no warning, and the component works
+   * in every respect except the one that matters. */
+  style.textContent = [NAV_CSS, STATES_CSS, TEAM_CHIP_CSS, AD_CSS].join('\n');
   document.head.appendChild(style);
 
   fixtures.teams = await (await fetch('/fixtures/teams.json')).json();
