@@ -11,3 +11,5 @@ tendency.json
 
 # Competitor captures and anything pulled from a CDN.
 captures/
+
+dist/
