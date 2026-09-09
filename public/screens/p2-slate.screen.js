@@ -1215,12 +1215,45 @@ function openInfo(game, ctx) {
 
 function fmtx(v) { return v == null ? null : v.toFixed(2) + '×'; }
 
+/* 🔴 A CARD PER GAME, REBUILT RATHER THAN PATCHED. Jason, 2026-09-09, holding
+ * our slate against Deuce's Match Schedule: "Not close." Then, when I began
+ * layering new CSS over the old three-column grid: "Scrap and start over."
+ *
+ * Both were right. The row was `1fr 76px 1fr` with the time wedged in a 76px
+ * middle column, and every new thing - the market switch, the info link - had
+ * been pushed into that column until it was three controls stacked in 76px. You
+ * cannot reach Deuce's shape by adding rules to that; the grid itself was the
+ * problem.
+ *
+ * THE SHAPE NOW, which is Deuce's with our function:
+ *
+ *   ┌──────────────────────────────────────────┐
+ *   │ 5:00 PM   info            [Spread|Winner]│   when it is, how it is played
+ *   │ ┌────────────────┐  at  ┌───────────────┐│
+ *   │ │ ⬤ Florida A&M  │      │ ⬤ Miami       ││   the two sides, each a tap
+ *   │ │ +56.5   2.00×  │      │ −56.5  2.00×  ││   target 60px tall
+ *   │ └────────────────┘      └───────────────┘│
+ *   └──────────────────────────────────────────┘
+ *
+ * 🔴 THE DENSITY ARGUMENT IS PARTLY CONCEDED AND IT IS WORTH SAYING WHY. Rows
+ * were measured against CBS to fit 24 games in few screens. That is right for a
+ * SEARCH - find one game - and wrong for a CARD you work down deciding each
+ * line, which is what the week's card is. Six a screen you read beats nine you
+ * scan past.
+ *
+ * What is NOT conceded: no repeated league header per card. That is Sofascore's
+ * mistake and it costs 40% of every one of its cards. */
 function row(ctx, game) {
   const r = el('div', 'p2-row');
   r.dataset.state = pickStateOf(game, ctx.picks[game.id], ctx.now, ctx.mode);
   if (ctx.mode === 'week') r.dataset.market = marketOf(ctx.picks[game.id]);
   r.dataset.gameId = game.id;
-  r.append(zone(ctx, game, 'away'), center(ctx, game), zone(ctx, game, 'home'));
+
+  r.appendChild(center(ctx, game));
+
+  const sides = el('div', 'p2-sides');
+  sides.append(zone(ctx, game, 'away'), el('span', 'p2-at', 'at'), zone(ctx, game, 'home'));
+  r.appendChild(sides);
   return r;
 }
 

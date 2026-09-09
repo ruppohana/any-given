@@ -20,8 +20,40 @@
    * because there is genuinely one team. IN THE POOL THAT IS FORBIDDEN - a slate
    * is 131 games and ~260 teams on one scroll, and a root overwrite cannot express
    * it. The pool uses --team-a / --team-b, set per element. See team-chip.js. */
-  --maroon: #8C1D40;
-  --gold:   #FFC627;
+  /* 🔴 ONE SIGNATURE COLOR. Jason, 2026-09-09: "How about 1 signature color."
+   *
+   * #4C6EF5, and it is chosen by measurement rather than by taste. The
+   * constraint is brutal and it is why there were two before: the accent has to
+   * be legible on a LIGHT ground and on a DARK one, and almost no single hex
+   * manages both.
+   *
+   *   maroon #8C1D40   8.88 on white   1.84 on the dark card  <- invisible
+   *   gold   #FFC627   1.57 on white  10.39 on the dark card  <- invisible
+   *   olive  #8BA84A   2.69 on white   6.07                   <- fails light
+   *   teal   #0FB5A8   2.56 on white   6.37                   <- fails light
+   *   THIS   #4C6EF5   3.78 on white   3.78 on the dark card  <- one color
+   *
+   * The blue family is the only one that lands mid-range in both, which is what
+   * "one signature color" actually requires. It clears the 3:1 bar for UI and
+   * large text in BOTH themes, which nothing else on that list does.
+   *
+   * 🔴 AND IT DOES NOT COLLIDE WITH THE RESULT SCALE. --up is green and --down
+   * is red; a blue accent is a third hue rather than a near-miss of either, so
+   * a price in accent can never be misread as a win or a loss. An olive accent -
+   * Deuce's own - would have sat between --up and the ground, which is the one
+   * place this app cannot afford ambiguity.
+   *
+   * The maroon and gold names are KEPT AS ALIASES rather than deleted: they are
+   * read in a dozen places, this is a color change and not a refactor, and doing
+   * both at once on the day of the opener is how a rename becomes an outage. */
+  --signature: #4C6EF5;
+  --maroon: var(--signature);
+  --gold:   var(--signature);
+
+  /* Text that sits ON the signature - the nav pill, a filled button. White
+   * rather than the ground color: 3.9:1 against the signature versus 3.78 for
+   * the ground, and it is the same in both themes, which the ground is not. */
+  --on-accent: #ffffff;
 
   /* 🔴 THE SURFACE IS DEUCE'S. Jason picked it on 2026-09-09 after asking "What
    * are we designing towards? We have styles saved and available. Let's pick
@@ -129,7 +161,12 @@
     --track: #2b2f34;
     --lift:  none;
     --grass: #14361f;
-    --accent: var(--gold);          /* THE TOKEN SWAPS. Maroon is not legible here */
+    /* 🔴 NO SWAP ANY MORE. The token used to become gold here because maroon
+     * disappeared on a dark ground. One signature color that measures the same
+     * in both themes is precisely what removes that special case - and a theme
+     * that changes the brand color was always a tell that the brand color did
+     * not work. */
+    --accent: var(--signature);
     --up:   #3fcf7a;                /* the light values go muddy on #120a0e */
     --down: #ff6b5e;
     --c-hi-bg: #123726;  --c-hi-fg: #68e6a0;
@@ -152,7 +189,7 @@
   --track: #2b2f34;
   --lift:  none;
   --grass: #14361f;
-  --accent: var(--gold);
+  --accent: var(--signature);
   --up:   #3fcf7a;
   --down: #ff6b5e;
   --c-hi-bg: #123726;  --c-hi-fg: #68e6a0;
