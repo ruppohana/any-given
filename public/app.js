@@ -35,7 +35,7 @@ const ROUTES = [
   /* 🔴 THE ONLY ROUTE THAT IS NOT FIXTURES. It polls the Worker, holds what it
    * gets behind the user's own delay, and settles against the play that actually
    * happened. Everything else here is a design surface; this one is the product. */
-  { id: 'live',      dest: 'live',      screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
+  { id: 'live',      dest: 'home',      screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
   { id: 'now',       dest: 'live',      screen: 'l4-now',          state: 'open',        label: 'The call (fixtures)' },
   { id: 'landed',    dest: 'live',      screen: 'l7-result',       state: 'landed',      label: 'Result — landed' },
   { id: 'missed',    dest: 'live',      screen: 'l7-result',       state: 'missed',      label: 'Result — missed' },
@@ -116,7 +116,17 @@ function drawNav(active) {
   if (old) old.remove();
   const nav = navBar(active, {
     liveAvailable: true,
-    hrefFor: (d) => '#/' + ({ slate: 'slate', picks: 'picks', standings: 'standings', live: 'now' }[d.id] || d.id)
+    /* 🔴 `live` MAPPED TO `now` — THE FIXTURE SCREEN, NOT THE GAME. Jason,
+     * 2026-09-08: "selecting pass or run does not highlight the selection and
+     * grey out the selection not taken." It does, on the real screen. He was
+     * tapping tiles on a STATIC DESIGN MOCK, because the Live tab in the bottom
+     * bar led there.
+     *
+     * That mapping made sense when every screen was a design surface and `now`
+     * was the only call card that existed. It stopped making sense the moment
+     * the app had a real one, and nothing caught it because both screens look
+     * almost identical — which is precisely why the mock was built. */
+    hrefFor: (d) => '#/' + ({ home: 'live', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
   });
   document.querySelector('.ag-shell').appendChild(nav);
 }

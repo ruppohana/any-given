@@ -59,7 +59,10 @@ param(
 # becomes a fatal error in a script whose first step is exactly that. cmd's own
 # redirection swallows it where the failure is genuinely expected.
 $ErrorActionPreference = 'Continue'
-$name = 'AnyGiven Poller'
+# One task per game, so NFL and college can both be on the wire at once. The
+#  name carries the sport because Task Scheduler keys on the name and a second
+#  registration would otherwise silently replace the first. 
+$name = "AnyGiven Poller $Sport" 
 $repo = Split-Path -Parent $PSScriptRoot
 
 if ($Remove) {

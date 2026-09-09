@@ -40,8 +40,17 @@ const MAX_PAYOUT = 6;
  * wire, which is the one being tested — and a college key that nothing is
  * pushing to is honest: the screen says nobody is polling it. */
 const GAME_FOR = {
+  /* NE @ SEA, Wed 9 Sep 5:20pm Pacific - the 2026 NFL opener. */
   'nfl': 'nfl:401872656',
-  'college-football': 'college-football:401752706'
+  /* 🔴 A REAL COLLEGE GAME, and it answers "why can't college be ready at the
+   * same time" - it CAN. College shares every line of this file: the same
+   * catalog, the same settlers, the same board. It was not live for one reason
+   * and it was not a code reason - nothing was polling a college game, and the
+   * id here was a placeholder.
+   *
+   * MIA @ FAMU, Thu 10 Sep 5:00pm Pacific. The day after the NFL opener, which
+   * is simply when the next college game is. */
+  'college-football': 'college-football:401858213'
 };
 
 const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College' };
@@ -78,6 +87,8 @@ const S = {
   stake: store.get('stake', 10),
   calls: store.get('calls', {}),   // afterPlayId -> { type, choice, stake, p }
   seenIntro: !!store.get('seenIntro', 0),
+  noGame: false,
+  delayOpen: false,
   /* 🔴 NO DEFAULT. Jason, 2026-09-08: "the initial decision needs to pick between
    * NFL and NCAA football." Defaulting to either one answers the question on the
    * user's behalf and then hides it — and the two sports are not interchangeable
@@ -326,7 +337,12 @@ async function poll(wrap) {
       fetch('/api/state/' + S.key),
       fetch('/api/board/' + S.key)
     ]);
-    if (stateRes.ok) S.raw = await stateRes.json();
+    if (stateRes.ok) { S.raw = await stateRes.json(); S.noGame = false; }
+    /* 🔴 404 IS AN ANSWER, NOT A SILENCE. The Worker says "nothing pushed for
+     * that game yet" and this used to ignore it and keep drawing a skeleton, so
+     * a sport nobody is polling looked identical to a sport that was one second
+     * from loading — forever. */
+    else if (stateRes.status === 404) S.noGame = true;
     if (boardRes.ok) S.board = (await boardRes.json()).calls || [];
     paint(wrap);
   } catch { /* offline is a state the screen draws, not an exception */ }
@@ -352,6 +368,23 @@ function paint(wrap) {
   if (!S.seenIntro && !Object.keys(S.calls).length) wrap.appendChild(introCard(wrap));
 
   if (!S.raw) {
+    /* 🔴 A DEAD END WITH NO DOOR IS WORSE THAN AN ERROR. Jason's phone had
+     * College stored, nothing is polling a college game, and the screen sat on
+     * "Waiting for the first push from the poller…" with no way to change it —
+     * because the sport gate was built one-way. A choice that cannot be
+     * unmade is not a choice, it is a trap with a nice first screen. */
+    if (S.noGame) {
+      const c = el('div', 'card lg-nogame');
+      c.appendChild(el('div', 'lg-nogame-h', `No ${SPORT_LABEL[S.sport] || 'game'} game is being polled`));
+      c.appendChild(el('p', 'lg-nogame-b',
+        'One game is on the wire at a time while this is a rig. Nothing is watching '
+        + `${SPORT_LABEL[S.sport] || 'that sport'} right now.`));
+      const b = el('button', 'lg-nogame-go', 'Pick a different sport');
+      b.onclick = () => { S.sport = null; S.noGame = false; store.set('sport', null); paint(wrap); };
+      c.appendChild(b);
+      wrap.appendChild(c);
+      return;
+    }
     wrap.appendChild(stateBlock('loading', { rows: 3, body: 'Waiting for the first push from the poller…' }));
     return;
   }
@@ -392,6 +425,12 @@ function paint(wrap) {
   /* ---- the bank ---- */
   const rows = settleAll(state);
   const bank = el('div', 'card lg-bank');
+  /* 🔴 A NUMBER WITH NO SENTENCE IS A SCORE. Jason: "add 'you have...' above the
+   * 200." A bare 200 could be points, a rank, or a countdown; "You have 200
+   * Marbles" is the only reading that says it is YOURS and that it is a stake
+   * you are about to spend. It also seats the balance in the one sentence the
+   * legal position rests on — a thing you HAVE, never a thing you bought. */
+  bank.appendChild(el('div', 'lg-bank-lead', 'You have'));
   const bal = el('div', 'lg-bal num', String(S.bank));
   bank.append(bal, el('span', 'lg-unit', 'Marbles'));
   const d = el('span', 'lg-delta num ' + signClass(S.bank - START_BANK));
@@ -525,6 +564,13 @@ function paint(wrap) {
     });
     wrap.appendChild(b);
   }
+
+  /* The sport is changeable from the screen it governs, not from a settings page
+   * two taps away. Somebody who watches both should never have to clear a
+   * browser to switch. */
+  const sw = el('button', 'lg-switch', `${SPORT_LABEL[S.sport] || 'Sport'} · change`);
+  sw.onclick = () => { S.sport = null; S.noGame = false; S.raw = null; store.set('sport', null); paint(wrap); };
+  wrap.appendChild(sw);
 
   wrap.appendChild(el('p', 'lg-foot',
     `feed ${age}s old · holding ${state.holding} play${state.holding === 1 ? '' : 's'} behind your ${S.delayMs / 1000}s delay`));
@@ -746,7 +792,29 @@ function introCard(wrap) {
   return c;
 }
 
+/**
+ * 🔴 A CONTROL YOU SET ONCE DOES NOT DESERVE THE TOP OF THE SCREEN FOREVER.
+ * Jason, 2026-09-08: "why do i have the behind on purpose on the top all the
+ * time?"
+ *
+ * Because it was drawn as a full card with a live slider on every render, above
+ * the game, permanently — spending the most valuable space in the app on a
+ * setting that is correct within ten seconds of arriving and never touched
+ * again. The delay is still the mechanic and still has to be VISIBLE, because a
+ * person needs to know they are behind. Visible is one line. Adjustable is a tap.
+ */
 function delayBar() {
+  if (S.delayOpen || !S.seenIntro) return delayPanel();
+  const line = el('button', 'lg-delayline');
+  line.appendChild(el('span', 'lg-delayline-l',
+    S.delayMs === 0 ? 'LIVE — no delay' : `${S.delayMs / 1000}s behind`));
+  line.appendChild(el('span', 'lg-delayline-a', 'adjust'));
+  if (S.delayMs === 0) line.classList.add('is-live');
+  line.onclick = () => { S.delayOpen = true; paint(document.querySelector('.lg').parentNode); };
+  return line;
+}
+
+function delayPanel() {
   const bar = el('div', 'lg-delay');
   const text = () => (S.delayMs === 0 ? 'LIVE — no delay' : `BEHIND ON PURPOSE · ${S.delayMs / 1000}s`);
   const label = el('span', 'lg-delay-l', text());
@@ -772,6 +840,11 @@ function delayBar() {
     warn.hidden = S.delayMs !== 0;
   };
   bar.append(label, input, warn);
+  if (S.seenIntro) {
+    const done = el('button', 'lg-delay-done', 'Done');
+    done.onclick = () => { S.delayOpen = false; paint(document.querySelector('.lg').parentNode); };
+    bar.appendChild(done);
+  }
   return bar;
 }
 
@@ -786,6 +859,25 @@ const CSS = `
 .lg-stale-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--down); }
 .lg-stale-b { font-size: var(--t-micro); color: var(--ink); }
 .lg-delay-warn { font-size: var(--t-micro); color: var(--down); font-weight: 700; margin: 2px 0 0; }
+.lg-delay-done { justify-self: start; font: inherit; font-size: var(--t-micro); font-weight: 700;
+  margin-top: 4px; min-height: 32px; padding: 0 14px; border: 1px solid var(--line);
+  border-radius: var(--radius-card); background: var(--card); color: var(--fg); }
+/* One line, not a card. It still says you are behind — that is the part that
+   must never disappear — and the slider is one tap away. */
+.lg-delayline { display: flex; align-items: baseline; gap: 8px; width: 100%;
+  font: inherit; font-size: var(--t-micro); text-align: left;
+  background: none; border: 0; padding: 2px 2px 0; color: var(--dim); }
+.lg-delayline-l { font-weight: 700; letter-spacing: .04em; color: var(--accent); }
+.lg-delayline.is-live .lg-delayline-l { color: var(--down); }
+.lg-delayline-a { text-decoration: underline; }
+.lg-nogame { display: grid; gap: 8px; padding: 16px 12px; }
+.lg-nogame-h { font-size: var(--t-emph); font-weight: 800; }
+.lg-nogame-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
+.lg-nogame-go { justify-self: start; font: inherit; font-weight: 800; margin-top: 4px;
+  min-height: var(--tap-min); padding: 0 18px; border: 0;
+  border-radius: var(--radius-card); background: var(--accent); color: var(--bg); }
+.lg-switch { justify-self: start; font: inherit; font-size: var(--t-micro); color: var(--dim);
+  background: none; border: 0; padding: 2px 0; text-decoration: underline; }
 .lg-sport { display: grid; gap: 8px; padding: 16px 12px; }
 .lg-sport-h { font-size: var(--t-section); font-weight: 800; }
 .lg-sport-b { font-size: var(--t-micro); color: var(--dim); margin: 0; line-height: 1.5; }
@@ -828,7 +920,11 @@ const CSS = `
 .lg-head { display: flex; align-items: center; gap: 8px; }
 .lg-score { font-size: var(--t-score); font-weight: 800; }
 .lg-meta { margin-left: auto; font-size: var(--t-micro); color: var(--dim); }
-.lg-bank { display: flex; align-items: baseline; gap: 6px; padding: 10px 12px; }
+/* The lead sits on its own line above the figure, so the row underneath keeps
+   the baseline alignment the balance, the unit and the delta all share. */
+.lg-bank { display: flex; align-items: baseline; gap: 6px; padding: 10px 12px; flex-wrap: wrap; }
+.lg-bank-lead { flex: 0 0 100%; font-size: var(--t-micro); color: var(--dim);
+  letter-spacing: .04em; margin-bottom: -2px; }
 .lg-bal { font-size: var(--t-bank); font-weight: 800; }
 .lg-unit { font-size: var(--t-micro); color: var(--dim); }
 .lg-delta { margin-left: auto; font-size: var(--t-figure); font-weight: 700; }
@@ -848,7 +944,12 @@ const CSS = `
 .lg-tiles { display: grid; grid-auto-flow: column; gap: 8px; }
 .lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
 .lg-tile { display: grid; gap: 2px; padding: 10px; min-height: 76px; text-align: left; }
-.lg-tile-label { font-weight: 800; font-size: var(--t-emph); }
+/* 🔴 THE CHOICE IS THE BIGGEST THING ON THE TILE. Jason: "make the word 'Run'
+   and 'Pass' larger." It was set at --t-emph, the same size as a card heading,
+   while the PAYOUT below it was --t-figure and won the tile. The number matters
+   and it is not what you are choosing between — you are choosing a word, at
+   arm's length, in a room with a television on. */
+.lg-tile-label { font-weight: 800; font-size: var(--t-section); line-height: 1.15; }
 .lg-tile-win { font-size: var(--t-figure); font-weight: 800; }
 .lg-tile-x { font-size: var(--t-micro); color: var(--dim); }
 /* The taken tile keeps the accent it was tapped with; the others recede rather

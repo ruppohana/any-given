@@ -47,6 +47,32 @@ async function grab(path, id, variant, dir) {
   return buf.length;
 }
 
+/* 🔴 CONFERENCE MARKS. Jason: "scrape the conference logos as well for the
+ * ncaa." They live on a DIFFERENT path from club crests — ncaa_conf, not ncaa —
+ * and the id space is not contiguous: ACC is 1, Big 12 is 4, Big Ten 5, SEC 8,
+ * AAC 151, and there are holes throughout. So the range is walked and a 404 is
+ * simply a number nobody uses, not a failure. Some conferences have no dark
+ * variant at all, which the fetch reports and the fallback covers. */
+if (which === 'conf') {
+  const dir = root + 'ncaa_conf';
+  for (const v of ['500', '500-dark']) mkdirSync(`${dir}/${v}`, { recursive: true });
+  let ok = 0, bytes = 0, found = [];
+  for (let id = 1; id <= 200; id++) {
+    for (const v of ['500', '500-dark']) {
+      const r = await grab('ncaa_conf', id, v, dir);
+      /* 🔴 COUNT WHAT WAS WRITTEN, NOT WHAT WAS TRIED. The first version pushed
+       * the id on every iteration and reported "200 conferences" when 26 exist.
+       * A summary line that counts the loop instead of the result is a lie that
+       * reads like a success. */
+      if (typeof r === 'number' && r > 200) { ok++; bytes += r; if (v === '500') found.push(id); }
+      else if (r === 'tiny' || r === 404) { /* an id nobody uses */ }
+    }
+  }
+  console.log(`conferences: ${ok} files, ${found.length} conferences, ${(bytes / 1048576).toFixed(2)} MB`);
+  console.log('ids:', found.join(' '));
+  process.exit(0);
+}
+
 const league = which === 'nfl'
   ? { path: 'nfl', dir: root + 'nfl', ids: NFL_IDS }
   : (() => {

@@ -457,7 +457,7 @@ function fieldStrip(snap) {
   for (let y = 0; y <= 100; y += 5) {
     const f = EZ + (y / 100) * (1 - EZ * 2);
     add('line', { x1: nearX(f), y1: NEAR_Y, x2: farX(f), y2: FAR_Y,
-                  stroke: PAINT, 'stroke-width': y % 10 ? .5 : .9,
+                  stroke: PAINT, 'stroke-width': y % 10 ? .3 : .55, opacity: y % 10 ? .34 : .5,
                   opacity: y % 10 ? '.45' : '.8' });
   }
   /* Hash marks along the two inbound lines. */
@@ -468,11 +468,11 @@ function fieldStrip(snap) {
       if (y % 5 === 0) continue;
       const f = EZ + (y / 100) * (1 - EZ * 2);
       add('line', { x1: hx(f), y1: hy - 1, x2: hx(f), y2: hy + 1,
-                    stroke: PAINT, 'stroke-width': .4, opacity: '.5' });
+                    stroke: PAINT, 'stroke-width': .28, opacity: '.3' });
     }
   }
   /* The touchlines, which close the shape. */
-  add('polygon', { points: quad(0, 1), fill: 'none', stroke: PAINT,
+  add('polygon', { points: quad(0, 1), fill: 'none', stroke: PAINT, opacity: .45,
                    'stroke-width': .9, opacity: '.85' });
 
   /* YARD NUMBERS. Jason, on two reference fields: "the second field is a little
@@ -487,7 +487,7 @@ function fieldStrip(snap) {
     const n = add('text', {
       x: farX(f) + t * (nearX(f) - farX(f)),
       y: FAR_Y + t * (NEAR_Y - FAR_Y),
-      'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700,
+      'text-anchor': 'middle', 'font-size': 7, 'font-weight': 600,
       'font-family': 'ui-sans-serif, system-ui, sans-serif',
       /* 🔴 FIELD PAINT IS NOT A THEME TOKEN. This was `var(--card)`, which is
        * near-white on light and near-black on dark — so on the dark theme the
@@ -498,7 +498,7 @@ function fieldStrip(snap) {
        * A yard number is white paint on grass in the world. The grass here is
        * drawn green in BOTH themes, so the number that sits on it must be fixed
        * too. Nothing inside the field may read a token that swaps. */
-      fill: PAINT, opacity: '.92'
+      fill: PAINT, opacity: '.45'
     });
     n.textContent = String(label);
   });
@@ -530,17 +530,27 @@ function fieldStrip(snap) {
     const T = 0.62;
     const bx = farX(b) + T * (nearX(b) - farX(b));
     const by = FAR_Y + T * (NEAR_Y - FAR_Y);
+    /* 🔴 THE BALL HAS TO WIN THE FIELD. Jason: "the ball is hard to read on the
+     * field... can you make the lines and text on the field thinner and/or
+     * lighter?" Both halves of that are one problem: the chalk was drawn at full
+     * strength across the whole field, so a 8px ball was competing with fifty
+     * lines of the same brightness. The markings are now thin and faint — they
+     * are context, not content — and the ball is larger, ringed in a dark halo
+     * that separates it from grass of any shade, and given a shadow so it sits
+     * ON the field rather than in it. */
     const g = add('g', { class: 'l4-ball', transform: `translate(${bx} ${by})` });
-    add('ellipse', { rx: 4.2, ry: 2.6, fill: '#7a4a24' }, g);
-    add('ellipse', { rx: 4.2, ry: 2.6, fill: 'none', stroke: '#5c3517', 'stroke-width': .5 }, g);
-    add('path', { d: 'M -2.4 0 H 2.4', stroke: '#fff', 'stroke-width': .75, opacity: '.95' }, g);
-    for (const lx of [-1.5, -0.5, 0.5, 1.5]) {
-      add('path', { d: `M ${lx} -0.85 V 0.85`, stroke: '#fff', 'stroke-width': .55, opacity: '.95' }, g);
+    add('ellipse', { cy: 1.5, rx: 5.4, ry: 1.5, fill: '#000', opacity: '.28' }, g);
+    add('ellipse', { rx: 5.6, ry: 3.5, fill: 'none', stroke: '#1c1205', 'stroke-width': 1.5, opacity: '.55' }, g);
+    add('ellipse', { rx: 5.2, ry: 3.2, fill: '#8b5424' }, g);
+    add('ellipse', { rx: 5.2, ry: 3.2, fill: 'none', stroke: '#4a2a10', 'stroke-width': .6 }, g);
+    add('path', { d: 'M -3.0 0 H 3.0', stroke: '#fff', 'stroke-width': .95 }, g);
+    for (const lx of [-1.8, -0.6, 0.6, 1.8]) {
+      add('path', { d: `M ${lx} -1.05 V 1.05`, stroke: '#fff', 'stroke-width': .7 }, g);
     }
-    add('path', { d: 'M -3.5 -1.1 A 4.2 2.6 0 0 0 -3.5 1.1', fill: 'none',
-                  stroke: '#fff', 'stroke-width': .45, opacity: '.7' }, g);
-    add('path', { d: 'M 3.5 -1.1 A 4.2 2.6 0 0 1 3.5 1.1', fill: 'none',
-                  stroke: '#fff', 'stroke-width': .45, opacity: '.7' }, g);
+    add('path', { d: 'M -4.3 -1.4 A 5.2 3.2 0 0 0 -4.3 1.4', fill: 'none',
+                  stroke: '#fff', 'stroke-width': .5, opacity: '.75' }, g);
+    add('path', { d: 'M 4.3 -1.4 A 5.2 3.2 0 0 1 4.3 1.4', fill: 'none',
+                  stroke: '#fff', 'stroke-width': .5, opacity: '.75' }, g);
     box.dataset.ballX = String(Math.round(bx));
   }
   box.appendChild(svg);

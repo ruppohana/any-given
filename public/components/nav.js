@@ -35,10 +35,19 @@
  */
 
 export const DESTINATIONS = [
+  /* 🔴 HOME IS FIRST AND IT IS THE GAME. Jason, 2026-09-08: "the bottom nav bar
+   * should have 'home' or something to start." The bar opened on Slate — a
+   * pool's week — which is the front door of the POOL rather than of the app,
+   * and left somebody who had wandered off with no obvious way back to the thing
+   * they came for. */
+  { id: 'home',      label: 'Home',      href: '/live/:game' },
   { id: 'slate',     label: 'Slate',     href: '/p/:pool/week/:week' },
+  /* 🔴 FOUR, NOT FIVE. Home and Live both led to the live game once Home was
+   * added, so the bar carried a duplicate AND wrapped to two rows at 375px —
+   * "Live" alone on a second line under the other four. Home IS the game; the
+   * separate Live tab is what Home replaced. */
   { id: 'picks',     label: 'Picks',     href: '/p/:pool/me' },
   { id: 'standings', label: 'Standings', href: '/p/:pool/standings' },
-  { id: 'live',      label: 'Live',      href: '/live/:game' }
 ];
 
 /** Which destination a cold open lands on. Origin decides, never a guess. */
