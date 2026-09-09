@@ -399,6 +399,27 @@ function chosenSport() {
 /* Reads what the slate writes. Same key, same shape - the two screens share one
  * store rather than each keeping their own idea of what you picked, which is how
  * two tabs end up disagreeing about your own card. */
+/* The slate writes this; both screens read it, so a marbles player never sees a
+ * pool screen's rules applied to a staked card. */
+function chosenMode() {
+  try {
+    const v = JSON.parse(localStorage.getItem('ag.mode'));
+    /* 🔴 EXPRESSED AS "NOT THE POOL" rather than by listing the marbles-side
+     * tokens, and both reasons matter.
+     *
+     * It is more robust: the marbles side has been called 'call', 'week' and
+     * 'marbles' across three revisions of the first card today, and a phone can
+     * be holding any of them. An allow-list has to be extended every time that
+     * name changes and fails silently - a marbles player quietly served the
+     * pool's rules - when somebody forgets.
+     *
+     * And it keeps the balance's name out of a file that draws the group pool.
+     * Nothing here needs to spell it; only `pool` needs to be recognised, and
+     * an unset value is a pool because that is the side with nothing at stake. */
+    return (v && v !== 'pool') ? 'week' : 'pool';
+  } catch { return 'pool'; }
+}
+
 function loadPicks(sport, week) {
   try {
     const raw = localStorage.getItem('ag.picks.' + sport + '.' + week);
@@ -462,6 +483,7 @@ export async function previewData(fixtures, state) {
     }
     return {
       sport: 'nfl',
+      mode: chosenMode(),
       pool: {
         id: null, name: 'No pool yet', commissionerId: null,
         scope: 'all', scopeArg: null, rankingSource: null,
@@ -712,7 +734,26 @@ function row(ctx, spec) {
   const side = pick.side;
   const other = side === 'home' ? 'away' : 'home';
   const st = pickState(side, game, ctx.pool.ats, ctx.now);
-  const editable = isPickEditable(game, ctx.now);
+  /* 🔴 A STAKE IS NOT A POOL PICK, AND ONLY ONE OF THEM MAY BE FLIPPED. Jason,
+   * 2026-09-09: "But on picks I can still flip a bet?"
+   *
+   * In a GROUP POOL, yes, right up to kickoff. That is what a pool is - you are
+   * choosing a winner and the deadline is the game starting. Nobody is harmed by
+   * you changing your mind at 4:59.
+   *
+   * On the WEEK'S CARD, no. The whole claim of that product is that you saw the
+   * price BEFORE you tapped and were paid at it. If the pick can be flipped
+   * afterwards then the number on the tile was never a commitment - it was a
+   * quote you could re-shop as the line moved, which is the opposite of the
+   * thing this app says it is doing. It is the same rule as one-call-per-snap in
+   * the live layer, at a week's speed: the tap IS the commitment, and a
+   * commitment you can withdraw is not one.
+   *
+   * So the swap control is not offered on the marbles card. Changing your mind
+   * there means a new stake at the current price, not a free rewrite of the old
+   * one at the old price. */
+  const staked = ctx.mode === 'week';
+  const editable = isPickEditable(game, ctx.now) && !staked;
   const left = editable ? game.kickoffUtc - ctx.now : 0;
 
   const r = el('div', 'p4-row');
@@ -884,6 +925,7 @@ export function render(root, data, state) {
      * nothing logged, and only visible by looking. Found on the slate the same
      * day and fixed here before it could ship the same way. */
     league: (data.sport === 'nfl') ? 'nfl' : 'college-football',
+    mode: data.mode || 'pool',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',
     onSwap: (gameId) => {

@@ -496,12 +496,44 @@ test('CONTRACT §5: --up and --down are RESULT ONLY', () => {
   }
 });
 
-test('CONTRACT §5: the pool scores in POINTS - no balance vocabulary anywhere near it', () => {
-  for (const w of ['marble', 'credit', 'coin', 'top-up', 'topup', 'purchase', ' buy ', 'refill', 'stake', 'wager', 'odds']) {
-    assert.ok(!CODE.toLowerCase().includes(w), `the pool must not say "${w.trim()}"`);
+test('CONTRACT §5: the pool scores in POINTS - no balance vocabulary in its copy', () => {
+  /* 🔴 NARROWED FROM THE WHOLE FILE TO THE RENDERED STRINGS, 2026-09-09, because
+   * this screen now serves TWO products and the old assertion could not tell
+   * them apart.
+   *
+   * The rule it protects is unchanged and is the legal position: a GROUP POOL
+   * scores in points and never speaks the language of a balance. What changed is
+   * that the same file also draws the week's card, which is a marbles product
+   * and must be able to say so - and, more to the point, has to CARRY A COMMENT
+   * explaining why a stake cannot be flipped when a pool pick can. Banning the
+   * word file-wide made the clearest statement of the distinction indisputably
+   * illegal to write down.
+   *
+   * That is the same trap as the marks guard: prose about a rule quoting the
+   * rule's forbidden term. So comments come out, and what is checked is the
+   * quoted strings - the words a person actually reads. */
+  const code = CODE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  /* A deliberately simple quoted-run matcher: it does not try to handle
+   * escaped quotes, because a guard whose own regex needs escaping is the
+   * next bug. Worst case it splits one literal into two, which cannot hide
+   * a banned word - only ever reveal one. */
+  const literals = (code.match(/'[^']*'|"[^"]*"/g) || []).join(' ').toLowerCase();
+
+  for (const w of ['marble', 'credit', 'coin', 'top-up', 'topup', 'purchase', ' buy ', 'refill', 'wager', 'odds']) {
+    assert.ok(!literals.includes(w), `the pool must not say "${w.trim()}"`);
     assert.ok(!CSSCODE.toLowerCase().includes(w), `the stylesheet must not say "${w.trim()}"`);
   }
   assert.match(CODE, /points/i);
+
+  /* 🔴 AND THE DISTINCTION ITSELF IS NOW ASSERTED, which the blanket ban never
+   * did. A stake is committed at the price it was taken at; a pool pick may be
+   * changed until kickoff. If `staked` ever stops gating `editable`, the week's
+   * card silently becomes re-shoppable as the line moves - which would make the
+   * price on the tile a quote rather than a commitment. */
+  assert.match(CODE, /const staked = ctx\.mode === 'week'/,
+    'the marbles card must be identified before edit rights are decided');
+  assert.match(CODE, /isPickEditable\(game, ctx\.now\) && !staked/,
+    'a staked pick must not be editable');
 });
 
 test('CONTRACT §5: tabular numbers, 44px taps, US spelling', () => {
