@@ -170,6 +170,33 @@ export function spreadText(spread, side) {
 
 /** Which side won, once a game is final. Null on a tie, which resolves through the one
  *  void path rather than through a winner. */
+/* 🔴 THE WEEK'S CARD IS AGAINST THE SPREAD. Jason, 2026-09-09: "Group pool.
+ * Straight up. Weeks card against the spread. So no blowout games."
+ *
+ * The last sentence is the reason, and it is exactly right. Straight up, a
+ * 56.5-point line is not a question - the model said so by saturating, and 19 of
+ * 24 college games came back greyed. AGAINST THE SPREAD every one of them is a
+ * live question again: Miami are enormous favorites and whether they win by more
+ * than 56 is genuinely open. The spread is the instrument that makes a mismatched
+ * fixture playable, which is what it was invented for.
+ *
+ * So the blowout treatment is deleted from the card rather than kept as a
+ * special case. It existed to describe a pricing failure that ATS removes.
+ *
+ * 🔴 A PUSH IS A VOID, not a loss and not a win - one void path, per doctrine.
+ * Landing exactly on the number is the game not having happened, for everybody.
+ * That is why the line is carried to the half point wherever a book posts one.
+ */
+export function coversSpread(game, side) {
+  if (game.status !== 'final' || game.homeScore == null || game.awayScore == null) return null;
+  if (typeof game.spread !== 'number') return null;
+  /* Stored as the HOME number, ESPN's convention: negative means home favored. */
+  const m = game.homeScore + game.spread - game.awayScore;
+  if (m === 0) return 'push';
+  const covered = m > 0 ? 'home' : 'away';
+  return covered === side ? 'won' : 'lost';
+}
+
 export function winnerOf(game) {
   if (game.status !== 'final' || game.homeScore == null || game.awayScore == null) return null;
   if (game.homeScore === game.awayScore) return null;
@@ -181,12 +208,24 @@ export function winnerOf(game) {
  * member. `--up` / `--down` are reached ONLY by `won` and `lost`: a pick that has not
  * resolved is not a win, and nothing here paints an unresolved pick green.
  */
-export function pickStateOf(game, pick, now) {
+export function pickStateOf(game, pick, now, mode) {
   if (game.status === 'void') return 'void';
   const side = pick && pick.side;
   const started = game.status !== 'scheduled' || now >= game.kickoffUtc;
   if (!side) return started ? 'locked' : 'unpicked';
   if (game.status === 'final') {
+    /* 🔴 THE TWO PRODUCTS SETTLE DIFFERENTLY ON THE SAME GAME, which is the
+     * whole point of them being two products. The pool asks who won; the week's
+     * card asks who covered. A game can be a win in one and a loss in the other,
+     * and that is correct rather than a contradiction - it is also why the two
+     * boards never sum. */
+    if (mode === 'week') {
+      const r = coversSpread(game, side);
+      /* No posted line means nothing to cover, so it falls back to the winner
+       * rather than voiding a game that was really played. */
+      if (r === 'push') return 'void';
+      if (r) return r === 'won' ? 'won' : 'lost';
+    }
     const w = winnerOf(game);
     if (w == null) return 'void';          /* a tie is the game not happening, for everybody */
     return w === side ? 'won' : 'lost';
@@ -353,43 +392,43 @@ export function probFromSpread(spread, side, sport) {
   return Math.min(0.90, Math.max(0.16, p));
 }
 
-/* 🔴 A BLOWOUT IS A GAME THE MODEL REFUSES TO PRICE. Jason, 2026-09-09: "Grey
- * the out and put, blowout."
+/* 🔴 THE PRICE AGAINST THE SPREAD IS 2.00x, BOTH SIDES, AND THAT IS THE HONEST
+ * NUMBER RATHER THAN A PLACEHOLDER.
  *
- * When the spread pushes one side past the 0.90 clamp the two prices stop
- * carrying information: every such game reads 6.00x against 1.11x, whether the
- * line is 22 points or 56. On the college slate that is most of the card -
- * Villanova at Louisville, Norfolk St at Virginia, Howard at Indiana, Florida
- * A&M at Miami - FCS visitors against FBS hosts, and the model is right about
- * every one of them.
+ * A posted line is the market's best estimate of the point at which the two
+ * sides are equally likely - that is what it is FOR. So p is 0.50 either way and
+ * `stake / p` is exactly 2. Varying it would mean claiming we know better than
+ * the book about which side of its own number is the value, which we do not and
+ * have no data to support.
  *
- * 🔴 GREYED AND LABELLED, NOT HIDDEN. Dropping the rows would have been the
- * tidier screen and the wrong one: the games are really on the slate, somebody
- * scanning for them would find a hole, and a card that silently omits fixtures
- * is a card you cannot trust to be the week. Showing them as unplayable says
- * the true thing - these are on, and there is no question here worth staking a
- * marble on.
+ * 🔴 AND WE TAKE NO VIG, so it really is 2.00 and not 1.91. A book prices both
+ * sides under 2 because that gap is its revenue. Nothing here is bought and
+ * nothing is redeemable, so there is no house to pay - shaving the payout would
+ * be imitating the shape of a sportsbook while having none of its reasons.
  *
- * 🔴 THE OFFICE POOL IS UNTOUCHED. Picking a blowout there is a legitimate free
- * point, which is exactly what a straight-up pool is for. This is a statement
- * about PRICING, so it only applies where there is a price.
+ * THE PRICE STILL APPEARS BEFORE THE TAP, unchanged doctrine. That it is the
+ * same number on every row is a fact about the product, not a reason to hide it:
+ * an ATS card is a card of coin flips, and saying so plainly is better than
+ * implying a spread of prices this data cannot support.
+ *
+ * A game with no posted line has no ATS price and cannot be graded ATS. It falls
+ * back to the winner - see pickStateOf.
  */
 /* 🔴 PICKS SURVIVE A RELOAD. Jason, 2026-09-09: "My picks did not stick."
  *
- * They lived in a plain object built by previewData and thrown away on the next
+ * They lived in an object built by previewData and thrown away on the next
  * render - fine for a designed preview that ships its own picks, useless the
- * moment somebody makes a real one. Closing the tab, or leaving for Home and
- * coming back, lost the lot.
+ * moment somebody makes a real one.
  *
  * 🔴 SCOPED BY SPORT AND WEEK, because the two slates are different cards and a
- * game id is only unique within one. A single bucket would let last week's picks
- * reappear on this week's rows, which is worse than losing them: it is the app
- * telling you that you picked something you did not.
+ * game id is unique only within one. A shared bucket would put last week's picks
+ * on this week's rows, which is worse than losing them: it is the app claiming
+ * you picked something you did not.
  *
  * 🔴 STILL NOT A SERVER. There is no pool backend yet, so this is a per-device
- * memory and nothing more - not shared, not authoritative, and to be REPLACED by
- * real storage rather than extended. Said here so the next session does not
- * mistake it for the pool.
+ * memory - not shared, not authoritative, and to be REPLACED by real storage
+ * rather than extended. Said here so the next session does not mistake it for
+ * the pool.
  */
 function picksKey(sport, week) { return 'ag.picks.' + sport + '.' + week; }
 
@@ -427,16 +466,17 @@ function savePicks(sport, week, picks) {
   } catch { /* a private window is allowed to forget */ }
 }
 
-export const BLOWOUT_AT = 1.12;
-
-export function isBlowout(game, sport) {
-  if (typeof game.spread !== 'number') return false;
-  const h = priceFromSpread(game.spread, 'home', sport);
-  const a = priceFromSpread(game.spread, 'away', sport);
-  return (h != null && h <= BLOWOUT_AT) || (a != null && a <= BLOWOUT_AT);
+export function priceAts(spread) {
+  return typeof spread === 'number' ? 2 : null;
 }
 
-/** `stake / p`, capped at 6x - the doctrine payout, as a multiple. */
+/** `stake / p`, capped at 6x - the doctrine payout, as a multiple.
+ *
+ *  🔴 NO LONGER USED BY THE WEEK'S CARD, which went against the spread on
+ *  2026-09-09 and prices at a flat 2.00x. Kept and still tested because it is
+ *  the straight-up pricing model - the shape the live layer uses, and the one
+ *  a moneyline card would need if that product is ever wanted. Deleting it
+ *  would throw away a measured piece of work to save nothing. */
 export function priceFromSpread(spread, side, sport) {
   const p = probFromSpread(spread, side, sport);
   if (p == null) return null;
@@ -876,14 +916,8 @@ function zone(ctx, game, side) {
      *
      * Only in `week`. The office pool has no price because it has no stake. */
     if (ctx.mode === 'week') {
-      const px = priceFromSpread(game.spread, side, ctx.sport);
-      if (px != null) {
-        const b = el('span', 'p2-price num', px.toFixed(2) + '×');
-        /* At the floor the model is saying "this is not a question". Marked so
-         * the row reads as one to skip rather than one to take. */
-        if (px <= 1.12) b.classList.add('is-thin');
-        meta.appendChild(b);
-      }
+      const px = priceAts(game.spread);
+      if (px != null) meta.appendChild(el('span', 'p2-price num', px.toFixed(2) + '×'));
     }
   }
   if (side === 'home') { l2.append(meta, nm); } else { l2.append(nm, meta); }
@@ -891,10 +925,7 @@ function zone(ctx, game, side) {
 
   if (mine) b.dataset.pick = 'on';
 
-  /* A blowout is not pickable on the priced card - the row is greyed and the
-   * word says why, so a disabled button here is legible rather than mysterious. */
-  const blown = ctx.mode === 'week' && isBlowout(game, ctx.sport);
-  const open = (st === 'unpicked' || st === 'picked') && !blown;
+  const open = st === 'unpicked' || st === 'picked';
   b.disabled = !open;
   b.setAttribute('aria-pressed', String(pick && pick.side === side));
   b.setAttribute('aria-label', (team.name || team.short) + (open ? '' : ' \u2013 locked'));
@@ -906,18 +937,6 @@ function zone(ctx, game, side) {
  *  time is REPLACED IN PLACE by the live state. Same slot, no badge, no extra column. */
 function center(ctx, game) {
   const c = el('div', 'p2-center num');
-  /* Before every other state EXCEPT the ones that describe a game already
-   * under way. A blowout that has kicked off is locked like any other row, and
-   * a final is a final - the label belongs to the window where somebody might
-   * otherwise be trying to pick it. */
-  if (ctx.mode === 'week' && game.status === 'scheduled' && ctx.now < game.kickoffUtc
-      && isBlowout(game, ctx.sport)) {
-    c.dataset.kind = 'blowout';
-    c.appendChild(el('span', 'p2-c-lo', 'Blowout'));
-    c.appendChild(el('span', 'p2-c-t', timeLabel(game.kickoffUtc)));
-    c.setAttribute('title', 'One side is over 90% - not a question worth a marble');
-    return c;
-  }
   if (game.status === 'void') {
     c.dataset.kind = 'void';
     c.appendChild(el('span', 'p2-c-lo', 'Void'));
@@ -953,10 +972,8 @@ function center(ctx, game) {
 
 function row(ctx, game) {
   const r = el('div', 'p2-row');
-  r.dataset.state = pickStateOf(game, ctx.picks[game.id], ctx.now);
+  r.dataset.state = pickStateOf(game, ctx.picks[game.id], ctx.now, ctx.mode);
   r.dataset.gameId = game.id;
-  /* Only on the priced card. In the pool this row is an ordinary pick. */
-  if (ctx.mode === 'week' && isBlowout(game, ctx.sport)) r.dataset.blowout = 'true';
   r.append(zone(ctx, game, 'away'), center(ctx, game), zone(ctx, game, 'home'));
   return r;
 }
@@ -1166,7 +1183,7 @@ function head(root, data, _) {
    * it. The separation is defended by the word that IS here — "group pool",
    * "points" — never by a disclaimer about the word that is not. */
   const kicker = el('p', 'p2-half', (data && data.mode) === 'week'
-    ? "The week's card · staked in marbles · priced off the line"
+    ? "The week's card · against the spread · every pick pays 2.00×"
     /* "Group pools" is the section's name (Jason, 2026-09-09). The kicker names
      * the section, not this one pool - the pool's own name is the h1 above it. */
     : 'Group pools · your group · scored in points');

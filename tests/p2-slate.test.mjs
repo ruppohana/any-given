@@ -491,3 +491,48 @@ test('a stored pick is restored onto a real slate', async () => {
     if (realLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = realLS;
   }
 });
+
+/* 🔴 THE TWO PRODUCTS SETTLE THE SAME GAME DIFFERENTLY. Added 2026-09-09 with
+ * the ATS decision: "Group pool. Straight up. Weeks card against the spread."
+ *
+ * A game can be a win in the pool and a loss on the card. That is not a
+ * contradiction to be reconciled - it is the reason the two boards never sum,
+ * and it is the thing most likely to be "fixed" by a future session that sees
+ * one game with two verdicts and assumes a bug. */
+test('the pool settles on the winner and the week card on the cover', () => {
+  const now = Date.UTC(2026, 8, 20);
+  const kick = Date.UTC(2026, 8, 19);
+  /* Home wins by 3 as a 7-point favorite: won straight up, did NOT cover. */
+  const g = { id: 'g', status: 'final', kickoffUtc: kick, spread: -7,
+              homeScore: 24, awayScore: 21 };
+
+  assert.equal(mod.pickStateOf(g, { side: 'home' }, now, 'pool'), 'won');
+  assert.equal(mod.pickStateOf(g, { side: 'home' }, now, 'week'), 'lost',
+    'a favorite that wins without covering must lose on the card');
+  assert.equal(mod.pickStateOf(g, { side: 'away' }, now, 'pool'), 'lost');
+  assert.equal(mod.pickStateOf(g, { side: 'away' }, now, 'week'), 'won');
+
+  /* 🔴 A PUSH IS THE ONE VOID PATH, not a loss and not a win. Landing exactly on
+   * the number is the game not having happened, for everybody. */
+  const push = { ...g, homeScore: 28, awayScore: 21 };
+  assert.equal(mod.coversSpread(push, 'home'), 'push');
+  assert.equal(mod.pickStateOf(push, { side: 'home' }, now, 'week'), 'void');
+  assert.equal(mod.pickStateOf(push, { side: 'away' }, now, 'week'), 'void');
+  /* Straight up the same game is an ordinary win - the pool has no push. */
+  assert.equal(mod.pickStateOf(push, { side: 'home' }, now, 'pool'), 'won');
+
+  /* No posted line cannot be graded against one, so it falls back to the winner
+   * rather than voiding a game that was really played. */
+  const noline = { ...g, spread: null };
+  assert.equal(mod.coversSpread(noline, 'home'), null);
+  assert.equal(mod.pickStateOf(noline, { side: 'home' }, now, 'week'), 'won');
+
+  /* A tie is a void in both, which is the doctrine that predates all of this. */
+  const tie = { ...g, homeScore: 21, awayScore: 21, spread: null };
+  assert.equal(mod.pickStateOf(tie, { side: 'home' }, now, 'pool'), 'void');
+
+  /* And the price against the spread is 2.00x both ways, or nothing at all. */
+  assert.equal(mod.priceAts(-7), 2);
+  assert.equal(mod.priceAts(56.5), 2);
+  assert.equal(mod.priceAts(null), null, 'no line means no ATS price');
+});

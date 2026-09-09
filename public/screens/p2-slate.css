@@ -208,22 +208,9 @@
 .p2-price { font-weight: 800; color: var(--accent); }
 .p2-price.is-thin { color: var(--dim); font-weight: 700; }
 
-/* 🔴 A BLOWOUT IS GREYED AND NAMED, NOT HIDDEN. Jason, 2026-09-09: "Grey the out
-   and put, blowout."
-
-   The row stays on the card because the game is really on the slate - a card
-   that silently omits fixtures is one you cannot trust to be the week. It is
-   dimmed and unpickable, and the middle column says the word, so an unusable
-   row is legible rather than mysterious.
-
-   Applies only where there is a price. In the group pool a blowout is an
-   ordinary pick, and a free point is what a straight-up pool is for. */
-.p2-row[data-blowout="true"] { opacity: .45; }
-.p2-row[data-blowout="true"] .p2-zone { cursor: default; }
-/* The price is the thing that is not on offer, so it loses the accent and stops
-   advertising a 6.00x nobody may take. */
-.p2-row[data-blowout="true"] .p2-price { color: var(--dim); font-weight: 700; }
-.p2-center[data-kind="blowout"] { gap: 1px; }
-.p2-center[data-kind="blowout"] .p2-c-lo { font-weight: 800; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--dim); }
+/* 🔴 THE BLOWOUT TREATMENT IS GONE, 2026-09-09. It greyed out 19 of 24 college
+   rows because straight-up pricing saturated on FCS-vs-FBS lines. The week's
+   card went against the spread, which is the instrument that makes a mismatched
+   fixture playable - so the rows it described are ordinary questions again and
+   the styles that dimmed them would now be lying about them. */
 .p2-c-t { font-size: var(--t-micro); color: var(--dim); }

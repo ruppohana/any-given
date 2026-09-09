@@ -46,7 +46,18 @@ export const DESTINATIONS = [
    * added, so the bar carried a duplicate AND wrapped to two rows at 375px —
    * "Live" alone on a second line under the other four. Home IS the game; the
    * separate Live tab is what Home replaced. */
-  { id: 'picks',     label: 'Picks',     href: '/p/:pool/me' },
+  /* 🔴 "My picks", not "Picks". Jason, 2026-09-09 - he asked for the rename and
+   * then corrected my "Your picks" to "My picks" in the next message.
+   *
+   * It is not decoration. Slate and this tab both list games, and the one-word
+   * label made them read as two views of the same list - which is exactly the
+   * confusion that produced "What is the difference between slate and picks?".
+   * The possessive is the whole answer in one word: that one is the week,
+   * this one is MINE.
+   *
+   * First person because the app is speaking as the person using it, the way
+   * every other label here does. "Your picks" is the app talking ABOUT them. */
+  { id: 'picks',     label: 'My picks',  href: '/p/:pool/me' },
   { id: 'standings', label: 'Standings', href: '/p/:pool/standings' },
 ];
 
