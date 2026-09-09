@@ -29,6 +29,10 @@ import { CALL_TYPES, byId, offerFor, settle, settleDrive, movedChains } from '/s
  *
  * Nothing here writes commentary. It renders what the detector already said. */
 import { detect } from '/src/lib/detect.js';
+/* 🔴 A REAL IMAGE FILE, not an unfurled card. The og:image can say which game is
+ * on; it can never say what YOU just called, because it is one picture per URL
+ * cached hard by the crawler. Web Share Level 2 attaches an actual PNG. */
+import { shareResult, shareReaction, MOMENTS } from '/components/sharecard.js';
 import { teamChip, applyTeamVars } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { signed, signClass, clock } from '/components/fmt.js';
@@ -591,6 +595,14 @@ function paint(wrap) {
   const said = commentary(state);
   if (said) wrap.appendChild(said);
 
+  /* ---- and a picture of it, if it was worth one ---- */
+  const react = reactions(state, wrap);
+  if (react) wrap.appendChild(react);
+
+  /* ---- brag about the best one ---- */
+  const brag = bragButton(state, rows);
+  if (brag) wrap.appendChild(brag);
+
   /* ---- what happened ---- */
   if (rows.length) {
     const list = el('div', 'card lg-rows');
@@ -1079,7 +1091,37 @@ function inviteButton(state) {
   };
   wrapEl.appendChild(b);
   wrapEl.appendChild(postToX(state, url));
+  wrapEl.appendChild(postToReddit(state, url));
   return wrapEl;
+}
+
+/**
+ * 🔴 REDDIT, AND ONLY REDDIT ALONGSIDE X. Jason: "Any other platform other than
+ * x?" The honest answer is that navigator.share already covers every one of
+ * them — the native sheet on a phone offers Messages, WhatsApp, Instagram,
+ * Threads, Reddit, mail, AirDrop, whatever is installed. A row of branded
+ * buttons re-implements the operating system, worse.
+ *
+ * A web intent only earns a button where the destination is a PLACE rather than
+ * a person, and for football there is exactly one more of those: an r/nfl or
+ * r/CFB game thread is where the conversation about a live game actually
+ * happens, it is public, and it is searchable afterwards. Facebook's sharer
+ * strips your text and posts a bare link; LinkedIn is not watching the game.
+ *
+ * Reddit's submit intent takes a title, which is the whole point — the post is
+ * the sentence, not the URL.
+ */
+function postToReddit(state, url) {
+  const a = el('a', 'lg-x lg-reddit');
+  /* The first line only. xText carries the hashtags on their own line and a
+   * Reddit TITLE is one sentence, not a post body. */
+  const title = xText(state).split(String.fromCharCode(10))[0];
+  a.href = 'https://www.reddit.com/submit?' + new URLSearchParams({ url, title });
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.appendChild(el('span', 'lg-x-mark', '⬤'));
+  a.appendChild(el('span', 'lg-x-l', 'Reddit'));
+  return a;
 }
 
 /**
@@ -1156,6 +1198,92 @@ ${tags}`;
 ${tags}`;
 }
 
+/**
+ * 🔴 IT ONLY APPEARS WHEN THERE IS SOMETHING TO SAY. A share button with nothing
+ * behind it is an ask; a share button attached to a call that just landed at 6×
+ * is a person wanting to tell somebody. The difference is whether the app is
+ * begging to be spread or being spread.
+ *
+ * The BEST settled call, not the last — nobody posts the one they lost.
+ */
+/**
+ * 🔴 REACTION CARDS, OFFERED ONLY WHEN THE MOMENT IS ACTUALLY ON THE SCREEN.
+ * Jason: "Can we not make generic touchdown images? For people to hit during the
+ * game... It would be awesome advertising, no?"
+ *
+ * Yes — and the reason it works is the reason advertising usually does not:
+ * nobody posts an advert, everybody posts a touchdown. So the card is the
+ * MOMENT, big, with the real score and crests, and the wordmark sits in the
+ * corner where a broadcaster puts a bug.
+ *
+ * A permanent row of share buttons would be a toolbar nobody touches. These
+ * appear because a touchdown just happened, on the play the detector flagged,
+ * and they go when the next drive starts — which is exactly the window in which
+ * somebody wants to say something.
+ *
+ * 🔴 AND THEY ARE DRAWN FROM THE HELD STATE. The score on a shared picture is
+ * the score this app was showing, delay included. A card built from the live
+ * feed would leak a play the sender has not seen — the one place this app could
+ * spoil its own mechanic.
+ */
+function reactions(state, wrap) {
+  const last = state.plays[state.plays.length - 1];
+  if (!last) return null;
+  const recent = state.plays.slice(-3);
+
+  const found = [];
+  const add = (k, line) => { if (!found.some((f) => f.k === k)) found.push({ k, line }); };
+  for (const p of recent) {
+    const t = (p.text || '').toLowerCase();
+    if (/touchdown/.test(t)) add('touchdown', p.text);
+    else if (/intercepted|fumble.*recovered by/.test(t)) add('turnover', p.text);
+    else if (/field goal.*(is good|good)/.test(t) && !/no good/.test(t)) add('field_goal', p.text);
+    else if (p.startDown === 4 && /rush|pass/.test((p.typeText || '').toLowerCase())) add('fourth_down', p.text);
+    else if ((p.statYardage || 0) >= 40) add('big_play', p.text);
+  }
+  if (!found.length) return null;
+
+  const card = el('div', 'card lg-react');
+  card.appendChild(el('div', 'lg-react-h', 'Send it'));
+  const row = el('div', 'lg-react-row');
+  for (const f of found.slice(0, 3)) {
+    const m = MOMENTS[f.k];
+    const b = el('button', 'lg-react-b');
+    b.style.setProperty('--m', m.tint);
+    b.appendChild(el('span', 'lg-react-w', m.word));
+    row.appendChild(b);
+    b.onclick = async () => {
+      const before = b.querySelector('.lg-react-w').textContent;
+      b.querySelector('.lg-react-w').textContent = '…';
+      const r = await shareReaction(state, f.k, f.line, xText(state));
+      b.querySelector('.lg-react-w').textContent =
+        r === 'shared' ? 'SENT' : r === 'downloaded' ? 'SAVED' : before;
+    };
+  }
+  card.appendChild(row);
+  return card;
+}
+
+function bragButton(state, rows) {
+  const landed = (rows || []).filter((r) => r.landed === true && r.delta > 0);
+  if (!landed.length) return null;
+  const best = landed.reduce((a, b) => (a.delta >= b.delta ? a : b));
+
+  const b = el('button', 'lg-brag');
+  b.appendChild(el('span', 'lg-brag-h', `Share it — ${best.label} at ${payoutOf(best)}×`));
+  b.appendChild(el('span', 'lg-brag-b', 'Makes a picture with the score and your call on it.'));
+  b.onclick = async () => {
+    const sub = b.querySelector('.lg-brag-b');
+    sub.textContent = 'Drawing it…';
+    const r = await shareResult(state, best, xText(state));
+    sub.textContent = r === 'shared' ? 'Sent.'
+      : r === 'downloaded' ? 'Saved to your downloads — attach it to a post.'
+      : r === 'cancelled' ? 'Makes a picture with the score and your call on it.'
+      : 'This browser cannot make the picture. The link still works.';
+  };
+  return b;
+}
+
 function delayBar() {
   if (S.delayOpen || !S.seenIntro) return delayPanel();
   const line = el('button', 'lg-delayline');
@@ -1223,7 +1351,20 @@ const CSS = `
 .lg-delayline-l { font-weight: 700; letter-spacing: .04em; color: var(--accent); }
 .lg-delayline.is-live .lg-delayline-l { color: var(--down); }
 .lg-delayline-a { text-decoration: underline; }
-.lg-invite-wrap { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
+.lg-react { display: grid; gap: 8px; padding: 12px; }
+.lg-react-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--dim); }
+.lg-react-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.lg-react-b { font: inherit; padding: 10px 14px; min-height: var(--tap-min);
+  border: 2px solid var(--m); border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--m) 12%, var(--card)); color: var(--m); }
+.lg-react-w { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; }
+.lg-brag { display: grid; gap: 3px; text-align: left; font: inherit; width: 100%;
+  padding: 13px 12px; border: 2px solid var(--up); border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--up) 10%, var(--card)); color: var(--fg); }
+.lg-brag-h { font-size: var(--t-emph); font-weight: 800; color: var(--up); }
+.lg-brag-b { font-size: var(--t-micro); color: var(--dim); }
+.lg-invite-wrap { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: stretch; }
+.lg-reddit .lg-x-mark { color: #ff4500; font-size: 15px; }
 .lg-x { display: grid; place-content: center; gap: 2px; text-decoration: none;
   padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-card);
   background: var(--card); color: var(--fg); }
