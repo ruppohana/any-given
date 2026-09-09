@@ -532,10 +532,25 @@ async function poll(wrap) {
      * 🔴 Home only. The live board has a running clock, a play feed and a stale
      * indicator that all want the tick, and this must never be the reason a
      * called snap is late on screen. */
-    if (S.isHome) {
+    /* 🔴 THE PRE-GAME SCREEN TAKES THE SAME GUARD AS HOME. It was Home only, and
+     * the pre-game is the screen somebody actually leaves open for hours before
+     * a kickoff - a countdown, a channel, an invite and a list of what else is
+     * on, all rebuilt from scratch twelve times a minute. Every crest in the
+     * head was a fresh <img> on every cycle, which is the blink again in the one
+     * place it lasts longest.
+     *
+     * 🔴 AND ONLY BEFORE THE SNAP. Once the game is live the board has a running
+     * clock, a play feed and a staleness indicator that all want the tick, and
+     * this must never be the reason a called snap is late on screen. The
+     * signature includes the status, so the first push that says the game has
+     * started forces a paint and the guard stops applying by itself. */
+    const quiet = S.isHome || (S.raw && S.raw.status === 'pre');
+    if (quiet) {
       const sig = homeSignature();
       if (sig === S.lastSig) return;
       S.lastSig = sig;
+    } else {
+      S.lastSig = null;
     }
     paint(wrap);
   } catch { /* offline is a state the screen draws, not an exception */ }
@@ -1352,7 +1367,12 @@ function untilLabel(ms) {
   const m = Math.round(ms / 60000);
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h ${m % 60}m` : `${Math.round(h / 24)} days`;
+  if (h < 24) return `${h}h ${m % 60}m`;
+  /* "1 days". Rounding to days and then always writing the plural is the same
+   * mistake as "1 members" on the standings header - a sentence assembled
+   * without asking how many it is describing. */
+  const d = Math.round(h / 24);
+  return d === 1 ? '1 day' : `${d} days`;
 }
 
 /**
@@ -1370,27 +1390,49 @@ function untilLabel(ms) {
  * somebody to write the screen instead of an empty state.
  */
 /* The other games in this league, after this one, soonest first. */
-async function alsoOn(wrap, state, now) {
+/* 🔴 THE SLATE IS FETCHED ONCE AND HELD, AND THE CARD IS DRAWN SYNCHRONOUSLY.
+ * Jason, 2026-09-09: "The also on blinks."
+ *
+ * It did, and for the same reason the logos did: paint() rebuilds this screen
+ * every five seconds, and this card was APPENDED AFTER AN AWAIT. So every cycle
+ * the list vanished with the rest of the DOM and reappeared a network round trip
+ * later - a card that flickers in and out at the foot of the screen for as long
+ * as you look at it.
+ *
+ * The blink was never about the network being slow. It was about drawing from
+ * inside an async function on a screen that redraws on a timer: even a 20ms
+ * response leaves a gap, because the append lands in the NEXT frame.
+ *
+ * So the fetch and the render are separated. `S.also` holds the list; the card
+ * is built from it in the same tick as everything around it; and the fetch runs
+ * only when there is nothing cached or the cache is ten minutes old. A slate
+ * does not change between two heartbeats. */
+const ALSO_TTL = 10 * 60 * 1000;
+
+function alsoOn(wrap, state, now) {
   const key = S.key;
   const sport = (key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
-  let games = [];
-  try {
-    const res = await fetch('/api/state/slate:' + sport + ':2026:' + (SLATE_WEEK[sport] || 1));
-    if (!res.ok) return;
-    games = ((await res.json()).games || [])
-      .filter((g) => g && g.status !== 'final' && g.kickoffUtc > (state.kickoffUtc || now)
-                     && String(g.id) !== String((key || '').split(':')[1]))
-      .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
-  } catch { return; }
-  if (!games.length) return;
+  const cached = S.also;
 
-  /* 🔴 APPENDED ONLY IF THE SCREEN IS STILL THE ONE THAT ASKED. This resumes
-   * after an await and paint() empties the container, so without the guard a
-   * slow response drops a list of college games at the foot of an NFL screen -
-   * or under a game that has since kicked off and repainted. The key is captured
-   * before the fetch and compared after it; nothing else is a reliable identity
-   * for "the screen I was drawing". */
-  if (S.key !== key || !wrap.isConnected) return;
+  /* Refresh in the background when it is missing or stale. It never draws - the
+   * next paint picks it up, which is what keeps this out of the render path. */
+  if (!cached || cached.sport !== sport || (now - cached.at) > ALSO_TTL) {
+    if (!S.alsoBusy) {
+      S.alsoBusy = true;
+      fetch('/api/state/slate:' + sport + ':2026:' + (SLATE_WEEK[sport] || 1))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d) S.also = { sport, at: Date.now(), games: d.games || [] }; })
+        .catch(() => {})
+        .then(() => { S.alsoBusy = false; });
+    }
+  }
+  if (!cached || cached.sport !== sport) return;
+
+  const games = (cached.games || [])
+    .filter((g) => g && g.status !== 'final' && g.kickoffUtc > (state.kickoffUtc || now)
+                   && String(g.id) !== String((key || '').split(':')[1]))
+    .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
+  if (!games.length) return;
 
   const box = el('div', 'card lg-also');
   const h = el('div', 'lg-also-h');
