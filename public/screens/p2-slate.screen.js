@@ -278,6 +278,8 @@ function lcg(seed) {
 function slateGame(o) {
   return {
     id: o.id, week: 2, kickoffUtc: o.kickoffUtc, home: o.home, away: o.away,
+    venue: o.venue || null, broadcast: o.broadcast || null,
+    spreadProvider: o.spreadProvider || null,
     spread: o.spread == null ? null : o.spread,
     status: o.status || 'scheduled',
     homeScore: o.homeScore == null ? null : o.homeScore,
@@ -588,6 +590,8 @@ async function realSlate(byId, sport) {
       for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
       return slateGame({
         id: g.id, kickoffUtc: g.kickoffUtc,
+        venue: g.venue || null, broadcast: g.broadcast || null,
+        spreadProvider: g.spreadProvider || null,
         home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
         spread: typeof g.spread === 'number' ? g.spread : null,
         status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
@@ -1090,8 +1094,100 @@ function center(ctx, game) {
     }
     c.appendChild(sw);
   }
+
+  /* 🔴 THE INFO LINK. Jason, 2026-09-09: "how about an 'info' hyperlink under the
+   * time that pulls up a head to head card on that game." Then, when asked
+   * whether to ship it with the facts already on the row: "Yes something worth
+   * opening."
+   *
+   * So it opens on records, AP rank, the book that posted the line, the venue
+   * and the channel - none of it derived, all of it captured by the poller for
+   * this. A card that repeats the three facts already printed on the row is a
+   * link somebody taps once. */
+  const info = el('button', 'p2-info', 'info');
+  info.type = 'button';
+  info.setAttribute('aria-label', 'Details for this game');
+  info.onclick = (e) => { e.stopPropagation(); openInfo(game, ctx); };
+  c.appendChild(info);
   return c;
 }
+
+/* 🔴 A DIALOG, NOT A ROUTE. The slate is a scroll position somebody has worked
+ * for - twenty-four games deep on a Saturday - and navigating away to a detail
+ * screen loses it. <dialog> is modal, closes on Escape and on the backdrop, and
+ * returns them exactly where they were. */
+function openInfo(game, ctx) {
+  const old = document.getElementById('p2-info-dlg');
+  if (old) old.remove();
+
+  const d = document.createElement('dialog');
+  d.id = 'p2-info-dlg';
+  d.className = 'p2-dlg';
+
+  const head = el('div', 'p2-dlg-h');
+  head.appendChild(el('div', 'p2-dlg-t',
+    (game.away.short || game.away.name) + ' at ' + (game.home.short || game.home.name)));
+  const meta = [timeLabel(game.kickoffUtc), dayLabel(game.kickoffUtc)];
+  if (game.venue) meta.push(game.venue);
+  if (game.broadcast) meta.push('on ' + game.broadcast);
+  head.appendChild(el('div', 'p2-dlg-s', meta.join(' · ')));
+  d.appendChild(head);
+
+  /* HEAD TO HEAD, one row per fact, both teams side by side. A table rather
+   * than two stacked cards, because every number here only means something
+   * next to the other team's. */
+  const t = el('div', 'p2-h2h');
+  const hdr = el('div', 'p2-h2h-r p2-h2h-hd');
+  hdr.appendChild(el('span', 'p2-h2h-l', ''));
+  hdr.appendChild(el('span', 'p2-h2h-v', game.away.abbrev || '–'));
+  hdr.appendChild(el('span', 'p2-h2h-v', game.home.abbrev || '–'));
+  t.appendChild(hdr);
+
+  const line = (label, a, b) => {
+    /* A row where NEITHER side has the fact is not drawn. An info card of five
+     * dashes is the thing this link exists not to be. */
+    if (a == null && b == null) return;
+    const r = el('div', 'p2-h2h-r');
+    r.appendChild(el('span', 'p2-h2h-l', label));
+    r.appendChild(el('span', 'p2-h2h-v num', a == null ? '–' : String(a)));
+    r.appendChild(el('span', 'p2-h2h-v num', b == null ? '–' : String(b)));
+    t.appendChild(r);
+  };
+
+  const A = game.away, H = game.home;
+  line('Record', A.record, H.record);
+  /* Last season only where this one has not started. In NFL week 1 every record
+   * is 0-0, which is accurate and says nothing. */
+  line('Last season', A.lastRecord, H.lastRecord);
+  line('AP rank', A.rank ? '#' + A.rank : null, H.rank ? '#' + H.rank : null);
+  line('The line', spreadText(game.spread, 'away'), spreadText(game.spread, 'home'));
+  if (ctx.mode === 'week') {
+    line('Spread pays', fmtx(priceAts(game.spread)), fmtx(priceAts(game.spread)));
+    line('Winner pays', fmtx(priceFromSpread(game.spread, 'away', ctx.sport)),
+                        fmtx(priceFromSpread(game.spread, 'home', ctx.sport)));
+  }
+  d.appendChild(t);
+
+  if (game.spreadProvider) {
+    /* 🔴 THE BOOK IS NAMED. A number with no source is our opinion; a number
+     * with a source is a fact about the market, and this app never posts a line
+     * of its own. */
+    d.appendChild(el('p', 'p2-dlg-n', 'Line posted by ' + game.spreadProvider + '.'));
+  }
+
+  const close = el('button', 'p2-dlg-x', 'Close');
+  close.onclick = () => d.close();
+  d.appendChild(close);
+  /* Tapping the backdrop closes it - the dialog element is the full viewport, so
+   * a click that lands on the element itself rather than on its content is a
+   * click outside the card. */
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  d.addEventListener('close', () => d.remove());
+  document.body.appendChild(d);
+  d.showModal();
+}
+
+function fmtx(v) { return v == null ? null : v.toFixed(2) + '×'; }
 
 function row(ctx, game) {
   const r = el('div', 'p2-row');

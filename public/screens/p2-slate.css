@@ -244,3 +244,39 @@
   letter-spacing: .02em; padding: 3px 0; min-height: 22px; border: 0; border-radius: 999px;
   background: transparent; color: var(--dim); }
 .scr-p2-slate .p2-mkt-b.is-on { background: var(--accent); color: var(--bg); }
+
+/* THE INFO LINK — under the market switch, in the centre column. Deliberately
+   quiet: it is a way to check your reasoning, not a call to action, and the
+   decision on this row is which team. */
+.scr-p2-slate .p2-info { font: inherit; font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; background: none; border: 0; padding: 4px 6px;
+  margin-top: 1px; color: var(--dim); text-decoration: underline; }
+
+/* THE HEAD-TO-HEAD CARD. A modal rather than a route, because the slate is a
+   scroll position somebody has worked for and navigating away loses it. */
+.scr-p2-slate + .p2-dlg, .p2-dlg { border: 0; padding: 0; background: transparent;
+  color: var(--fg); max-width: 420px; width: calc(100% - 32px); }
+.p2-dlg::backdrop { background: rgba(0, 0, 0, .55); }
+.p2-dlg { border-radius: var(--radius-card); }
+.p2-dlg > * { background: var(--card); }
+.p2-dlg > :first-child { border-radius: var(--radius-card) var(--radius-card) 0 0; }
+.p2-dlg > :last-child { border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.p2-dlg-h { padding: 16px 16px 10px; border-bottom: 1px solid var(--line); }
+.p2-dlg-t { font-size: var(--t-section); font-weight: 800; line-height: 1.2; }
+.p2-dlg-s { margin-top: 3px; font-size: var(--t-micro); color: var(--dim);
+  font-variant-numeric: tabular-nums; }
+.p2-h2h { padding: 6px 16px 10px; display: grid; gap: 0; }
+.p2-h2h-r { display: grid; grid-template-columns: 1fr auto auto; gap: 12px;
+  align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.p2-h2h-r:last-child { border-bottom: 0; }
+.p2-h2h-hd { border-bottom: 1px solid var(--line); }
+.p2-h2h-hd .p2-h2h-v { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em;
+  color: var(--dim); }
+.p2-h2h-l { font-size: var(--t-body); color: var(--dim); }
+/* Both value columns are the same fixed width so the two teams line up down the
+   card - the whole point of a head-to-head is reading across. */
+.p2-h2h-v { font-size: var(--t-body); font-weight: 700; min-width: 56px; text-align: right; }
+.p2-dlg-n { margin: 0; padding: 0 16px 12px; font-size: var(--t-micro); color: var(--dim); }
+.p2-dlg-x { display: block; width: 100%; font: inherit; font-size: var(--t-emph);
+  font-weight: 800; min-height: var(--tap-min); border: 0; border-top: 1px solid var(--line);
+  color: var(--accent); }
