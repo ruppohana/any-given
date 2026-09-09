@@ -32,6 +32,9 @@
  *   tag    a short pill beside the title (the league, usually), or null
  *   right  an element to sit left of the menu, or null
  */
+/* The one menu button, held outside the DOM so a screen wipe cannot lose it. */
+let KEPT_GEAR = null;
+
 export function pageHeader(opts) {
   const o = opts || {};
   const h = document.createElement('header');
@@ -66,7 +69,7 @@ export function pageHeader(opts) {
     const img = document.createElement('img');
     img.className = 'ag-hd-lg';
     img.src = '/logos/leagues/' + (o.league === 'nfl' ? 'nfl' : 'ncaa') + '-500.png';
-    img.width = 22; img.height = 22;
+    img.width = 30; img.height = 30;
     img.alt = o.league === 'nfl' ? 'NFL' : 'NCAA';
     img.decoding = 'sync';
     /* A mark that fails to load leaves the football and the title, which still
@@ -77,23 +80,46 @@ export function pageHeader(opts) {
     const NS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+    svg.setAttribute('width', '26'); svg.setAttribute('height', '26');
     svg.setAttribute('class', 'ag-hd-ball');
     svg.setAttribute('aria-hidden', 'true');
+    /* 🔴 TILTED, AND WITH A SEAM. Jason, 2026-09-09: "the football icon is
+     * terrible" - twice over, because the second attempt was no better than the
+     * first.
+     *
+     * The first was two arcs meeting at a tangent: a rounded blob that read as a
+     * circle. The second was a correct vesica - pointed at both ends - and still
+     * failed, because a HORIZONTAL lens with a line through it is an eye. That
+     * is the shape the eye reaches for first, and it is not a football.
+     *
+     * What separates them is the TILT. A football is drawn on a diagonal in
+     * every context anybody has ever seen one - a logo, a scoreboard, an emoji -
+     * so the angle is doing more identification work than the outline is. Add
+     * the long seam the laces sit on, which nothing else has, and it stops being
+     * ambiguous at 26px.
+     */
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('transform', 'rotate(-32 12 12)');
+
     const ball = document.createElementNS(NS, 'path');
-    /* A prolate spheroid on its long axis with a lace line - the shape reads as
-     * a football at 18px, which a detailed one does not. */
-    ball.setAttribute('d', 'M3.6 12c0-3.6 4-8.4 8.4-8.4S20.4 8.4 20.4 12s-4 8.4-8.4 8.4S3.6 15.6 3.6 12z');
-    ball.setAttribute('fill', 'none');
-    ball.setAttribute('stroke', 'currentColor');
-    ball.setAttribute('stroke-width', '1.7');
+    ball.setAttribute('d', 'M1.8 12C5.6 5.4 18.4 5.4 22.2 12 18.4 18.6 5.6 18.6 1.8 12Z');
+    ball.setAttribute('fill', 'currentColor');
+
+    const seam = document.createElementNS(NS, 'path');
+    seam.setAttribute('d', 'M8 12h8');
+    seam.setAttribute('stroke', 'var(--bg)');
+    seam.setAttribute('stroke-width', '1.5');
+    seam.setAttribute('stroke-linecap', 'round');
+
     const lace = document.createElementNS(NS, 'path');
-    lace.setAttribute('d', 'M9 12h6M11 10.2v3.6M13 10.2v3.6');
+    lace.setAttribute('d', 'M10 10.4v3.2M12 10.2v3.6M14 10.4v3.2');
     lace.setAttribute('fill', 'none');
-    lace.setAttribute('stroke', 'currentColor');
-    lace.setAttribute('stroke-width', '1.7');
+    lace.setAttribute('stroke', 'var(--bg)');
+    lace.setAttribute('stroke-width', '1.5');
     lace.setAttribute('stroke-linecap', 'round');
-    svg.append(ball, lace);
+
+    g.append(ball, seam, lace);
+    svg.appendChild(g);
     badge.appendChild(svg);
     l.appendChild(badge);
   }
@@ -114,13 +140,21 @@ export function pageHeader(opts) {
   const r = document.createElement('div');
   r.className = 'ag-hd-r';
   if (o.right) r.appendChild(o.right);
-  /* 🔴 THE MENU IS MOVED, NOT COPIED. There is exactly one #gear in the document
-   * and this relocates it into whichever header is currently on screen, so it
-   * cannot end up drawn twice or left behind on a screen that has gone. A
-   * cloned button would need its own listener and would drift from the original
-   * the first time one of them was changed. */
-  const gear = document.getElementById('gear');
-  if (gear) r.appendChild(gear);
+  /* 🔴 THE MENU IS MOVED, NOT COPIED - AND THAT NEARLY DESTROYED IT. Jason,
+   * 2026-09-09: "The ellipsis or hamburger is gone."
+   *
+   * There is exactly one #gear in the document and this relocates it into
+   * whichever header is on screen, which avoids two copies drifting apart. What
+   * it did not survive is a screen that re-renders with `root.innerHTML = ''`:
+   * that removes the gear along with the header holding it, and because the only
+   * reference to it was getElementById, the next lookup returned null and the
+   * button was gone from the app until a full reload.
+   *
+   * So the node is remembered here the first time it is seen. Moving a shared
+   * singleton into a container somebody else empties is only safe if something
+   * outside that container still holds it. */
+  const gear = document.getElementById('gear') || KEPT_GEAR;
+  if (gear) { KEPT_GEAR = gear; r.appendChild(gear); }
   h.appendChild(r);
   return h;
 }
