@@ -13,3 +13,8 @@ tendency.json
 captures/
 
 dist/
+
+# The captured feed payloads ARE evidence and are committed. A directory
+# exclusion cannot be undone by a negation, which is what the first attempt at
+# this rule got wrong - and it silently dropped them from the commit rather than
+# failing loudly, which is the worse half.
