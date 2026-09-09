@@ -315,7 +315,18 @@ test('the screen fetches nothing, declares no types, and uses the SHARED chip', 
    * this file is allowed to name — strip it before scanning for marks. */
   const js = stripComments(SCREEN_SRC).replace(/export const bar = .*/, '');
   assert.ok(!/\bfetch\s*\(/.test(js), 'data arrives as an argument');
-  assert.ok(SCREEN_SRC.includes("from '/components/team-chip.js'"), 'the chip is the shared component');
+  /* 🔴 THIS ASSERTION IS INVERTED ON PURPOSE, 2026-09-08. It used to demand the
+   * shared TEAM CHIP in the mark slot, and it was enforcing the wrong thing.
+   * Jason, on this exact row: "for the icons for each person, make up something
+   * for a person who won a week, they get a logo, 2 weeks gets one, etc not 2
+   * color, crap."
+   *
+   * A two-color chip beside a PERSON identifies a TEAM — the same two colors for
+   * everybody who picked it, on every row, distinguishing nobody. The badge is
+   * still a SHARED component, which was the real rule; it is simply the right
+   * shared component. */
+  assert.ok(!/team-chip\.js/.test(SCREEN_SRC), 'a person is not identified by a team');
+  assert.ok(SCREEN_SRC.includes("from '/components/badge.js'"), 'the badge is the shared component');
   assert.ok(!/createElementNS/.test(js), 'a second chip was written here');
   assert.ok(!/espncdn|<img|logo|\.svg|\.png|\.jpg/i.test(js), 'no marks, no logo, no CDN image, ever');
   assert.ok(!/type\s+StandingsRow|interface\s+StandingsRow/.test(js), 'types are imported, never re-declared');

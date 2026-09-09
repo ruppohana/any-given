@@ -37,6 +37,12 @@ const ROOT = new URL('..', import.meta.url);
 const readRoot = (p) => fs.readFileSync(new URL(p, ROOT), 'utf8');
 
 const SCREEN_SRC = readRoot('public/screens/l6-board.screen.js');
+/* 🔴 THE BADGE SYSTEM MOVED OUT, 2026-09-08, and these assertions moved with it.
+ * P5 was still filling the same slot beside a person's name with a TEAM CHIP —
+ * "not 2 color, crap" — so the drawing became a shared component rather than
+ * being copied into a second screen. Every rule below still holds; it is now
+ * checked where the code actually is. */
+const BADGE_SRC = readRoot('public/components/badge.js');
 const CSS_SRC = readRoot('public/screens/l6-board.css');
 const BOARD_SRC = readRoot('src/lib/board.ts');
 const FIXTURE = JSON.parse(readRoot('fixtures/real-utep-at-ou-260905-final.json'));
@@ -55,6 +61,11 @@ async function loadScreen() {
 }
 
 const SCREEN = await loadScreen();
+
+/* The badge system is its own component now, so it is imported as one rather
+ * than lifted out of a screen's text. That is the point of the move: two screens
+ * draw badges and exactly one file defines them. */
+const BADGES = await import(new URL('../public/components/badge.js', import.meta.url).href);
 
 /** Import board.ts the way the browser does: through the screen's own strip. */
 async function loadStrippedBoard() {
@@ -207,7 +218,7 @@ test('🔴 the ring is the constant: one color, all fifteen, earned and locked',
   for (const key of KEYS) {
     for (const tier of [0, 1, 2]) {
       for (const locked of [false, true]) {
-        const svg = SCREEN.badgeSvg(key, tier, locked, 34);
+        const svg = BADGES.badgeSvg(key, tier, locked, 34);
         const m = [...svg.matchAll(/r="10\.9"[^/]*stroke="([^"]+)"/g)].map((x) => x[1]);
         assert.equal(m.length, 1, `${key}/${tier}/${locked}: one ring, found ${m.length}`);
         rings.add(m[0]);
@@ -227,7 +238,7 @@ test('🔴 tier lives in the numeral and nowhere else', () => {
    * and the three drawings must be byte-identical, so nothing else - not the
    * ring, not the fill, not the glyph - is doing tier's job quietly. */
   for (const key of KEYS) {
-    const svgs = [0, 1, 2].map((t) => SCREEN.badgeSvg(key, t, false, 34));
+    const svgs = [0, 1, 2].map((t) => BADGES.badgeSvg(key, t, false, 34));
     const body = svgs.map((s) => s
       .replace(/<circle cx="[\d.]+" cy="[\d.]+" r="[\d.]+" fill="#1a1416"[^>]*\/>/g, '')
       .replace(/<text[^>]*>\d<\/text>/g, ''));
@@ -240,8 +251,8 @@ test('🔴 tier lives in the numeral and nowhere else', () => {
 
 test('a locked tier is the same mark in outline, not a padlock', () => {
   for (const key of KEYS) {
-    const on = SCREEN.badgeSvg(key, 1, false, 34);
-    const off = SCREEN.badgeSvg(key, 1, true, 34);
+    const on = BADGES.badgeSvg(key, 1, false, 34);
+    const off = BADGES.badgeSvg(key, 1, true, 34);
     const glyph = (s) => (s.match(/<g fill="[^"]*"[^>]*>([\s\S]*?)<\/g>/) || [])[1];
     assert.equal(glyph(off), glyph(on), `${key}: the locked glyph is a different drawing`);
     assert.ok(!/padlock|lock|\?/.test(off), `${key}: locked badge drew something other than the mark`);
@@ -252,7 +263,7 @@ test('🔴 the badge metals are a fixed scale and cannot be reached by team colo
   for (const key of KEYS) {
     for (const tier of [0, 1, 2]) {
       for (const locked of [false, true]) {
-        const svg = SCREEN.badgeSvg(key, tier, locked, 34);
+        const svg = BADGES.badgeSvg(key, tier, locked, 34);
         assert.ok(!/--accent|--team-a|--team-b|--maroon|--gold/.test(svg),
           `${key}/${tier}: a team or accent token reached the badge`);
       }
@@ -270,7 +281,7 @@ test('the tier is a numeral inside the object, and it is never in the ring', () 
    * The rule that survives is the one that was always load-bearing: THE RING IS
    * THE CONSTANT and tier is never in it. That is what makes fifteen drawings
    * read as one set. */
-  const svgs = [0, 1, 2].map((t) => SCREEN.badgeSvg('win', t, false, 34));
+  const svgs = [0, 1, 2].map((t) => BADGES.badgeSvg('win', t, false, 34));
   svgs.forEach((svg, t) => {
     assert.match(svg, new RegExp('>' + (t + 1) + '</text>'), 'the tier reads as a numeral');
   });
@@ -279,7 +290,7 @@ test('the tier is a numeral inside the object, and it is never in the ring', () 
   assert.ok(!/circle[^>]*cy="27"/.test(svgs[0]), 'the pip row is gone');
 });
 test('five families of three — a badge you have earned still has somewhere to go', () => {
-  const src = SCREEN_SRC.match(/const FAMILIES = \[([\s\S]*?)\n\];/)[1];
+  const src = BADGE_SRC.match(/export const FAMILIES = \[([\s\S]*?)\n\];/)[1];
   assert.equal((src.match(/^\s{2}\['/gm) || []).length, 5);
   for (const key of KEYS) assert.ok(src.includes(`'${key}'`), `${key} missing`);
   // the names are the reference's own, deliberately unchanged

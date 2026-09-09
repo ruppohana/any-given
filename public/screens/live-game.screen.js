@@ -356,7 +356,24 @@ function paint(wrap) {
   const last = state.plays[state.plays.length - 1];
   const already = last ? S.calls[last.id] : null;
 
-  if (type && last && !already) {
+  /* 🔴 A FINISHED GAME DOES NOT ASK YOU WHAT HAPPENS NEXT. Caught in a screenshot
+   * on 2026-09-08: the head read Q4 0:00 with a final score above a card asking
+   * "Run or pass — and do they get the first down?" over four priced tiles. There
+   * is no next play. Anything staked there could never settle, and the app was
+   * inviting it.
+   *
+   * It matters tonight rather than in theory: every game ends, so every session
+   * of this app finishes on this screen. The last thing it shows should be what
+   * happened, not a question it cannot answer. */
+  if (state.status === 'final') {
+    const done = el('div', 'card lg-done');
+    done.appendChild(el('div', 'lg-done-h', 'Final'));
+    done.appendChild(el('div', 'lg-done-b',
+      S.bank === START_BANK
+        ? 'You finished level.'
+        : `You finished ${S.bank > START_BANK ? 'up' : 'down'} ${Math.abs(S.bank - START_BANK)}, on ${S.bank} Marbles.`));
+    wrap.appendChild(done);
+  } else if (type && last && !already) {
     const card = el('div', 'card lg-call');
     card.appendChild(el('div', 'lg-q', type.question));
     const sub = el('div', 'lg-sub', state.situation?.downDistanceText || last.text.slice(0, 70));
@@ -611,6 +628,9 @@ const CSS = `
   border: 1px solid var(--down); background: color-mix(in srgb, var(--down) 10%, var(--card)); }
 .lg-stale-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--down); }
 .lg-stale-b { font-size: var(--t-micro); color: var(--ink); }
+.lg-done { display: grid; gap: 4px; padding: 14px 12px; }
+.lg-done-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--dim); }
+.lg-done-b { font-size: var(--t-emph); font-weight: 800; }
 .lg-name { display: grid; gap: 6px; padding: 12px; }
 .lg-name-h { font-weight: 800; font-size: var(--t-emph); }
 .lg-name-b { font-size: var(--t-micro); color: var(--dim); }

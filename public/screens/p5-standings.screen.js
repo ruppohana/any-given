@@ -11,9 +11,22 @@
  *    so twenty read in two.
  *      TAKEN: the column set, the tint-not-border highlight, the caps headers over
  *             numbers only, the 42px row.
- *      NOT TAKEN: the mark column. Any Given has no logos, ever. The two-color chip
- *             from /components/team-chip.js holds that slot - the SHARED component,
- *             not a second one written here.
+ *      NOT TAKEN: the club crest. Any Given has no logos, ever.
+ *
+ *      🔴 AND WHAT HOLDS THAT SLOT CHANGED, 2026-09-08. It was a two-color team
+ *             chip, and that was wrong for a reason worth writing down: Sofascore's
+ *             crest identifies the SUBJECT OF THE ROW, and on this screen the
+ *             subject is a PERSON, not a team. The chip put the same two colors on
+ *             every row of everybody who picked that team and distinguished nobody.
+ *             Jason: "for the icons for each person, make up something for a person
+ *             who won a week, they get a logo, 2 weeks gets one, etc not 2 color,
+ *             crap."
+ *             So the slot carries an EARNED BADGE from /components/badge.js - the
+ *             same system L6 draws, shared rather than copied. Most rows have
+ *             nothing in it, which is the point: a mark that everybody has is not a
+ *             mark. The sentence this replaces is deleted rather than kept, because
+ *             a superseded rule standing beside the current one is a second
+ *             instruction.
  *
  *  reference/armchair-quarterback-teardown/screens/AQB-leaderboard.png
  *  reference/armchair-quarterback-teardown/screens/AQB-LIVE-leaderboard-real-scores.png
@@ -41,7 +54,9 @@
  * cannot import a .ts file, so the shape is honored and the field names are exact.
  */
 import { stateBlock, STATES_CSS } from '/components/states.js';
-import { teamChip, TEAM_CHIP_CSS } from '/components/team-chip.js';
+/* The badge is the shared component - read the header of badge.js for why a
+ * person's row does not carry a team's two colors. */
+import { badgePin, BADGE_CSS } from '/components/badge.js';
 import { dash, signed, signClass } from '/components/fmt.js';
 
 export const id = 'p5-standings';
@@ -188,6 +203,19 @@ export async function previewData(fixtures, state) {
     weekRows: attachTeams(OFFICE_WEEK, byAbbrev),
     seasonRows: attachTeams(OFFICE_SEASON, byAbbrev),
     joinedWeek: {},
+    /* 🔴 BADGES ARE SPARSE ON PURPOSE, and this is the point of drawing them at
+     * all. Everybody has a team, so a team chip put a mark on every single row
+     * and distinguished nobody. Two people in an eight-person pool have won
+     * something; the rest have an empty slot, which is a fact about them rather
+     * than a hole in the layout.
+     *
+     * These ids are the same shape earnedIds() emits - family + threshold - so
+     * the preview and the real thing read the identical vocabulary. */
+    badges: {
+      u_dana: ['win1', 'top3'],
+      u_reggie: ['win5', 'top3', 'crazy1'],
+      u_marcus: ['day1']
+    },
     asOf: Date.now() - 41000,
     phase: 'ready'
   };
@@ -272,7 +300,7 @@ function el(tag, cls, text) {
 export function render(root, data, state) {
   root.innerHTML = '';
   const style = document.createElement('style');
-  style.textContent = [STATES_CSS, TEAM_CHIP_CSS].join('\n');
+  style.textContent = [STATES_CSS, BADGE_CSS].join('\n');
   root.appendChild(style);
 
   const host = el('div', 'scr-p5-standings');
@@ -412,16 +440,17 @@ export function render(root, data, state) {
     card.appendChild(head);
 
     const list = el('ol', 'p5-rows');
-    let prevTeam = null;
+    /* `prevTeam` is gone with the chip. It existed so navy-against-navy and
+       yellow-against-yellow were visible rather than theoretical, and there are
+       no team colors on this screen to collide any more. */
     rows.forEach((r) => {
-      list.appendChild(rowEl(r, rows, prevTeam));
-      prevTeam = r.teamIdentity;
+      list.appendChild(rowEl(r, rows));
     });
     card.appendChild(list);
     return card;
   }
 
-  function rowEl(r, rows, prevTeam) {
+  function rowEl(r, rows) {
     const li = el('li', 'p5-li');
     const a = el('a', 'p5-row' + (r.isSelf ? ' p5-row--self' : ''));
     a.href = '#member-' + r.userId;
@@ -438,12 +467,37 @@ export function render(root, data, state) {
       mv.title = movementText(r.movement);
     }
 
-    /* The chip is the SHARED component. adjacentTo is the row above, which is what
-     * makes navy-against-navy and yellow-against-yellow visible instead of theoretical. */
+    /* 🔴 THE MARK SLOT CARRIES A BADGE, NOT A TEAM. Jason, on this exact row:
+     * "for the icons for each person, make up something for a person who won a
+     * week, they get a logo, 2 weeks gets one, etc not 2 color, crap."
+     *
+     * A two-color chip beside a PERSON identifies a TEAM. It is the same two
+     * colors for everybody who picked that team, it says nothing about who is
+     * reading the week well, and on a standings row it is decoration wearing
+     * data's clothes. A badge can only be there because that person did
+     * something — and the slot the Sofascore bar puts a club crest in is exactly
+     * the slot an earned mark belongs in.
+     *
+     * Nobody's badge is a real state and is drawn as NOTHING, never as a
+     * placeholder. The column still reserves its width so twenty names stay in
+     * one vertical line; an empty badge slot must not ragged the list.
+     *
+     * The component is shared with L6 — one badge system, specced once, per the
+     * frozen contract. */
     const chipSlot = el('span', 'p5-chip');
-    if (r.teamIdentity) {
-      chipSlot.appendChild(teamChip(r.teamIdentity, { size: 18, withAbbrev: false, adjacentTo: prevTeam }));
-    }
+    const held = (data.badges && data.badges[r.userId]) || [];
+    const pin = badgePin(held, 20);
+    if (pin) chipSlot.appendChild(pin);
+    /* 🔴 NO "+N" HERE, and L6 keeps its. Tried and reverted the same evening: a
+     * counter after the badge pushed the name, so "Dana K." and "Reggie" no
+     * longer started where "Elena V." did, and the column went ragged on exactly
+     * the three rows that had something to show.
+     *
+     * The Sofascore bar this screen is measured against is a vertical rhythm —
+     * nine rows on one screen, twenty in two — and that only works if a name
+     * begins in the same place on every row. L6's board is four columns of its
+     * own and has the room. The tooltip on the pin still names every badge held,
+     * and the case is where a collection belongs. */
 
     const nameCell = el('span', 'p5-namecell');
     nameCell.appendChild(el('span', 'p5-name', r.displayName));

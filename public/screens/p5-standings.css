@@ -10,8 +10,14 @@
  * The highlight is a TINT, not a border - Sofascore's, and it is the right call:
  * a bordered row inside a bordered card is two rules arguing.
  * The tint is mixed off --accent, which SWAPS TOKEN on dark. Nothing here reads
- * --maroon or --gold, and nothing here writes --team-a/--team-b at :root - the chip
- * sets those per element, which is the pool's whole color model.
+ * --maroon or --gold.
+ *
+ * 🔴 AND NOTHING HERE READS TEAM COLOR AT ALL ANY MORE, 2026-09-08. This file used
+ * to say the per-row chip set --team-a/--team-b and call that the pool's color
+ * model. It was true of the slate; it was wrong here. The subject of a standings
+ * row is a PERSON, and a two-color team chip beside a name is the same two colors
+ * for everybody who picked that team. The slot carries an earned badge now, whose
+ * palette is a fixed scale that deliberately never touches team data.
  */
 
 .scr-p5-standings { font-variant-numeric: tabular-nums; }
@@ -99,7 +105,7 @@
 .scr-p5-standings .p5-head,
 .scr-p5-standings .p5-row {
   display: grid;
-  grid-template-columns: 26px 24px 18px minmax(0, 1fr) 44px 44px;
+  grid-template-columns: 26px 24px 22px minmax(0, 1fr) 44px 44px;
   gap: 6px; align-items: center;
 }
 
@@ -141,6 +147,12 @@
 .scr-p5-standings .p5-mv.up { color: var(--up); }
 .scr-p5-standings .p5-mv.down { color: var(--down); }
 
+/* 🔴 THE BADGE SLOT IS A GRID COLUMN, so it is fixed whether or not anything is
+   in it. Most rows have no badge — that is the point of drawing them — and a
+   slot that collapsed when empty would start five of eight names in a different
+   place from the other three. The bar this table is measured against is a
+   vertical rhythm before it is anything else. 22px, up from the 18px the old
+   team chip needed, because a badge has to be recognizable to be one. */
 .scr-p5-standings .p5-chip { display: flex; align-items: center; justify-content: center; }
 
 .scr-p5-standings .p5-namecell {
