@@ -1,27 +1,46 @@
-name = "anygiven"
+name = "any-given"
 main = "src/worker.ts"
 compatibility_date = "2026-09-08"
-assets = { directory = "public", binding = "ASSETS" }
 
-# One live game is one Durable Object. Hibernation means an idle connection
-# costs nothing, and a self-rescheduling alarm is what allows a poll faster
-# than 60 seconds - no cron product on any platform goes below a minute.
-[[durable_objects.bindings]]
-name = "GAME_ROOM"
-class_name = "GameRoom"
+# 🔴 THE CLIENT IS SERVED FROM dist/, NOT public/.
+# public/ holds .ts modules that four screens import; tools/preview.mjs strips
+# those types at request time and no host does. build-static.mjs emits .js beside
+# every .ts and rewrites the specifiers, so dist/ is the thing that can actually
+# be served. Deploying public/ would hand a browser raw TypeScript.
+#   node tools/build-static.mjs   before every deploy
+assets = { directory = "dist", binding = "ASSETS" }
 
-[[durable_objects.bindings]]
-name = "POOL_ROOM"
-class_name = "PoolRoom"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["GameRoom", "PoolRoom"]
-
-[[d1_databases]]
-binding = "DB"
-database_name = "anygiven"
-database_id = "PLACEHOLDER-created-by-wrangler-d1-create"
+# 🔴 THE HOST POLLS, THE WORKER SERVES, AND KV IS THE JOINT.
+#
+# ESPN returns 403 to Cloudflare - to the datacenter, not to the header: a
+# browser User-Agent was added and it changed nothing. The vault already records
+# "only the host machine can reach ESPN" for the cloud container and the mount
+# VM; Workers are now on that list too.
+#
+# So the poller runs on the machine that CAN reach the feed and pushes state up.
+# The architecture is unchanged in the way that matters - ONE server polls, a
+# phone holds one connection and is never given ESPN's URL - the poller just runs
+# here rather than there. KV is free and holds the last state.
+[[kv_namespaces]]
+binding = "LIVE"
+id = "2f4db44e9d21432d8ffb205f965438fa"
 
 [vars]
 SEASON = "2026"
+
+# ------------------------------------------------------------------
+# NOT DECLARED YET, AND ON PURPOSE
+#
+# Durable Objects are how MANY phones share ONE game. For one person testing
+# whether the loop is fun, a Worker with a ten-second cache is enough, it runs on
+# the FREE tier, and a DO would force the $5/month plan tonight for nothing. The
+# binding arrives with the second viewer.
+#
+# D1 is the POOL's storage - pools, members, picks, scores. The live rig holds
+# its state in the client and writes nothing, so an unprovisioned database would
+# only be a deploy that fails for a table nobody reads. migrations/ is written
+# and waiting.
+#
+# Both were in this file from the pool plan. Neither is deleted work - they are
+# uncommented when the thing that needs them exists.
+# ------------------------------------------------------------------

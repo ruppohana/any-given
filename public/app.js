@@ -32,7 +32,11 @@ const ROUTES = [
   { id: 'invite',    dest: 'slate',     screen: 'p1-invite',       state: 'ready',       label: 'Invite landing' },
   { id: 'create',    dest: 'slate',     screen: 'p6-create',       state: 'create',      label: 'Create a pool' },
   { id: 'rules',     dest: 'live',      screen: 's6-rules',        state: 'ready',       label: 'Rules' },
-  { id: 'now',       dest: 'live',      screen: 'l4-now',          state: 'open',        label: 'The call' },
+  /* 🔴 THE ONLY ROUTE THAT IS NOT FIXTURES. It polls the Worker, holds what it
+   * gets behind the user's own delay, and settles against the play that actually
+   * happened. Everything else here is a design surface; this one is the product. */
+  { id: 'live',      dest: 'live',      screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
+  { id: 'now',       dest: 'live',      screen: 'l4-now',          state: 'open',        label: 'The call (fixtures)' },
   { id: 'landed',    dest: 'live',      screen: 'l7-result',       state: 'landed',      label: 'Result — landed' },
   { id: 'missed',    dest: 'live',      screen: 'l7-result',       state: 'missed',      label: 'Result — missed' },
   { id: 'game',      dest: 'live',      screen: 'l5-game',         state: 'final',       label: 'The game' },

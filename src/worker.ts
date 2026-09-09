@@ -19,8 +19,11 @@ import { parseSlate, type Sport } from './feed/espn.ts';
 
 export interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
+  LIVE: KVNamespace;
   DB?: D1Database;
   SEASON?: string;
+  /** Set with `wrangler secret put PUSH_TOKEN`. Without it nothing can write. */
+  PUSH_TOKEN?: string;
 }
 
 const SPORTS: Record<string, Sport> = {
@@ -50,9 +53,25 @@ function json(body: unknown, status = 200, ttl = 0): Response {
   });
 }
 
-/** One upstream read, shared by every viewer, via the runtime cache. */
+/** One upstream read, shared by every viewer, via the runtime cache.
+ *
+ * 🔴 THE USER-AGENT IS LOAD-BEARING. ESPN returns 403 to a request without one -
+ * from a Worker, not from a laptop. The same URL that worked all evening from
+ * this machine failed the moment it ran on Cloudflare, and the only difference
+ * was the header.
+ *
+ * Found by deploying and curling the deployed thing rather than by trusting that
+ * a route which works locally works everywhere. It would otherwise have been
+ * discovered at kickoff. */
 async function upstream(url: string, ttl: number): Promise<any> {
-  const req = new Request(url, { cf: { cacheTtl: ttl, cacheEverything: true } as any });
+  const req = new Request(url, {
+    headers: {
+      'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+      accept: 'application/json, text/plain, */*'
+    },
+    cf: { cacheTtl: ttl, cacheEverything: true } as any
+  });
   const res = await fetch(req);
   if (!res.ok) throw new Error(`espn ${res.status}`);
   return res.json();
@@ -64,7 +83,112 @@ export default {
     const p = url.pathname;
 
     try {
-      /* ---- the slate: what is on tonight ---- */
+      /* ---- the poller pushes, and ONLY the poller ----
+       *
+       * 🔴 ESPN RETURNS 403 TO CLOUDFLARE. Not to the header - a browser
+       * User-Agent was added and redeployed and it changed nothing - to the
+       * datacenter. The vault already records that only the host can reach ESPN,
+       * for the cloud container and the mount VM; Workers join that list.
+       *
+       * So the poller runs on the machine that can reach the feed and pushes
+       * here. What matters about the architecture is untouched: ONE thing polls,
+       * every phone reads one shared copy, and no client is ever handed ESPN's
+       * URL. The poller simply lives on the host until a feed exists that a
+       * Worker can reach - CollegeFootballData for college, which is the paid
+       * feed the vault already chose, and an open question for NFL.
+       *
+       * The token is a secret rather than a check on the caller's address,
+       * because a Worker cannot trust an IP. */
+      if (p === '/api/push' && req.method === 'POST') {
+        const token = req.headers.get('x-push-token') || '';
+        if (!env.PUSH_TOKEN || token !== env.PUSH_TOKEN) return json({ error: 'no' }, 401);
+        const body = await req.json() as { key?: string; state?: unknown };
+        if (!body.key || !body.state) return json({ error: 'key and state required' }, 400);
+        await env.LIVE.put(body.key, JSON.stringify({ ...body.state as object, pushedAt: Date.now() }), {
+          /* A live game is worthless when stale and this is a rig, not a record.
+           * Six hours covers a game and its overtime and then forgets it. */
+          expirationTtl: 60 * 60 * 6
+        });
+        return json({ ok: true, key: body.key });
+      }
+
+      /* ---- what the poller last pushed ---- */
+      if (p.startsWith('/api/state/')) {
+        const key = p.slice('/api/state/'.length);
+        const raw = await env.LIVE.get(key);
+        if (!raw) return json({ error: 'nothing pushed for that game yet', key }, 404);
+        /* No cache header: KV is already the shared copy, and a stale read here
+         * would be a second layer of staleness on top of the poll interval. */
+        return new Response(raw, {
+          headers: { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' }
+        });
+      }
+
+      /* ---- A CALL, AND A BOARD TO PUT IT ON ----
+       *
+       * 🔴 TWO PEOPLE CALLING SEPARATELY IS A RIG. TWO PEOPLE SEEING EACH OTHER
+       * IS THE PRODUCT. Jason wants a friend on it tomorrow, so the board is
+       * built tonight rather than after.
+       *
+       * And it does NOT need a Durable Object. A DO buys low-latency shared state
+       * for many viewers; this is a handful of people making a call every forty
+       * seconds against a feed everyone is already forty-five seconds behind. KV
+       * is eventually consistent by a second or two, which is invisible under a
+       * delay that large - and it is free.
+       *
+       * ONE KEY PER PERSON PER GAME, never one key for the board. KV allows one
+       * write a second per key, so a shared array would make two people writing
+       * at once a lost call. Separate keys cannot collide at all, and the board is
+       * a list.
+       *
+       * IDENTITY IS A DISPLAY NAME AND A DEVICE. No account, no email, no
+       * password - the same rule the pool has, for the same reason.
+       */
+      if (p === '/api/call' && req.method === 'POST') {
+        const b = await req.json() as {
+          key?: string; deviceId?: string; name?: string;
+          afterPlayId?: string; type?: string; choice?: string; stake?: number; p?: number;
+        };
+        if (!b.key || !b.deviceId || !b.afterPlayId || !b.type || !b.choice) {
+          return json({ error: 'key, deviceId, afterPlayId, type and choice are required' }, 400);
+        }
+        /* 🔴 ONE CALL PER SNAP, enforced by the KEY rather than by a check.
+         * The id is the game, the person and the play they called after - so a
+         * second tap on the same snap overwrites rather than double-counting, and
+         * requirement 7.4 holds without the server having to remember anything. */
+        const id = `call:${b.key}:${b.deviceId}:${b.afterPlayId}`;
+        const existing = await env.LIVE.get(id);
+        if (existing) return json({ ok: true, alreadyCalled: true, call: JSON.parse(existing) });
+
+        const call = {
+          key: b.key, deviceId: b.deviceId, name: (b.name || 'Someone').slice(0, 24),
+          afterPlayId: b.afterPlayId, type: b.type, choice: b.choice,
+          stake: Math.max(0, Math.min(25, Number(b.stake) || 10)),
+          p: typeof b.p === 'number' ? b.p : null,
+          at: Date.now()
+        };
+        await env.LIVE.put(id, JSON.stringify(call), { expirationTtl: 60 * 60 * 6 });
+        return json({ ok: true, call });
+      }
+
+      /* Everybody's calls on one game. The client settles them against the plays
+       * it already holds, so the board is a read and never a computation here. */
+      if (p.startsWith('/api/board/')) {
+        const key = p.slice('/api/board/'.length);
+        const list = await env.LIVE.list({ prefix: `call:${key}:` });
+        const calls = await Promise.all(
+          list.keys.map(async (k) => {
+            const raw = await env.LIVE.get(k.name);
+            return raw ? JSON.parse(raw) : null;
+          })
+        );
+        return json({ key, calls: calls.filter(Boolean), fetchedAt: Date.now() });
+      }
+
+      /* ---- the slate: what is on tonight ----
+       * 🔴 STILL 403 FROM CLOUDFLARE. Kept because it works the moment the feed
+       * is one a Worker may call, and because deleting it would hide the fact
+       * that the route is correct and the network is not. */
       if (p === '/api/slate') {
         const sport = SPORTS[url.searchParams.get('sport') || 'nfl'];
         if (!sport) return json({ error: 'unknown sport' }, 400);

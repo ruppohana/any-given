@@ -1,0 +1,7 @@
+/* The live screen keeps its CSS inside the module, because it is the one screen
+ * whose markup and styles change together every time the catalog does - and a
+ * pair of files that must move together is a pair that drifts.
+ *
+ * This file exists so the shell's automatic <link> for every screen does not
+ * 404. A missing stylesheet is harmless and a 404 in the console during a live
+ * game is a red herring somebody chases at kickoff. */

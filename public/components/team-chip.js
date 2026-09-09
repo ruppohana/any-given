@@ -112,8 +112,20 @@ export function marksOn(doc) {
   return !!(el && el.dataset && el.dataset.marks === 'on');
 }
 
-export function logoUrl(team) {
-  return team && team.id ? 'https://a.espncdn.com/i/teamlogos/ncaa/500/' + team.id + '.png' : null;
+/* 🔴 THE PATH IS SPORT-SPECIFIC, and getting it wrong is silent. A team id is
+ * only unique WITHIN a league, so NFL 17 and 26 under the ncaa path resolved to
+ * Claremont-Mudd-Scripps and UCLA - two real logos, loading successfully, for the
+ * wrong teams entirely. Nothing errored and nothing looked broken; the game just
+ * had the wrong crests on it.
+ *
+ * Found by pointing the live screen at a real NFL game and looking at it, which
+ * is the only way this class of bug is ever found. */
+const LEAGUE_PATH = { nfl: 'nfl', 'college-football': 'ncaa', ncaa: 'ncaa' };
+
+export function logoUrl(team, league) {
+  if (!team || !team.id) return null;
+  const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
+  return `https://a.espncdn.com/i/teamlogos/${path}/500/${team.id}.png`;
 }
 
 export function teamChip(team, opts) {
@@ -133,7 +145,7 @@ export function teamChip(team, opts) {
   const bAdj = adjacentTo ? normalizeColor(adjacentTo.primary) : null;
   if (tooClose(a, bAdj)) wrap.dataset.adjacentClash = 'true';
 
-  const url = marksOn() ? logoUrl(team) : null;
+  const url = marksOn() ? logoUrl(team, opts.league) : null;
   if (url) {
     const img = document.createElement('img');
     img.className = 'tchip-logo';
