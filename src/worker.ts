@@ -256,6 +256,58 @@ export default {
         return json({ ok: true, now: Date.now(), season: env.SEASON || null });
       }
 
+      /* ---- A SHARED LINK UNFURLS AS THE GAME IT POINTS AT ----
+       *
+       * 🔴 Jason: "we can tailor them for the sport." More than that — tailor
+       * them for the GAME. The static tags in index.html describe the product,
+       * which is right for anygiven.app and wrong for the link somebody actually
+       * sends: that link carries ?game=, and it should unfurl as "New England at
+       * Seattle" rather than as a generic pitch.
+       *
+       * The tags are rewritten HERE rather than in the page because a crawler
+       * does not run JavaScript. X, iMessage and Slack read the HTML as served
+       * and nothing else — a title set by the client is a title no card ever
+       * sees, which is the trap that makes this look done when it is not.
+       *
+       * Everything falls back to the static tags: an unknown game, a KV miss or
+       * a malformed key all leave the document exactly as it shipped. */
+      if ((p === '/' || p === '/index.html') && url.searchParams.get('game')) {
+        const key = url.searchParams.get('game') || '';
+        const res = await env.ASSETS.fetch(new Request(new URL('/', url).toString(), req));
+        try {
+          const raw = await env.LIVE.get(key);
+          if (!raw) return res;
+          const st = JSON.parse(raw);
+          const away = st.teams?.[st.awayTeamId], home = st.teams?.[st.homeTeamId];
+          if (!away || !home) return res;
+
+          const match = `${away.name} at ${home.name}`;
+          const when = st.kickoffUtc
+            ? new Date(st.kickoffUtc).toLocaleString('en-US',
+                { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }) + ' PT'
+            : null;
+          const live = st.status === 'live'
+            ? `Live now — ${away.abbrev} ${st.awayScore}, ${home.abbrev} ${st.homeScore}.`
+            : st.status === 'final' ? `Final — ${away.abbrev} ${st.awayScore}, ${home.abbrev} ${st.homeScore}.`
+            : when ? `Kickoff ${when}.` : '';
+          const desc = `${live} Call the plays as they happen. Free, no account, nothing to install.`.trim();
+
+          /* Escaped, because a team name is feed data landing in an HTML
+           * attribute. `St. John's` would otherwise end the attribute early. */
+          const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          const html = (await res.text())
+            .replace(/(<meta property="og:title" content=")[^"]*/, `$1${esc(match)} · Any Given Snap`)
+            .replace(/(<meta name="twitter:title" content=")[^"]*/, `$1${esc(match)} · Any Given Snap`)
+            .replace(/(<meta property="og:description" content=")[^"]*/, `$1${esc(desc)}`)
+            .replace(/(<meta name="twitter:description" content=")[^"]*/, `$1${esc(desc)}`)
+            .replace(/(<meta property="og:url" content=")[^"]*/, `$1${esc(url.toString())}`);
+          return new Response(html, {
+            headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate' }
+          });
+        } catch { return res; }
+      }
+
       /* ---- everything else is the client ---- */
       return env.ASSETS.fetch(req);
     } catch (e: any) {

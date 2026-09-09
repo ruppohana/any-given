@@ -634,7 +634,7 @@ function paint(wrap) {
     wrap.appendChild(b);
   }
 
-  wrap.appendChild(inviteButton());
+  wrap.appendChild(inviteButton(state));
 
   wrap.appendChild(el('p', 'lg-foot',
     `feed ${age}s old · holding ${state.holding} play${state.holding === 1 ? '' : 's'} behind your ${S.delayMs / 1000}s delay`));
@@ -967,7 +967,7 @@ function pregame(state, now, wrap) {
     + 'coach’s decision, a kickoff is a returner’s.'));
   box.appendChild(q);
 
-  box.appendChild(inviteButton());
+  box.appendChild(inviteButton(state));
 
   /* Who is already here, if anybody. Silence when nobody is, rather than an
    * empty box announcing that nobody came. */
@@ -1048,8 +1048,18 @@ function commentary(state) {
  * which is how this actually gets sent. Clipboard is the desktop fallback, and
  * neither is assumed: a browser with neither still gets a link it can select.
  */
-function inviteButton() {
-  const url = `${location.origin}/?game=${encodeURIComponent(S.key)}`;
+function inviteButton(state) {
+  /* 🔴 THE COLON IS NOT ENCODED, and this is not fussiness. The key is
+   * `nfl:401872656`, and encodeURIComponent turns it into `nfl%3A401872656` —
+   * so a link somebody posts in public reads as
+   * `anygiven.app/?game=nfl%3A401872656`. That is a URL that looks broken, or
+   * tracked, and it is the first thing a stranger sees of this app.
+   *
+   * A colon is legal in a query value under RFC 3986; only the delimiters have
+   * to be escaped. Everything else stays encoded, so a key that ever contains a
+   * genuine delimiter is still safe. */
+  const url = `${location.origin}/?game=${encodeURIComponent(S.key).replace(/%3A/g, ':')}`;
+  const wrapEl = el('div', 'lg-invite-wrap');
   const b = el('button', 'lg-invite');
   b.appendChild(el('span', 'lg-invite-h', 'Invite a friend'));
   b.appendChild(el('span', 'lg-invite-b', 'They land on this game. No account, no install.'));
@@ -1067,7 +1077,83 @@ function inviteButton() {
      * must not simply do nothing — it shows the URL to select by hand. */
     b.querySelector('.lg-invite-b').textContent = url;
   };
-  return b;
+  wrapEl.appendChild(b);
+  wrapEl.appendChild(postToX(state, url));
+  return wrapEl;
+}
+
+/**
+ * 🔴 X's WEB INTENT — no API key, no SDK, no script from their origin.
+ * Jason, 2026-09-08: "What about opening X and prepopulating a tweet?" Yes, and
+ * it is one URL: /intent/tweet with text and url. It opens THEIR compose window
+ * with the words already in it, and a person still has to press post. Nothing is
+ * ever published by this app.
+ *
+ * 🔴 THE TEXT IS THE PRODUCT, AND IT CHANGES WITH THE MOMENT. "Come play my app"
+ * is an advertisement nobody sends. What people actually post is a RESULT — so
+ * once there is a settled call to brag about, the tweet is the brag and the app
+ * is the footnote. Before that it is the matchup.
+ *
+ * And it never says "bet". The balance is Marbles, they cannot be bought, and a
+ * post that says betting is the first objection arriving in our own words.
+ */
+function postToX(state, url) {
+  const a = el('a', 'lg-x');
+  a.href = 'https://twitter.com/intent/tweet?' + new URLSearchParams({ text: xText(state), url });
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.appendChild(el('span', 'lg-x-mark', '𝕏'));
+  a.appendChild(el('span', 'lg-x-l', 'Post it'));
+  return a;
+}
+
+/**
+ * 🔴 HASHTAGS FROM THE TEAMS ACTUALLY PLAYING. Jason: "Can we regenerate X
+ * hashtags for the teams playing?" They come off the same abbreviations already
+ * in the state — no table to maintain, and nothing to go stale when a team is
+ * added or a game changes.
+ *
+ * #NEvsSEA is the shape the sport itself uses, and it is what somebody following
+ * the game is already watching. Adding it is the difference between posting into
+ * your own followers and posting into the conversation about the game.
+ *
+ * TWO, NEVER FIVE. A post carrying a stack of tags reads as marketing and gets
+ * treated as marketing. The matchup tag puts it in the game's stream; the app
+ * tag is how anybody finds the others playing.
+ */
+function hashtags(state) {
+  const away = state && state.teams ? state.teams[state.awayTeamId] : null;
+  const home = state && state.teams ? state.teams[state.homeTeamId] : null;
+  const clean = (v) => (v || '').replace(/[^A-Za-z0-9]/g, '');
+  const a = clean(away && away.abbrev), h = clean(home && home.abbrev);
+  return a && h ? `#${a}vs${h} #AnyGivenSnap` : '#AnyGivenSnap';
+}
+
+function xText(state) {
+  const away = state && state.teams ? state.teams[state.awayTeamId] : null;
+  const home = state && state.teams ? state.teams[state.homeTeamId] : null;
+  const game = away && home ? `${away.short} at ${home.short}` : 'this game';
+
+  /* The best settled call so far, if there is one — the thing worth posting. */
+  let best = null;
+  for (const c of Object.values(S.calls)) {
+    const r = settleOne({ ...c }, state || { plays: [], drives: [] });
+    if (r && r.landed === true && (!best || r.delta > best.delta)) best = { ...c, delta: r.delta };
+  }
+  const tags = hashtags(state);
+  if (best) {
+    return `Called "${best.label}" at ${payoutOf(best)}× on ${game} and it hit. `
+      + `+${best.delta} Marbles.
+
+${tags}`;
+  }
+  const n = S.bank - START_BANK;
+  if (n > 0) return `Up ${n} Marbles calling plays on ${game}.
+
+${tags}`;
+  return `Calling the plays on ${game} before they happen.
+
+${tags}`;
 }
 
 function delayBar() {
@@ -1137,6 +1223,12 @@ const CSS = `
 .lg-delayline-l { font-weight: 700; letter-spacing: .04em; color: var(--accent); }
 .lg-delayline.is-live .lg-delayline-l { color: var(--down); }
 .lg-delayline-a { text-decoration: underline; }
+.lg-invite-wrap { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
+.lg-x { display: grid; place-content: center; gap: 2px; text-decoration: none;
+  padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); color: var(--fg); }
+.lg-x-mark { font-size: 18px; line-height: 1; text-align: center; }
+.lg-x-l { font-size: var(--t-micro); color: var(--dim); }
 .lg-invite { display: grid; gap: 2px; text-align: left; font: inherit; width: 100%;
   padding: 13px 12px; border: 1px solid var(--accent); border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--accent) 10%, var(--card)); color: var(--fg); }

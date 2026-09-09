@@ -8,7 +8,15 @@ compatibility_date = "2026-09-08"
 # every .ts and rewrites the specifiers, so dist/ is the thing that can actually
 # be served. Deploying public/ would hand a browser raw TypeScript.
 #   node tools/build-static.mjs   before every deploy
-assets = { directory = "dist", binding = "ASSETS" }
+# 🔴 run_worker_first IS WHY THE OG TAGS WERE NEVER REWRITTEN. Cloudflare Assets
+# serves a matching static file BEFORE the Worker runs — so `/` came straight off
+# disk and the handler that rewrites the per-game tags never executed. The code
+# was correct and unreachable, which reads exactly like code that does not work.
+#
+# It is a LIST rather than `true` on purpose: routing all 1,500 logo files through
+# the Worker to rewrite two meta tags on one path would put a function invocation
+# in front of every crest on a 131-game slate.
+assets = { directory = "dist", binding = "ASSETS", run_worker_first = ["/", "/index.html"] }
 
 # 🔴 THE REAL DOMAIN. Bought 2026-09-08 from Cloudflare Registrar, in the same
 # account this Worker deploys to — which is the whole reason .app was chosen over

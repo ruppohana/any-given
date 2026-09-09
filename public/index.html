@@ -2,7 +2,30 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 🔴 OPEN GRAPH. Without these, a link shared to X, iMessage or Slack unfurls
+       as a bare URL with no title, no picture and no sentence — which is exactly
+       what every invite sent tonight would have looked like. X in particular
+       STRIPS the URL out of the visible tweet text and shows this card instead,
+       so these tags are not decoration: they ARE the post.
+
+       og:image is an absolute URL by spec. A relative one silently yields no
+       card at all, which is the failure that looks like "we have no tags". -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Any Given">
+  <meta property="og:url" content="https://anygiven.app/">
+  <meta property="og:title" content="Any Given Snap — call the play before it happens">
+  <meta property="og:description" content="Free. No account. Nothing to install.">
+  <meta property="og:image" content="https://anygiven.app/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Any Given Snap — call the play before it happens.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Any Given Snap — call the play before it happens">
+  <meta name="twitter:description" content="Free. No account. Nothing to install.">
+  <meta name="twitter:image" content="https://anygiven.app/og.png">
+  <meta name="description" content="Call the next play before it happens. Free, no account, no install.">
+  <meta name="theme-color" content="#120a0e">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Any Given…</title>
 <link rel="stylesheet" href="/styles/tokens.css">
 <link rel="stylesheet" href="/styles/shell.css">
