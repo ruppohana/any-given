@@ -589,3 +589,49 @@ test('every product screen uses the shared header, and it carries the league mar
     assert.match(src, /league:/, f + ' does not pass its league to the header');
   }
 });
+
+/* 🔴 TWO MARKETS ON ONE GAME. Added 2026-09-09 - Jason: "What about the
+ * availability to switch from points to money line by game. So you can pick and
+ * underdog and get a better payout?"
+ *
+ * This is what going against the spread cost, handed back per row. ATS makes
+ * every mismatch playable and flattens every price to 2.00x, so a 24-game card
+ * became 24 identical coin flips. The WINNER market restores the range without
+ * bringing the blowout problem back, because the spread is on the same row. */
+test('the market is part of the pick, and it decides both the price and the verdict', () => {
+  const now = Date.UTC(2026, 8, 20);
+  const kick = Date.UTC(2026, 8, 19);
+  /* Home wins by 3 as a 7-point favorite: won outright, did NOT cover. */
+  const g = { id: 'g', status: 'final', kickoffUtc: kick, spread: -7,
+              homeScore: 24, awayScore: 21 };
+
+  /* 🔴 THE SAME PICK SETTLES BOTH WAYS DEPENDING ON THE MARKET TAKEN. Reading
+   * the pool's mode alone would grade a moneyline pick against a line the person
+   * deliberately declined. */
+  assert.equal(mod.pickStateOf(g, { side: 'home', market: 'spread' }, now, 'week'), 'lost');
+  assert.equal(mod.pickStateOf(g, { side: 'home', market: 'winner' }, now, 'week'), 'won');
+  assert.equal(mod.pickStateOf(g, { side: 'away', market: 'spread' }, now, 'week'), 'won');
+  assert.equal(mod.pickStateOf(g, { side: 'away', market: 'winner' }, now, 'week'), 'lost');
+
+  /* Default is the spread - the pool half's own rule, and the one that makes
+   * every game worth picking. A pick with no market recorded is a spread pick. */
+  assert.equal(mod.marketOf(null), 'spread');
+  assert.equal(mod.marketOf({ side: 'home' }), 'spread');
+  assert.equal(mod.marketOf({ market: 'winner' }), 'winner');
+  assert.equal(mod.pickStateOf(g, { side: 'home' }, now, 'week'), 'lost',
+    'a pick with no market must settle as a spread pick');
+
+  /* 🔴 THE WINNER PRICE IS THE THING THAT MAKES THE CHOICE WORTH HAVING: the dog
+   * pays more than the favorite, and both pay something other than 2.00x. */
+  const dog = mod.priceFromSpread(-7, 'away', 'nfl');
+  const fav = mod.priceFromSpread(-7, 'home', 'nfl');
+  assert.ok(dog > fav, 'the underdog must pay more outright');
+  assert.ok(dog > 2 && fav < 2, 'a moneyline that pays 2.00x both ways is the spread again');
+  assert.equal(mod.priceAts(-7), 2, 'the spread pays 2.00x either side');
+
+  /* A push is still the one void path, and only on the spread - a game won by
+   * exactly the number is a clean win outright. */
+  const push = { ...g, homeScore: 28, awayScore: 21 };
+  assert.equal(mod.pickStateOf(push, { side: 'home', market: 'spread' }, now, 'week'), 'void');
+  assert.equal(mod.pickStateOf(push, { side: 'home', market: 'winner' }, now, 'week'), 'won');
+});

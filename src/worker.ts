@@ -609,7 +609,34 @@ export default {
       }
 
       /* ---- everything else is the client ---- */
-      return env.ASSETS.fetch(req);
+      /* 🔴 THE APP'S OWN CODE MUST REVALIDATE. Found on 2026-09-09 after the
+       * fourth deploy in a row that Jason could not see: the file on the edge was
+       * correct every time and his browser kept running a module it had cached.
+       * I diagnosed it as a stale build twice before recognising the pattern.
+       *
+       * Cloudflare Assets serves immutable-ish defaults, which is right for a
+       * hashed bundle and wrong for this app: the module URLs are STABLE
+       * (/screens/x.screen.js) and the contents change on every deploy, so a
+       * cached copy is a different app wearing the same address. There is no
+       * build step adding hashes and there should not be one - the whole point
+       * of the Node --experimental-strip-types build is that these files stay
+       * readable and directly servable.
+       *
+       * `no-cache` is NOT `no-store`: the browser keeps the file and revalidates
+       * it, so an unchanged deploy still answers 304 and costs nothing. What it
+       * removes is the window where somebody is running last hour's code and
+       * neither of us knows.
+       *
+       * 🔴 LOGOS AND FIXTURES KEEP THEIR LONG CACHE. Those are content-addressed
+       * in practice - a team's mark at /logos/nfl/500/17.png does not change -
+       * and they are the files worth caching hard. Only the code revalidates. */
+      const res = await env.ASSETS.fetch(req);
+      if (/\.(?:js|css|html)$/.test(p) || p === '/') {
+        const h = new Headers(res.headers);
+        h.set('cache-control', 'no-cache');
+        return new Response(res.body, { status: res.status, headers: h });
+      }
+      return res;
     } catch (e: any) {
       /* An upstream failure is a state the client has a screen for. It is never a
        * blank page: offline and error are drawn, and this is what feeds them. */

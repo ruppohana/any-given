@@ -220,7 +220,11 @@ export function pickStateOf(game, pick, now, mode) {
      * card asks who covered. A game can be a win in one and a loss in the other,
      * and that is correct rather than a contradiction - it is also why the two
      * boards never sum. */
-    if (mode === 'week') {
+    /* 🔴 THE MARKET IS PART OF THE PICK, so it is part of the settlement. A row
+     * taken on the WINNER is graded on who won; the same row taken on the SPREAD
+     * is graded on who covered. Reading the pool's mode alone would settle a
+     * moneyline pick against a line the person deliberately declined. */
+    if (mode === 'week' && (!pick || pick.market !== 'winner')) {
       const r = coversSpread(game, side);
       /* No posted line means nothing to cover, so it falls back to the winner
        * rather than voiding a game that was really played. */
@@ -483,9 +487,9 @@ function picksKey(sport, week) { return 'ag.picks.' + sport + '.' + week; }
 function hydrate(stored, games) {
   const out = {};
   for (const g of games) {
-    const side = stored[g.id] && stored[g.id].side;
-    out[g.id] = { gameId: g.id, side: side || null, state: 'unpicked',
-                  lockedAt: g.kickoffUtc, crowd: null };
+    const st = stored[g.id] || {};
+    out[g.id] = { gameId: g.id, side: st.side || null, market: st.market || null,
+                  state: 'unpicked', lockedAt: g.kickoffUtc, crowd: null };
   }
   return out;
 }
@@ -505,10 +509,48 @@ function savePicks(sport, week, picks) {
      * and a stored `state` would survive a kickoff it should not. */
     const out = {};
     for (const k of Object.keys(picks || {})) {
-      if (picks[k] && picks[k].side) out[k] = { side: picks[k].side };
+      /* The market is persisted even with no side yet: somebody who switches a
+       * row to Winner and then scrolls away has expressed a preference about
+       * that game, and losing it means the price they were looking at changes
+       * back under them. */
+      const p = picks[k];
+      if (p && (p.side || p.market)) {
+        out[k] = {};
+        if (p.side) out[k].side = p.side;
+        if (p.market) out[k].market = p.market;
+      }
     }
     localStorage.setItem(picksKey(sport, week), JSON.stringify(out));
   } catch { /* a private window is allowed to forget */ }
+}
+
+/* 🔴 TWO MARKETS ON THE SAME GAME. Jason, 2026-09-09: "What about the
+ * availability to switch from points to money line by game. So you can pick and
+ * underdog and get a better payout?"
+ *
+ * This is the thing that going against the spread cost, handed back per row.
+ * ATS makes every mismatch playable and flattens every price to 2.00x, so a
+ * twenty-four game card became twenty-four identical coin flips - honest, and
+ * with nothing to choose between the rows.
+ *
+ * The WINNER market restores the range without bringing the blowout problem
+ * back, because the spread is always right there on the same row. Kansas +5.5
+ * pays 2.00x to cover or 3.67x to win outright; taking the dog straight up is a
+ * real decision with a real price, and taking Miami -56.5 to win is a decision
+ * the model will price at the floor and dim, which is the honest answer rather
+ * than a refusal.
+ *
+ * 🔴 THE MARKET IS STORED ON THE PICK, not on the screen. It decides the payout
+ * AND the settlement, so a pick that did not carry its own market would be
+ * graded by whatever the row happened to be showing later. Same reason the
+ * spread is stored at pick time.
+ *
+ * Default is the spread: it is the pool half's own rule, it is the shape most
+ * people know from an office pool, and it is the one that makes every game
+ * worth picking.
+ */
+export function marketOf(pick) {
+  return (pick && pick.market === 'winner') ? 'winner' : 'spread';
 }
 
 export function priceAts(spread) {
@@ -961,8 +1003,19 @@ function zone(ctx, game, side) {
      *
      * Only in `week`. The office pool has no price because it has no stake. */
     if (ctx.mode === 'week') {
-      const px = priceAts(game.spread);
-      if (px != null) meta.appendChild(el('span', 'p2-price num', px.toFixed(2) + '×'));
+      const mk = marketOf(ctx.picks[game.id]);
+      const px = mk === 'winner'
+        ? priceFromSpread(game.spread, side, ctx.sport)
+        : priceAts(game.spread);
+      if (px != null) {
+        const b = el('span', 'p2-price num', px.toFixed(2) + '×');
+        /* On the WINNER market the model can say a side is barely a question -
+         * a 56-point favorite pays the floor. Dimmed rather than hidden: it is a
+         * legitimate choice, it is just not an interesting one, and the spread
+         * on the same row is one tap away. */
+        if (mk === 'winner' && px <= 1.12) b.classList.add('is-thin');
+        meta.appendChild(b);
+      }
     }
   }
   if (side === 'home') { l2.append(meta, nm); } else { l2.append(nm, meta); }
@@ -1012,12 +1065,38 @@ function center(ctx, game) {
   }
   c.dataset.kind = 'time';
   c.appendChild(el('span', 'p2-time', timeLabel(game.kickoffUtc)));
+
+  /* 🔴 THE MARKET SWITCH, UNDER THE TIME - where Jason asked for it, and the
+   * right place for it: dead centre, between the two sides it re-prices, so it
+   * is obvious the choice applies to the whole row rather than to one team.
+   *
+   * Only on the priced card. In the group pool there is one way to be right and
+   * a switch would be offering a choice that changes nothing. */
+  if (ctx.mode === 'week' && typeof game.spread === 'number') {
+    const mk = marketOf(ctx.picks[game.id]);
+    const sw = el('div', 'p2-mkt');
+    for (const o of [{ id: 'spread', l: 'Spread' }, { id: 'winner', l: 'Winner' }]) {
+      const b = el('button', 'p2-mkt-b' + (mk === o.id ? ' is-on' : ''), o.l);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(mk === o.id));
+      b.title = o.id === 'spread'
+        ? 'Beat the number. Both sides pay 2.00×'
+        : 'Just win. The underdog pays more';
+      b.onclick = (e) => {
+        e.stopPropagation();
+        ctx.onMarket(game.id, o.id);
+      };
+      sw.appendChild(b);
+    }
+    c.appendChild(sw);
+  }
   return c;
 }
 
 function row(ctx, game) {
   const r = el('div', 'p2-row');
   r.dataset.state = pickStateOf(game, ctx.picks[game.id], ctx.now, ctx.mode);
+  if (ctx.mode === 'week') r.dataset.market = marketOf(ctx.picks[game.id]);
   r.dataset.gameId = game.id;
   r.append(zone(ctx, game, 'away'), center(ctx, game), zone(ctx, game, 'home'));
   return r;
@@ -1079,6 +1158,21 @@ export function render(root, data, state) {
      * localStorage - render() stays pure DOM over its argument. */
     mode: data.mode || 'pool', sport: data.sport || 'college-football',
     week: data.week || 1,
+    /* 🔴 SWITCHING THE MARKET DOES NOT CLEAR THE PICK. Somebody who took Kansas
+     * and then wants Kansas outright has not changed their mind about Kansas -
+     * making them tap the team again would be the app forgetting what they just
+     * said. The price under their pick changes, which is the whole point of the
+     * control. */
+    onMarket: (gameId, market) => {
+      const p = (ctx.picks[gameId] || (ctx.picks[gameId] = { side: null, crowd: null }));
+      if (marketOf(p) === market) return;
+      p.market = market;
+      savePicks(ctx.sport, ctx.week, ctx.picks);
+      const g = (data.games || []).find((x) => x.id === gameId);
+      if (p.side && g) postPick(ctx.sport, ctx.week, g, p.side);
+      const oldRow = root.querySelector('.p2-row[data-game-id="' + cssEsc(gameId) + '"]');
+      if (oldRow && g) oldRow.replaceWith(row(ctx, g));
+    },
     onPick: (gameId, side) => {
       /* 🔴 CREATE THE ROW IF IT IS NOT THERE. Jason, 2026-09-09: "This weeks
        * card does not allow me to pick."

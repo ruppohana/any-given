@@ -233,3 +233,14 @@
 /* And the container, so anything using scrollIntoView inherits the offset
    without each call site having to know about the bars. */
 .scr-p2-slate { scroll-padding-top: 72px; }
+
+/* THE MARKET SWITCH — spread or winner, per game, under the time.
+   Dead centre between the two sides it re-prices, so it reads as belonging to
+   the row rather than to a team. Small, because it is a modifier and not the
+   decision: the decision is which team, and it is 60px tall on either side. */
+.scr-p2-slate .p2-mkt { display: flex; gap: 2px; margin-top: 3px;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px; }
+.scr-p2-slate .p2-mkt-b { flex: 1 1 0; font: inherit; font-size: 10px; font-weight: 800;
+  letter-spacing: .02em; padding: 3px 0; min-height: 22px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--dim); }
+.scr-p2-slate .p2-mkt-b.is-on { background: var(--accent); color: var(--bg); }
