@@ -89,10 +89,31 @@ export type LivePlay = {
   quarter: number;
   clock: string;
   text: string;
+  /** ESPN's own type name, needed by the settlers and previously dropped. */
+  typeText: string;
   kind: PlayKind;
   scoringPlay: boolean;
   homeScore: number;
   awayScore: number;
+  /**
+   * 🔴 THE DOWN, FROM THE FEED'S STRUCTURED FIELDS RATHER THAN ITS PROSE.
+   *
+   * Requirement 7.1 is that ESPN ships two play-text grammars. Measured on 8
+   * real NFL games: a college play says "...for 8 yards, 1st down PENN" and an
+   * NFL play says "...for 8 yards (C.DeJean)." A settler reading the sentence
+   * scored NFL first downs at 3.2% against college's 26% — and `script`, the
+   * default snap question, has two tiles that say "first down".
+   *
+   * `end.down === 1` with the same team still holding the ball is the fact, in
+   * both grammars. `endTeamId` is what separates a conversion from a turnover,
+   * which also resets the down.
+   */
+  startDown: number | null;
+  distance: number | null;
+  endDown: number | null;
+  startTeamId: string | null;
+  endTeamId: string | null;
+  statYardage: number | null;
 };
 
 export type Offer = {
@@ -197,6 +218,7 @@ export function readPlays(summary: any): LivePlay[] {
   for (const d of all) {
     const team = String(d?.team?.id ?? '');
     for (const p of d?.plays || []) {
+      const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
       out.push({
         id: String(p.id),
         driveId: String(d.id ?? ''),
@@ -204,10 +226,17 @@ export function readPlays(summary: any): LivePlay[] {
         quarter: Number(p.period?.number) || 0,
         clock: p.clock?.displayValue || '',
         text: p.text || '',
+        typeText: p.type?.text || '',
         kind: classify(p.text || '', p.type?.text || ''),
         scoringPlay: !!p.scoringPlay,
         homeScore: Number(p.homeScore) || 0,
-        awayScore: Number(p.awayScore) || 0
+        awayScore: Number(p.awayScore) || 0,
+        startDown: n(p.start?.down),
+        distance: n(p.start?.distance),
+        endDown: n(p.end?.down),
+        startTeamId: p.start?.team?.id != null ? String(p.start.team.id) : null,
+        endTeamId: p.end?.team?.id != null ? String(p.end.team.id) : null,
+        statYardage: n(p.statYardage)
       });
     }
   }

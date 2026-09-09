@@ -18,7 +18,7 @@
  * the app asks that instead.
  */
 
-import { CALL_TYPES, byId, offerFor, settle, settleDrive } from '/src/catalog.js';
+import { CALL_TYPES, byId, offerFor, settle, settleDrive, movedChains } from '/src/catalog.js';
 import { teamChip, applyTeamVars } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { signed, signClass, clock } from '/components/fmt.js';
@@ -149,8 +149,14 @@ function priceFor(type, state, offenseTeamId) {
    * of evidence, and the in-game counts move it from there. Where a type has no
    * measured rates it falls back to one-each, which is the honest flat prior. */
   const PRIOR_WEIGHT = 4;
+  /* 🔴 THE PRIOR IS PER SPORT. `rates` was measured on three college games and
+   * `ratesNfl` on eight real NFL ones, and they are genuinely different football:
+   * the NFL passes 60% of snaps against college's 51%, and runs middle on 19% of
+   * plays against college's 38%. Feeding one sport's numbers to the other is the
+   * same class of error as grading a sack by the wrong league's rule. */
+  const table = (state.sport === 'nfl' && type.ratesNfl) ? type.ratesNfl : type.rates;
   for (const c of type.choices) {
-    counts[c.id] = type.rates?.[c.id] != null ? type.rates[c.id] * PRIOR_WEIGHT : 1;
+    counts[c.id] = table?.[c.id] != null ? table[c.id] * PRIOR_WEIGHT : 1;
   }
   let n = type.choices.reduce((a, c) => a + counts[c.id], 0);
   const priorN = n;                                    // the prior is not evidence
@@ -163,7 +169,9 @@ function priceFor(type, state, offenseTeamId) {
      * the one the tile is actually asking about. */
     for (const p of rel) {
       if (p.kind !== 'run' && p.kind !== 'pass') continue;
-      const got = /1st down|first down|touchdown/i.test(p.text || '');
+      /* The SAME rule the settler uses. A regex here and a down there is how the
+       * price and the payout come to disagree about the same play. */
+      const got = movedChains(p, { distance: p.distance }).got;
       counts[`${p.kind}_${got ? 'yes' : 'no'}`]++; n++;
     }
   }
@@ -224,7 +232,11 @@ function settleOne(call, state) {
    * the NFL and a rush in college — every operator rulebook says so in the same
    * words — and a sack turns up on 16% of real drives. Passing the wrong league
    * here does not error; it quietly grades the call the other way. */
-  const r = settle(call.type, call.choice, { text: next.text, typeText: next.typeText || '' },
+  /* 🔴 THE WHOLE PLAY, not two fields of it. `startDown`/`endDown`/`endTeamId`
+   * are how a first down is read in the NFL, where the sentence never says so —
+   * passing only text and typeText silently reverted that fix to the college
+   * grammar. */
+  const r = settle(call.type, call.choice, next,
                    { down: call.down, distance: call.distance, sport: state.sport });
   if (r.landed === null) return { void: true, because: r.because, delta: 0, play: next };
   return { landed: r.landed, because: r.because, play: next,

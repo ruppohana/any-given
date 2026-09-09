@@ -240,3 +240,61 @@ test('🔴 the player dimension is absent, and that is recorded rather than hidd
   assert.equal(playerish.length, 0,
     'a player-scoped market needs an explicit per-play star from the parser first');
 });
+
+/* ------------------------------------------------------------------ *
+ * TWO GRAMMARS, TWO LEAGUES — 8 real NFL games, 2026-09-08
+ * ------------------------------------------------------------------ */
+
+test('🔴 a first down is read from the DOWN, not from the sentence', async () => {
+  /* Requirement 7.1: ESPN ships two play-text grammars. A college play reads
+   * "...for 8 yards, 1st down PENN"; an NFL play reads "...for 8 yards
+   * (C.DeJean)." The settler used to look for the words, and measured NFL first
+   * downs at 3.2% against college's 26%.
+   *
+   * `script` is the DEFAULT snap question and two of its four tiles say "first
+   * down" — so on an NFL feed nearly every call would have graded short. Anyone
+   * taking a first down loses all night, and the app looks like it is cheating
+   * rather than broken. */
+  const { movedChains } = await import('../src/catalog.ts');
+
+  /* NFL: no words, but the down is right there. */
+  const nflGain = { text: 'J.Hurts pass short left to D.Goedert for 8 yards (Q.Mitchell).',
+                    startDown: 1, distance: 10, endDown: 2, startTeamId: '21', endTeamId: '21' };
+  assert.equal(movedChains(nflGain).got, false, 'second down is not a first down');
+
+  const nflFirst = { text: 'S.Barkley right guard to PHI 41 for 3 yards (K.Clark).',
+                     startDown: 2, distance: 2, endDown: 1, startTeamId: '21', endTeamId: '21' };
+  assert.equal(movedChains(nflFirst).got, true, 'the down reset with the same team');
+
+  /* 🔴 A TURNOVER ALSO RESETS THE DOWN TO 1, and it is the opposite of moving
+   * the chains. `endTeamId` is the only thing that separates them. */
+  const turnover = { text: 'D.Prescott pass intercepted by C.Gardner-Johnson.',
+                     startDown: 3, distance: 7, endDown: 1, startTeamId: '6', endTeamId: '21' };
+  assert.equal(movedChains(turnover).got, false, 'a turnover is not a conversion');
+
+  /* College, unchanged: no structured down, the sentence says it. */
+  assert.equal(movedChains({ text: 'Mateer run for 12 yards, 1st down OU' }).got, true);
+  assert.equal(movedChains({ text: 'Mateer run for 2 yards' }, { distance: 10 }).got, false);
+
+  /* A touchdown is a first down by any reading and is written as neither. */
+  assert.equal(movedChains({ text: 'J.Jeudy 25 yard pass for a TOUCHDOWN' }).got, true);
+});
+
+test('the NFL priors are measured, and differ from college where the football differs', async () => {
+  const { byId } = await import('../src/catalog.ts');
+  for (const id of ['script', 'run_pass', 'direction', 'drive_end']) {
+    const t = byId(id);
+    assert.ok(t.ratesNfl, `${id} must carry measured NFL rates`);
+    const sum = Object.values(t.ratesNfl).reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(sum - 1) < 0.03, `${id} NFL rates sum to ${sum}`);
+    assert.equal(Object.keys(t.ratesNfl).length, t.choices.length);
+  }
+  /* 🔴 THE DIFFERENCE IS REAL FOOTBALL, NOT NOISE. The NFL runs between the
+   * tackles far less than college — 19% against 38% — so `middle` is the long
+   * answer in one league and the safe one in the other. A single shared prior
+   * would have priced it wrong in both. */
+  const dir = byId('direction');
+  assert.ok(dir.rates.middle > 0.33, 'college runs middle often');
+  assert.ok(dir.ratesNfl.middle < 0.25, 'the NFL does not');
+  assert.ok(byId('run_pass').ratesNfl.pass > byId('run_pass').rates.pass, 'the NFL passes more');
+});

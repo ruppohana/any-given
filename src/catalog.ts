@@ -66,6 +66,19 @@ export type CallType = {
    * counts as the night gives the model something to look at.
    */
   rates?: Record<string, number>;
+  /**
+   * 🔴 THE SAME THING, MEASURED ON THE NFL — 8 complete real games, 1,445 plays,
+   * 150 drives, captured exactly as the college three were. Jason, 2026-09-08:
+   * "did you get the data like we did for the ncaa?"
+   *
+   * They are genuinely different football and not a rounding difference: the NFL
+   * passes 60% of snaps where college passes 51%, and runs middle on 19% where
+   * college runs middle on 38%. Feeding one league's numbers to the other is the
+   * same class of error as grading a sack by the wrong league's rule.
+   *
+   * Absent where a type had too few real events to count honestly.
+   */
+  ratesNfl?: Record<string, number>;
 };
 
 export const CALL_TYPES: CallType[] = [
@@ -76,7 +89,9 @@ export const CALL_TYPES: CallType[] = [
     perGame: 123,
     reads: 'tendency',
     scope: 'play',
-    baseRate: 0.49          // 180 run / 368 run-or-pass snaps
+    baseRate: 0.49,         // 180 run / 368 run-or-pass snaps, college
+    rates: { run: 0.49, pass: 0.51 },
+    ratesNfl: { run: 0.402, pass: 0.598 }   // 922 real NFL snaps
   },
   {
     id: 'fourth_down',
@@ -138,7 +153,9 @@ export const CALL_TYPES: CallType[] = [
      * over 38%, and every tile pays. It was in this file all along and the
      * router never offered it. */
     baseRate: 0.29,
-    rates: { td: 0.29, fg: 0.13, punt: 0.377, turnover: 0.203 }
+    rates: { td: 0.29, fg: 0.13, punt: 0.377, turnover: 0.203 },
+    /* 139 real NFL drives. The NFL kicks more and punts less. */
+    ratesNfl: { td: 0.266, fg: 0.209, punt: 0.367, turnover: 0.158 }
   },
 
   /* ---- DRIVE SCOPE. A different clock, and the reason the app has a pulse
@@ -154,7 +171,9 @@ export const CALL_TYPES: CallType[] = [
     /* 🔴 39% - and 25 yards is a well-chosen line rather than a round number.
      * It sits close enough to even to be a real decision and far enough from it
      * to be worth something. Ten yards would have been 68% and not a question. */
-    baseRate: 0.39
+    baseRate: 0.39,
+    rates: { yes: 0.39, no: 0.61 },
+    ratesNfl: { yes: 0.527, no: 0.473 }     // 150 real NFL drives
   },
   {
     id: 'drive_redzone',
@@ -163,7 +182,9 @@ export const CALL_TYPES: CallType[] = [
     perGame: 25,
     reads: 'situation',
     scope: 'drive',
-    baseRate: 0.48          // 36 of 75 real drives
+    baseRate: 0.48,         // 36 of 75 real college drives
+    rates: { yes: 0.48, no: 0.52 },
+    ratesNfl: { yes: 0.487, no: 0.513 }
   },
 
   /* ---- MORE OPTIONS. Jason, 2026-09-08: "open your options." Every base rate
@@ -187,7 +208,11 @@ export const CALL_TYPES: CallType[] = [
      * the whole catalog, and a three-way rather than a coin flip. This is the one
      * that makes run-or-pass look thin. */
     baseRate: 0.29,
-    rates: { left: 0.29, middle: 0.38, right: 0.33 }
+    rates: { left: 0.29, middle: 0.38, right: 0.33 },
+    /* 🔴 930 real NFL snaps, and the shape is DIFFERENT: 40/19/41 against
+     * college's 29/38/33. The NFL runs between the tackles far less often, so
+     * middle stops being the safe answer and starts being the long one. */
+    ratesNfl: { left: 0.403, middle: 0.189, right: 0.408 }
   },
   {
     id: 'first_down',
@@ -217,7 +242,8 @@ export const CALL_TYPES: CallType[] = [
      * favourite is real, and a quarter of the time nobody scores at all. */
     scope: 'drive',
     baseRate: 0.56,
-    rates: { td: 0.56, fg: 0.19, none: 0.25 }
+    rates: { td: 0.56, fg: 0.19, none: 0.25 },
+    ratesNfl: { td: 0.266, fg: 0.209, none: 0.525 }
   },
 
   /* ---- WHAT THE MARKET ACTUALLY SELLS. Jason, 2026-09-08: "ask what
@@ -266,7 +292,10 @@ export const CALL_TYPES: CallType[] = [
     /* First choice, per the field's definition. The spread that matters is in
      * `rates`: the modal answer is run-and-short at 41%. */
     baseRate: 0.115,
-    rates: { run_yes: 0.115, run_no: 0.405, pass_yes: 0.163, pass_no: 0.317 }
+    rates: { run_yes: 0.115, run_no: 0.405, pass_yes: 0.163, pass_no: 0.317 },
+    /* 922 real NFL snaps: 9 / 31 / 19 / 41. Nothing above 42% in either league,
+     * which is what makes it the default question in both. */
+    ratesNfl: { run_yes: 0.094, run_no: 0.308, pass_yes: 0.185, pass_no: 0.412 }
   },
   {
     id: 'punt_fair_catch',
@@ -278,7 +307,9 @@ export const CALL_TYPES: CallType[] = [
     /* 42% over 26 real punts. Near even, and it settles the instant the ball is
      * caught - which is the property Simplebet credited for the touchback
      * market's success. Instant gratification beat sophistication there. */
-    baseRate: 0.423
+    baseRate: 0.423,
+    rates: { fair: 0.423, return: 0.577 },
+    ratesNfl: { fair: 0.424, return: 0.576 }   // 33 real NFL punts fielded
   },
   {
     id: 'three_and_out',
@@ -292,7 +323,9 @@ export const CALL_TYPES: CallType[] = [
      * is the catalog's one long shot rather than its one bad question. Compare
      * the three that were REJECTED for the same measurement: a sack is 3%, a
      * penalty on the play is 1%, crossing midfield is 83%. */
-    baseRate: 0.173
+    baseRate: 0.173,
+    rates: { yes: 0.173, no: 0.827 },
+    ratesNfl: { yes: 0.122, no: 0.878 }        // 139 real NFL drives
   }
 ];
 
@@ -345,6 +378,63 @@ export function sackCountsAs(sport: SettleSport | null | undefined): 'run' | 'pa
   if (sport === 'nfl') return 'pass';
   if (sport === 'college-football') return 'run';
   return null;
+}
+
+/**
+ * 🔴 DID THEY MOVE THE CHAINS — READ FROM THE DOWN, NOT FROM THE SENTENCE.
+ *
+ * This asked whether the play text contained "1st down". It does in COLLEGE and
+ * it does NOT in the NFL, and that is requirement 7.1 exactly: ESPN ships two
+ * play-text grammars and the season you ship against decides which.
+ *
+ * Measured over 8 real NFL games, 1,445 plays: the text rule scored first downs
+ * at 3.2%. The same rule on three college games scores 26%. The difference is
+ * not football, it is punctuation — a college play reads "...for 8 yards, 1st
+ * down PENN", an NFL play reads "...for 8 yards (C.DeJean)."
+ *
+ * WHAT THAT WOULD HAVE DONE TOMORROW: `script` is the DEFAULT snap question and
+ * two of its four tiles say "first down". On NFL text nearly every call would
+ * have graded short — anybody taking a first down loses, all night, and the app
+ * would have looked like it was cheating rather than broken.
+ *
+ * So it reads the structured fields the feed already carries: a first down is
+ * `end.down === 1` with the ball still in the same hands. `end.team` is what
+ * separates a conversion from a turnover, which also resets the down to 1 — a
+ * fumble that ends a drive must never grade as moving the chains.
+ *
+ * The text remains the fallback for a feed that gives no downs, so the college
+ * grammar keeps working exactly as it did.
+ */
+export function movedChains(
+  play: { text: string; startDown?: number | null; endDown?: number | null;
+          startTeamId?: string | null; endTeamId?: string | null; statYardage?: number | null },
+  ctx?: { down?: number | null; distance?: number | null }
+): { got: boolean | null; because: string } {
+  const s = play.text.toLowerCase();
+  /* A touchdown is a first down by any reading and is never written as one. */
+  if (has(s, /touchdown/)) return { got: true, because: 'touchdown' };
+
+  if (typeof play.endDown === 'number' && play.endDown > 0) {
+    /* Possession changed: somebody got a first down, but not the offense that
+     * was asked about. */
+    if (play.startTeamId && play.endTeamId && play.startTeamId !== play.endTeamId) {
+      return { got: false, because: 'they lost the ball' };
+    }
+    return play.endDown === 1
+      ? { got: true, because: 'first down' }
+      : { got: false, because: 'short of it' };
+  }
+
+  /* No structured down - the college grammar, where the sentence says so. */
+  if (has(s, /1st down|first down/)) return { got: true, because: 'first down' };
+
+  /* Last resort: the gain against the distance we were told. */
+  const y = yardsOf(play as any);
+  const need = ctx?.distance ?? null;
+  if (y !== null && need !== null) {
+    return y >= need ? { got: true, because: `${y} of ${need}` } : { got: false, because: `${y} of ${need}` };
+  }
+  return { got: false, because: 'short of it' };
 }
 
 /** One reading of run-or-pass, shared by every question that needs it, so the
@@ -400,9 +490,10 @@ export function settle(
     case 'script': {
       const r = runOrPass(play, ctx?.sport);
       if (!r.side) return { landed: null, because: r.because };
-      const got = has(s, /1st down|first down|touchdown/);
-      const actual = `${r.side}_${got ? 'yes' : 'no'}`;
-      return { landed: actual === choice, because: `${r.because}, ${got ? 'first down' : 'short of it'}` };
+      const fd = movedChains(play, ctx);
+      if (fd.got === null) return { landed: null, because: fd.because };
+      const actual = `${r.side}_${fd.got ? 'yes' : 'no'}`;
+      return { landed: actual === choice, because: `${r.because}, ${fd.because}` };
     }
 
     case 'punt_fair_catch': {
@@ -465,11 +556,9 @@ export function settle(
     }
 
     case 'first_down': {
-      const got = has(s, /1st down|first down/);
-      /* A touchdown is not written as a first down and is obviously one. */
-      const scored = has(s, /touchdown/);
-      return { landed: ((got || scored) ? 'yes' : 'no') === choice,
-               because: scored ? 'touchdown' : got ? 'first down' : 'short of it' };
+      const r = movedChains(play, ctx);
+      if (r.got === null) return { landed: null, because: r.because };
+      return { landed: (r.got ? 'yes' : 'no') === choice, because: r.because };
     }
 
     case 'field_goal': {
