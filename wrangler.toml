@@ -10,6 +10,36 @@ compatibility_date = "2026-09-08"
 #   node tools/build-static.mjs   before every deploy
 assets = { directory = "dist", binding = "ASSETS" }
 
+# 🔴 THE REAL DOMAIN. Bought 2026-09-08 from Cloudflare Registrar, in the same
+# account this Worker deploys to — which is the whole reason .app was chosen over
+# the alternatives: the registrar IS the deploy target, so there is no DNS to
+# hand-configure and no third party in the path.
+#
+# `custom_domain = true` is not the same as a route. Cloudflare creates the DNS
+# record and issues the certificate itself; a plain route would need a record
+# that already existed.
+#
+# 🔴 AND `workers_dev = true` IS LOAD-BEARING, NOT TIDINESS. Declaring ANY route
+# turns the workers.dev URL OFF by default. It happened here: the moment
+# anygiven.app went live, any-given.ruppohana.workers.dev started returning
+# Cloudflare error 1042 — and that was the link already sent to somebody, on the
+# eve of the one night it had to work.
+#
+# The failure is quiet in the worst way. The deploy printed a WARNING about
+# preview URLs, said "Deployed", and named the new domain; nothing in it said the
+# old address had just stopped answering. A comment in this very file claimed the
+# opposite and was wrong until it was tested.
+#
+# Both addresses answer now, and a link that is already out stays good.
+workers_dev = true
+
+# www is here because somebody will type it, and an apex-only setup answers that
+# with nothing at all — not a redirect, a dead name. It costs one line.
+routes = [
+  { pattern = "anygiven.app", custom_domain = true },
+  { pattern = "www.anygiven.app", custom_domain = true }
+]
+
 # 🔴 THE HOST POLLS, THE WORKER SERVES, AND KV IS THE JOINT.
 #
 # ESPN returns 403 to Cloudflare - to the datacenter, not to the header: a
