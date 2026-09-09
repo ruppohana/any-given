@@ -552,6 +552,17 @@ export async function previewData(fixtures, state) {
   const anchor = new Date(sat.getTime() - 2 * DAY);
   anchor.setHours(10, 45, 0, 0);
   let now = anchor.getTime();
+  /* 🔴 A REAL SLATE RUNS ON THE REAL CLOCK. The anchored time above exists so
+   * the DESIGNED PREVIEW sits in the middle of a week with some games kicked off
+   * and some not - it is a staging device for a screen full of invented
+   * kickoffs, and it is right for that.
+   *
+   * Applied to a live feed it is a lie in both directions: an anchor in the past
+   * leaves a game that has already kicked off looking pickable, and an anchor in
+   * the future locks a game nobody can play yet. `pickStateOf` compares `now`
+   * against the real kickoff, so the wrong clock silently decides which rows a
+   * thumb may touch. */
+  if (live) now = Date.now();
   if (short && real.length === 3) {
     /* Between the second and third captured kickoff. Two of the three are genuinely over
      * and carry their real final scores; the third has not kicked off yet, so its result
@@ -680,7 +691,25 @@ function zone(ctx, game, side) {
    * with the name on line 2, which gives the name back about 40px. */
   const pick = ctx.picks[game.id];
   const l1 = el('div', 'p2-l1');
-  const chip = teamChip(team, { size: 18, adjacentTo: game[side === 'home' ? 'away' : 'home'] });
+  /* 🔴 THE LEAGUE MUST TRAVEL WITH THE CHIP, and omitting it is silent. Found on
+   * the deployed NFL slate 2026-09-09 by a verification agent.
+   *
+   * A team id is only unique WITHIN a league, and team-chip defaults to the
+   * college path. So the NFL slate asked for /logos/ncaa/500-dark/17.png and got
+   * a real logo, 200 OK, belonging to a completely different school - the 49ers
+   * row drew Cal's script, the Bengals drew Cincinnati, the Bills drew Auburn.
+   * Ids with no college counterpart 404'd and fell back to the drawn chip, so
+   * the failure was not even uniform: some rows were wrong and some were bare.
+   *
+   * team-chip.js carries a comment warning about exactly this - NFL 17 and 26
+   * under the ncaa path resolving to Claremont-Mudd-Scripps and UCLA - and this
+   * call site was written without it anyway. Nothing errors, nothing logs, and
+   * the only way to catch it is to look at the pixels. */
+  const chip = teamChip(team, {
+    size: 18,
+    league: ctx.sport === 'nfl' ? 'nfl' : 'college-football',
+    adjacentTo: game[side === 'home' ? 'away' : 'home']
+  });
   const rec = el('span', 'p2-rec num', game[side + 'Record'] || '');
   const crowdWrap = el('span', 'p2-meta');
   /* 🔴 CROWD IS THE POOL'S OWN AND NOBODY SEES ANYTHING UNTIL THE GAME LOCKS.
@@ -873,7 +902,21 @@ export function render(root, data, state) {
      * localStorage - render() stays pure DOM over its argument. */
     mode: data.mode || 'pool', sport: data.sport || 'college-football',
     onPick: (gameId, side) => {
-      const p = ctx.picks[gameId];
+      /* 🔴 CREATE THE ROW IF IT IS NOT THERE. Jason, 2026-09-09: "This weeks
+       * card does not allow me to pick."
+       *
+       * `ctx.picks` used to be pre-populated with an entry per game, because the
+       * only slates that existed were designed previews carrying thirty-one
+       * picks in four states. The real slates hand back `picks: {}` - correctly,
+       * because nobody has picked anything - and this line then read `undefined`
+       * and threw on the assignment below. EVERY tap on a real slate died in the
+       * handler, silently: no row changed, no error surfaced, the screen just
+       * did not respond.
+       *
+       * The empty map was the honest thing to return. The handler assuming a
+       * pre-seeded row was the bug, and it only survived this long because the
+       * preview data hid it. */
+      const p = (ctx.picks[gameId] || (ctx.picks[gameId] = { side: null, crowd: null }));
       p.side = p.side === side ? null : side;
       /* The crowd arrives WITH the pick and leaves with it. It is not cached from a
        * previous tap, because the rule is about what you see before you commit. */
@@ -1004,7 +1047,9 @@ function head(root, data, _) {
    * "points" — never by a disclaimer about the word that is not. */
   const kicker = el('p', 'p2-half', (data && data.mode) === 'week'
     ? "The week's card · staked in marbles · priced off the line"
-    : 'Office pool · your group · scored in points');
+    /* "Group pools" is the section's name (Jason, 2026-09-09). The kicker names
+     * the section, not this one pool - the pool's own name is the h1 above it. */
+    : 'Group pools · your group · scored in points');
   root.insertBefore(kicker, h);
   const p = data && data.pool;
   if (p) {

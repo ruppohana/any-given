@@ -255,10 +255,14 @@ test('§5 - the words. Marbles is the balance and none of the dead words appear'
    * legal position rests on: a price exists ONLY under `mode === 'week'`, and
    * the office pool's own copy never mentions a balance it does not have. */
   assert.ok(/ctx\.mode === 'week'/.test(CODE), 'the price must be gated on the week card mode');
-  const poolCopy = (CODE.match(/'Office pool[^']*'/g) || []).join(' ');
-  assert.ok(poolCopy.length > 0, 'the office pool must name itself on the screen');
-  assert.ok(!/Marble/i.test(poolCopy), 'the office pool copy must not mention a balance it does not have');
-  assert.ok(!/stake|payout|bank/i.test(poolCopy), 'the office pool stakes nothing');
+  /* The section is "Group pools", plural - Jason, 2026-09-09: "Group pools not
+   * pool." It went Run a pool -> Group pool -> Group pools, and the plural is
+   * right because this names a SECTION somebody can hold several pools in, not
+   * one pool object. The pool's own name is the h1 above the kicker. */
+  const poolCopy = (CODE.match(/'Group pools[^']*'/g) || []).join(' ');
+  assert.ok(poolCopy.length > 0, 'the pool section must name itself on the screen');
+  assert.ok(!/Marble/i.test(poolCopy), 'the pool copy must not mention a balance it does not have');
+  assert.ok(!/stake|payout|bank/i.test(poolCopy), 'a group pool stakes nothing');
 });
 
 test('§5 - the screen never fetches. Data arrives as an argument', () => {
@@ -390,4 +394,52 @@ test('previewData runs on both sports and returns a usable shape', async () => {
     globalThis.fetch = realFetch;
     if (realLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = realLS;
   }
+});
+
+/* 🔴 EVERY teamChip CALL NAMES ITS LEAGUE. Added 2026-09-09 after the deployed
+ * NFL slate drew college logos.
+ *
+ * A team id is unique only WITHIN a league, and team-chip defaults to the
+ * college directory. So the NFL slate requested /logos/ncaa/500-dark/17.png and
+ * got a real, valid, 200-OK logo belonging to a different school: the 49ers row
+ * drew Cal, the Bengals drew Cincinnati, the Bills drew Auburn. Ids with no
+ * college counterpart 404'd and fell back to the drawn chip, so some rows were
+ * wrong and others were bare. Nothing throws and nothing logs - the only signal
+ * is the pixels, which is the class of bug requirement 7.5 exists for.
+ *
+ * 🔴 SCOPED TO THE FOUR SCREENS THE PRODUCT REACHES, and the scope is a finding
+ * rather than a convenience. The l*, s*, p1, p3 and p6 screens are the design
+ * harness - behind the ?dev gate, driven by college fixtures, pinned to one
+ * captured game - and their ~30 league-less calls are correct for a screen that
+ * can only ever show that fixture. These four are the only ones whose team ids
+ * change league at runtime. A harness screen promoted into the product joins
+ * this list on the way.
+ *
+ * Scanned as a window after each call site rather than by matching balanced
+ * parens: an options object holds ternaries and index expressions, and a regex
+ * that tries to bracket it correctly is a second bug waiting behind the first.
+ */
+test('no teamChip is created without a league', async () => {
+  const { readFileSync } = await import('node:fs');
+  const dir = new URL('../public/screens/', import.meta.url);
+  const files = ['p2-slate.screen.js', 'p4-picks.screen.js',
+                 'p5-standings.screen.js', 'live-game.screen.js'];
+
+  const bad = [];
+  for (const f of files) {
+    const src = readFileSync(new URL(f, dir), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');       /* the comments quote the bug */
+    let at = 0;
+    for (;;) {
+      const i = src.indexOf('teamChip(', at);
+      if (i < 0) break;
+      at = i + 9;
+      const win = src.slice(i, i + 260);
+      /* `drawn: true` forces the two-color chip and touches no logo path, so it
+       * is the one shape that legitimately carries no league. */
+      if (/drawn:\s*true/.test(win)) continue;
+      if (!/\bleague\b/.test(win)) bad.push(f + ': ' + win.replace(/\s+/g, ' ').slice(0, 80));
+    }
+  }
+  assert.deepEqual(bad, [], 'these teamChip calls will resolve logos against the wrong league');
 });

@@ -691,7 +691,7 @@ function row(ctx, spec) {
    * is a harder version of the adjacency test than a horizontal pair, not a softer one. */
   const idBlock = el('div', 'p4-id');
   const l1 = el('div', 'p4-id1');
-  l1.appendChild(teamChip(game[side], { size: 18, adjacentTo: game[other] }));
+  l1.appendChild(teamChip(game[side], { size: 18, league: ctx.league, adjacentTo: game[other] }));
   l1.appendChild(el('span', 'p4-team', game[side].short || game[side].name));
   if (ctx.pool.ats) {
     const sp = spreadText(game.spread, side);
@@ -699,7 +699,7 @@ function row(ctx, spec) {
   }
   const l2 = el('div', 'p4-id2');
   l2.appendChild(el('span', 'p4-over', 'over'));
-  l2.appendChild(teamChip(game[other], { size: 14, withAbbrev: false, adjacentTo: game[side] }));
+  l2.appendChild(teamChip(game[other], { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game[side] }));
   l2.appendChild(el('span', 'p4-opp', game[other].short || game[other].name));
   idBlock.append(l1, l2);
 
@@ -843,6 +843,12 @@ export function render(root, data, state) {
     now: data.now,
     pool: data.pool,
     picks: data.picks,
+    /* 🔴 THE LEAGUE, so every teamChip on this screen resolves its logo against
+     * the right directory. A team id is unique only WITHIN a league, so an NFL
+     * id under the college path returns a real logo for the wrong team - 200 OK,
+     * nothing logged, and only visible by looking. Found on the slate the same
+     * day and fixed here before it could ship the same way. */
+    league: (data.sport === 'nfl') ? 'nfl' : 'college-football',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',
     onSwap: (gameId) => {
@@ -1026,7 +1032,7 @@ export function render(root, data, state) {
         const t = g ? g[leg.side] : null;
         const pill = el('span', 'p4-leg');
         pill.dataset.legResult = leg.result || (leg.locked ? 'locked' : 'open');
-        if (t) pill.appendChild(teamChip(t, { size: 12 }));
+        if (t) pill.appendChild(teamChip(t, { size: 12, league: ctx.league }));
         else pill.appendChild(el('span', 'tchip-abbrev num', '—'));
         if (leg.result) pill.appendChild(icon(leg.result === 'won' ? 'check' : leg.result === 'lost' ? 'cross' : 'dash', 11));
         else if (leg.locked) pill.appendChild(icon('lock', 11));

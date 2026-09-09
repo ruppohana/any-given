@@ -63,6 +63,41 @@ function json(body: unknown, status = 200, ttl = 0): Response {
  * Found by deploying and curling the deployed thing rather than by trusting that
  * a route which works locally works everywhere. It would otherwise have been
  * discovered at kickoff. */
+/* 🔴 THE BOARD IS BUILT ON THE WRITE, NOT ON THE READ.
+ *
+ * One document per game holding every call, so `/api/board/:key` is a single
+ * get() instead of a list() plus a get() per call. The read happens every 5
+ * seconds per device; the write happens when somebody taps. Putting the
+ * aggregation on the rare side is the whole fix.
+ *
+ * 🔴 KEYED BY device+play, SO A MERGE IS IDEMPOTENT. A re-post - the late name
+ * landing on an existing call - replaces its row rather than appending a second
+ * one, which is the same identity rule the `call:` record itself uses.
+ *
+ * Last-write-wins on a concurrent merge, and that is acceptable here in a way it
+ * would not be for the calls themselves: the individual `call:` records are the
+ * authority and this is a projection of them, so the worst case is a row missing
+ * from a leaderboard until the next call rebuilds it. A lost CALL would be
+ * somebody's stake disappearing; a lost board row is a display artifact.
+ */
+async function mergeBoard(env: any, key: string, call: any): Promise<void> {
+  try {
+    const k = `board:${key}`;
+    const raw = await env.LIVE.get(k);
+    const prev = raw ? (JSON.parse(raw).calls || []) : [];
+    const same = (c: any) => c && c.deviceId === call.deviceId && c.afterPlayId === call.afterPlayId;
+    const calls = prev.filter((c: any) => !same(c));
+    calls.push(call);
+    /* Same 6-hour life as a call record. A board that outlived its calls would
+     * show rows for a game whose detail has expired. */
+    await env.LIVE.put(k, JSON.stringify({ calls }), { expirationTtl: 60 * 60 * 6 });
+  } catch {
+    /* 🔴 NEVER FAIL THE CALL FOR THE SAKE OF THE BOARD. The call is already
+     * stored by the time this runs. Throwing here would turn a leaderboard
+     * problem into a lost stake. */
+  }
+}
+
 async function upstream(url: string, ttl: number): Promise<any> {
   const req = new Request(url, {
     headers: {
@@ -180,6 +215,7 @@ export default {
           if (name && name !== prev.name) {
             const renamed = { ...prev, name };
             await env.LIVE.put(id, JSON.stringify(renamed), { expirationTtl: 60 * 60 * 6 });
+            await mergeBoard(env, b.key, renamed);
             return json({ ok: true, alreadyCalled: true, renamed: true, call: renamed });
           }
           return json({ ok: true, alreadyCalled: true, call: prev });
@@ -193,21 +229,39 @@ export default {
           at: Date.now()
         };
         await env.LIVE.put(id, JSON.stringify(call), { expirationTtl: 60 * 60 * 6 });
+        await mergeBoard(env, b.key, call);
         return json({ ok: true, call });
       }
 
       /* Everybody's calls on one game. The client settles them against the plays
        * it already holds, so the board is a read and never a computation here. */
+      /* 🔴 ONE GET, NEVER A LIST. Found in production 2026-09-09 by a
+       * verification agent: every poll returned 502
+       * `KV list() limit exceeded for the day.`
+       *
+       * This route used to `list()` the `call:<key>:` prefix and then `get()`
+       * every match. The client polls it every 5 seconds, PER DEVICE, so one
+       * person watching one game for an hour costs 720 list operations against
+       * a daily allowance of 1,000. The board was dead for the rest of the UTC
+       * day before anybody had made a call - on the day of the opener.
+       *
+       * A list-per-poll is the wrong shape regardless of the quota: reads are
+       * constant and writes are rare, so the aggregate belongs on the WRITE.
+       * `board:<key>` is one document holding every call for a game, merged by
+       * mergeBoard() when a call lands. Reading it is a single get.
+       *
+       * The individual `call:` records are still written and are still the
+       * authority for one-call-per-snap - the board doc is a projection of
+       * them, so a lost merge costs a row on a leaderboard and never a call. */
       if (p.startsWith('/api/board/')) {
         const key = p.slice('/api/board/'.length);
-        const list = await env.LIVE.list({ prefix: `call:${key}:` });
-        const calls = await Promise.all(
-          list.keys.map(async (k) => {
-            const raw = await env.LIVE.get(k.name);
-            return raw ? JSON.parse(raw) : null;
-          })
-        );
-        return json({ key, calls: calls.filter(Boolean), fetchedAt: Date.now() });
+        /* An empty key would read `board:` and hand back somebody else's game. */
+        if (!key || key === 'null' || key === 'undefined') {
+          return json({ error: 'a game key is required' }, 400);
+        }
+        const raw = await env.LIVE.get(`board:${key}`);
+        const calls = raw ? (JSON.parse(raw).calls || []) : [];
+        return json({ key, calls, fetchedAt: Date.now() });
       }
 
       /* ---- the slate: what is on tonight ----

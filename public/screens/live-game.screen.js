@@ -1031,12 +1031,17 @@ function modeCard(wrap, compact) {
    * thing using the app's own noun — the one that is deliberately not "credits",
    * for the same reason.
    *
-   * "Weekly group pools" becomes "Run a pool", because the person on this screen
-   * is starting one rather than browsing a category. */
+   * 🔴 "GROUP POOLS", PLURAL. Jason, 2026-09-09: "Group pools not pool." It went
+   * through "Run a pool" and then "Group pool" before landing here, and the
+   * plural is the correct one for the same reason his phrasing kept it: this
+   * button is the door to a SECTION, not to one pool object. A person can be in
+   * several - the office, the family, the group chat - and the singular quietly
+   * promises there is only ever one, which is a claim the product does not make
+   * and would have to walk back the first time somebody joins a second. */
   const row = el('div', 'lg-mode-row');
   const opts = [
     { id: 'marbles', h: 'Play the marbles', b: 'Stake marbles at a price you see first. Live, or a card for the week.' },
-    { id: 'pool', h: 'Group pool', b: 'Your group, a week at a time, scored in points. Nothing staked.' }
+    { id: 'pool', h: 'Group pools', b: 'Your group, a week at a time, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');
@@ -1136,7 +1141,7 @@ function homeScreen(wrap, state, now) {
    * a settings page wearing a landing's clothes. */
   const pickedLine = el('div', 'lg-picked');
   pickedLine.appendChild(el('span', 'lg-picked-w',
-    (S.mode === 'pool' ? 'Group pool' : 'Playing the marbles')
+    (S.mode === 'pool' ? 'Group pools' : 'Playing the marbles')
     + ' · ' + (SPORT_LABEL[S.sport] || '')));
   const chg = el('button', 'lg-picked-c', 'Change');
   chg.onclick = () => {
@@ -1153,7 +1158,7 @@ function homeScreen(wrap, state, now) {
   /* The two doors, on the marbles side only - the pool has one destination. */
   const gr = el('div', 'lg-mode-row lg-gorow');
   const go = S.mode === 'pool'
-    ? [{ h: 'Open the pool', b: 'Pick the week for points', to: '#/slate' }]
+    ? [{ h: 'Open the pool', b: 'Pick the week for points', to: '#/slate' }]  /* singular HERE on purpose: this door opens ONE pool */
     : [{ h: 'Call it live', b: 'Snap by snap, 45s behind', to: '#/live' },
        { h: "The week's card", b: 'Every game, priced', to: '#/slate' }];
   for (const o of go) {
@@ -1174,11 +1179,28 @@ function homeScreen(wrap, state, now) {
   const g = el('a', 'card lg-hgame');
   g.href = '#/live';
 
+  /* 🔴 BUILT TO THE SHARE CARD'S PROPORTIONS. Jason, 2026-09-09: "Make the text
+   * larger like the card."
+   *
+   * The share card gets this right and the home card had it backwards. On the
+   * card the crests are large, the connector between them is a small quiet
+   * "at", and the MATCHUP NAME is the hero. Here the crests were small, the
+   * connector was a big white "VS" - the loudest thing on the card, and the one
+   * word carrying no information - and the names were a caption underneath.
+   *
+   * So the emphasis is inverted to match: 44px crests, a dim lowercase "at",
+   * and the names at figure size. "at" also replaces "vs" because the away team
+   * is named first and "at" says where the game is in the same breath, which is
+   * what the card has always said.
+   *
+   * A LIVE SCORE STILL WINS. Once the game starts the number is the reason to
+   * look at this card, so it keeps the loud slot the word "VS" was wasting. */
   const head = el('div', 'lg-head');
-  if (away) head.appendChild(teamChip({ id: state.awayTeamId, ...away }, { size: 34, league }));
-  head.appendChild(el('span', 'lg-score num',
-    state.status === 'pre' ? 'vs' : `${state.awayScore} – ${state.homeScore}`));
-  if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 34, league }));
+  const pre = state.status === 'pre';
+  if (away) head.appendChild(teamChip({ id: state.awayTeamId, ...away }, { size: 44, league }));
+  head.appendChild(el('span', pre ? 'lg-at' : 'lg-score num',
+    pre ? 'at' : `${state.awayScore} – ${state.homeScore}`));
+  if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 44, league }));
   g.appendChild(head);
 
   /* 🔴 THE NAMES, LIKE THE SHARE CARD HAS. Jason, 2026-09-08: "Add the team
@@ -1782,11 +1804,15 @@ const CSS = `
 .lg-sport.is-compact .lg-mode-h { font-size: var(--t-body); }
 .lg-sport.is-compact .lg-mode-b { display: none; }
 .lg-hgame { display: grid; gap: 6px; padding: 14px 12px; text-decoration: none; color: var(--fg); }
-/* The matchup reads as the card's title: the crests are the picture and this is
-   the caption, so it takes the emphasis size rather than the body size. */
-.lg-hgame-t { font-size: var(--t-emph); font-weight: 800; line-height: 1.25; }
-.lg-hgame-b { font-size: var(--t-micro); color: var(--dim); }
-.lg-hgame-go { font-size: var(--t-body); font-weight: 800; color: var(--accent); margin-top: 2px; }
+/* The matchup is the card's HEADLINE, at the share card's proportions - figure
+   size, which is the largest type outside the live layer's own bank strip. */
+.lg-hgame-t { font-size: var(--t-figure); font-weight: 800; line-height: 1.2;
+  letter-spacing: -0.01em; }
+/* The quiet connector the share card uses. It separates two crests; it is not a
+   thing to read, so it gets the smallest size and the dim color. */
+.lg-at { font-size: var(--t-body); font-weight: 700; color: var(--dim); }
+.lg-hgame-b { font-size: var(--t-body); color: var(--dim); }
+.lg-hgame-go { font-size: var(--t-emph); font-weight: 800; color: var(--accent); margin-top: 4px; }
 .lg-mark { display: flex; align-items: baseline; gap: 0; }
 .lg-mark-stem { color: var(--dim); font-weight: 700; }
 .lg-mark-end { color: var(--accent); font-weight: 800; }
