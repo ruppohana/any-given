@@ -407,6 +407,8 @@ export function render(root, _data, screenState) {
    * undefined S.forced there would silently retarget somebody's invite to
    * whatever is next on the slate. */
   S.forced = !!forced;
+  /* Reset on arrival, so Home is a door and not a wizard somebody is stuck in. */
+  S.homeStep = 'mode';
   if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
   paint(wrap);
@@ -571,7 +573,12 @@ function paint(wrap) {
    *
    * Home shows the two halves, the sport, what is on and when, and how to bring
    * somebody. Calling the game is a TAP AWAY rather than the thing underneath. */
-  if (!invited && !S.isHome) wrap.appendChild(modeCard(wrap, true));
+  /* 🔴 NO HUB STRIP ON THE GAME. It was here to let somebody switch mode or
+   * league without leaving, and that was a reasonable answer while Home was a
+   * summary. Home is now the front door and is one tap away in the nav, so this
+   * strip is the same two questions asked a second time, on top of the game
+   * they were asked in order to reach. Deleted rather than hidden: a control
+   * that duplicates the door is how the page stopped having a subject. */
 
   /* 🔴 THE WAY OUT GOES ABOVE EVERY EARLY RETURN. It was appended near the
    * FOOTER, which paint() never reaches on a pre-kickoff game — it returns after
@@ -661,6 +668,22 @@ function paint(wrap) {
 
   if (state.status === 'pre') {
     wrap.appendChild(pregame(state, now, wrap));
+    /* 🔴 THE THINGS THAT USED TO BE ON HOME LIVE HERE NOW, because Home became
+     * the front door and a front door carries one question. Everything ABOUT a
+     * game belongs on the game: the week's card for the same league, the invite
+     * that opens this fixture, and the ad slot - which is allowed here only
+     * because a pre-game screen is a browsing screen. It disappears the moment
+     * the game starts and tiles carrying a price and a countdown appear, which
+     * is the ad doctrine's actual rule rather than a place on the page. */
+    const wk = el('button', 'lg-mode lg-go lg-wide');
+    wk.appendChild(el('span', 'lg-mode-h', S.mode === 'pool' ? 'Open the pool' : "The week's card"));
+    wk.appendChild(el('span', 'lg-mode-b', S.mode === 'pool'
+      ? 'Pick the week for points' : 'Against the spread, every pick pays 2.00×'));
+    wk.onclick = () => { location.hash = '#/slate'; };
+    wrap.appendChild(wk);
+
+    wrap.appendChild(inviteButton(state));
+    wrap.appendChild(adSlot('banner', 'Your ad here · reserved, nothing sold yet'));
     return;
   }
 
@@ -1020,6 +1043,10 @@ function sportCard(wrap) {
       S.raw = null; S.board = [];
       /* Pool mode has its own screen. This one owns the live layer only. */
       if (S.mode === 'pool') { location.hash = '#/slate'; return; }
+      /* 🔴 THE SECOND CARD IS THE LAST ONE. Answering it is the whole reason
+       * somebody opened the front door, so it takes them THROUGH rather than
+       * repainting Home with a third thing on it. */
+      if (S.isHome) { location.hash = '#/live'; return; }
       paint(wrap);
       poll(wrap);
       refreshKey(wrap, id);
@@ -1096,13 +1123,9 @@ function modeCard(wrap, compact) {
     if (compact && o.id === S.mode) b.classList.add('is-on');
     b.onclick = () => {
       S.mode = o.id; store.set('mode', o.id);
-      /* 🔴 THE FIRST CARD NEVER NAVIGATES. It sets what you are playing; the
-       * SPORT card below it is the next question, and the speed card after that.
-       * Sending somebody straight to a screen here skipped both.
-       *
-       * The one exception is the pool with a sport already chosen — there is no
-       * third question on that side, so the slate IS the next screen. */
-      if (o.id === 'pool' && S.sport) { location.hash = '#/slate'; return; }
+      /* On the front door the first card advances to the second. Everywhere
+       * else this card is a setting being changed in place. */
+      if (S.isHome) S.homeStep = 'sport';
       paint(wrap);
     };
     row.appendChild(b);
@@ -1168,137 +1191,28 @@ function modeCard(wrap, compact) {
  * chip was wrong in a way this is not: that chip floated beside a hub that was
  * already asking the same question two rows below it. */
 function homeScreen(wrap, state, now) {
-  /* Steps 1 and 2. paint()'s own gates catch these before Home is reached on a
-   * cold start, but not when somebody clears a choice from here - and a screen
-   * that depends on a caller's gate to be correct is one refactor from showing
-   * a page with a hole in it. */
-  if (!S.mode) { wrap.appendChild(modeCard(wrap)); return; }
-  if (!S.sport) { wrap.appendChild(sportCard(wrap)); return; }
-
-  /* 🔴 STEP 3, REBUILT. Jason, 2026-09-09: "This page seems a little lost. Any
-   * given snap seems lost. Same with playing with marbles. Call it live is the
-   * same game card below, yes?"
+  /* 🔴 HOME IS THE FORK. ALWAYS. Jason settled this on 2026-09-09, after saying
+   * "Home button still goes here" seven times and my guessing wrong every time.
    *
-   * Yes it is, and that was the whole problem. The page had FOUR competing
-   * things at the top - a delay bar about a game not on screen, the mark in a
-   * card, a status line, and two buttons - and one of those buttons went to
-   * exactly where the big card below it went. Nothing was the subject of the
-   * page, so everything read as a fragment of one.
+   * The model I kept rebuilding was "Home is where you land once you have
+   * chosen", so it drew a hub with the game on it. His is "Home is the front
+   * door": it asks the question every time, even when the answer is already
+   * stored, because the point of a front door is that it is where you START -
+   * not a summary of where you have been.
    *
-   * The fix is to say what the page is about. The mark is the PAGE TITLE, out of
-   * its card and at the top where a title goes. What you picked is a quiet line
-   * under it. Then one thing labelled UPCOMING, which IS the live game and IS
-   * the way into it - the duplicate button is deleted rather than restyled.
-   * Then the week's card, full width, because it is the second thing and not the
-   * other half of a pair. */
-  const title = el('div', 'lg-home-mark');
-  title.appendChild(el('span', 'lg-mark-stem', 'Any Given…'));
-  title.appendChild(el('span', 'lg-mark-end', ' Snap'));
-  wrap.appendChild(title);
-
-  const pickedLine = el('div', 'lg-picked');
-  pickedLine.appendChild(el('span', 'lg-picked-w',
-    (S.mode === 'pool' ? 'Group pools' : 'Playing the marbles')
-    + ' · ' + (SPORT_LABEL[S.sport] || '')));
-  const chg = el('button', 'lg-picked-c', 'Change');
-  chg.onclick = () => {
-    /* Clearing BOTH is deliberate. Clearing only the mode would drop somebody at
-     * step 1 and then skip step 2, because the sport is still set - so "Change"
-     * would answer a question they never got asked. */
-    S.mode = null; S.sport = null;
-    store.set('mode', null); store.set('sport', null);
-    S.lastSig = null;
-    paint(wrap);
-  };
-  pickedLine.appendChild(chg);
-  wrap.appendChild(pickedLine);
-
-  /* Tonight's game as a summary, not as the game itself — crests, score if it
-   * has started, and when it kicks. */
-  const away = state.teams[state.awayTeamId], home = state.teams[state.homeTeamId];
-  const league = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
-  const g = el('a', 'card lg-hgame');
-  g.href = '#/live';
-  /* 🔴 "Title the card upcoming..." - Jason, 2026-09-09. A card with a crest, a
-   * name and a countdown is legible but unlabelled, and an unlabelled card on a
-   * landing page is a thing you have to work out. One word says what it is, and
-   * it is the word that stays true when the game goes live - see below. */
-  g.appendChild(el('div', 'lg-hgame-k', state.status === 'pre' ? 'Upcoming'
-    : state.status === 'final' ? 'Final' : 'Live now'));
-
-  /* 🔴 BUILT TO THE SHARE CARD'S PROPORTIONS. Jason, 2026-09-09: "Make the text
-   * larger like the card."
+   * That makes these two genuinely different screens rather than one screen with
+   * a state in it:
    *
-   * The share card gets this right and the home card had it backwards. On the
-   * card the crests are large, the connector between them is a small quiet
-   * "at", and the MATCHUP NAME is the hero. Here the crests were small, the
-   * connector was a big white "VS" - the loudest thing on the card, and the one
-   * word carrying no information - and the names were a caption underneath.
+   *   HOME   - one question, two answers. Then the league. Then you leave.
+   *   /live  - the game, and everything belonging to it: the Upcoming card, the
+   *            week's card, the invite, the ad slot.
    *
-   * So the emphasis is inverted to match: 44px crests, a dim lowercase "at",
-   * and the names at figure size. "at" also replaces "vs" because the away team
-   * is named first and "at" says where the game is in the same breath, which is
-   * what the card has always said.
-   *
-   * A LIVE SCORE STILL WINS. Once the game starts the number is the reason to
-   * look at this card, so it keeps the loud slot the word "VS" was wasting. */
-  const head = el('div', 'lg-head');
-  const pre = state.status === 'pre';
-  if (away) head.appendChild(teamChip({ id: state.awayTeamId, ...away }, { size: 44, league }));
-  head.appendChild(el('span', pre ? 'lg-at' : 'lg-score num',
-    pre ? 'at' : `${state.awayScore} – ${state.homeScore}`));
-  if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 44, league }));
-  g.appendChild(head);
-
-  /* 🔴 THE NAMES, LIKE THE SHARE CARD HAS. Jason, 2026-09-08: "Add the team
-   * names like the card."
-   *
-   * The card was two crests and the word "vs", which is the one thing a crest
-   * cannot do on its own: identify a team to somebody who does not already know
-   * the crest. FAMU's rattler and Miami's U are strong marks and they are still
-   * a guessing game to most people, and the app already had the sentence — the
-   * share card has drawn `${away.short} at ${home.short}` since it was built.
-   *
-   * `at`, not `vs`. The away team is named first, so "at" states the venue in
-   * the same breath and matches both the share card and the pre-game screen. A
-   * neutral-site game is the exception and it is not one this line has to solve
-   * before the opener. */
-  if (away && home) {
-    g.appendChild(el('div', 'lg-hgame-t', `${away.short || away.name} at ${home.short || home.name}`));
-  }
-
-  const line = state.status === 'pre'
-    ? (state.kickoffUtc ? `Kicks in ${untilLabel(state.kickoffUtc - now)}` : 'Not started')
-    : state.status === 'final' ? 'Final'
-    : state.situation ? `Live · Q${state.situation.quarter} ${state.situation.clock}` : 'Live';
-  const meta = [line];
-  if (state.venue) meta.push(state.venue);
-  if (state.broadcast) meta.push('on ' + state.broadcast);
-  g.appendChild(el('div', 'lg-hgame-b', meta.join(' · ')));
-  /* This line is the old "Call it live" button, now attached to the card it
-   * always duplicated. */
-  g.appendChild(el('div', 'lg-hgame-go',
-    state.status === 'live' ? 'Call it live →' : 'Call it live, snap by snap →'));
-  wrap.appendChild(g);
-
-  /* The week's card, edge to edge - Jason: "Make this weeks card stretch edge to
-   * edge." It is the second door, not the other half of a pair, so it gets a
-   * full-width row rather than a half-width button beside a gap.
-   *
-   * The pool side has only ever had one door and takes the same treatment. */
-  const wk = el('button', 'lg-mode lg-go lg-wide');
-  wk.appendChild(el('span', 'lg-mode-h', S.mode === 'pool' ? 'Open the pool' : "The week's card"));
-  wk.appendChild(el('span', 'lg-mode-b', S.mode === 'pool'
-    ? 'Pick the week for points' : 'Every game, priced off the real line'));
-  wk.onclick = () => { location.hash = '#/slate'; };
-  wrap.appendChild(wk);
-
-  wrap.appendChild(inviteButton(state));
-
-  /* 🔴 THE AD GOES LAST, BELOW EVERYTHING. Jason: "Add an add at the bottom."
-   * Home is a browsing screen, which is exactly where the ad doctrine says a
-   * slot may live - never beside a tile carrying a price and a countdown. */
-  wrap.appendChild(adSlot('banner', 'Your ad here · reserved, nothing sold yet'));
+   * S.homeStep is TRANSIENT and resets on every arrival, which is what keeps
+   * this a door rather than a wizard somebody can be stranded halfway down. The
+   * stored mode and sport are NOT cleared - they still mark the current choice
+   * and they are what every other screen reads. */
+  if (S.homeStep === 'sport') { wrap.appendChild(sportCard(wrap)); return; }
+  wrap.appendChild(modeCard(wrap));
 }
 
 function introCard(wrap) {
@@ -1781,7 +1695,18 @@ const CSS = `
   background: color-mix(in srgb, var(--up) 10%, var(--card)); color: var(--fg); }
 .lg-brag-h { font-size: var(--t-emph); font-weight: 800; color: var(--up); }
 .lg-brag-b { font-size: var(--t-micro); color: var(--dim); }
-.lg-invite-wrap { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: stretch; }
+/* 🔴 TWO COLUMNS, NOT THREE. Jason, 2026-09-09: "The right side of the cards
+   should align."
+
+   It was 1fr auto auto, from when a Reddit button sat beside the X one. That
+   button was deleted and the track was not, so the grid still reserved a third
+   column and, more to the point, a SECOND GAP after it - about 16px of nothing
+   between the X button and the right edge. Every other card on the page ran to
+   the edge and this one row stopped short of it.
+
+   An empty grid track is invisible; its gap is not. That is the whole bug, and
+   it is why removing a child from a grid means checking the template. */
+.lg-invite-wrap { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
 .lg-x { display: grid; place-content: center; gap: 2px; text-decoration: none;
   padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-card);
   background: var(--card); color: var(--fg); }

@@ -82,3 +82,15 @@ SEASON = "2026"
 # Both were in this file from the pool plan. Neither is deleted work - they are
 # uncommented when the thing that needs them exists.
 # ------------------------------------------------------------------
+
+# 🔴 THE POOL'S STORAGE. KV holds the live game state, which is one hot document
+# rewritten every few seconds and read by everybody - exactly what KV is for. A
+# pool is the opposite shape: many small rows, queried by relationships (whose
+# picks, in which pool, for which week) and needing them to be consistent with
+# each other. That is a database, and pretending otherwise is how the board
+# endpoint ended up doing a list() per poll and exhausting its daily quota.
+[[d1_databases]]
+binding = "DB"
+database_name = "anygiven"
+database_id = "6dfcb86c-03ff-48d3-bdf0-5bc7ce8a4a7d"
+migrations_dir = "migrations"
