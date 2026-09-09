@@ -236,3 +236,47 @@ test('🔴 the stale rule fires on a dead poller and not on the pre-kickoff back
   assert.equal(fn({ status: 'live' }, NOW), null);
   assert.equal(fn(null, NOW), null);
 });
+
+/* 🔴 THE DELAY HOLDS THE SITUATION AND THE SCORE, NOT JUST THE PLAYS.
+ *
+ * Found 2026-09-09 by the dry run, six hours before the opener, and it was the
+ * worst bug in this app. held() truncated the play list and passed the LIVE
+ * situation and LIVE score straight through, so the screen hid a play and then
+ * printed the down, the distance and the score that resulted FROM it.
+ *
+ * That leaks the exact thing the delay exists to hide. If the last visible play
+ * was 2nd & 9 and the header says 1st & 10, the hidden play got a first down and
+ * you know it before being asked to call it. A hidden touchdown is worse: the
+ * score moves while the play that scored it is still withheld.
+ *
+ * It also poisoned the QUESTION, because the catalog picks what to ask from the
+ * down and distance - which is how the dry run's first call came to be a
+ * run-or-pass question one snap before a punt.
+ *
+ * The comparison is against the LAST VISIBLE PLAY, which is what somebody 45
+ * seconds behind their television can actually know. */
+test('🔴 a held play never leaks its own result through the situation or the score', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8');
+
+  const i = src.indexOf('function held(');
+  assert.ok(i > 0, 'held() is gone - read the file before trusting this test');
+  const body = src.slice(i, src.indexOf('\nfunction ', i + 10));
+
+  /* It must not simply spread the raw state when it is holding something back. */
+  assert.match(body, /last\.endDown/, 'the held down must come from the last visible play');
+  assert.match(body, /last\.endDistance/, 'the held distance must come from the last visible play');
+  assert.match(body, /last\.homeScore/, 'the held score must come from the last visible play');
+  assert.match(body, /last\.awayScore/);
+  assert.match(body, /last\.endTeamId/, 'the offense can change on the hidden play');
+
+  /* And the play list itself is still truncated - the original behaviour that
+   * was correct and must not be lost while fixing the rest. */
+  assert.match(body, /raw\.plays\.slice\(0, Math\.max\(0, raw\.plays\.length - 1\)\)/);
+
+  /* The per-play end distance has to exist upstream or none of this can work. */
+  const live = readFileSync(new URL('../src/live.ts', import.meta.url), 'utf8');
+  assert.match(live, /endDistance: n\(p\.end\?\.distance\)/,
+    'live.ts must capture the distance after each play');
+  assert.match(live, /endDistance: number \| null;/, 'and declare it on the type');
+});

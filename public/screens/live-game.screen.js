@@ -182,7 +182,62 @@ function held(raw, delayMs, now) {
   const cutoff = now - delayMs;
   const asOf = raw.pushedAt || raw.fetchedAt || 0;
   const visible = asOf <= cutoff ? raw.plays : raw.plays.slice(0, Math.max(0, raw.plays.length - 1));
-  return { ...raw, plays: visible, holding: raw.plays.length - visible.length };
+  const holding = raw.plays.length - visible.length;
+
+  /* 🔴 THE SITUATION AND THE SCORE ARE HELD BACK TOO, AND NOT DOING THAT WAS
+   * THE WORST BUG IN THIS APP. Found 2026-09-09 by the dry run, six hours before
+   * the opener.
+   *
+   * This used to `return { ...raw, plays: visible }` - truncating the plays and
+   * passing the LIVE situation and the LIVE score straight through. So the
+   * screen hid a play and then printed the down, the distance and the score that
+   * resulted FROM it.
+   *
+   * That is not a cosmetic mismatch. It leaks the exact thing the delay exists
+   * to hide: if the last play you can see was 2nd & 9 and the header says 1st &
+   * 10, the hidden play got a first down and you know it before you are asked to
+   * call it. A hidden touchdown is worse - the score moves while the play that
+   * scored it is still being withheld.
+   *
+   * It also poisoned the QUESTION. The catalog picks what to ask from the down
+   * and distance, so a call made on a held 3rd & 11 was being offered the
+   * question for the live 1st & 11 - which is how the dry run's first call came
+   * to be a run-or-pass question one snap before a punt, and voided.
+   *
+   * 🔴 THE ANSWER COMES FROM THE LAST VISIBLE PLAY, which already carries the
+   * score after itself and the down and distance it ended on. That is the only
+   * honest source: it is what a viewer 45 seconds behind their television can
+   * actually know. */
+  if (!holding || !visible.length) {
+    return { ...raw, plays: visible, holding };
+  }
+  const last = visible[visible.length - 1];
+  return {
+    ...raw,
+    plays: visible,
+    holding,
+    /* The score as it stood after the last play you have been shown. */
+    homeScore: last.homeScore != null ? last.homeScore : raw.homeScore,
+    awayScore: last.awayScore != null ? last.awayScore : raw.awayScore,
+    situation: raw.situation ? {
+      ...raw.situation,
+      down: last.endDown != null ? last.endDown : raw.situation.down,
+      distance: last.endDistance != null ? last.endDistance : raw.situation.distance,
+      /* The clock and the last play text belong to the play you can see, not to
+       * the one being withheld. */
+      clock: last.clock || raw.situation.clock,
+      quarter: last.quarter || raw.situation.quarter,
+      lastPlayText: last.text,
+      lastPlayKind: last.kind,
+      playId: last.id,
+      driveId: last.driveId,
+      /* 🔴 THE OFFENSE CAN CHANGE ON THE HIDDEN PLAY - a turnover, a punt, a
+       * score. `endTeamId` is who had the ball when the visible play finished,
+       * and using the live offense here would say which team is on the field
+       * next, which is itself a leak. */
+      offenseTeamId: last.endTeamId || last.offenseTeamId || raw.situation.offenseTeamId
+    } : raw.situation
+  };
 }
 
 /** What question does this moment ask? */

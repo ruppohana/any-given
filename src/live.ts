@@ -125,6 +125,7 @@ export type LivePlay = {
   startDown: number | null;
   distance: number | null;
   endDown: number | null;
+  endDistance: number | null;
   startTeamId: string | null;
   endTeamId: string | null;
   statYardage: number | null;
@@ -271,6 +272,11 @@ export function readPlays(summary: any): LivePlay[] {
         startDown: n(p.start?.down),
         distance: n(p.start?.distance),
         endDown: n(p.end?.down),
+        /* 🔴 THE DISTANCE AFTER THE PLAY, so a held view can state the next
+         * down honestly instead of borrowing the live one. See held() in the
+         * live screen: without this the delay leaks the result of the play it
+         * is hiding. */
+        endDistance: n(p.end?.distance),
         startTeamId: p.start?.team?.id != null ? String(p.start.team.id) : null,
         endTeamId: p.end?.team?.id != null ? String(p.end.team.id) : null,
         statYardage: n(p.statYardage),
