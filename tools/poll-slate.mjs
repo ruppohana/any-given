@@ -198,11 +198,27 @@ for (const id of ids) {
     /* 🔴 THE SPREAD IS READ OR IT IS NULL. A pool "against the spread" with an
      * invented number is worse than one with no number: it looks authoritative
      * and it is fiction. Not every game has a line posted, and those say so. */
-    let spread = null, provider = null;
+    /* 🔴 THE WHOLE ODDS DOCUMENT, NOT ONE FIELD OF IT. We had been fetching
+     * this to read `spread` and dropping everything else on the floor - the
+     * total, both moneylines, and the opening numbers - which is why the app
+     * could only ever offer two markets.
+     *
+     * Every one of these settles from data we already hold: the total and the
+     * moneylines against the final score, the same way the spread does. The
+     * cost of capturing them is zero, because the request was already being
+     * made. */
+    let spread = null, provider = null, total = null, mlHome = null, mlAway = null;
     try {
       const odds = await get(`${CORE}/events/${id}/competitions/${id}/odds`);
       const o = (odds.items || [])[0];
       if (o && typeof o.spread === 'number') { spread = o.spread; provider = o.provider?.name || null; }
+      if (o && typeof o.overUnder === 'number') total = o.overUnder;
+      const ml = (t) => {
+        const v = t && (t.moneyLine ?? t.current?.moneyLine?.value);
+        return typeof v === 'number' ? v : null;
+      };
+      mlHome = ml(o?.homeTeamOdds);
+      mlAway = ml(o?.awayTeamOdds);
     } catch { /* no line posted */ }
 
     const st = comp.status?.$ref ? await get(comp.status.$ref).catch(() => null) : null;
@@ -234,6 +250,10 @@ for (const id of ids) {
       homeTeamId: home.id, awayTeamId: away.id,
       homeScore: home.score, awayScore: away.score,
       spread, spreadProvider: provider,
+      /* The posted total, and the two moneylines. Absent stays absent - a
+         market with no line is a market we do not offer, never one we price
+         ourselves and attribute to a book. */
+      total, moneylineHome: mlHome, moneylineAway: mlAway,
       /* 🔴 BOTH OF THESE ARE $ref OBJECTS, NOT VALUES. I assumed comp.broadcasts
        * was an array and called .map on it; every event in the week threw, and
        * the run then pushed a slate of ZERO GAMES over a correct one.
@@ -296,7 +316,7 @@ const key = `slate:${sport}:${season}:${week}`;
  * a working poller from the outside.
  *
  * One line, bumped by hand, republishes once and then dedupes as before. */
-const SCHEMA = 2;
+const SCHEMA = 3;
 
 const same = await (async () => {
   try {

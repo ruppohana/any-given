@@ -110,3 +110,11 @@ class_name = "LivePoller"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["LivePoller"]
+
+# 🔴 THE SLATE REFRESHES ITSELF. Ten minutes: fast enough that a final score
+# and a moved line are never stale for long, slow enough that ESPN never
+# notices us. The LIVE feed is not here - cron's floor is one minute and the
+# whole live mechanic fits in a 27-second window, which is why that half runs
+# on Durable Object alarms at ten seconds instead.
+[triggers]
+crons = ["*/10 * * * *"]

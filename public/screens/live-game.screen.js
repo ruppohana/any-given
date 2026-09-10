@@ -36,6 +36,7 @@ import { shareResult, shareReaction, MOMENTS } from '/components/sharecard.js';
 /* `tooClose` and `normalizeColor` come from the chip rather than being written
    again here - the bug and the slate have to agree about when two teams clash,
    or the same fixture is legible in one place and not the other. */
+import { pageHeader } from '/components/header.js';
 import { teamChip, applyTeamVars, tooClose, normalizeColor } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { adSlot } from '/components/ad.js';
@@ -194,7 +195,14 @@ const S = {
    * interpret. */
   mode: (() => {
     const v = store.get('mode', null);
-    if (v === 'call' || v === 'week' || v === 'marbles') return 'marbles';
+    /* 🔴 EVERY RETIRED NAME STILL RESOLVES. Somebody who used this app an hour
+     * ago has 'marbles' in their storage, and before that 'call' or 'week'.
+     * A mode that does not map lands them on a blank fork with a stored
+     * preference the app no longer understands. 'marbles' meant "the staking
+     * half", and the live board is what that door led to, so that is where it
+     * points now. */
+    if (v === 'live' || v === 'call' || v === 'marbles') return 'live';
+    if (v === 'allgames' || v === 'week') return 'allgames';
     return v === 'pool' ? 'pool' : null;
   })(),
   bank: START_BANK,
@@ -654,6 +662,86 @@ function bannerFor(play) {
   if (/field goal is good/i.test(t)) return 'FIELD GOAL';
   if (/field goal is no good|field goal.*blocked/i.test(t)) return 'NO GOOD';
   return null;
+}
+
+/* 🔴 THE GAME SELECTOR. Jason: "after hitting call it live, what will it look
+ * like on days with multiple games within a close time frame and or at the
+ * same time." Then: "Make a game selector."
+ *
+ * The honest answer to the question was that it looked like ONE game, chosen
+ * for you. nextGameKey() sorted the week by kickoff and took the first
+ * non-final one, which is a sensible rule when a single game is on and an
+ * arbitrary one when eight kick within a minute of each other. Sunday would
+ * have shown a game nobody picked with no way to leave it.
+ *
+ * 🔴 IT ONLY DRAWS WHEN THERE IS A CHOICE TO MAKE. One game on the wire and
+ * the strip is absent - a picker with a single option is furniture that
+ * teaches you to ignore pickers. Thursday and Monday look exactly as they do
+ * now; Sunday grows a row.
+ *
+ * Live games come first and are marked, because that is what somebody opening
+ * this screen means by "what is on". Upcoming ones follow in kickoff order so
+ * you can arm the next one before it starts. Finals are dropped: there is
+ * nothing left to call, and the record of what you called is on the board.
+ */
+function gameStrip(wrap) {
+  const games = (S.also && S.also.games) || [];
+  const mine = games
+    .filter((g) => g && g.id && g.status !== 'final' && g.status !== 'void')
+    .sort((a, b) => {
+      const live = (x) => (x.status === 'in_progress' ? 0 : 1);
+      return live(a) - live(b) || a.kickoffUtc - b.kickoffUtc;
+    });
+  if (mine.length < 2) return null;
+
+  const nowKey = String(S.key || '');
+  const strip = el('div', 'lg-games ag-scroll-x');
+  strip.setAttribute('role', 'group');
+  strip.setAttribute('aria-label', 'Choose a game');
+
+  for (const g of mine) {
+    const key = S.sport + ':' + g.id;
+    const b = el('button', 'lg-gamechip');
+    b.type = 'button';
+    if (key === nowKey) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
+    if (g.status === 'in_progress') b.dataset.live = 'true';
+
+    const byId = {};
+    for (const t of (g.teams || [])) byId[String(t.id)] = t;
+    const away = byId[String(g.awayTeamId)], home = byId[String(g.homeTeamId)];
+    b.appendChild(el('span', 'lg-gamechip-t',
+      ((away && away.abbrev) || '?') + ' @ ' + ((home && home.abbrev) || '?')));
+    /* Live games show the score, upcoming ones the time. The same slot, and
+       it is always the thing you would ask about that game right now. */
+    b.appendChild(el('span', 'lg-gamechip-s num', g.status === 'in_progress'
+      ? ((g.awayScore ?? 0) + '–' + (g.homeScore ?? 0))
+      : new Date(g.kickoffUtc).toLocaleTimeString(undefined,
+          { hour: 'numeric', minute: '2-digit' })));
+
+    b.onclick = () => {
+      if (key === nowKey) return;
+      /* 🔴 FORCED, so refreshKey() stops choosing for them. Without this the
+       * five-minute key refresh would quietly drag the screen back to
+       * whatever it thinks is next, and the person's choice would appear to
+       * undo itself for no visible reason. */
+      S.forced = true;
+      S.key = key;
+      /* Everything held is about the OLD game. Carrying any of it across is
+       * how a board ends up showing one game's score over another's plays. */
+      S.raw = null; S.board = []; S.noGame = false;
+      S.fieldNode = null; FIELD_CAM = null;
+      if (FIELD_RAF) { cancelAnimationFrame(FIELD_RAF); FIELD_RAF = null; }
+      /* Ask the server to make sure something is polling it. The cron starts
+         pollers for live games every ten minutes; this closes the gap for
+         somebody who picks a game in between. */
+      try { fetch('/api/poller/ensure?game=' + encodeURIComponent(g.id)
+        + '&sport=' + encodeURIComponent(S.sport)).catch(() => {}); } catch { /* offline */ }
+      paint(wrap);
+      poll(wrap);
+    };
+    strip.appendChild(b);
+  }
+  return strip;
 }
 
 function fieldStrip(state) {
@@ -1422,10 +1510,33 @@ function settleOne(call, state) {
            delta: r.landed ? Math.round(call.stake * pays) - call.stake : -call.stake };
 }
 
+/* Does this call belong to the game on screen? New calls carry their game id;
+ * older ones are matched on ESPN's play-id prefix, which is the event id. */
+function callIsFor(call, playId, gameId) {
+  if (!gameId) return true;
+  if (call.gameId) return String(call.gameId) === String(gameId);
+  return String(playId).startsWith(String(gameId));
+}
+
 function settleAll(state) {
+  /* 🔴 200 MARBLES PER GAME, NOT PER SESSION. Jason settled it when the
+   * question surfaced: "You decided 200 per game."
+   *
+   * The bank used to sum EVERY call in storage, and that was invisible while
+   * exactly one game was ever on the wire. It stops being invisible the moment
+   * two are: eight Sunday games would have shared one pot, so a bad first
+   * quarter in one would follow you into the other seven, and the app's own
+   * rule - the bank refills every game, nobody is eliminated - would quietly
+   * not be true.
+   *
+   * Per game keeps every game an equal proposition and keeps that rule honest.
+   * It also means the delta beside the balance means something specific: how
+   * you are doing in THIS game, which is the only comparison anybody makes. */
+  const gameId = state.gameId || (S.key || '').split(':')[1] || null;
   let bank = START_BANK;
   const rows = [];
   for (const [afterPlayId, call] of Object.entries(S.calls)) {
+    if (!callIsFor(call, afterPlayId, gameId)) continue;
     const c = { ...call, afterPlayId };
     const r = settleOne(c, state);
     if (r.open) { rows.push({ ...c, open: true }); bank -= call.stake; continue; }
@@ -1688,7 +1799,28 @@ function paint(wrap) {
    * where it cannot be true is the fastest way to make it look like noise.
    *
    * It belongs on the game, where it is a live fact about what you are seeing. */
-  if (!S.isHome) wrap.appendChild(delayBar());
+  /* 🔴 THE SAME HEADER AS EVERY OTHER SCREEN. Jason: "we need a header like
+   * the rest, the NFL logo, kill the football. for this page, Call it live."
+   *
+   * This was the only screen in the app without one - it opened straight onto
+   * the delay chip and the scoreboard, which made it read as a different
+   * product rather than as one door of this one. The league mark is the anchor
+   * (it is what changes between NFL and college), the title says which of the
+   * app's halves you are in, and the settings menu is adopted into it the way
+   * it is everywhere else.
+   *
+   * "Call it live" as the title and not as the call to action above the
+   * question - a title says where you ARE, a prompt says what to DO, and they
+   * should not be the same words on one screen. */
+  if (!S.isHome) {
+    wrap.appendChild(pageHeader({
+      title: 'Call it live',
+      league: (S.sport === 'nfl') ? 'nfl' : 'ncaa'
+    }));
+    wrap.appendChild(delayBar());
+    const gs = gameStrip(wrap);
+    if (gs) wrap.appendChild(gs);
+  }
 
   /* 🔴 HOME IS DECIDED FIRST, BEFORE ANY GAME STATE IS CONSULTED. It used to sit
    * below the loading guard, the no-game branch and the two choice gates, so on
@@ -2433,6 +2565,20 @@ function paint(wrap) {
     wrap.appendChild(waitingCard());
   } else if (type && last && !already) {
     const card = el('div', 'card lg-call');
+    /* 🔴 THE SAME FOUR WORDS OVER EVERY QUESTION. Jason: "above the question,
+     * have a standard call to action, You make the call..."
+     *
+     * The questions rotate - run or pass, ten yards or more, how does this
+     * drive end - and each arrives as a fresh sentence, so the card never had
+     * a fixed thing to recognise. A line that is identical on every snap is
+     * what turns twenty different questions into one repeated ritual: you see
+     * those words, you know a call is open, before you have read what it is
+     * about.
+     *
+     * It is also the product's whole promise in four words, and this is the
+     * one place in the app where the person is actually being asked to make
+     * one. */
+    card.appendChild(el('div', 'lg-cta', 'You make the call…'));
     card.appendChild(el('div', 'lg-q', type.question));
     /* 🔴 SAY WHICH PLAY THIS IS, BECAUSE THE CARD READ AS THOUGH IT WAS ASKING
      * ABOUT THE ONE PRINTED UNDER IT. Jason: "It asked left middle or right
@@ -2446,10 +2592,22 @@ function paint(wrap) {
      *
      * Two words fix the sentence and nothing else changes: the question is about
      * the NEXT snap, and this is what happened before it. */
-    const sub = el('div', 'lg-sub');
-    sub.appendChild(el('span', 'lg-sub-k', 'Last play'));
-    sub.appendChild(el('span', 'lg-sub-t', last.text.slice(0, 90)));
-    card.appendChild(sub);
+    /* 🔴 THE LAST PLAY LINE IS GONE FROM THE QUESTION. Jason: "remove this, we
+     * already have it just above."
+     *
+     * It was right when it shipped - the card was the only place saying what
+     * had just happened, and a question about the next snap needs the context
+     * of the last one. Then the bar under the field took that job, and this
+     * became the same sentence twice, four pixels apart, in a smaller
+     * typeface.
+     *
+     * Fourth time tonight one element has been retired because a better one
+     * arrived: the down-and-distance pill went when the field's caption
+     * covered it, the caption went when the scorebug covered that, the second
+     * scoreboard went when this bar replaced it. Every one of them was
+     * justified on the day it was built. 🔴 THE HABIT WORTH KEEPING IS ASKING
+     * WHAT A NEW COMPONENT MAKES REDUNDANT, at the moment it lands, rather
+     * than waiting for somebody to circle it in a screenshot. */
     card.appendChild(el('div', 'lg-nextq', 'You are calling the NEXT snap'));
 
     /* ONE CHIP, NOT THREE BUTTONS. Jason: "should we just put a typical amount
@@ -2618,6 +2776,11 @@ function paint(wrap) {
  */
 async function makeCall(wrap, type, offer, afterPlay, state) {
   S.calls[afterPlay.id] = {
+    /* 🔴 THE CALL REMEMBERS WHICH GAME IT WAS MADE IN. Without this the bank
+       cannot be per game, because a play id alone does not say what it
+       belongs to unless you happen to know ESPN prefixes them with the event
+       - which it does, and which is not a thing to rely on. */
+    gameId: state.gameId || (S.key || '').split(':')[1] || null,
     type: type.id, choice: offer.choice.id, label: offer.choice.label,
     stake: S.stake, pays: offer.pays, p: offer.p,
     /* A drive call is settled by the drive it belongs to, not by the next snap,
@@ -2867,9 +3030,9 @@ function sportCard(wrap) {
        * all. Both now go to step 3 and let the person choose live or the week,
        * which is the question the front door exists to ask. */
       if (S.isHome) {
-        if (S.mode === 'pool') { location.hash = '#/slate'; return; }
-        S.homeStep = 'go';
-        paint(wrap);
+        location.hash = S.mode === 'pool' ? '#/slate'
+          : S.mode === 'allgames' ? '#/allgames'
+          : '#/live';
         return;
       }
       if (S.mode === 'pool') { location.hash = '#/slate'; return; }
@@ -2905,8 +3068,9 @@ function modeCard(wrap, compact) {
   }
   if (!compact) {
     c.appendChild(el('p', 'lg-sport-b',
-      'Two halves. One stakes marbles at a price you can see before you tap; the '
-      + 'other is your group picking a week for points. They keep separate scores '
+      'Three ways in. Two of them stake marbles at a price you see before you tap - '
+      + 'one snap by snap while you watch, one across the whole week. The third is '
+      + 'your group, scored in points, with nothing staked. The scores never add together.'
       + 'and never add together.'));
   }
 
@@ -2942,8 +3106,24 @@ function modeCard(wrap, compact) {
    * and would have to walk back the first time somebody joins a second. */
   const row = el('div', 'lg-mode-row');
   const opts = [
-    { id: 'marbles', h: 'Play the marbles', b: 'Stake marbles at a price you see first. Live, or a card for the week.' },
-    { id: 'pool', h: 'Your group', b: 'People you know, a week at a time, scored in points. Nothing staked.' }
+    /* 🔴 THREE DOORS. Jason: "At the Home Screen, we have 3 choices, live
+     * games, then all games, where you can place bets on the entire list,
+     * plus first by quarter and half and others and parlays. Then the third
+     * is the group pools."
+     *
+     * This reverses "First page is play for the marbles or group pool, only"
+     * from earlier the same day, and the reversal is right because the thing
+     * being split was never one product. "Play the marbles" covered both a
+     * snap-by-snap live board and a whole week's card of pre-game markets -
+     * two different acts, on two different clocks, sharing a door because
+     * they shared a currency.
+     *
+     * They divide by WHEN you are, which is the only division a person
+     * actually feels: something is happening right now, something is
+     * happening this week, or your group is keeping score. */
+    { id: 'live', h: 'Live games', b: 'Call it snap by snap while you watch. A price before every tap.' },
+    { id: 'allgames', h: 'All games', b: 'The whole week. Winner, spread, total, halves, quarters and parlays.' },
+    { id: 'pool', h: 'Group pools', b: 'People you know, a week at a time, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');
@@ -2989,9 +3169,14 @@ function modeCard(wrap, compact) {
          * stopped dead on step 2 with no third page and no error. */
         if (S.isHome) {
           S.sport = id; store.set('sport', id);
-          if (S.mode === 'pool') { location.hash = '#/slate'; return; }
-          S.homeStep = 'go';
-          paint(wrap);
+          /* 🔴 THE DOOR IS ALREADY CHOSEN, SO THERE IS NO THIRD PAGE. With two
+           * modes, "marbles" still had to ask live-or-weekly, which is what
+           * goCard was for. With three, that question WAS the first card, and
+           * asking it again a page later would be the wizard this front door
+           * was built to stop being. Pick a half, pick a league, arrive. */
+          location.hash = S.mode === 'pool' ? '#/slate'
+            : S.mode === 'allgames' ? '#/allgames'
+            : '#/live';
           return;
         }
         if (id === S.sport) return;
@@ -3077,7 +3262,7 @@ function homeScreen(wrap) {
     /* The rules of the thing they just chose, under the question that follows
      * it. Marbles only - the group pool has no bank and no price, and showing
      * it here would be explaining a product they did not pick. */
-    if (S.mode === 'marbles') wrap.appendChild(marblesCard());
+    if (S.mode === 'live' || S.mode === 'allgames') wrap.appendChild(marblesCard());
     return;
   }
   wrap.appendChild(modeCard(wrap));

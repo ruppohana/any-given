@@ -1,3 +1,4 @@
+import { captureSlate } from './slate-cron.ts';
 export { LivePoller } from './poller-do.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
  *
@@ -114,6 +115,34 @@ async function upstream(url: string, ttl: number): Promise<any> {
 }
 
 export default {
+  /* 🔴 THE SCHEDULED HALF. Jason: "Did we move everything to the cloud?"
+   * Not until this. Every ten minutes: refresh the week's slate from the core
+   * API, and make sure a Durable Object poller is running for anything in
+   * progress.
+   *
+   * Ten minutes is the SLATE's cadence, not the live board's - a kickoff time
+   * or a posted line does not move faster than that, and the live feed is
+   * handled by the DOs at ten SECONDS. Cron's one-minute floor is the reason
+   * the live layer could never have lived here, and the reason it does not
+   * need to.
+   *
+   * Both leagues, every run. The NFL and college seasons overlap all autumn
+   * and there is no cheaper way to know which has a game on than to look. */
+  async scheduled(_event: any, env: any, ctx: any) {
+    const season = Number(env.SEASON) || 2026;
+    ctx.waitUntil((async () => {
+      for (const sport of ['nfl', 'college-football']) {
+        try {
+          const r = await captureSlate(env, sport, season);
+          console.log('cron', sport, JSON.stringify(r));
+        } catch (e: any) {
+          /* One league failing must not cost the other. */
+          console.log('cron', sport, 'FAILED', String(e?.message || e));
+        }
+      }
+    })());
+  },
+
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const p = url.pathname;
@@ -237,6 +266,37 @@ export default {
        * anything. One object per game, named for the game, so starting twice
        * is idempotent rather than the four-poller pileup that corrupted an
        * hour of tonight's data. */
+      /* 🔴 `ensure` IS THE ONE POLLER ACTION A CLIENT MAY CALL. Everything else
+       * here stays behind the token, because starting an arbitrary poller is
+       * an outbound loop somebody else pays for. This one is bounded: the game
+       * must be IN PROGRESS on our own captured slate, so the worst a stranger
+       * achieves is starting a poller the cron was about to start anyway.
+       *
+       * It exists because the cron runs every ten minutes and a person picking
+       * a game from the selector should not wait for the next tick to see it. */
+      if (p === '/api/poller/ensure') {
+        const u0 = new URL(req.url);
+        const gid = (u0.searchParams.get('game') || '').replace(/\D/g, '');
+        const sp = u0.searchParams.get('sport') === 'college-football' ? 'college-football' : 'nfl';
+        if (!gid) return json({ error: 'game required' }, 400);
+        const season = Number(env.SEASON) || 2026;
+        let ok = false;
+        for (let wk = 1; wk <= 20 && !ok; wk++) {
+          const raw = await env.LIVE.get(`slate:${sp}:${season}:${wk}`);
+          if (!raw) continue;
+          try {
+            const g = (JSON.parse(raw).games || []).find((x: any) => String(x.id) === gid);
+            if (g) { ok = g.status === 'in_progress'; break; }
+          } catch { /* next week */ }
+        }
+        if (!ok) return json({ ok: false, reason: 'not in progress on our slate' });
+        const stub0 = env.POLLER.get(env.POLLER.idFromName(`${sp}:${gid}`));
+        await stub0.fetch(new Request('https://do/start', {
+          method: 'POST', body: JSON.stringify({ gameId: gid, sport: sp })
+        }));
+        return json({ ok: true, started: `${sp}:${gid}` });
+      }
+
       if (p.startsWith('/api/poller/')) {
         const token = req.headers.get('x-push-token') || '';
         if (!env.PUSH_TOKEN || token !== env.PUSH_TOKEN) return json({ error: 'no' }, 401);
@@ -256,6 +316,17 @@ export default {
           status: res.status,
           headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
         });
+      }
+
+      /* Run the scheduled capture on demand - the only way to test a cron
+         without waiting ten minutes for it, and how a new week gets seeded. */
+      if (p === '/api/cron/slate' && req.method === 'POST') {
+        const token = req.headers.get('x-push-token') || '';
+        if (!env.PUSH_TOKEN || token !== env.PUSH_TOKEN) return json({ error: 'no' }, 401);
+        const u = new URL(req.url);
+        const sport = u.searchParams.get('sport') || 'nfl';
+        const out = await captureSlate(env, sport, Number(env.SEASON) || 2026);
+        return json(out);
       }
 
       /* ---- what the poller last pushed ---- */
@@ -450,9 +521,19 @@ export default {
        * up - the same reasoning as the invite link carrying the game.
        */
       if (p === '/api/pool/create' && req.method === 'POST') {
-        const b = await req.json() as { deviceId?: string; name?: string; poolName?: string; sport?: string };
+        const b = await req.json() as { deviceId?: string; name?: string; poolName?: string; sport?: string; week?: number };
         if (!b.deviceId) return json({ error: 'deviceId is required' }, 400);
         const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
+        /* 🔴 A POOL CAN BE ONE WEEK, OR THE SEASON. Jason: "The pools can also
+         * be single weeks." NULL is the season, which is every pool that
+         * already exists - so this is additive and needs no backfill.
+         *
+         * Validated as a RANGE rather than for truthiness: week 0 is not a
+         * week, and `b.week ? ... : null` would have quietly turned a bad
+         * value into a season-long pool nobody asked for. This app shipped
+         * three separate bugs from exactly that shortcut tonight. */
+        const wk = Number(b.week);
+        const week = Number.isInteger(wk) && wk >= 1 && wk <= 22 ? wk : null;
 
         /* 🔴 NO VOWELS IN THE CODE. Six characters from a 26-letter alphabet
          * will eventually spell something, and a pool code that has to be read
@@ -465,16 +546,16 @@ export default {
 
         await env.DB.prepare(
           `INSERT INTO pool (id, name, commissioner_id, scope, scope_arg, ranking_source,
-                             ats, season, scope_locked_at, created_at, sport)
-           VALUES (?, ?, ?, 'all', NULL, NULL, 0, 2026, NULL, ?, ?)`
-        ).bind(code, String(b.poolName || 'Our pool').slice(0, 40), b.deviceId, Date.now(), sport).run();
+                             ats, season, scope_locked_at, created_at, sport, week)
+           VALUES (?, ?, ?, 'all', NULL, NULL, 0, 2026, NULL, ?, ?, ?)`
+        ).bind(code, String(b.poolName || 'Our pool').slice(0, 40), b.deviceId, Date.now(), sport, week).run();
 
         await env.DB.prepare(
           `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
            VALUES (?, ?, ?, 0, 'commissioner')`
         ).bind(code, b.deviceId, String(b.name || '').slice(0, 24)).run();
 
-        return json({ ok: true, poolId: code, name: b.poolName || 'Our pool', sport });
+        return json({ ok: true, poolId: code, name: b.poolName || 'Our pool', sport, week });
       }
 
       /* Join by code. Idempotent: joining twice is joining. */
@@ -563,7 +644,7 @@ export default {
        * is not a pool. */
       if (p === '/api/pool/standings') {
         const sport = url.searchParams.get('sport') === 'nfl' ? 'nfl' : 'college-football';
-        const week = Number(url.searchParams.get('week')) || 0;
+        let week = Number(url.searchParams.get('week')) || 0;
         const poolId = url.searchParams.get('pool')
           || (sport === 'nfl' ? 'world-nfl' : 'world-cfb');
 
@@ -573,6 +654,23 @@ export default {
          *
          * A void game contributes to NOTHING - not a win, not a loss, not the
          * played count. One void path: the game did not happen, for everybody. */
+        /* 🔴 A ONE-WEEK POOL SCORES ONE WEEK, WHATEVER THE CALLER ASKS FOR.
+         * The query already took a week filter, for the "this week only" view
+         * of a season pool - so a single-week pool needs no new SQL, only a
+         * refusal to be talked out of its own week.
+         *
+         * Forced on the SERVER rather than trusted from the request, because
+         * the caller is a browser. A client that could widen a one-week pool
+         * to the season would be reading other weeks' picks into a board it
+         * was never entered in, which is a scoring bug wearing a query
+         * parameter. Same rule as the final score: if it decides a result, it
+         * is decided here. */
+        try {
+          const meta = await env.DB.prepare('SELECT week FROM pool WHERE id = ?')
+            .bind(poolId).first() as any;
+          if (meta && Number.isInteger(meta.week)) week = meta.week;
+        } catch { /* a pool with no row cannot be narrowed */ }
+
         const rows = await env.DB.prepare(
           `SELECT m.user_id AS id,
                   m.display_name AS name,

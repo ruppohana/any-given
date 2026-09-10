@@ -1,0 +1,17 @@
+-- 🔴 A POOL CAN BE ONE WEEK. Jason: "The pools can also be single weeks."
+--
+-- Every pool so far has been a season: you join, and you are in it until
+-- January. That is the right shape for an office pool and the wrong shape for
+-- most of the reasons somebody actually starts one - a group chat that wants
+-- to play THIS Sunday, a family that plays on Thanksgiving, anyone who will
+-- not commit four months to a thing they have not tried.
+--
+-- 🔴 IT IS ALSO THE INVITE LOOP'S PROBLEM. A season pool asks a stranger who
+-- followed a link for a season-long commitment before they have seen a single
+-- screen. A one-week pool asks for Sunday. The product's only distribution
+-- mechanism is somebody forwarding a link, and the size of the ask at that
+-- moment is the whole conversion.
+--
+-- NULL week means the season, which is every pool that already exists - so
+-- this migration changes nothing for them and needs no backfill.
+ALTER TABLE pool ADD COLUMN week INTEGER;
