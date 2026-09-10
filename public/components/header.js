@@ -77,50 +77,24 @@ export function pageHeader(opts) {
     img.addEventListener('error', () => img.remove());
     badge.appendChild(img);
 
-    const NS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', '26'); svg.setAttribute('height', '26');
-    svg.setAttribute('class', 'ag-hd-ball');
-    svg.setAttribute('aria-hidden', 'true');
-    /* 🔴 TILTED, AND WITH A SEAM. Jason, 2026-09-09: "the football icon is
-     * terrible" - twice over, because the second attempt was no better than the
-     * first.
+    /* 🔴 THE FOOTBALL IS GONE. Jason: "the NFL logo, kill the football."
      *
-     * The first was two arcs meeting at a tangent: a rounded blob that read as a
-     * circle. The second was a correct vesica - pointed at both ends - and still
-     * failed, because a HORIZONTAL lens with a line through it is an eye. That
-     * is the shape the eye reaches for first, and it is not a football.
+     * It went through three drawings - a blob that read as a circle, a vesica
+     * that read as an eye, and a tilted one with a seam that finally read as a
+     * football - and the argument for it was that it is the CONSTANT beside a
+     * league mark that changes: it says which app you are in.
      *
-     * What separates them is the TILT. A football is drawn on a diagonal in
-     * every context anybody has ever seen one - a logo, a scoreboard, an emoji -
-     * so the angle is doing more identification work than the outline is. Add
-     * the long seam the laces sit on, which nothing else has, and it stops being
-     * ambiguous at 26px.
-     */
-    const g = document.createElementNS(NS, 'g');
-    g.setAttribute('transform', 'rotate(-32 12 12)');
-
-    const ball = document.createElementNS(NS, 'path');
-    ball.setAttribute('d', 'M1.8 12C5.6 5.4 18.4 5.4 22.2 12 18.4 18.6 5.6 18.6 1.8 12Z');
-    ball.setAttribute('fill', 'currentColor');
-
-    const seam = document.createElementNS(NS, 'path');
-    seam.setAttribute('d', 'M8 12h8');
-    seam.setAttribute('stroke', 'var(--bg)');
-    seam.setAttribute('stroke-width', '1.5');
-    seam.setAttribute('stroke-linecap', 'round');
-
-    const lace = document.createElementNS(NS, 'path');
-    lace.setAttribute('d', 'M10 10.4v3.2M12 10.2v3.6M14 10.4v3.2');
-    lace.setAttribute('fill', 'none');
-    lace.setAttribute('stroke', 'var(--bg)');
-    lace.setAttribute('stroke-width', '1.5');
-    lace.setAttribute('stroke-linecap', 'round');
-
-    g.append(ball, seam, lace);
-    svg.appendChild(g);
-    badge.appendChild(svg);
+     * That argument was never wrong, it was just answered elsewhere in the
+     * meantime. The nav carries the app's identity on every screen, the domain
+     * is in the address bar, and this header now sits on a page whose whole top
+     * third is a scoreboard. A second identity mark next to a league logo is
+     * two things competing to be the anchor, and the league one wins because it
+     * is the one that changes between NFL and college - which is the question a
+     * header is actually answering.
+     *
+     * Three iterations to draw it well and then deleted. That is not waste; it
+     * is what it costs to find out a mark is not needed, and the finding is
+     * only available once the thing is good enough to judge. */
     l.appendChild(badge);
   }
 
