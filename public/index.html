@@ -129,7 +129,16 @@
     border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
   .ag-topbar-mark { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 5px; }
   .ag-topbar-t { font-size: var(--t-body); font-weight: 800; letter-spacing: -.01em;
-    color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    /* Hidden while the page's own h1 is on screen - see wireTopbarTitle.
+       opacity rather than display, so the mark and the menu do not jump
+       sideways as it comes and goes. */
+    opacity: 0; transform: translateY(2px);
+    transition: opacity .16s ease, transform .16s ease; }
+  .ag-topbar-t[data-show="true"] { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .ag-topbar-t { transition: none; }
+  }
   .ag-topbar .spacer { flex: 1 1 auto; }
   /* In the bar now, so it needs no ground of its own - the bar is the ground. */
   .ag-gear { flex: 0 0 auto;

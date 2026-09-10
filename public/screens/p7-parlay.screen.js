@@ -38,7 +38,7 @@ import {
 import { playsFromPeriods } from '/src/lib/price-model.js';
 import {
   marketsFor, priceFor, priceLabel, chosenSport, chosenWeek,
-  fetchSlate, resolveWeek, groupsOf, groupLabel, timeLabel, spreadText, num, STAKES,
+  fetchSlate, resolveWeek, groupsOf, groupLabel, timeLabel, spreadText, num, FLAT_STAKE,
 } from '/screens/p6-allgames.screen.js';
 
 export const id = 'p7-parlay';
@@ -67,13 +67,17 @@ export function storeKey(sport, week) {
 export function loadSlip(sport, week) {
   try {
     const raw = JSON.parse(localStorage.getItem(storeKey(sport, week)) || 'null');
-    if (!raw || !Array.isArray(raw.legs)) return { legs: [], stake: STAKES[0], placed: false };
+    if (!raw || !Array.isArray(raw.legs)) return { legs: [], stake: FLAT_STAKE, placed: false };
     return {
       legs: raw.legs.filter((l) => l && l.gameId && l.marketId && l.choiceId),
-      stake: num(raw.stake) ? raw.stake : STAKES[0],
+      /* 🔴 ALWAYS FLAT_STAKE, EVEN FROM STORAGE. A slip written before the
+         ladder was removed carries whatever it was staked at, and honouring
+         that would leave two parlays on the board settling at different
+         sizes for no reason a person could see. */
+      stake: FLAT_STAKE,
       placed: !!raw.placed,
     };
-  } catch { return { legs: [], stake: STAKES[0], placed: false }; }
+  } catch { return { legs: [], stake: FLAT_STAKE, placed: false }; }
 }
 
 function saveSlip(sport, week, slip) {
@@ -256,20 +260,12 @@ function slipCard(ctx) {
     c.appendChild(why);
   }
 
-  /* The stake ladder, and the return beside it. Same three rungs as the board
-     so a person does not have to learn a second set of numbers. */
-  const bar = el('div', 'p7-stake');
-  bar.appendChild(el('span', 'p7-stake-l', 'STAKE'));
-  for (const s of STAKES) {
-    const b = el('button', 'p7-stake-b num', String(s));
-    b.type = 'button';
-    if (s === slip.stake) b.dataset.on = 'true';
-    b.disabled = slip.placed;
-    b.onclick = () => { slip.stake = s; ctx.save(); ctx.repaint(); };
-    bar.appendChild(b);
-  }
-  c.appendChild(bar);
-
+  /* 🔴 NO LADDER. Jason: "Flat 5 except for the head to head." The parlay is
+     on the staking half of the weekly board, not the live one, so it takes
+     the same rule and for the same reason: this screen has no bank, so a
+     stake with no budget behind it is not a choice, it is a bigger number.
+     The 250x ceiling is what makes a parlay worth building; the stake was
+     never the interesting part of it. */
   const ret = el('p', 'p7-ret');
   ret.appendChild(el('span', null, v.ok ? 'Returns ' : 'Would return '));
   ret.appendChild(el('strong', 'num', String(parlayReturns(slip.stake, price))));

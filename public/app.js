@@ -97,6 +97,22 @@ function currentRoute() {
   return ROUTES.find((r) => r.id === id) || ROUTES.find((r) => r.id === 'home') || ROUTES[0];
 }
 
+let TITLE_OBS = null;
+function wireTopbarTitle() {
+  const tb = document.getElementById('topbar-title');
+  if (!tb) return;
+  if (TITLE_OBS) { TITLE_OBS.disconnect(); TITLE_OBS = null; }
+  const h1 = document.querySelector('#root .ag-hd-t');
+  /* No page title to defer to - a design-harness route, or a screen that
+     never had one - so the bar keeps its own. Absent beats guessed. */
+  if (!h1) { tb.dataset.show = 'true'; return; }
+  tb.dataset.show = 'false';
+  TITLE_OBS = new IntersectionObserver(([e]) => {
+    tb.dataset.show = e.isIntersecting ? 'false' : 'true';
+  }, { rootMargin: '-44px 0px 0px 0px', threshold: 0 });
+  TITLE_OBS.observe(h1);
+}
+
 const TITLES = {
   home: 'Any Given',
   live: 'Call it live',
@@ -137,6 +153,33 @@ async function mount() {
    * for the design-harness routes: they are not places a person navigates to. */
   const tb = document.getElementById('topbar-title');
   if (tb) tb.textContent = TITLES[route.id] || 'Any Given';
+  /* 🔴 THE BAR TITLE ONLY APPEARS ONCE THE PAGE'S OWN TITLE HAS GONE.
+   *
+   * Adding the bar put the screen's name on screen twice - "Build a parlay"
+   * in the bar and "Build a parlay" as the h1 a hundred and thirty pixels
+   * below it. That is the rule this app's own header comment already states,
+   * arriving one element further up: "a header may not repeat what the
+   * element directly under it already says."
+   *
+   * The answer is not to delete one of them. The large title is the screen's
+   * identity and the bar title is what you need AFTER it has scrolled away -
+   * so the bar shows its title only when the h1 is off screen, which is the
+   * behaviour every phone OS already taught people. Nothing is duplicated and
+   * nothing is lost.
+   *
+   * IntersectionObserver rather than a scroll handler: a scroll listener on a
+   * 130,000px board firing on every frame is exactly the kind of thing that
+   * makes a long list feel cheap.
+   *
+   * 🔴 CALLED AFTER THE RENDER. It was here, before it, and the h1 it looks
+   * for does not exist yet at this point - so every screen fell to the "no
+   * page title, keep the bar's own" branch and the duplication stayed
+   * exactly as it was. Nothing errored; the feature simply had no effect.
+   *
+   * The trap is already written down forty lines below, about the sample-data
+   * banner: "AFTER THE RENDER, NEVER BEFORE IT. This was appended here and
+   * then wiped on the very next line... Nothing errored. It simply was not
+   * there." Same function, same mistake, one commit apart. */
 
   /* 🔴 SAY WHEN THE GAMES ARE NOT REAL. Jason, 2026-09-08, looking at My picks:
    * "These are not correct games, right?" They are not. Notre Dame did not beat
@@ -162,6 +205,7 @@ async function mount() {
     const data = mod.previewData ? await mod.previewData(fixtures, route.state) : {};
     lastData = data;
     mod.render(root, data, route.state);
+    wireTopbarTitle();
   } catch (e) {
     const box = document.createElement('div');
     box.className = 'state state-error';
@@ -169,6 +213,9 @@ async function mount() {
     const p = document.createElement('p'); p.className = 'state-body'; p.textContent = String(e && e.message || e);
     box.append(h, p);
     root.appendChild(box);
+    /* An error screen has no h1, so the bar keeps its own title - which is
+       the one time you most want to know where you are. */
+    wireTopbarTitle();
   }
   /* 🔴 THE BANNER MUST NOT LIE IN EITHER DIRECTION. The slate now reads the real
    * week off the feed, so calling those games made up would be as wrong as
