@@ -43,6 +43,27 @@
        cannot serve both. -->
   <meta name="theme-color" content="#ebebeb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+
+  <!-- 🔴 ADD TO HOME SCREEN. Jason wants this on his phone for tonight's games,
+       and the difference it makes is not cosmetic: a standalone launch has no
+       address bar, so the floating nav stops competing with Safari's own bar
+       for the same 60px at the bottom of the screen - which is the thing every
+       screenshot he has sent today has shown underneath it.
+
+       🔴 iOS IGNORES THE MANIFEST'S ICONS AND READS apple-touch-icon. Both are
+       here because Android reads the manifest and iOS does not; shipping one
+       is how an app ends up on a home screen as a blurry screenshot of its own
+       first paint. The Apple one is also the only icon that must be opaque -
+       iOS composites a transparent PNG onto black. -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <!-- `default` keeps the status bar readable over the light ground. `black-
+       translucent` would put the clock on top of the page's own first row. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Any Given">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">

@@ -1,0 +1,23 @@
+{
+  "name": "Any Given",
+  "short_name": "Any Given",
+  "description": "Call it snap by snap while you watch. A price before every tap.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ebebeb",
+  "theme_color": "#ebebeb",
+  "categories": ["sports", "entertainment"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Live games", "url": "/#/live" },
+    { "name": "All games", "url": "/#/allgames" },
+    { "name": "Build a parlay", "url": "/#/buildparlay" }
+  ]
+}
