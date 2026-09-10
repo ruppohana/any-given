@@ -172,11 +172,18 @@
    *
    *     inner radius = outer radius - the inset between them
    *
-   * 14 outside, 10 inside. The inner one lands on --radius-card exactly, which
-   * is what makes the tab look like the same family of shape as every card it
-   * sits under rather than a smaller copy of the bar. Move --radius-nav and
-   * the tab follows; there is no second number to remember. */
-  --radius-nav:  14px;
+   * 🔴 10 OUTSIDE, 6 INSIDE. Jason, 2026-09-10: "Nav radius to be 10 as well.
+   * That is what we are slowly moving to, yes?" - yes. 10 is the house radius
+   * and the bar is the last thing that was not on it. It went 999 -> 14 -> 10
+   * in one session and the intermediate step was me hedging: 14 was chosen so
+   * the INNER tab would land on 10, which optimised the wrong shape. The bar
+   * is the thing you see; the tab is a detail inside it. Put the house number
+   * on the thing that is visible from across the room.
+   *
+   * The tab derives to 6 and that is correct rather than a compromise - a
+   * shape inset inside another shape has to be tighter or the two outlines
+   * converge at the corner and the padding appears to vanish there. */
+  --radius-nav:  10px;
   --radius-nav-item: calc(var(--radius-nav) - 4px);
 
   /* 🔴 NESTED CORNERS. Jason, 2026-09-09, on a zoomed corner of the slate: "Can
