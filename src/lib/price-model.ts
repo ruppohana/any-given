@@ -1,0 +1,319 @@
+/* 🔴 WHAT A DERIVED MARKET IS ACTUALLY WORTH.
+ *
+ * Jason sent one screenshot and it is the whole argument for this file:
+ * Miami -59.5 against Florida A&M, FIRST HALF WINNER, and all three tiles say
+ * 2.00x - Miami, Florida A&M, and Tie.
+ *
+ * 🔴 THOSE THREE PRICES IMPLY A 150% PROBABILITY. It is not that the board was
+ * flat, which would merely be dull. It is that the board was INCOHERENT: a
+ * three-way market whose choices each pay 2.00x is stating that the three
+ * outcomes are each 50% likely, and one of them is Florida A&M leading Miami
+ * at half time. Measured across this week's real slate, 91% of every tile in
+ * the app was exactly 2.00x for the same reason.
+ *
+ * WHERE 2.00x WAS RIGHT, AND IT STAYS. p6-allgames prices anything with a
+ * posted line at 2.00x on the argument that a line IS the market's own
+ * estimate of the point where both sides are equally likely. That argument is
+ * correct and this file does not touch it:
+ *
+ *     spread, total, team totals   ->  still 2.00x, still for that reason
+ *     whole-game winner            ->  still the moneyline, converted
+ *
+ * What it was wrong about is every market with NO posted line of its own - the
+ * halves, the four quarters, first to score, the winning margin. Those were
+ * defaulting to 2.00x not because anything estimated them at even money but
+ * because nothing estimated them at all.
+ *
+ * 🔴 THE MODEL IS THE POSTED LINE, PUSHED THROUGH TIME. It invents no opinion
+ * about the teams - every number here comes out of the two figures the book
+ * already published, the spread and the total, which is what doctrine means by
+ * "priced by the model" rather than by us:
+ *
+ *   1. Final margin is Normal(mean = -spread, sd). The spread IS the mean; a
+ *      book publishing -7 is saying it expects the home side to win by 7.
+ *   2. A fraction f of the game carries a fraction f of the mean and, because
+ *      variance adds over independent time, sqrt(f) of the deviation. That
+ *      single line is what makes a first quarter closer to a coin flip than
+ *      the game is, without anybody deciding that it should be.
+ *   3. A tie needs a width, because football scores are lumpy rather than
+ *      continuous. See TIE_WIDTH.
+ *
+ * 🔴 AND THE PRICES IN A MARKET ARE NORMALISED TO SUM TO 1 BEFORE ANY CAP.
+ * That is the specific defect in the screenshot and it cannot come back: the
+ * choices of one market are exhaustive and mutually exclusive, so their
+ * probabilities sum to one by definition, and any set that does not is a bug
+ * whatever the individual numbers look like.
+ */
+
+/* Sigma of the FINAL MARGIN, in points. Both are the standard figures for
+ * their sport rather than anything fitted here - college is wider because
+ * college has far more mismatches in it, which is the same reason its slate
+ * is 86 games and the NFL's is 16. */
+const SD_MARGIN: Record<string, number> = {
+  nfl: 13.5,
+  'college-football': 16.5,
+};
+
+/* 🔴 HOW THE GAME'S SCORING IS SPREAD ACROSS IT, and the quarters are NOT
+ * even. Second and fourth quarters carry noticeably more than first and third
+ * - the two-minute drill happens twice a game and both times at the end of a
+ * half. Using 0.25 for each would price a first quarter and a second quarter
+ * identically, which is wrong in a way anybody who watches football would
+ * spot immediately. */
+const QUARTER_SHARE = [0.21, 0.29, 0.22, 0.28];
+
+/* 🔴 A TIE NEEDS A WIDTH BECAUSE FOOTBALL IS NOT CONTINUOUS. A normal
+ * distribution gives any exact value probability zero, so P(margin === 0) off
+ * a continuous model is 0 and the Tie tile would price at infinity. Real
+ * football piles up on a handful of margins and 0 is one of the commonest, so
+ * the mass near zero is taken as the density there times an effective width.
+ *
+ * 2.6 is set so that an EVENLY MATCHED first half - spread 0 - prices a tie at
+ * about 9%, which is what half-time ties actually run at. It is a calibration
+ * against a known rate, not a taste. There is a test for it. */
+const TIE_WIDTH = 2.6;
+
+/* 🔴 THE FLOOR, AND IT IS A PRODUCT RULE RATHER THAN A MATHEMATICAL ONE. A
+ * tile at 1.01x is not a bet, it is a rounding error with a tap target - and
+ * the old board carried 24 of them. Below this a market is NOT OFFERED at all,
+ * rather than offered at a price nobody should take. Anything at exactly the
+ * floor is a genuine near-certainty being sold honestly cheap. */
+export const MIN_PRICE = 1.1;
+
+/** The single-call ceiling. Unchanged, and imported nowhere else from here. */
+export const MAX_PRICE = 6;
+
+/* 🔴 THE MIRROR OF THE FLOOR, AND IT EXISTS BECAUSE THE CAP CANNOT SAY NO.
+ *
+ * A floor stops us offering a bet that pays nothing. Nothing stopped the
+ * opposite: `neither` on first-to-score is a 0-0 final, about 1 game in 2000,
+ * whose honest price is ~2000x. The 6x cap does not refuse that bet, it just
+ * quietly pays it at 6 - a tile selling something for a three-hundredth of
+ * what it is worth, sitting next to a coin flip at 2.00x and looking like the
+ * better deal because the number is bigger.
+ *
+ * So above this, the market is not offered. 12x is two full doublings past the
+ * cap: anything whose true price is further out than that cannot be sold
+ * honestly at 6, and the right answer is not to sell it. */
+export const MAX_TRUE_PRICE = 12;
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Standard normal CDF, Abramowitz & Stegun 26.2.17. Accurate to ~7.5e-8,
+ *  which is several orders of magnitude finer than a price rounded to 2dp. */
+export function normCdf(z: number): number {
+  const s = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+    - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return 0.5 * (1 + s * y);
+}
+
+function normPdf(z: number): number {
+  return Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);
+}
+
+/**
+ * WHAT FRACTION OF THE GAME THIS MARKET COVERS. Returns null for a market that
+ * is not a slice of time at all.
+ */
+export function shareOf(scope: string, period?: number): number | null {
+  if (scope === 'game') return 1;
+  if (scope === 'half') {
+    /* markets.ts numbers the first half `period: 2` - it means "through the
+       end of period 2", which is how scoreAfterPeriod reads it. So the FIRST
+       half is periods 1-2 and the second half is 3-4. */
+    if (period === 2) return QUARTER_SHARE[0] + QUARTER_SHARE[1];
+    if (period === 4) return QUARTER_SHARE[2] + QUARTER_SHARE[3];
+    return null;
+  }
+  if (scope === 'quarter' && isNum(period) && period >= 1 && period <= 4) {
+    return QUARTER_SHARE[period - 1];
+  }
+  return null;
+}
+
+/** The margin distribution over a slice of the game, from the posted spread. */
+export function marginDist(spread: number, share: number, sport: string) {
+  const sd = SD_MARGIN[sport] ?? SD_MARGIN['college-football'];
+  return {
+    mu: -spread * share,              // ESPN convention: home number, negative = home favoured
+    sigma: sd * Math.sqrt(share),     // variance adds over time, deviation goes as sqrt
+  };
+}
+
+/**
+ * P(home) / P(away) / P(tie) over a slice of the game.
+ *
+ * 🔴 NORMALISED, ALWAYS. The three come out of one distribution so they
+ * already sum to about 1, and they are divided through anyway - a rounding
+ * drift of a thousandth is not worth the class of bug it leaves open.
+ */
+export function winnerProbs(spread: number, share: number, sport: string) {
+  const { mu, sigma } = marginDist(spread, share, sport);
+  const tie = Math.min(0.4, normPdf(-mu / sigma) / sigma * TIE_WIDTH);
+  const rest = 1 - tie;
+  /* P(home leads) among the non-tie mass. */
+  const pHome = 1 - normCdf((0 - mu) / sigma);
+  const home = pHome * rest;
+  const away = (1 - pHome) * rest;
+  const s = home + away + tie;
+  return { home: home / s, away: away / s, tie: tie / s };
+}
+
+/**
+ * P of each winning-margin bucket, over the whole game. `1-6`, `7-13`, `14+`.
+ *
+ * 🔴 A TIE IS NOT A BUCKET AND IS NOT SILENTLY FOLDED INTO ONE. markets.ts
+ * offers three buckets and none of them is 0, so a tied game settles through
+ * the void path. Its mass is therefore removed here and the three buckets are
+ * normalised over what is left - pricing them as though a tie were impossible
+ * would overstate every one of them.
+ */
+export function marginProbs(spread: number, sport: string) {
+  const { mu, sigma } = marginDist(spread, 1, sport);
+  /* |margin| in a band, summed from both tails of the distribution. */
+  const band = (lo: number, hi: number) => {
+    const p = (a: number, b: number) => normCdf((b - mu) / sigma) - normCdf((a - mu) / sigma);
+    return p(lo, hi) + p(-hi, -lo);
+  };
+  const raw = {
+    '1-6': band(0.5, 6.5),
+    '7-13': band(6.5, 13.5),
+    '14+': band(13.5, 200),
+  };
+  /* 🔴 TIE IS A FOURTH BUCKET, NOT A VOID, and I had this backwards. The
+     comment that stood here argued at length that a tied game voids the market
+     so the three buckets should be normalised over the non-tie mass. Then I
+     read the market: markets.ts offers `1-6 | 7-13 | 14+ | tie`. It is a
+     choice you can take. Normalising it away priced the other three as though
+     the tie mass did not exist, overstating all of them, and left `tie`
+     unpriced entirely so the whole market was dropped as unofferable.
+     Reasoning about a data structure instead of opening it - twice in one
+     file, since `neither` on first_to_score was the same mistake. */
+  const tie = Math.min(0.4, normPdf(-mu / sigma) / sigma * TIE_WIDTH);
+  const s = (raw['1-6'] + raw['7-13'] + raw['14+']) || 1;
+  const keep = 1 - tie;
+  return {
+    '1-6': raw['1-6'] / s * keep,
+    '7-13': raw['7-13'] / s * keep,
+    '14+': raw['14+'] / s * keep,
+    tie,
+  };
+}
+
+/**
+ * P(home scores first).
+ *
+ * 🔴 MUCH FLATTER THAN WINNING, AND DELIBERATELY SO. Who scores first is one
+ * possession, decided largely by a coin toss and a single drive, so it barely
+ * tracks a 40-point spread. Modelled as the winner probability of a slice
+ * about one drive long - which lands a 21-point favourite near 60% rather than
+ * near 95%, and that is the right shape. Ties are impossible here, so the two
+ * are normalised across each other only.
+ */
+export function firstToScoreProbs(spread: number, sport: string) {
+  const w = winnerProbs(spread, 0.08, sport);
+  const s = w.home + w.away || 1;
+  /* 🔴 `neither` IS A REAL CHOICE ON THIS MARKET - a 0-0 final. It is also
+     about one game in two thousand, which is the interesting part: see the
+     band rule in priceMarket. Modelled rather than omitted, because a choice
+     with no probability drops the whole market and that is what it was
+     silently doing. */
+  const NEITHER = 0.0005;
+  const rest = 1 - NEITHER;
+  return { home: w.home / s * rest, away: w.away / s * rest, neither: NEITHER };
+}
+
+/**
+ * A PROBABILITY BECOMES A PRICE. `stake / p`, two decimals, capped at 6x.
+ * Returns null BELOW THE FLOOR, which is how a market says "do not offer this"
+ * rather than printing a number nobody should take.
+ */
+export function priceFromP(p: number): number | null {
+  if (!isNum(p) || p <= 0) return null;
+  const raw = Math.round((1 / p) * 100) / 100;
+  if (raw < MIN_PRICE) return null;
+  return Math.min(MAX_PRICE, raw);
+}
+
+/**
+ * PRICE EVERY CHOICE IN ONE MARKET FOR ONE GAME.
+ *
+ * The single entry point the board calls. Returns `offerable: false` when this
+ * market should not be drawn for this game at all.
+ *
+ * 🔴 A MARKET WITH A NEAR-CERTAIN SIDE IS NOT OFFERED, EVEN THOUGH ITS OTHER
+ * SIDES PRICE FINE. Miami -59.5 puts the first-half winner at 99.1% / 0.5% /
+ * 0.3%. Miami falls below the floor and disappears, which leaves a market
+ * showing Florida A&M at 6.00x and Tie at 6.00x - two big numbers, no
+ * favourite, and nothing on the screen saying that both are 200-to-1 shots
+ * being sold at 6.
+ *
+ * That is worse than the flat board it replaces. A tile's price is the only
+ * thing telling you what you are taking, and the cap has already flattened
+ * both of these into the same number as a coin flip on a good game. So the
+ * rule is: if ANY outcome is a near-certainty, the market is a formality
+ * rather than a proposition, and it does not get drawn. Mismatches therefore
+ * show fewer markets, which is the honest answer - there is less to bet on in
+ * a 59-point game, and pretending otherwise is what produced the screenshot.
+ */
+export function priceMarket(
+  game: any,
+  market: { id: string; scope: string; period?: number; needsLine?: string; choices: { id: string }[] },
+  sport: string,
+): { offerable: boolean; prices: Record<string, number> } {
+  const none = { offerable: false, prices: {} };
+  if (!game || !market) return none;
+  const spread = game.spread;
+
+  /* A posted line prices itself at 2.00x both ways - unchanged, and the reason
+     is in this file's header. Jason, 2026-09-10: "Against the spread I get
+     even odds." Yes, and that is correct rather than a gap. */
+  if (market.needsLine) {
+    const prices: Record<string, number> = {};
+    for (const c of market.choices) prices[c.id] = 2;
+    return { offerable: true, prices };
+  }
+
+  /* Everything below needs the spread to have an opinion at all. Without one
+     there is no model, and 2.00x is then an honest statement of ignorance
+     rather than a default nobody chose. */
+  if (!isNum(spread)) {
+    const prices: Record<string, number> = {};
+    for (const c of market.choices) prices[c.id] = 2;
+    return { offerable: true, prices };
+  }
+
+  let probs: Record<string, number> | null = null;
+  if (market.id === 'margin') {
+    probs = marginProbs(spread, sport) as unknown as Record<string, number>;
+  } else if (market.id === 'first_to_score') {
+    probs = firstToScoreProbs(spread, sport) as unknown as Record<string, number>;
+  } else {
+    const share = shareOf(market.scope, market.period);
+    if (share === null) return none;
+    /* 🔴 THE WHOLE-GAME WINNER IS LEFT ALONE. It has a moneyline, which is a
+       real price from a real book, and a model built out of the spread has
+       nothing to add to it. p6-allgames still owns that one. */
+    if (market.id === 'winner') return none;
+    probs = winnerProbs(spread, share, sport) as unknown as Record<string, number>;
+  }
+
+  const prices: Record<string, number> = {};
+  for (const c of market.choices) {
+    const p = probs[c.id];
+    if (!isNum(p) || p <= 0) return none;
+    /* The band, checked on the TRUE price before the cap flattens it. Both
+       ends drop the whole market rather than the one choice: a market missing
+       an outcome is not the same market, and the remaining tiles would be
+       priced against a set that no longer sums to one. */
+    const truePrice = 1 / p;
+    if (truePrice < MIN_PRICE || truePrice > MAX_TRUE_PRICE) return none;
+    const price = priceFromP(p);
+    if (price === null) return none;
+    prices[c.id] = price;
+  }
+  return { offerable: true, prices };
+}
