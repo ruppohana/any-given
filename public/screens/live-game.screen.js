@@ -624,6 +624,36 @@ function spotYard(state) {
  * way when the two clash - the home team's colour is the stable one because
  * the spread and the field are quoted on it - and a side whose secondary
  * clashes too gets null, which callers render as neutral. */
+/* 🔴 WHICH LEAGUE THIS GAME IS, FROM THE PAYLOAD - NEVER FROM THE KEY.
+ *
+ * This existed FIVE TIMES in this file as
+ *
+ *     (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football'
+ *
+ * which reads the league out of a STRING that usually contains it. Anything
+ * that is not literally 'nfl' before the colon is college, so a key of
+ * `rehearsal:live` - or any key we invent later - is silently college.
+ *
+ * 🔴 WHAT IT COST, FOUND BY REPLAYING A REAL GAME: the scorebug drew
+ * CLAREMONT-MUDD-SCRIPPS and UCLA over New England at Seattle, with play text
+ * reading "to SEA 11". The names and colours were right, because those come
+ * from the payload. Only the crests were wrong, because logoUrl builds
+ * `/logos/<league>/<id>.png` and NFL 17 is New England while college 17 is
+ * CMS. A real crest, for a real team, and nothing anywhere errors.
+ *
+ * Fourth filename-as-truth bug in this repo - after the test suite's league
+ * detection, replay.mjs's sport, and idFromRef - and the same fix as all
+ * three: read the field that states the fact instead of parsing a name that
+ * usually implies it. The payload carries `sport`. Use it.
+ *
+ * The key is kept as the fallback for the one case where there is no payload
+ * yet - the first paint, before the first poll returns. */
+function leagueOf(state) {
+  const fromFeed = state && state.sport;
+  if (fromFeed === 'nfl' || fromFeed === 'college-football') return fromFeed;
+  return (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+}
+
 function teamPalette(state) {
   const away = state.teams[state.awayTeamId], home = state.teams[state.homeTeamId];
   const ap = normalizeColor(away && away.primary);
@@ -1583,7 +1613,7 @@ function saveCallSummary(rows) {
      * total has to parse the game key and guess which week an id belonged to -
      * and would silently fold last week's games into this week's number the
      * first time the week rolled over. */
-    const sport = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+    const sport = leagueOf(S.raw);
     all[S.key] = { won, lost, voided, open, profit, at: Date.now(),
                    sport, week: SLATE_WEEK[sport] || 1 };
     localStorage.setItem('ag.callsum', JSON.stringify(all));
@@ -1718,6 +1748,39 @@ function homeSignature() {
           r.situation && r.situation.clock, S.mode, S.sport].join('|');
 }
 
+/**
+ * 🔴 EVERY TEAM CARRIES ITS OWN LEAGUE, FROM THE PAYLOAD.
+ *
+ * Found by replaying a real NFL game through the live screen: the scorebug
+ * drew CLAREMONT-MUDD-SCRIPPS and UCLA over a New England at Seattle game
+ * whose play text said "to SEA 11". The names and colours were right - they
+ * come from the payload - and only the crests were wrong.
+ *
+ * logoUrl builds `/logos/<league>/<variant>/<id>.png` and falls back to
+ * college when it is not told a league. That default is correct for the
+ * shipped fixture, which is 760 schools and nothing else, and catastrophic
+ * for live data: NFL team 17 is New England and college team 17 is CMS, so
+ * the wrong league produces a real crest for a real team and nothing
+ * anywhere errors. Same shape as the three filename-as-truth bugs already in
+ * this file's history - two ids that look interchangeable, one confident
+ * wrong answer.
+ *
+ * 🔴 STAMPED AT THE DOOR RATHER THAN PASSED AT EVERY CALL SITE. There are
+ * nine places in this screen that pull a team out of `state.teams`, and a
+ * rule that has to be remembered nine times is a rule that will be missed
+ * once. The payload already says which sport it is; putting that on each
+ * team as it arrives means no caller can get it wrong, including callers
+ * that do not exist yet.
+ */
+function stampLeague(raw) {
+  if (!raw || !raw.teams || !raw.sport) return raw;
+  for (const id of Object.keys(raw.teams)) {
+    const t = raw.teams[id];
+    if (t && typeof t === 'object') { t.id = t.id || id; t.league = raw.sport; }
+  }
+  return raw;
+}
+
 async function refreshKey(wrap, sport) {
   const k = await nextGameKey(sport);
   /* Guard the sport as well as the value: the lookup is async and somebody can
@@ -1734,7 +1797,7 @@ async function poll(wrap) {
       fetch('/api/state/' + S.key),
       fetch('/api/board/' + S.key)
     ]);
-    if (stateRes.ok) { S.raw = await stateRes.json(); S.noGame = false; }
+    if (stateRes.ok) { S.raw = stampLeague(await stateRes.json()); S.noGame = false; }
     /* 🔴 404 IS AN ANSWER, NOT A SILENCE. The Worker says "nothing pushed for
      * that game yet" and this used to ignore it and keep drawing a skeleton, so
      * a sport nobody is polling looked identical to a sport that was one second
@@ -1849,7 +1912,11 @@ function paint(wrap) {
   if (!S.isHome) {
     wrap.appendChild(pageHeader({
       title: 'Call it live',
-      league: (S.sport === 'nfl') ? 'nfl' : 'ncaa'
+      /* The same bug as the crests, in the header: this read S.sport - a
+         stored PREFERENCE - rather than the league of the game on screen. An
+         NFL game under an NCAA mark, which is the one place a wrong league is
+         unmissable. leagueOf reads the payload and falls back to the key. */
+      league: leagueOf(S.raw) === 'nfl' ? 'nfl' : 'ncaa'
     }));
     const gs = gameStrip(wrap);
     if (gs) wrap.appendChild(gs);
@@ -1996,7 +2063,7 @@ function paint(wrap) {
   const head = el('div', 'lg-head');
   const away = state.teams[state.awayTeamId], home = state.teams[state.homeTeamId];
   /* The league goes with the chip, because a team id is only unique inside one. */
-  const league = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+  const league = leagueOf(state);
   /* 🔴 THE GAME HEAD IS WHERE A CREST DOES ITS JOB, so it is sized for that and
    * not for a list row. 22 was the slate's number, carried over — and a slate row
    * is one of sixty while this is the only place on screen that says WHICH GAME
@@ -3545,7 +3612,7 @@ function pregame(state, now, wrap) {
 
     const gh = el('div', 'lg-head');
     const aw = state.teams[state.awayTeamId], hm = state.teams[state.homeTeamId];
-    const lg = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+    const lg = leagueOf(state);
     if (aw) gh.appendChild(teamChip({ id: state.awayTeamId, ...aw }, { size: 44, league: lg }));
     gh.appendChild(el('span', 'lg-at', 'at'));
     if (hm) gh.appendChild(teamChip({ id: state.homeTeamId, ...hm }, { size: 44, league: lg }));

@@ -520,7 +520,14 @@ export async function fetchSlate(sport, week, byId) {
     /* Identity travels WITH the game - the shipped team file is a snapshot and
      * the feed is not. It is the fallback for what the payload omits, never the
      * other way round. */
-    for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
+    /* 🔴 `league` COMES WITH THE TEAM. logoUrl falls back to college when it
+       is not told, which is right for the shipped 760-school fixture and
+       wrong for anything live - NFL 17 is New England and college 17 is
+       Claremont-Mudd-Scripps, so an unstamped NFL team draws a real crest
+       for a real team and nothing errors. */
+    for (const t of g.teams || []) {
+      if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t, league: sport };
+    }
     return {
       id: String(g.id),
       shortName: g.shortName || null,
