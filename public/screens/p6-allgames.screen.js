@@ -1251,7 +1251,27 @@ export function render(root, data, state) {
     repaint(gameId) {
       const old = root.querySelector('.p6a-game[data-game-id="' + cssEsc(gameId) + '"]');
       const game = games.find((x) => x.id === gameId);
-      if (old && game) old.replaceWith(gameCard(this, game));
+      /* 🔴 THE CARD STAYS OPEN ACROSS A REBUILD. Jason: "Hitting a stake of 10
+       * collapses the tab."
+       *
+       * Since the game became a <details>, `open` is STATE THAT LIVES ON THE
+       * ELEMENT - and this function throws the element away. gameCard decides
+       * `open` from whether the game has a pick on it, which is right on a
+       * first render and wrong on every rebuild: changing the stake is not a
+       * pick, so the card came back closed under the thumb that had just
+       * tapped it.
+       *
+       * The same trap the comment two lines up already describes for scroll
+       * position - "a board is a long scroll somebody has worked for" - and I
+       * introduced a second kind of worked-for state without extending the
+       * rule to cover it. Anything the USER put into the DOM has to be carried
+       * across a replaceWith, not recomputed from the model. */
+      const wasOpen = old ? old.open : null;
+      if (old && game) {
+        const fresh = gameCard(this, game);
+        if (wasOpen !== null) fresh.open = wasOpen;
+        old.replaceWith(fresh);
+      }
       paintTally();
     }
   };
