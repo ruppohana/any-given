@@ -28,6 +28,10 @@ import { HEADER_CSS } from '/components/header.js';
 const ROUTES = [
   { id: 'slate',     dest: 'slate',     screen: 'p2-slate',        state: 'ready-short', label: 'The slate (3 real games)' },
   { id: 'slate131',  dest: 'slate',     screen: 'p2-slate',        state: 'ready',       label: 'The slate (131 games)' },
+  /* 🔴 THE WEEK'S MARKETS. The second of the three doors on Home - winner,
+   * spread, total, halves, quarters, team totals, first to score and margin,
+   * on every game of the week. Reached at #/allgames from the front door. */
+  { id: 'allgames',  dest: 'slate',     screen: 'p6-allgames',     state: 'ready',       label: 'All games' },
   { id: 'picks',     dest: 'picks',     screen: 'p4-picks',        state: 'ready',       label: 'My picks' },
   { id: 'parlay',    dest: 'picks',      screen: 'p3-parlay',       state: 'valid',       label: 'The parlay' },
   { id: 'standings', dest: 'standings', screen: 'p5-standings',    state: 'ready',       label: 'Standings' },
@@ -309,26 +313,25 @@ function buildSettings() {
     () => document.documentElement.dataset.theme || 'system',
     (v) => { if (v === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; }));
 
-  /* --- marks --- */
-  box.appendChild(seg('Team logos', [['on', 'On'], ['off', 'Off']],
-    () => document.documentElement.dataset.marks || 'on',
-      /* 🔴 setMarks(), NOT set('marks', v). Jason, 2026-09-09: "Logos keep
-     * defaulting off. Turn them on."
-     *
-     * They were on at boot and turned themselves off the first time anybody
-     * opened this panel, because TWO WRITERS DISAGREED ABOUT THE FORMAT.
-     * `set()` is the generic settings writer and it JSON-stringifies, so it
-     * stored the five characters "on" WITH QUOTES. Boot reads the key raw and
-     * assigns it straight to `dataset.marks`, and marksOn() compares that to the
-     * bare string `on` - which '"on"' is not. So one visit to the settings sheet
-     * poisoned the key permanently, and choosing "On" was the action that did
-     * it. Choosing Off worked, which is why it looked like the default was off
-     * rather than like the toggle was broken.
-     *
-     * setMarks() is the one that already writes the raw format boot reads. The
-     * generic writer is right for every other setting here and wrong for this
-     * one, and the fix is to stop having two. */
-  (v) => { setMarks(v === 'on'); cache.clear(); mount(); }));
+  /* 🔴 NO LOGO TOGGLE IN THE SHEET. Jason, 2026-09-10: "remove the logo
+   * toggle. We need it in the backend but not the user."
+   *
+   * A `seg('Team logos', On/Off)` lived here and it was the wrong kind of
+   * control to ship. Marks are not a taste setting - they are a LICENSING
+   * position, priced at ~$16,875 for the college marks and unresolved. A switch
+   * asks the user to decide something that is ours to decide, and worse, it
+   * advertises that the answer is currently arguable.
+   *
+   * 🔴 THE MECHANISM IS UNTOUCHED, ONLY THE CONTROL IS GONE. setMarks() still
+   * exists, `ag.marks` is still read at boot, dataset.marks still drives every
+   * chip, and teamChip still falls back to two colors and an abbreviation.
+   * Nothing about how it WORKS changed - which is what "we need it in the
+   * backend" asks for.
+   *
+   * Where it can still be flipped: the ?dev bar's Logos checkbox, which is the
+   * harness and is hidden from everybody else, and setMarks() from a console.
+   * That is the right home for it - a build-time position with a developer
+   * switch, rather than a product feature with a user switch. */
 
   /* --- the delay, which is why this exists --- */
   const d = document.createElement('div'); d.className = 'ag-set';
@@ -339,7 +342,19 @@ function buildSettings() {
   r.type = 'range'; r.min = '0'; r.max = '90'; r.step = '5'; r.value = String((get('delayMs', 45000)) / 1000);
   const label = () => { dvL.textContent = r.value === '0' ? 'Live — no gap to call into' : r.value + ' seconds behind'; };
   label();
-  r.oninput = () => { set('delayMs', Number(r.value) * 1000); label(); };
+  /* 🔴 IT ANNOUNCES ITSELF, because this sheet opens ON TOP of a screen that is
+   * already mounted. The live board seeds its own delay from the same
+   * `ag.delayMs` key and re-reads it every paint - but a sheet open over a
+   * quiet board means no paint is coming, so the slider would move and the
+   * board would go on holding the old number with nothing anywhere disagreeing
+   * out loud. A same-document write fires no `storage` event (that one is for
+   * OTHER tabs), so the write has to say so itself. */
+  r.oninput = () => {
+    const ms = Number(r.value) * 1000;
+    set('delayMs', ms);
+    label();
+    window.dispatchEvent(new CustomEvent('ag:delay', { detail: ms }));
+  };
   dv.appendChild(dvL);
   d.append(dl, dv, r);
   box.appendChild(d);

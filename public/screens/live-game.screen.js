@@ -1783,22 +1783,56 @@ async function poll(wrap) {
   } catch { /* offline is a state the screen draws, not an exception */ }
 }
 
+/* 🔴 ONE VALUE, TWO SCREENS, AND IT IS RE-READ RATHER THAN REMEMBERED. S.delayMs
+ * was seeded from storage once at module load, which was correct while the only
+ * way to change it was the slider on this screen. Now that the slider is in
+ * settings - an overlay that opens ON TOP of a mounted live screen - a cached
+ * copy is a bug with no symptom: the sheet would say 20s, the board would keep
+ * holding 45, and nothing anywhere would disagree out loud.
+ *
+ * Re-reading at the top of paint costs one localStorage hit per repaint and
+ * removes the whole class. The event below covers the one case paint cannot:
+ * the sheet is open over a screen that is not repainting. */
+let DELAY_WIRED = false;
+function wireDelay(wrap) {
+  if (DELAY_WIRED) return;
+  DELAY_WIRED = true;
+  window.addEventListener('ag:delay', (e) => {
+    const ms = Number(e && e.detail);
+    if (!Number.isFinite(ms) || ms === S.delayMs) return;
+    S.delayMs = ms;
+    /* The hold changes what is on screen, not just what is stored - a shorter
+       delay reveals plays we were sitting on, a longer one takes them back. */
+    paint(wrap);
+  });
+}
+
 function paint(wrap) {
+  S.delayMs = store.get('delayMs', 45000);
+  wireDelay(wrap);
   wrap.innerHTML = '';
   const now = Date.now();
 
-  /* ---- the delay, first, because it is the thing that makes this work ----
+  /* 🔴 THE DELAY IS NOT DRAWN HERE ANY MORE. Jason, 2026-09-10: "Move 45
+   * seconds behind to settings."
    *
-   * 🔴 EXCEPT ON HOME. Jason, 2026-09-09: "why the 45 seconds again?"
+   * It had already been demoted twice - off Home, then from a permanent panel
+   * down to a one-line "45s behind · adjust" - and both times the argument for
+   * keeping something was the same: the delay is the most important idea in
+   * this product. That is true and it is not an argument for a control. A
+   * SETTING you change once and a FACT you read every play are different
+   * things, and this line was pretending to be both while being neither well.
    *
-   * Because it was drawn unconditionally at the top of every paint, including a
-   * landing page where there is no live feed, nothing being held back and
-   * nothing to be behind. "45s BEHIND ON PURPOSE" above a menu is a boast about
-   * a mechanic the person has not reached yet, and it reads as an error - behind
-   * WHAT? The delay is the most important idea in this product and putting it
-   * where it cannot be true is the fastest way to make it look like noise.
+   * It is a setting. It goes in settings, which is reachable from this screen's
+   * own header, and which already had the identical slider - so the honest
+   * description of this change is that a duplicate was deleted rather than that
+   * a control was moved.
    *
-   * It belongs on the game, where it is a live fact about what you are seeing. */
+   * 🔴 WHAT DOES NOT GO WITH IT: the FAULT case. A feed further behind than the
+   * setting is not a preference, it is something being wrong, and that is the
+   * stale banner's job - it draws in --down, says the feed is frozen, and is
+   * unaffected by any of this. Deleting a status line is safe precisely because
+   * the failure it hinted at is reported somewhere louder. */
   /* 🔴 THE SAME HEADER AS EVERY OTHER SCREEN. Jason: "we need a header like
    * the rest, the NFL logo, kill the football. for this page, Call it live."
    *
@@ -1817,7 +1851,6 @@ function paint(wrap) {
       title: 'Call it live',
       league: (S.sport === 'nfl') ? 'nfl' : 'ncaa'
     }));
-    wrap.appendChild(delayBar());
     const gs = gameStrip(wrap);
     if (gs) wrap.appendChild(gs);
   }
@@ -3943,89 +3976,18 @@ function bragButton(state, rows) {
  *
  * A number a person can check against their own television is worth more than a
  * number that is always right because we defined it. */
-/* 🔴 IT DERIVES THE HELD VIEW ITSELF RATHER THAN TAKING ONE. delayBar is drawn
- * near the top of paint(), and `const state = held(...)` is a hundred lines
- * below it - passing it in would be a temporal dead zone reference, which this
- * file has already been bitten by twice and warns about in paint() itself. A
- * function declaration is hoisted; a const is not. */
-function behindLabel(now) {
-  const state = S.raw ? held(S.raw, S.delayMs, now) : null;
-  /* 🔴 THE MEASURED PUBLISH LAG, NOT THE AGE OF THE NEWEST PLAY - and this is
-   * the SECOND place that distinction had to be made. I fixed it in the timing
-   * card and left it here, so at half time the chip read "550s behind · the
-   * feed" while the feed was 47 seconds behind and perfectly healthy. It was
-   * reporting the length of half time.
-   *
-   * 🔴 THE SAME WRONG NUMBER IN TWO PLACES IS THE DUPLICATE-RULE BUG AGAIN, in
-   * arithmetic instead of CSS: one concept, computed twice, and only one copy
-   * got corrected. There is now one source - the poller measures it at arrival
-   * and publishes it, and both readouts read that field. */
-  const measured = state && typeof state.publishLagMs === 'number'
-    ? Math.round(state.publishLagMs / 1000) : null;
-  const vis = state && state.plays && state.plays.length
-    ? state.plays[state.plays.length - 1] : null;
-  const age = measured != null ? measured
-    : (vis && vis.wallclockMs ? Math.round((now - vis.wallclockMs) / 1000) : null);
-  if (age == null) return S.delayMs === 0 ? 'LIVE — no delay' : `${S.delayMs / 1000}s behind`;
-  /* 🔴 NOT NAMED `held`. It was, and it shadowed the held() FUNCTION this same
-   * body calls three lines above it - `const` shadows for the whole scope, not
-   * from the line down, so the call landed in the temporal dead zone and threw
-   * "Cannot access 'held' before initialization". The live screen went blank
-   * mid-game and no console error surfaced, because the screen's own error
-   * boundary caught it and drew "That screen did not load".
-   *
-   * 🔴 FOURTH TDZ FAULT IN THIS FILE, and the first one caused by a NAME rather
-   * than by an order - which is worse, because moving the declaration does not
-   * fix it and the code reads as though it should work.
-   *
-   * Whichever is larger is the one you are actually experiencing. */
-  const wanted = Math.round(S.delayMs / 1000);
-  return age > wanted + 5 ? `${age}s behind · the feed` : `${age}s behind`;
-}
-
-function delayBar() {
-  if (S.delayOpen || !S.seenIntro) return delayPanel();
-  const line = el('button', 'lg-delayline');
-  line.appendChild(el('span', 'lg-delayline-l', behindLabel(Date.now())));
-  line.appendChild(el('span', 'lg-delayline-a', 'adjust'));
-  if (S.delayMs === 0) line.classList.add('is-live');
-  line.onclick = () => { S.delayOpen = true; paint(document.querySelector('.lg').parentNode); };
-  return line;
-}
-
-function delayPanel() {
-  const bar = el('div', 'lg-delay');
-  const text = () => (S.delayMs === 0 ? 'LIVE — no delay' : `BEHIND ON PURPOSE · ${S.delayMs / 1000}s`);
-  const label = el('span', 'lg-delay-l', text());
-  if (S.delayMs === 0) label.classList.add('is-live');
-  const input = el('input');
-  input.type = 'range'; input.min = '0'; input.max = '90'; input.step = '5';
-  input.value = String(S.delayMs / 1000);
-  input.setAttribute('aria-label', 'How far behind the television you are, in seconds');
-
-  /* 🔴 ZERO IS ALLOWED AND IS NAMED. The slider is user-set and always on -
-   * settled doctrine, and it is not this screen's job to prevent a choice. It IS
-   * this screen's job to say what the choice costs, at the moment it is made,
-   * rather than letting somebody discover it by finding every question
-   * unanswerable. */
-  const warn = el('p', 'lg-delay-warn', 'No gap left to call into — this is a scoreboard now.');
-  warn.hidden = S.delayMs !== 0;
-
-  input.oninput = () => {
-    S.delayMs = Number(input.value) * 1000;
-    store.set('delayMs', S.delayMs);
-    label.textContent = text();
-    label.classList.toggle('is-live', S.delayMs === 0);
-    warn.hidden = S.delayMs !== 0;
-  };
-  bar.append(label, input, warn);
-  if (S.seenIntro) {
-    const done = el('button', 'lg-delay-done', 'Done');
-    done.onclick = () => { S.delayOpen = false; paint(document.querySelector('.lg').parentNode); };
-    bar.appendChild(done);
-  }
-  return bar;
-}
+/* 🔴 behindLabel / delayBar / delayPanel LIVED HERE and are gone - the delay
+ * is a setting now, and the settings sheet in app.js owns the only slider.
+ *
+ * Kept as a note rather than deleted silently, because one of them carried a
+ * fix that must not be re-lost if anybody rebuilds a readout on this screen:
+ * the number a person is shown is the poller's MEASURED publish lag, never the
+ * age of the newest play. Those agree during play and diverge completely at
+ * half time, where "age of the newest play" reports the length of the break -
+ * it once read "550s behind · the feed" while the feed was 47 seconds behind
+ * and perfectly healthy. state.publishLagMs is the field; it is measured at
+ * arrival by the poller and published with the state, so there is one source
+ * and not two copies of the same arithmetic. */
 
 const CSS = `
 .lg { display: grid; gap: 10px; }
