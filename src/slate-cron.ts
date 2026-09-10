@@ -119,12 +119,31 @@ export async function captureSlate(env: any, sport: string, season: number) {
       const away = sides.find((x) => x.homeAway === 'away') || sides[1];
       if (!home || !away) continue;
 
+      /* 🔴 THE PERIOD COMES WITH THE STATUS, AND IT IS WHAT LETS A MARKET
+       * CLOSE ON ITS OWN CLOCK. Jason, 2026-09-10: "So I can only bet on who
+       * wins the second half until kick?"
+       *
+       * He could, and it was wrong. Every market closed at kickoff because
+       * kickoff was the only moment the slate knew about - so a second-half
+       * winner, a Q4 winner, a market whose subject had not happened yet and
+       * would not for two hours, all shut at the same instant as the coin
+       * toss. That is the opposite of what this app is for.
+       *
+       * The status object was already being fetched to read `type.name` and it
+       * carries `period` and `displayClock` in the same response. One extra
+       * field on the write, no extra request, and a market can now be gated on
+       * whether ITS period has started rather than on whether the game has. */
       let status = 'scheduled';
+      let period: number | null = null;
+      let clock: string | null = null;
       try {
         const st = comp.status?.$ref ? await get(String(comp.status.$ref)) : comp.status;
         const n = st?.type?.name;
         status = n === 'STATUS_FINAL' ? 'final'
           : n === 'STATUS_SCHEDULED' ? 'scheduled' : (n ? 'in_progress' : 'scheduled');
+        const pn = Number(st?.period);
+        period = Number.isFinite(pn) && pn > 0 ? pn : null;
+        clock = typeof st?.displayClock === 'string' ? st.displayClock : null;
       } catch { /* leave scheduled */ }
 
       /* 🔴 EVERY MARKET LINE, NOT JUST THE SPREAD. The request was already
@@ -162,7 +181,7 @@ export async function captureSlate(env: any, sport: string, season: number) {
         id, sport, season, week,
         kickoffUtc: Date.parse(ev.date),
         name: ev.name, shortName: ev.shortName,
-        status,
+        status, period, clock,
         homeTeamId: home.id, awayTeamId: away.id,
         homeScore: home.score, awayScore: away.score,
         spread, spreadProvider: provider,

@@ -317,3 +317,73 @@ export function priceMarket(
   }
   return { offerable: true, prices };
 }
+
+/* 🔴 WHEN A MARKET CLOSES, AND IT IS NOT ALWAYS KICKOFF.
+ *
+ * Jason, 2026-09-10: "So I can only bet on who wins the second half until
+ * kick?" Yes, and it was the single worst rule in the board.
+ *
+ * Everything shut at kickoff because kickoff was the only moment the slate
+ * knew about. So a fourth-quarter winner closed at the coin toss - three
+ * hours before the thing it is about starts, on a proposition nobody could
+ * possibly have resolved yet. An app whose entire thesis is that there is
+ * something to do WHILE you watch was closing every in-game market before the
+ * game began.
+ *
+ * 🔴 THE RULE: A MARKET CLOSES WHEN ITS OWN PERIOD STARTS. Not before, not at
+ * kickoff. Full-game markets and anything covering period 1 still close at
+ * kickoff, because their subject begins then. Everything else stays open
+ * exactly as long as it is genuinely undecided:
+ *
+ *     winner, spread, total, margin, first to score, team totals
+ *                        -> kickoff. The whole game is their subject
+ *     first half, Q1     -> kickoff
+ *     Q2                 -> the start of the second quarter
+ *     second half, Q3    -> half time
+ *     Q4                 -> the start of the fourth quarter
+ *
+ * So a Sunday afternoon has a rolling board rather than one that empties at
+ * 1pm: the second half of the early game is live while you are watching the
+ * first, which is the product.
+ *
+ * 🔴 AND THE PRICE DOES NOT NEED A LIVE LINE TO DO THIS. A future period is
+ * priced off the pregame spread scaled to that period, exactly as it is
+ * before kickoff - the relative strength of two teams is what the spread
+ * says, and it does not stop being true at half time. What this deliberately
+ * does NOT model is game state: a side down 28 in the fourth throws on every
+ * down, which moves a Q4 total more than it moves a Q4 winner. Naming that as
+ * a known gap rather than pretending the number is a live price.
+ */
+export function marketClosesAtPeriod(market: { scope: string; period?: number }): number {
+  if (market.scope === 'game') return 1;
+  if (market.scope === 'half') {
+    /* markets.ts numbers a half by the period it ENDS on: 2 is the first half,
+       4 is the second. The second half opens at period 3. */
+    return market.period === 4 ? 3 : 1;
+  }
+  if (market.scope === 'quarter' && isNum(market.period)) return market.period;
+  return 1;
+}
+
+/**
+ * IS THIS MARKET STILL OPEN FOR THIS GAME?
+ *
+ * 🔴 A FINAL GAME IS SHUT WHATEVER THE PERIOD SAYS, and that guard is first
+ * for a reason: a finished game's status object still reports `period: 4`, so
+ * a Q4 market read off the period alone would look open on a game that ended
+ * an hour ago. The same trap as reading a scheduled game's period, from the
+ * other end.
+ */
+export function marketIsOpen(game: any, market: { scope: string; period?: number }, now: number): boolean {
+  if (!game || !market) return false;
+  if (game.status === 'final') return false;
+  if (game.status !== 'in_progress') {
+    /* Not started: open until the clock reaches kickoff. */
+    return isNum(game.kickoffUtc) && isNum(now) && now < game.kickoffUtc;
+  }
+  /* Running: open only while the game has not reached this market's period.
+     An unknown period on a live game closes everything except full-game
+     markets, which are shut anyway - absent beats guessed. */
+  if (!isNum(game.period)) return false;
+  return game.period < marketClosesAtPeriod(market);
+}

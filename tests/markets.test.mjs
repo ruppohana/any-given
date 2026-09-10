@@ -125,10 +125,18 @@ test('every one of the 179 plays carries quarter, homeScore and awayScore', () =
  * 1 — THE CATALOG
  * ═════════════════════════════════════════════════════════════════════════ */
 
-test('GAME_MARKETS is exactly the thirteen agreed markets, in order', () => {
+/* 🔴 FIFTEEN NOW. h2_winner and h2_total were added 2026-09-10 because Jason
+ * asked "So I can only bet on who wins the second half until kick?" and the
+ * honest answer was that he could not bet on it at all - there was an h1 of
+ * each and no h2, so a scope named "half" was really about the first one. The
+ * catalogue looked complete because every other scope came in a full set.
+ *
+ * This census test is the reason the gap was findable at all, and it is why
+ * it stays a literal list rather than a count. */
+test('GAME_MARKETS is exactly the fifteen agreed markets, in order', () => {
   assert.deepEqual(M.GAME_MARKETS.map((m) => m.id), [
     'winner', 'spread', 'total',
-    'h1_winner', 'h1_total',
+    'h1_winner', 'h1_total', 'h2_winner', 'h2_total',
     'q1_winner', 'q2_winner', 'q3_winner', 'q4_winner',
     'team_total_home', 'team_total_away',
     'first_to_score', 'margin',
@@ -329,7 +337,9 @@ test('across the whole catalog, a market lands exactly one choice or voids entir
         `${m.id}: every verdict carries a reason`);
     }
   }
-  assert.equal(decided, 12);
+  /* 14 of 15: the spread pushes on this fixture, which is the void path and
+     is asserted separately above. Was 12 of 13 before the second-half pair. */
+  assert.equal(decided, 14);
   assert.equal(voided, 1);      // the spread, and only the spread
 });
 
@@ -385,10 +395,10 @@ test('the captured feed names a sportsbook and nothing this module returns does'
       }
     }
   }
-  /* 34 choices across the thirteen markets: 2+2+2 + 3+2 + 3*4 + 2+2 + 3 + 4. */
+  /* 39 choices across the fifteen markets: 2+2+2 + 3+2 + 3+2 + 3*4 + 2+2 + 3 + 4. */
   const choices = M.GAME_MARKETS.reduce((n, m) => n + m.choices.length, 0);
-  assert.equal(choices, 34);
-  assert.equal(checked, 4 * 34);
+  assert.equal(choices, 39);
+  assert.equal(checked, 4 * 39);
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -570,8 +580,14 @@ test('a negative team-total line is still a line', () => {
  * ═════════════════════════════════════════════════════════════════════════ */
 
 test('an unknown market or choice is null, and never one of the three reasons', () => {
+  /* 🔴 THIS LIST USED TO LEAD WITH `h2_winner`, as its example of a market
+     that does not exist. It exists now - added 2026-09-10 - and this test
+     failing is how that landed. Worth keeping the note: the suite had a
+     second-half market written down as the canonical MISSING one, which is
+     about as clear a signal of the gap as a codebase can give, and it sat
+     here unread until Jason asked the question directly. */
   const bad = [
-    settle('h2_winner', 'home'),
+    settle('h3_winner', 'home'),
     settle('', 'home'),
     settle('winner', 'tie'),
     settle('total', 'push'),

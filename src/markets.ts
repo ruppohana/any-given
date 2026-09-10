@@ -134,6 +134,33 @@ export const GAME_MARKETS: GameMarket[] = [
     needsLine: 'total',
     choices: overUnderChoices(),
   },
+  /* 🔴 THE SECOND HALF, WHICH DID NOT EXIST. Jason, 2026-09-10: "So I can only
+   * bet on who wins the second half until kick?" - the honest answer was that
+   * he could not bet on it at all. `h1_winner` and `h1_total` were here and
+   * there was no h2 of either, so a market named after a half was really a
+   * market about the first one, and the catalogue looked complete because
+   * every OTHER scope came in a full set.
+   *
+   * These two are the most valuable markets on the board and it is a
+   * consequence of the close rule, not of the sport: a second-half market
+   * stays open through the whole first half, so it is the one proposition
+   * somebody watching at 1:40pm can still take. Everything else on a live
+   * game has already shut. */
+  {
+    id: 'h2_winner',
+    label: 'Second half winner',
+    scope: 'half',
+    period: 4,
+    choices: homeAwayTie(),
+  },
+  {
+    id: 'h2_total',
+    label: 'Second half total',
+    scope: 'half',
+    period: 4,
+    needsLine: 'total',
+    choices: overUnderChoices(),
+  },
   ...quarterWinners,
   {
     id: 'team_total_home',
@@ -510,6 +537,38 @@ export function settleMarket(
       return totalVerdict(points, line, choiceId,
         `half line ${num(line)}, being the posted total ${num(total)} halved and rounded ` +
         `to the nearest 0.5; first half home ${num(end.home)} + away ${num(end.away)} = ${num(points)}`);
+    }
+
+    /* 🔴 THE SECOND HALF IS A SUBTRACTION, AND OVERTIME BELONGS TO IT.
+     * `scoreAfterPeriod(list, 4)` is the score at the end of regulation and
+     * the halftime score comes off it. A game that goes to overtime keeps
+     * counting into the second half rather than being voided: the market is
+     * named for a half of football, an overtime is a continuation of the
+     * second half in every way a viewer experiences it, and the alternative -
+     * voiding every overtime game - would hand back stakes on the most
+     * exciting finishes in the sport. Stated here because it is a real choice
+     * and not an oversight. */
+    case 'h2_winner': {
+      const half = scoreAfterPeriod(list, 2);
+      const end = finalScore(game, list);
+      if (half === null || end === null) return notFinal();
+      return sideVerdict(end.home - half.home, end.away - half.away, choiceId, true,
+        `second half: home ${num(end.home - half.home)}, away ${num(end.away - half.away)} ` +
+        `(final ${num(end.home)}-${num(end.away)} less half time ${num(half.home)}-${num(half.away)})`);
+    }
+
+    case 'h2_total': {
+      const half = scoreAfterPeriod(list, 2);
+      const end = finalScore(game, list);
+      if (half === null || end === null) return notFinal();
+      if (!isNum(total)) return noLine();
+      /* Derived exactly as h1_total's is, and said out loud for the same
+         reason: no half total is posted, so this one is ours. */
+      const line = Math.round((total / 2) * 2) / 2;
+      const points = (end.home - half.home) + (end.away - half.away);
+      return totalVerdict(points, line, choiceId,
+        `half line ${num(line)}, being the posted total ${num(total)} halved and rounded ` +
+        `to the nearest 0.5; second half ${num(points)} points`);
     }
 
     /* ── quarter scope ──────────────────────────────────────────────── */
