@@ -1224,9 +1224,17 @@ function gameCard(ctx, game) {
   moreWord.appendChild(el('span', 'p6a-more-w', 'LESS'));
   more.appendChild(moreWord);
   more.appendChild(el('span', 'p6a-more-c', '⌄'));
-  mid.appendChild(more);
   teams.append(teamBlock(ctx, game, 'away'), mid, teamBlock(ctx, game, 'home'));
   top.appendChild(teams);
+  /* 🔴 ITS OWN ROW, NOT THE MIDDLE COLUMN. First pass put it under the @
+     inside the three-column teams grid, where it took ~64px of horizontal
+     space away from the two names and then overflowed its own cell anyway -
+     the text is nowrap inside a column the grid was free to squeeze, so
+     "MORE" printed straight over Louisville's rank.
+     A full-width row below the teams costs no horizontal space at all, and
+     since the @ is centred the control still lands directly beneath it,
+     which is what was asked for. */
+  top.appendChild(more);
 
   const offered = marketsFor(game, ctx.markets);
   const staked = ctx.store[game.id] || {};

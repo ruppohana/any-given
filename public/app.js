@@ -435,6 +435,19 @@ function buildSettings() {
    * That is the right home for it - a build-time position with a developer
    * switch, rather than a product feature with a user switch. */
 
+  /* 🔴 THE BUILD, WHERE A PERSON CAN READ IT. Several times today a change
+   * was deployed, correct, and reported as missing - and the only way to
+   * settle it was to curl the origin from a laptop. A phone holding a stale
+   * bundle looks exactly like a feature that was never built, and neither
+   * of us could tell them apart from a screenshot.
+   *
+   * It is the last row of the menu and it is deliberately dull: this is
+   * diagnostic furniture, not a setting. */
+  const bi = document.createElement('div');
+  bi.className = 'ag-build';
+  bi.textContent = 'Build ' + (window.__BUILD__ || 'dev');
+  box.appendChild(bi);
+
   /* --- the delay, which is why this exists --- */
   const d = document.createElement('div'); d.className = 'ag-set';
   const dl = document.createElement('div'); dl.className = 'ag-set-l'; dl.textContent = 'BROADCAST DELAY';

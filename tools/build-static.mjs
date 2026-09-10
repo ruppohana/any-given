@@ -131,8 +131,20 @@ const BUILD_STAMP_INJECTED = true;
   const stamp = Date.now().toString(36);
   const idx = join(DIST, 'index.html');
   if (existsSync(idx)) {
-    writeFileSync(idx, readFileSync(idx, 'utf8').replace('</head>',
-      `<script>window.__BUILD__=${JSON.stringify(stamp)}</script></head>`));
+    /* 🔴 STAMP app.js TOO. The screens and their CSS were stamped and the
+     * entry point was not, so a phone could hold a stale app.js at a stable
+     * URL indefinitely - `must-revalidate` is a request, and an iOS
+     * standalone web app does not always honour it. index.html is no-cache
+     * so the stamp itself is always fresh; what was missing was anything
+     * that made the URL change.
+     *
+     * This cost real time today: several changes were reported as "I don't
+     * see it" when they were deployed and correct, and the only way to tell
+     * was to curl the origin. */
+    writeFileSync(idx, readFileSync(idx, 'utf8')
+      .replace('src="/app.js"', `src="/app.js?v=${stamp}"`)
+      .replace('</head>',
+        `<script>window.__BUILD__=${JSON.stringify(stamp)}</script></head>`));
   }
   const appjs = join(DIST, 'app.js');
   if (existsSync(appjs)) {

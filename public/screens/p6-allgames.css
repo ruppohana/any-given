@@ -534,14 +534,15 @@
    inherits the text colour and weight like any other character. On open it
    flips to the up arrowhead via a rotation, which keeps one element
    authoritative about the state instead of two glyphs that can disagree. */
-.scr-p6-allgames .p6a-mid {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  flex: 0 0 auto; min-width: 0;
-}
+.scr-p6-allgames .p6a-mid { flex: 0 0 auto; }
+/* Its own full-width row under the teams. The @ is centred in the grid
+   above, so a centred control here lands directly beneath it and costs the
+   two names no width at all. */
 .scr-p6-allgames .p6a-more {
-  display: flex; align-items: center; gap: 3px;
+  flex: 1 0 100%; order: 4;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
   font-size: 9px; font-weight: 800; letter-spacing: .08em; color: var(--dim);
-  line-height: 1; white-space: nowrap;
+  line-height: 1; white-space: nowrap; padding-top: 1px;
 }
 .scr-p6-allgames .p6a-more-c {
   font-size: 11px; line-height: 1; transition: transform .15s ease;
