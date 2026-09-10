@@ -86,7 +86,7 @@
 /* THE FIELD IN PERSPECTIVE — colors taken off Jason's second reference rather
    than chosen: two greens a real mower makes, thick white paint, and numbers
    big enough to read at 393px. See fieldStrip() for the geometry. */
-.scr-live-game .lg-field { margin: 2px 0 10px; }
+.scr-live-game .lg-field { margin: 0; }
 /* THE SPOT IS BOLD; THE DISTANCE IS NOT. Jason: "bold 1st & 10 at the NE 4".
    The two halves of this line are not equals - the left is the situation, and
    it is one of the three things he ranked as most important on this screen.
@@ -112,9 +112,26 @@
    the stripes are what make green ground read as a pitch. */
 .scr-live-game .lg-f-mow { fill: #a8c98a; }
 .scr-live-game .lg-f-ez { fill: #35682f; }
-.scr-live-game .lg-f-rz { fill: #ff3b30; fill-opacity: .12; }
+/* 🔴 NOT RED. Jason: "why is the redzone (green-brown)?" - because it was
+   red, and red over green is the one overlay that cannot work. They are
+   complements: every partial mix of them lands in the mud between, so a 12%
+   #ff3b30 wash on #6f9c52 turf does not read as "tinted red", it reads as
+   dirt. Raising the opacity does not fix it either; it just gets muddier
+   before it gets red.
+
+   A broadcast gets away with a red zone tint because it is compositing over a
+   photograph with its own light and shadow. On flat vector turf there is
+   nothing to carry the hue.
+
+   So the marking is a DARKENING instead - no hue, no clash, and it still says
+   "this twenty is different from the rest". The area is legible; it just is
+   not going to be red. */
+.scr-live-game .lg-f-rz { fill: #000000; fill-opacity: .14; }
 .scr-live-game .lg-f-l5 { stroke: #ffffff; stroke-opacity: .9; }
 .scr-live-game .lg-f-l10 { stroke: #ffffff; }
+/* The red zone boundary. A line, not a wash - paint sits on grass, a tint
+   mixes with it, and red mixed with green is mud. */
+.scr-live-game .lg-f-l20 { stroke: #e03131; }
 .scr-live-game .lg-f-hash { stroke: #ffffff; stroke-opacity: .85; stroke-width: 1; }
 .scr-live-game .lg-f-side { stroke: #ffffff; stroke-width: 2.4; }
 .scr-live-game .lg-f-num { fill: #ffffff; font-size: 15px; font-weight: 800;
@@ -123,10 +140,17 @@
 .scr-live-game .lg-f-post { stroke: #ffd400; fill: none; stroke-linecap: round; }
 .scr-live-game .lg-f-fd { stroke: #ffd400; }
 .scr-live-game .lg-f-los { stroke: #1f2d1f; stroke-opacity: .75; }
-.scr-live-game .lg-f-ball { fill: #7b3f1d; stroke: #ffffff; stroke-width: 1.2; }
-.scr-live-game .lg-f-lace { stroke: #ffffff; stroke-width: 1.1; stroke-linecap: round; }
-.scr-live-game .lg-f-arrow { stroke: #ffffff; stroke-width: 1.8; fill: none;
-  stroke-linecap: round; stroke-linejoin: round; }
+.scr-live-game .lg-f-ball { fill: #7b3f1d; stroke: #ffffff; stroke-width: 2; }
+.scr-live-game .lg-f-lace { stroke: #ffffff; stroke-width: 1.8; stroke-linecap: round; }
+/* The direction chevrons - a road marking, not an arrow. Quiet enough to be
+   texture, present enough to answer "which way are they going" without being
+   read as something the ball did. */
+/* Two passes: a white shape, then the team's colour inside it. The underlay
+   is what lets any primary be used without checking it against turf first. */
+.scr-live-game .lg-f-chev path { fill: none; stroke-linecap: round;
+  stroke-linejoin: round; }
+.scr-live-game .lg-f-chev-u { stroke: #ffffff; stroke-opacity: .92; stroke-width: 6; }
+.scr-live-game .lg-f-chev-t { stroke-width: 3.2; }
 
 
 /* ── THE SCOREBUG ───────────────────────────────────────────────────────────
@@ -319,9 +343,16 @@
    the centre line and is the other half of why row one looked shifted. A
    marker that changes the layout when it appears is a marker that moves the
    thing it is marking. */
+/* 🔴 CENTRED BY TRANSFORM, NOT BY A HALF-HEIGHT MARGIN. `top: 50%` puts the
+   dot's TOP edge at the middle, so it needs pulling back by half its own
+   size - and that correction was hard-coded at -3px for a 6px dot. Any change
+   to the size silently decentred it, which is exactly what happened here.
+   translateY(-50%) is half of whatever the dot currently is, so the two can
+   never disagree again. Bigger too: at 6px it read as a speck rather than a
+   marker. */
 .scr-live-game .lg-bug-sc[data-poss="true"]::after {
-  content: ''; position: absolute; top: 50%; margin-top: -3px; right: 2px;
-  width: 6px; height: 6px; border-radius: 50%; background: #ffd400; }
+  content: ''; position: absolute; top: 50%; transform: translateY(-50%);
+  right: 3px; width: 9px; height: 9px; border-radius: 50%; background: #ffd400; }
 .scr-live-game .lg-bug-half[data-side="home"] .lg-bug-sc[data-poss="true"]::after {
   right: auto; left: 2px; }
 
@@ -353,6 +384,154 @@
    one component, stacked three pixels apart, curved differently. Both now
    name the same token, which is the only way they stay matched through the
    next change to either. */
+/* 8px while Jason looks at it - one value, and every corner of the bug and
+   the banner reads it, so the whole thing changes together. Back to
+   var(--radius-card) if 16 wins. */
+/* Now that every card is 8, the bug just uses the same token as everything
+   else - a local override would be one more place for it to drift. */
+.scr-live-game { --bug-radius: var(--radius-card); }
 .scr-live-game .lg-bug-banner,
-.scr-live-game .lg-bug { border-radius: var(--radius-card); }
-.scr-live-game .lg-head { display: grid; justify-items: center; gap: 4px; padding: 2px 0 8px; }
+.scr-live-game .lg-bug { border-radius: var(--bug-radius); }
+
+/* 🔴 THE CORNERS ARE ROUNDED ON THE BLOCKS THEMSELVES, NOT ONLY BY THE CLIP.
+   Jason sent the same crop three times - a beautifully rounded TOUCHDOWN
+   banner sitting on a scorebug with a square red corner - and I measured
+   16px on both, twice, and told him they matched. They did measure the same.
+   They did not LOOK the same on his phone.
+
+   🔴 THE DIFFERENCE IS THE BROWSER, AND I COULD NOT SEE IT. I test in the
+   Chromium pane; he is on iOS Safari, which has never reliably clipped a
+   positioned, stacking-context child to an ancestor's border-radius - and the
+   team panel is exactly that: `position: relative; z-index: 2`, which it needs
+   so the crest can bleed over the score. So Safari painted the panel square
+   into the corner the clip was supposed to round.
+
+   Measuring the DOM told me the rule was applied. It could not tell me what
+   was drawn. That is the whole lesson: a computed style is what the engine
+   was asked for, a screenshot is what it did, and on this one they disagreed
+   for three rounds while I kept quoting the number back.
+
+   Rounding the painted blocks needs no clip and behaves identically
+   everywhere. The parent keeps overflow: hidden for the crest overhang. */
+.scr-live-game .lg-bug-half[data-side="away"] .lg-bug-team {
+  border-top-left-radius: var(--bug-radius); }
+.scr-live-game .lg-bug-half[data-side="home"] .lg-bug-team {
+  border-top-right-radius: var(--bug-radius); }
+.scr-live-game .lg-bug-r2 > :first-child {
+  border-bottom-left-radius: var(--bug-radius); }
+.scr-live-game .lg-bug-r2 > :last-child {
+  border-bottom-right-radius: var(--bug-radius); }
+/* 🔴 FLUSH. Jason: "can you eliminate the padding between the score the field
+   and the score" / "push them together". Three separate elements with three
+   separate margins were reading as three cards; touching, they read as one
+   scoreboard with a picture in the middle of it - which is what they are. */
+.scr-live-game .lg-head { display: grid; justify-items: center; gap: 4px; padding: 2px 0 0; }
+
+/* The copy under the field. Same bar, a little air above it so it reads as a
+   repeat of the header rather than as part of the graphic. */
+/* The field and the second bar are one grid item with no internal gap; the
+   negative margin closes the last gap, the one above the group. */
+.scr-live-game .lg-fieldstack { display: grid; gap: 0; margin-top: -10px; }
+.scr-live-game .lg-bug[data-copy="true"] { margin: 0; }
+
+/* The play by play scrolls inside its card - see the note where it is built.
+   About four plays visible, which is enough to see the drive you are in
+   without the transcript owning the page. */
+/* 🔴 THREE PLAYS. Jason: "make the play by play show up to 3 lines."
+   
+   Rows are not a fixed height - they measured 54, 72 and 88px depending on
+   how long the play text is and whether there is a star line - so "three
+   rows" cannot be expressed as a height until the rows themselves are
+   predictable. Hence the clamp below: a play description is allowed two lines
+   and no more, which brings every row to roughly 74px, and three of those is
+   the 222 here.
+   
+   Clamping first and sizing second is the order that matters. Sizing a
+   viewport against variable content just means a different number of rows on
+   every drive. */
+.scr-live-game .lg-say-rows { max-height: 222px; overflow-y: auto;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* 🔴 NO CLAMP IN THE LIST. Jason: "in the massive play by play, print the
+   entire play, do not truncate it."
+   
+   I had clamped it to two lines so the rows were a predictable height and
+   three of them fitted the viewport - which optimised the wrong thing. The
+   bar under the field is the GLANCE; this list is the RECORD, and a record
+   that ends in an ellipsis is not one. The plays it was cutting were the long
+   ones, which are long because something complicated happened - a return with
+   a penalty on it is exactly what somebody scrolls back to read.
+   
+   Rows are uneven again as a result, so the 222px viewport shows between two
+   and three of them rather than exactly three. That is the honest trade: the
+   list scrolls either way, and completeness beats a tidy row count. */
+.scr-live-game .lg-say-detail { overflow-wrap: anywhere; }
+/* A hint that there is more, without a scrollbar on a phone that has none. */
+.scr-live-game .lg-say { position: relative; }
+.scr-live-game .lg-say::after { content: ''; position: absolute; left: 1px; right: 1px;
+  bottom: 1px; height: 26px; pointer-events: none; border-radius: 0 0 10px 10px;
+  background: linear-gradient(to bottom, transparent, var(--card)); }
+
+/* 🔴 THE SEAM BETWEEN THE BAR AND THE FIELD IS SQUARE. Jason: "on the top
+   score, can you remove the bottom two radius? as well as removing the top 2
+   radius in the field graphic."
+
+   Now that the three touch, a rounded corner on either side of a seam reads
+   as two objects pressed together - you see the pinch where the curves meet
+   and the eye separates them again, which undoes the point of pushing them
+   together. Square where they join, round only on the outside, and the group
+   becomes one shape.
+
+   The corners are zeroed on the painted blocks as well as the container,
+   because that is where the rounding actually lives - see the Safari note
+   further up. */
+.scr-live-game .lg-head .lg-bug { border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0; }
+.scr-live-game .lg-head .lg-bug .lg-bug-r2 > :first-child { border-bottom-left-radius: 0; }
+.scr-live-game .lg-head .lg-bug .lg-bug-r2 > :last-child { border-bottom-right-radius: 0; }
+.scr-live-game .lg-fieldstack .lg-fieldsvg { border-top-left-radius: 0;
+  border-top-right-radius: 0; }
+/* And the seam underneath it, the same way: the field's bottom corners and
+   the second bar's top corners both square, so the whole assembly has round
+   corners only where it meets the page. */
+.scr-live-game .lg-fieldstack .lg-fieldsvg { border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0; }
+.scr-live-game .lg-bug[data-copy="true"] { border-top-left-radius: 0;
+  border-top-right-radius: 0; }
+.scr-live-game .lg-bug[data-copy="true"] .lg-bug-half[data-side="away"] .lg-bug-team {
+  border-top-left-radius: 0; }
+.scr-live-game .lg-bug[data-copy="true"] .lg-bug-half[data-side="home"] .lg-bug-team {
+  border-top-right-radius: 0; }
+
+/* THE LATEST PLAY, under the field. Same black strip as the bug's second row
+   so the stack reads as one instrument, square where it meets the field and
+   rounded where it meets the page. Two lines maximum: a play description is
+   as long as it is, and a bar that grows without limit stops being a bar. */
+.scr-live-game .lg-lastbar { display: flex; align-items: baseline; gap: 9px;
+  padding: 8px 12px 9px; background: #000000; color: #ffffff;
+  border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.scr-live-game .lg-lastbar-w { flex: 0 0 auto; font-size: var(--t-micro);
+  font-weight: 800; letter-spacing: .06em; color: rgba(255,255,255,.66); }
+/* 🔴 THREE LINES. Jason: "up to 3 lines in the play by play under the field?"
+   - and this is the bar he meant the first time he said three lines, which I
+   read as the LIST above and sized to three rows. Both are fine as they are,
+   so both stay; this is the one that was actually cutting text off.
+   
+   Two lines truncated the plays that need the room most: a penalty that
+   nullifies a touchdown, or a return with three tacklers named, is exactly
+   the play somebody re-reads. Three is still a cap - the bar has to stay a
+   bar - but it clears almost everything the feed writes. */
+.scr-live-game .lg-lastbar-t { font-size: var(--t-micro); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; }
+
+/* A stoppage in the bar under the field: the label leads, the wait follows. */
+.scr-live-game .lg-lastbar-k { flex: 0 0 auto; font-size: var(--t-body);
+  font-weight: 800; }
+.scr-live-game .lg-lastbar[data-state="stoppage"] .lg-lastbar-t {
+  color: rgba(255,255,255,.66); }
+
+/* A miss is announced in the result palette, not the scoring team's colour -
+   nobody is celebrating, and --down already means "this went against you"
+   everywhere else in the app. */
+.scr-live-game .lg-bug-banner[data-kind="miss"] {
+  background: color-mix(in srgb, var(--down) 78%, #23262c); }

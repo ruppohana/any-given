@@ -239,6 +239,24 @@ const S = {
  *
  * Absent, never guessed: only these three stoppages, matched on the feed's own
  * words. Anything else gets no pill rather than an invented one. */
+/* WHAT KIND OF STOPPAGE A PLAY IS, if it is one. Shared, because the bar under
+ * the field and anything else that cares must agree - and matched against what
+ * the feed actually writes, which is not what anybody guesses: "Official
+ * Timeout at 07:29.", "END QUARTER 1", "Two-minute warning". */
+function stoppageOf(play) {
+  if (!play) return null;
+  const t = (play.typeText || '') + ' ' + (play.text || '');
+  const isHalf = /end (of )?(the )?half|halftime/i.test(t)
+    || (/end (of )?(the )?(quarter|period)|end quarter/i.test(t) && play.quarter === 2);
+  if (isHalf) return { label: 'Half time', note: 'no football for about thirteen minutes' };
+  if (/official timeout/i.test(t)) return { label: 'Commercial break', note: 'no snap for a couple of minutes' };
+  if (/^timeout|timeout #/i.test((play.text || '').trim())) return { label: 'Timeout', note: 'they stopped the clock' };
+  if (/two.minute warning/i.test(t)) return { label: 'Two-minute warning', note: 'no snap for a couple of minutes' };
+  if (/end (of )?(the )?(quarter|period)|end quarter/i.test(t)) return { label: 'End of the quarter', note: 'no snap for a couple of minutes' };
+  if (/end of game|end game/i.test(t)) return { label: 'Final', note: 'that is the game' };
+  return null;
+}
+
 function breakLine(state) {
   const plays = (state && state.plays) || [];
   const last = plays[plays.length - 1];
@@ -535,16 +553,107 @@ function panField(node, target, draw) {
  * Both the camera and the frame ask this, so they cannot disagree - the pan
  * targeting one yard and the marker drawn at another is the sort of bug that
  * looks like a rendering glitch and is actually two opinions. */
+/* 🔴 THE FIELD IS FIXED TO THE STADIUM, NOT TO WHOEVER HAS THE BALL. Jason:
+ * "it seems like the possession arrow is always pointing to the right?" - it
+ * was, and the reason was that the whole picture was drawn from the offense's
+ * point of view: position was 100 minus yards-to-goal, so forward was always
+ * rightward and the chevrons could only ever point one way.
+ *
+ * That had a real benefit - "forward" never changed meaning, and on a 40-yard
+ * window with no end zone in sight the direction of a drive is otherwise
+ * genuinely ambiguous. It also had two costs. The field MIRRORED on every
+ * change of possession, so the ball appeared to leap across the screen having
+ * not moved; and the chevrons carried only colour, never direction, which is
+ * half a mark doing nothing.
+ *
+ * Now: 0 is the away team's own goal line, 100 is the home team's, and that
+ * never changes. The away side attacks rightward, the home side leftward, the
+ * same way a camera on the halfway line sees it - which is what is on the
+ * television next to the phone.
+ *
+ * 🔴 EVERYTHING GEOMETRIC ON THIS GRAPHIC NOW GOES THROUGH THESE TWO
+ * FUNCTIONS. The spot, the first-down line, the direction of the chevrons and
+ * the end zone that counts as "theirs" all derive from the same pair, so they
+ * cannot end up disagreeing about which way the game is being played. */
+function attackDir(state) {
+  const off = state && state.situation && state.situation.offenseTeamId;
+  if (!off) return 1;
+  return String(off) === String(state.awayTeamId) ? 1 : -1;
+}
+
 function spotYard(state) {
   const si = state && state.situation;
   const ytg = si && typeof si.yardsToGoal === 'number' ? si.yardsToGoal : null;
   if (ytg == null) return null;
+  const dir = attackDir(state);
+  /* Distance to the defending end zone, turned into a fixed field position:
+     the away side counts up toward 100, the home side down toward 0. */
+  const pos = dir === 1 ? 100 - ytg : ytg;
   const p = state.plays && state.plays[state.plays.length - 1];
   const t = p ? ((p.typeText || '') + ' ' + (p.text || '')) : '';
   const scored = !!(p && p.scoringPlay) && /touchdown/i.test(t);
-  /* Four yards past the line: far enough to be unmistakably in, not so far it
-     looks like the back of the end zone. */
-  return scored ? 104 : 100 - ytg;
+  /* Four yards past the line they crossed - far enough to be unmistakably in,
+     and on the correct side now that either end can be the scoring one. */
+  return scored ? (dir === 1 ? 104 : -4) : pos;
+}
+
+/* 🔴 ONE PLACE DECIDES WHAT COLOUR A TEAM IS ON THIS SCREEN. Jason: "the
+ * posession arrow did not change color when the team changed."
+ *
+ * It could not. The chevrons read `team.primary` straight off the feed, and
+ * New England and Seattle both ship 002a5c - the same navy, to the byte. So
+ * possession flipped and the mark stayed exactly as it was, which is worse
+ * than having no colour at all: it actively said nothing had changed.
+ *
+ * 🔴 THIRD TIME THIS CLASH HAS BITTEN, AND THE FIRST TWO WERE FIXED LOCALLY.
+ * teamChip has `adjacentTo` for the slate, the scorebug grew its own
+ * resolution an hour ago, and the field then grew a third path that skipped
+ * both. Each fix was correct where it was written and none of them was
+ * reachable from anywhere else, which is how the same bug arrives three times
+ * wearing different clothes.
+ *
+ * So the decision moves out here and everything asks it. The away side gives
+ * way when the two clash - the home team's colour is the stable one because
+ * the spread and the field are quoted on it - and a side whose secondary
+ * clashes too gets null, which callers render as neutral. */
+function teamPalette(state) {
+  const away = state.teams[state.awayTeamId], home = state.teams[state.homeTeamId];
+  const ap = normalizeColor(away && away.primary);
+  const hp = normalizeColor(home && home.primary);
+  if (!tooClose(ap, hp)) return { away: ap, home: hp };
+  const as = normalizeColor(away && away.secondary);
+  if (as && !tooClose(as, hp)) return { away: as, home: hp };
+  return { away: null, home: hp };
+}
+
+function teamColor(state, id) {
+  const p = teamPalette(state);
+  return String(id) === String(state.awayTeamId) ? p.away : p.home;
+}
+
+/* 🔴 EVERY WAY OF SCORING GETS THE BANNER, NOT JUST THE ONE I BUILT FIRST.
+ * Jason: "why dont we display field goal like we did for touchdown?"
+ *
+ * No reason. The banner was written the night a touchdown happened to be on
+ * screen, and it tested for a touchdown - so a field goal, the second most
+ * common way a drive ends, passed under it in silence. That is not a design
+ * decision, it is the first case standing in for the category.
+ *
+ * A missed kick is in here too. It is not a score, but it is the same KIND of
+ * moment - a drive ending on one swing, with somebody's marbles riding on it -
+ * and a board that shouts about the make and says nothing about the miss is
+ * only telling half of what just happened.
+ *
+ * Matched on the feed's own words, which spell it out: "A.Borregales extra
+ * point is GOOD", "field goal is No Good". */
+function bannerFor(play) {
+  if (!play) return null;
+  const t = (play.typeText || '') + ' ' + (play.text || '');
+  if (play.scoringPlay && /touchdown/i.test(t)) return 'TOUCHDOWN';
+  if (play.scoringPlay && /safety/i.test(t)) return 'SAFETY';
+  if (/field goal is good/i.test(t)) return 'FIELD GOAL';
+  if (/field goal is no good|field goal.*blocked/i.test(t)) return 'NO GOOD';
+  return null;
 }
 
 function fieldStrip(state) {
@@ -570,6 +679,17 @@ function fieldStrip(state) {
  * without re-deciding anything about the game. */
 function drawField(wrap, state, ball, cam) {
   const si = state.situation;
+  /* 🔴 DECLARED AT THE TOP, BECAUSE HALF THIS FUNCTION USES IT. I introduced
+   * `dir` beside the first-down line, which is two thirds of the way down -
+   * and the red zone, the red 20-yard line and the end zones all read it
+   * ABOVE that point. `const` is hoisted but not initialised, so every one of
+   * them threw "Cannot access 'dir' before initialization", the render died
+   * after the scorebug, and the entire screen below it went blank.
+   *
+   * Fifth temporal dead zone in this file. The pattern every time is the
+   * same: a value introduced where it was first needed, in a function that
+   * needed it earlier too. Declare it where the function starts. */
+  const dir = attackDir(state);
   /* From the SITUATION, never from the drawn ball - the two differ on a score,
      and the caption must say the real distance rather than the one implied by
      where the marker was put. */
@@ -678,7 +798,12 @@ function drawField(wrap, state, ball, cam) {
   if (lo < 0) svg.appendChild(quad(lo, 0, 'lg-f-ez'));
   if (hi > 100) svg.appendChild(quad(100, hi, 'lg-f-ez'));
   /* The red zone, as a region rather than an edge. */
-  if (hi > 80) svg.appendChild(quad(Math.max(80, lo), Math.min(100, hi), 'lg-f-rz'));
+  /* The twenty they are attacking, whichever end that is. */
+  if (dir === 1) {
+    if (hi > 80) svg.appendChild(quad(Math.max(80, lo), Math.min(100, hi), 'lg-f-rz'));
+  } else if (lo < 20) {
+    svg.appendChild(quad(Math.max(0, lo), Math.min(20, hi), 'lg-f-rz'));
+  }
 
   const line = (yard, cls, w) => {
     const a = P(yard, 0), b = P(yard, 1);
@@ -688,7 +813,18 @@ function drawField(wrap, state, ball, cam) {
 
   for (let a = Math.ceil(lo / 5) * 5; a <= hi; a += 5) {
     if (a < 0 || a > 100) continue;
-    svg.appendChild(line(a, a % 10 === 0 ? 'lg-f-l10' : 'lg-f-l5', a % 10 === 0 ? 1.6 : 1));
+    /* 🔴 THE 20 THEY ARE ATTACKING IS RED. Jason: "can i see a red line instead
+       of a white line at the 20yl?" - which is the better answer to the red
+       zone than the wash I just removed. A tint over turf muddies because red
+       and green are complements; a red LINE sits on top of the turf instead of
+       mixing into it, so it stays red at any opacity.
+     
+       Only yard 80 - the boundary of the end zone they are going for. The 20
+       behind them is just a yard line; it becomes the red one the moment
+       possession flips, which is correct and happens for free. */
+    const red = a === (dir === 1 ? 80 : 20);
+    svg.appendChild(line(a, red ? 'lg-f-l20' : (a % 10 === 0 ? 'lg-f-l10' : 'lg-f-l5'),
+      red ? 2.6 : (a % 10 === 0 ? 1.6 : 1)));
   }
   /* Hash marks: the texture that says this is a football field and not a
      soccer pitch. Two rows, a yard apart in field space. */
@@ -758,29 +894,115 @@ function drawField(wrap, state, ball, cam) {
 
   /* The first-down line in the color every broadcast has used for thirty
      years, and the line of scrimmage in white. */
-  const fdYard = si.down && typeof si.distance === 'number' ? ball + si.distance : null;
-  if (fdYard != null && fdYard > lo && fdYard < hi && fdYard <= 100) {
+  const fdYard = si.down && typeof si.distance === 'number' ? ball + dir * si.distance : null;
+  if (fdYard != null && fdYard > lo && fdYard < hi && fdYard >= 0 && fdYard <= 100) {
     svg.appendChild(line(fdYard, 'lg-f-fd', 2.4));
   }
-  svg.appendChild(line(ball, 'lg-f-los', 2.2));
+  /* 🔴 NO LINE OF SCRIMMAGE IN THE END ZONE. Jason: "what happened here?" -
+   * and one of the two answers is the dark stroke cutting across the end zone
+   * on a touchdown. There is no scrimmage after a score; the ball is drawn
+   * four yards deep because that is where it ended up, and the code went on
+   * drawing a scrimmage line through it because it draws one every frame.
+   * A marking that means "the ball is snapped here" has to be absent when
+   * nothing is being snapped. */
+  if (ball <= 100) svg.appendChild(line(ball, 'lg-f-los', 2.2));
 
   /* The ball, sat on the near hash where a spot actually is. */
-  const bp = P(ball, 0.62);
-  svg.appendChild(mk('ellipse', { cx: bp[0].toFixed(2), cy: bp[1].toFixed(2), rx: 6.4, ry: 4,
+  /* 🔴 BETWEEN THE HASH ROWS, NOT ON ONE. Jason: "move the ball up 10ish pixels
+     to be in the center of the hash marks so it is easier to read, move the
+     arrow as well."
+   
+     It sat at v=0.62, which is the near hash - where a real ball is spotted,
+     and that was the reasoning. Wrong priority: the hash rows are the busiest
+     texture on the graphic, a dense run of white ticks, and a small brown
+     ellipse placed on top of one competes with it. Dead centre between the two
+     inner rows is the only clear band on the field, so the ball reads at a
+     glance instead of being found.
+   
+     Realism loses to legibility on a graphic this size - the same call as the
+     40-yard window and the deleted far-side numbers. */
+  const BALL_V = 0.5;
+  const bp = P(ball, BALL_V);
+  /* 🔴 TWICE THE SIZE. Jason: "make the ball 2x larger." It is the subject of
+     the graphic and it was the smallest mark on it - smaller than a yard
+     number, on a field 400 units wide. The lace scales with it or the shape
+     stops reading as a football and becomes a brown pill. */
+  svg.appendChild(mk('ellipse', { cx: bp[0].toFixed(2), cy: bp[1].toFixed(2), rx: 12.8, ry: 8,
     class: 'lg-f-ball' }));
-  svg.appendChild(mk('line', { x1: (bp[0] - 2.6).toFixed(2), y1: bp[1].toFixed(2),
-    x2: (bp[0] + 2.6).toFixed(2), y2: bp[1].toFixed(2), class: 'lg-f-lace' }));
+  svg.appendChild(mk('line', { x1: (bp[0] - 5.2).toFixed(2), y1: bp[1].toFixed(2),
+    x2: (bp[0] + 5.2).toFixed(2), y2: bp[1].toFixed(2), class: 'lg-f-lace' }));
 
-  /* Which way they are attacking. Without it the picture is symmetrical and
-     says nothing about whether that yellow line is ahead of them or behind. */
-  const a0 = P(Math.min(hi - 1, ball + 3), 0.62), a1 = P(Math.min(hi - 0.5, ball + 8), 0.62);
-  svg.appendChild(mk('path', {
-    d: 'M' + a0[0].toFixed(1) + ' ' + a0[1].toFixed(1) + ' L' + a1[0].toFixed(1) + ' ' + a1[1].toFixed(1)
-      + ' M' + (a1[0] - 5).toFixed(1) + ' ' + (a1[1] - 4).toFixed(1)
-      + ' L' + a1[0].toFixed(1) + ' ' + a1[1].toFixed(1)
-      + ' L' + (a1[0] - 5).toFixed(1) + ' ' + (a1[1] + 4).toFixed(1),
-    class: 'lg-f-arrow'
-  }));
+  /* 🔴 CHEVRONS AT THE EDGE. Jason answered the direction question with a
+   * picture of three nested chevrons, which is the right answer and beats
+   * both of mine.
+   *
+   * The arrow it replaces failed twice: he asked what it signified, then sent
+   * a frame where its head had been clipped off leaving a bare dash beside the
+   * ball. An arrow next to a ball reads as a VECTOR - the last play went this
+   * way, they gained this much - when what it meant was a compass. Chevrons
+   * carry no such claim: nothing is at their tail, so there is nothing they
+   * can be describing the movement of. They are the marking a road uses for
+   * exactly this reason.
+   *
+   * DRAWN IN SCREEN COORDINATES, NOT FIELD ONES. Everything else on this
+   * graphic is placed in yards so it stays true when the camera pans. These
+   * are furniture on the frame - pinned to the right edge, never near the
+   * ball, and therefore never clipped, which is the other half of what went
+   * wrong with the arrow.
+   *
+   * The offense always attacks rightward in this coordinate system, so they
+   * always point right and never have to be reasoned about. */
+  /* 🔴 IN THE COLOUR OF WHOEVER HAS THE BALL. Jason: "can we change the color
+   * to match the team with the ball?" - which turns the chevrons from a
+   * direction marker into a POSSESSION marker that also says direction. Two
+   * facts, one mark, and the second one comes free: if the colour changes,
+   * the ball changed hands.
+   *
+   * 🔴 EACH ONE IS DRAWN TWICE, AND THAT IS NOT BELT AND BRACES. A team colour
+   * on turf is a coin flip - Seattle's navy and the Jets' green are both
+   * darker than the grass they would sit on, and 402 of 760 schools carry a
+   * black or missing primary. The white underlay guarantees the shape reads at
+   * any colour, so the tint can be whatever the team's is without anyone
+   * having to check it against a green background first. */
+  const chevColor = (si.offenseTeamId && teamColor(state, si.offenseTeamId)) || '#ffffff';
+  const chev = mk('g', { class: 'lg-f-chev', 'aria-hidden': 'true' });
+  /* 🔴 ON THE BALL'S LINE, AND HALF THE DISTANCE IN. Jason: "can the arrow be
+   * in the same line top to bottom as the ball? and half way closer to the
+   * ball".
+   *
+   * They were pinned to the middle of the FRAME at a fixed y, which is only
+   * the same height as the ball by accident - the field is in perspective, so
+   * a point's screen y depends on where it sits across the width AND how the
+   * camera has panned. Taking the ball's own y means the two are on one line
+   * whatever the projection is doing.
+   *
+   * Moving them in from the edge is the part that makes them read as related
+   * to the ball rather than as decoration parked in the corner. Clamped so
+   * they never crowd it when the ball is already near the right edge - the
+   * relationship has to survive a goal-line stand. */
+  const chevY = bp[1];
+  /* They point the way the offense is going, and they sit ahead of the ball
+     on that side - both flip together, because a chevron behind the ball
+     pointing away from it says nothing at all. */
+  /* 🔴 A FIXED GAP FROM THE BALL, NOT A MIDPOINT. Jason: "make the arrows
+     closer to the ball." Halfway to the frame edge meant the distance changed
+     with field position - tight on a goal-line snap, a mile away at midfield -
+     so the chevrons read as related to the ball sometimes and as decoration
+     the rest of the time. A constant offset keeps that relationship the same
+     on every snap, and the clamp only matters in the last few yards. */
+  const chevX = dir === 1
+    ? Math.min(W - 44, bp[0] + 22)
+    : Math.max(44, bp[0] - 22);
+  for (let i = 0; i < 3; i++) {
+    const x = chevX + dir * i * 11, y = chevY;
+    const d = 'M' + x + ' ' + (y - 9) + ' L' + (x + dir * 8) + ' ' + y
+      + ' L' + x + ' ' + (y + 9);
+    chev.appendChild(mk('path', { d, class: 'lg-f-chev-u' }));
+    const top = mk('path', { d, class: 'lg-f-chev-t' });
+    top.setAttribute('stroke', chevColor);
+    chev.appendChild(top);
+  }
+  svg.appendChild(chev);
 
   wrap.appendChild(svg);
   /* 🔴 NO CAPTION. Jason: "remove this now", of the line under the field.
@@ -943,10 +1165,21 @@ function held(raw, delayMs, now) {
       /* The feed's own sentence for where the ball is, after the last play you
          have been shown - never the live one. */
       downDistanceText: last.endSpotText || raw.situation.downDistanceText,
-      /* From the last VISIBLE play - the field must never draw the ball where
-         the withheld play left it. */
-      yardsToGoal: last.endYardsToEndzone != null
-        ? last.endYardsToEndzone : raw.situation.yardsToGoal,
+      /* 🔴 THE LAST VISIBLE PLAY THAT ACTUALLY HAS A SPOT, walking backwards.
+       * From the last visible play alone, the field DISAPPEARED after every
+       * kickoff: ESPN posts no `end.yardsToEndzone` on one, so the value went
+       * null and fieldStrip bailed out. A graphic that vanishes between drives
+       * is worse than one that is a play stale - the ball did not stop
+       * existing because the feed declined to say where it was.
+       *
+       * Still only VISIBLE plays, so the delay is not leaked; the search just
+       * skips the rows that have nothing to say. */
+      yardsToGoal: (() => {
+        for (let i = visible.length - 1; i >= 0; i--) {
+          if (visible[i].endYardsToEndzone != null) return visible[i].endYardsToEndzone;
+        }
+        return raw.situation.yardsToGoal;
+      })(),
       /* The clock and the last play text belong to the play you can see, not to
        * the one being withheld. */
       clock: last.clock || raw.situation.clock,
@@ -1645,6 +1878,9 @@ function paint(wrap) {
    * missing one - the whole point of a bug is that it is trusted at a glance.
    */
   const sb = el('div', 'lg-bug');
+  /* Kept so the copy under the field is the SAME bar rather than a second
+     implementation of it - see where it is cloned. */
+  S.bugNode = sb;
   const poss = state.situation && state.situation.offenseTeamId;
 
   /* 🔴 TWO NAVY PANELS ARE ONE PANEL. Jason: "fix the gos and the colors" -
@@ -1669,14 +1905,7 @@ function paint(wrap) {
    * palette collides with its opponent's does not get to be represented by a
    * colour here, and a grey block that reads is worth more than a navy one
    * that does not. */
-  const panelColors = (() => {
-    const ap = normalizeColor(away && away.primary);
-    const hp = normalizeColor(home && home.primary);
-    if (!tooClose(ap, hp)) return { away: ap, home: hp };
-    const as = normalizeColor(away && away.secondary);
-    if (as && !tooClose(as, hp)) return { away: as, home: hp };
-    return { away: null, home: hp };
-  })();
+  const panelColors = teamPalette(state);
 
   /* 🔴 NO MARK ON THE LEFT. Jason: "i dont need any graphic on the left side".
    *
@@ -1860,7 +2089,7 @@ function paint(wrap) {
   const lastPlay = state.plays && state.plays[state.plays.length - 1];
   const txt = lastPlay ? ((lastPlay.typeText || '') + ' ' + (lastPlay.text || '')) : '';
   const isFlag = /penalty/i.test(txt);
-  const isTd = !!(lastPlay && lastPlay.scoringPlay) && /touchdown/i.test(txt);
+  const bannerWord = bannerFor(lastPlay);
 
   const right = el('div', 'lg-bug-dd');
   const offC = poss ? colorFor(poss) : null;
@@ -1905,8 +2134,12 @@ function paint(wrap) {
    * to say right now. Ours says the one thing the app knows and the bug cannot
    * fit: what the flag was for, or that somebody scored. Absent otherwise -
    * a permanently-present strip is a second bug, not an announcement. */
-  if (isTd) {
-    const banner = el('div', 'lg-bug-banner', 'T O U C H D O W N');
+  if (bannerWord) {
+    /* Plain text - the CSS does the letter-spacing. It used to be typed as
+       "T O U C H D O W N" with the tracking ALSO in the stylesheet, which is
+       fine for one hard-coded word and falls apart the moment there are four. */
+    const banner = el('div', 'lg-bug-banner', bannerWord);
+    banner.dataset.kind = bannerWord === 'NO GOOD' ? 'miss' : 'score';
     /* The ADJUSTED colour, not the team's raw primary - the panels already
        swapped New England to its secondary because both teams are the same
        navy, and a banner in the unswapped colour would celebrate in a shade
@@ -2025,12 +2258,86 @@ function paint(wrap) {
    * justified on the day. */
   const dl = null;
   if (dl) wrap.appendChild(dl);
-  const bl = breakLine(state);
-  if (bl) wrap.appendChild(bl);
+  /* 🔴 NOTHING BETWEEN THE SCORE AND THE FIELD. Jason: "do not put the
+   * commercial break or anything inbetween the score and the field."
+   *
+   * The stoppage pill used to sit there and it split the one thing the last
+   * hour was spent joining - bar, field, bar as a single instrument. Anything
+   * inserted into that seam breaks the object back into pieces, however
+   * useful it is on its own.
+   *
+   * It is not lost: the bar UNDER the field says it now, which is where a
+   * stoppage belongs anyway - it is the current state of play, and that bar is
+   * the current state of play. Touchdowns and penalties still come above,
+   * because those are not states, they are events, and an event announces
+   * itself over the top. */
   /* Directly under the spot it illustrates - the pill says "3rd & 5 at SEA 31"
      and this is the same sentence in a picture. */
   const fs = fieldStrip(state);
-  if (fs) wrap.appendChild(fs);
+  if (fs) {
+    /* 🔴 ONE GROUP, SO THE GRID GAP CANNOT GET BETWEEN THEM. Jason: "push them
+     * together". Setting the margins to zero did nothing, because the spacing
+     * was never a margin - `.lg` is a grid with `gap: 10px`, and a gap is a
+     * property of the CONTAINER, not of the things in it. No amount of editing
+     * the children reaches it.
+     *
+     * So the bar, the field and the copy become a single grid item with no gap
+     * of its own. The negative top margin cancels the one gap that remains -
+     * the one above the group - so the whole assembly sits flush under the
+     * header bar as well. */
+    const stack = el('div', 'lg-fieldstack');
+    stack.appendChild(fs);
+    /* 🔴 THE SCORE AGAIN, UNDER THE FIELD. Jason: "can you copy the game score
+     * to beneath the field as well, i want to see both."
+     *
+     * A CLONE, NOT A SECOND SCORE COMPONENT. The two can never disagree,
+     * because there is one builder and one set of decisions behind it - the
+     * colour clash resolution, the possession dot, the ordinals, the flag and
+     * touchdown states. A parallel "compact score" would have been a second
+     * place for all of that to be got slightly differently, which is how the
+     * same fact ends up rendered two ways on one screen.
+     *
+     * It carries no listeners, so cloneNode is safe; if the bar ever gains one
+     * this becomes a second call to the builder instead. */
+    /* 🔴 THE BOTTOM BAR IS THE LATEST PLAY, NOT A SECOND SCOREBOARD. Jason:
+     * "the bottom score... i want to change that now to display the most
+     * current play. keep the top score and the field as they are."
+     *
+     * The duplicate score was his idea an hour ago and it was a reasonable
+     * one - see both, do not scroll. Having lived with it, the second copy
+     * says nothing the first did not, and the space under the field is the
+     * most valuable strip on the screen: it is directly beneath the thing you
+     * are looking at and directly above the question you are about to answer.
+     *
+     * What belongs there is what just happened. The field shows WHERE the ball
+     * is; this says HOW it got there. Together they are the whole picture of
+     * the moment being called.
+     *
+     * 🔴 HELD PLAYS ONLY, like everything else on this screen - the newest
+     * VISIBLE play, never the raw feed's newest. A bar under the field that
+     * ran ahead of the field would leak the play the app is still asking
+     * about, which is the one thing this product cannot do. */
+    const lp = (state.plays || [])[state.plays.length - 1];
+    if (lp) {
+      const bar = el('div', 'lg-lastbar');
+      const when = (lp.quarter ? 'Q' + lp.quarter : '') + (lp.clock ? ' ' + lp.clock : '');
+      if (when.trim()) bar.appendChild(el('span', 'lg-lastbar-w num', when.trim()));
+      /* A stoppage is not a play, so it does not get read out as one. The feed
+         writes "Official Timeout at 04:39." - true, and not what a person
+         wants under a field. They want to know nothing is about to happen and
+         roughly for how long. */
+      const st = stoppageOf(lp);
+      if (st) {
+        bar.dataset.state = 'stoppage';
+        bar.appendChild(el('span', 'lg-lastbar-k', st.label));
+        bar.appendChild(el('span', 'lg-lastbar-t', st.note));
+      } else {
+        bar.appendChild(el('span', 'lg-lastbar-t', (lp.text || '').trim()));
+      }
+      stack.appendChild(bar);
+    }
+    wrap.appendChild(stack);
+  }
   /* Under the question, where the thumb already is - a timing button you have to
      go and find measures reaction time to the button, not the television. */
   /* 🔴 OFF THE BOARD, NOT OUT OF THE CODE. Jason: "lets remove the snap button,
@@ -3141,6 +3448,19 @@ function commentary(state) {
 
   const card = el('div', 'card lg-say');
   card.appendChild(el('div', 'lg-say-h', 'Play by play'));
+  /* 🔴 THE LIST SCROLLS INSIDE ITSELF. Jason: "can we limit the amount you see
+   * without scrolling?"
+   *
+   * Twenty-five plays is roughly two thousand pixels, so the page had a short
+   * live screen followed by a very long transcript - and everything below it,
+   * the name field and the invite, was effectively unreachable. A record does
+   * not deserve unlimited page just because it is unlimited data.
+   *
+   * The HEADER stays put and only the rows move, which is the difference
+   * between a scrollable list and a card that slides its own title away. And
+   * overscroll-behavior stops the page taking over when the list hits its end
+   * - the thing that makes a nested scroller feel broken on a phone. */
+  const rowsWrap = el('div', 'lg-say-rows');
 
   for (const p of rows) {
     const d = byId.get(p.id);
@@ -3154,8 +3474,21 @@ function commentary(state) {
     /* The situation the play was run in, in the feed's own words where it has
        them - the same rule as the down-and-distance pill. */
     const t = state.teams[p.offenseTeamId];
-    const dd = p.startDown
-      ? `${['1st', '2nd', '3rd', '4th'][p.startDown - 1]} & ${p.distance === 0 ? 'goal' : p.distance}`
+    /* 🔴 "undefined & goal — SEA" WAS ON JASON'S SCREEN. `p.startDown ?` is a
+       truthiness test, so any value ESPN reports that is not a real down -
+       and it reports -1 after a score, 0 on an administrative row - sailed
+       through and indexed an array that has four entries. A down is 1, 2, 3
+       or 4; everything else has no down, and a row with no down says the team
+       and nothing more.
+       
+       Third time tonight the same check has failed in a different place: the
+       scorebug printed "-1 & 10", the field printed "0 yards to the end
+       zone", and now this. Truthiness is not validity, and the values that
+       expose the difference are the ones that only appear at the edges of a
+       game - a score, a timeout, the end of a quarter. */
+    const dn = p.startDown;
+    const dd = (dn >= 1 && dn <= 4)
+      ? `${['1st', '2nd', '3rd', '4th'][dn - 1]} & ${p.distance === 0 ? 'goal' : p.distance}`
       : null;
     if (r && MOMENT_EMOJI[r.event]) {
       const e = el('span', 'lg-say-emoji', MOMENT_EMOJI[r.event]);
@@ -3175,8 +3508,9 @@ function commentary(state) {
       row.appendChild(el('div', 'lg-say-star',
         `${who} · ${p.star.role}${side ? ' · ' + side.abbrev : ''}`));
     }
-    card.appendChild(row);
+    rowsWrap.appendChild(row);
   }
+  card.appendChild(rowsWrap);
   return card;
 }
 

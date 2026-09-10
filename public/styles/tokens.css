@@ -145,8 +145,16 @@
    * cards are ~16-18px and its controls are pills. A 12px card on a grey ground
    * still reads as a panel; a 16px one reads as an object sitting on it. */
   --radius-chip:   8px;
-  --radius-button: 12px;
-  --radius-card:  16px;
+  /* 🔴 8px EVERYWHERE. Jason: "change all to 8", after looking at the scorebug
+   * at 8 beside the same thing at 16. One token change moves every card, the
+   * field, the bug and the banner together - which is the whole reason they
+   * name a token instead of a number.
+   *
+   * The button radius comes with it. A 12px control inside an 8px card is the
+   * inner corner rounder than the outer one, which reads as a mistake even
+   * when nobody can say why. */
+  --radius-button: 10px;
+  --radius-card:  10px;
   --radius-pill:  999px;
 
   /* 🔴 NESTED CORNERS. Jason, 2026-09-09, on a zoomed corner of the slate: "Can
@@ -222,7 +230,17 @@
 
   --nest-inset: 6px;
   --nest-step: calc(var(--nest-inset) + 1px);
-  --radius-l1: 22px;
+  /* 🔴 THE SLATE'S NESTED RAMP CANNOT SIMPLY BE 8. Concentric corners need
+   * inner = outer − inset, and the slate stacks three of them: day card, game
+   * card, pick target. At 8px for the outer the chain runs 8 → 1 → −6, which
+   * is not a ramp, it is a collapse.
+   *
+   * So the day card drops as far as the arithmetic allows and no further:
+   * 16 → 9 → 2. Flatter, in the same direction as everything else, and still
+   * genuinely concentric - which is the property Jason asked for by name when
+   * he said "can these offsets and radius' line up?". Making the outer 8 would
+   * satisfy one instruction by breaking an earlier one. */
+  --radius-l1: 18px;
   --radius-l2: calc(var(--radius-l1) - var(--nest-step));
   --radius-l3: calc(var(--radius-l2) - var(--nest-step));
 
