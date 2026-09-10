@@ -45,25 +45,33 @@ test('a bad leg price poisons the whole price rather than being skipped', () => 
   assert.equal(parlayPrice([2, NaN]), 0);
 });
 
-/* 🔴 THE FINDING, RECORDED AS A TEST RATHER THAN AS A NOTE.
+/* 🔴 THE LADDER PAYS FOR ITS OWN RISK AT EVERY STEP, which is the whole
+ * reason the parlay got a ceiling of its own.
  *
- * At the doctrinal 6x cap every parlay of three legs or more pays exactly the
- * same, and three is the MINIMUM. So a fourth leg strictly increases the chance
- * of losing for no increase in return - the product is dominated at its own
- * floor. This test passes today and is the argument for the cap being Jason's
- * to move; if he moves it, this test is the one that must be rewritten, on
- * purpose, with him having said so. */
-test('at the 6x cap a parlay is flat from its own minimum leg count', () => {
+ * This test used to assert the opposite and PASS: at the doctrinal 6x cap
+ * every parlay from three legs upward paid identically, and three is the
+ * minimum - so a fourth leg bought nothing but a higher chance of losing.
+ * Jason moved the cap to 50 on that evidence, 2026-09-10. The assertion is
+ * inverted here on purpose and with him having said so; it is not a test that
+ * drifted to match the code. */
+test('every added leg increases the return, up to the cap', () => {
   const evens = (n) => Array(n).fill(2);
-  assert.equal(PARLAY_MAX_PAYOUT, 6);
-  assert.equal(parlayPrice(evens(2)), 4);          // under the cap
-  assert.equal(parlayPrice(evens(3)), 6);          // 8   -> capped
-  assert.equal(parlayPrice(evens(4)), 6);          // 16  -> capped
-  assert.equal(parlayPrice(evens(5)), 6);          // 32  -> capped
-  assert.equal(parlayPrice(evens(6)), 6);          // 64  -> capped
-  const three = parlayPrice(evens(PARLAY_MIN_LEGS));
-  const six = parlayPrice(evens(PARLAY_MAX_LEGS));
-  assert.equal(three, six, 'the minimum and maximum parlay pay the same');
+  assert.equal(PARLAY_MAX_PAYOUT, 50);
+  assert.equal(parlayPrice(evens(2)), 4);
+  assert.equal(parlayPrice(evens(3)), 8);
+  assert.equal(parlayPrice(evens(4)), 16);
+  assert.equal(parlayPrice(evens(5)), 32);
+  assert.equal(parlayPrice(evens(6)), 50);        // 64 -> capped
+  for (let n = PARLAY_MIN_LEGS; n < PARLAY_MAX_LEGS; n++) {
+    assert.ok(parlayPrice(evens(n + 1)) > parlayPrice(evens(n)),
+      n + ' legs must pay less than ' + (n + 1));
+  }
+});
+
+/* The single-call cap is untouched, and that is the point of a separate one. */
+test('the parlay ceiling is its own - 6x still caps a single call', () => {
+  assert.equal(parlayPrice([100], 6), 6);
+  assert.notEqual(PARLAY_MAX_PAYOUT, 6);
 });
 
 test('returns round once, to whole marbles', () => {
@@ -112,7 +120,7 @@ test('every broken rule is reported, not just the first', () => {
 const gamesOf = (...gs) => new Map(gs.map((g) => [g.id, g]));
 const playsOf = (...pairs) => new Map(pairs);
 
-test('all legs land: won, and it pays the capped product', () => {
+test('all legs land: won, and it pays the product of the legs', () => {
   const g = [finished('1', 24, 10), finished('2', 30, 3), finished('3', 17, 14)];
   const r = settleStakeParlay(
     [leg('1'), leg('2'), leg('3')],
@@ -120,8 +128,8 @@ test('all legs land: won, and it pays the capped product', () => {
     playsOf(['1', platesFor(24, 10)], ['2', platesFor(30, 3)], ['3', platesFor(17, 14)]),
     10);
   assert.equal(r.state, 'won');
-  assert.equal(r.price, 6);
-  assert.equal(r.returns, 60);
+  assert.equal(r.price, 8, 'three legs of 2.00x, uncapped at the 50x ceiling');
+  assert.equal(r.returns, 80);
 });
 
 test('one leg lost is the whole parlay, and it returns nothing', () => {

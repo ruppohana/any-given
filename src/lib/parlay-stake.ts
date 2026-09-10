@@ -30,33 +30,42 @@ import { settleMarket } from '../markets.ts';
 
 export { PARLAY_MIN_LEGS, PARLAY_MAX_LEGS };
 
-/* 🔴 THE OPEN NUMBER, AND IT IS DELIBERATELY 6 UNTIL JASON MOVES IT.
+/* 🔴 50x, AND IT IS THE PARLAY'S OWN CEILING - NOT A CHANGE TO THE 6x ON A
+ * SINGLE CALL. Jason settled it 2026-09-10, on the evidence below.
  *
- * Doctrine says the payout is `stake / p` capped at 6x, and the builder may not
- * decide that. So this ships at 6 and the suite records what 6 does to a
- * parlay rather than quietly picking a nicer value:
+ * This shipped at 6 first, deliberately, because doctrine says `stake / p`
+ * capped at 6x and the builder may not decide that. What 6 did to a parlay
+ * was recorded as a passing test rather than argued about:
  *
  *     2 legs of 2.00x  ->   4.00x
  *     3 legs           ->   8.00x  -> capped to 6.00
  *     4 legs           ->  16.00x  -> capped to 6.00
- *     5 legs           ->  32.00x  -> capped to 6.00
  *     6 legs           ->  64.00x  -> capped to 6.00
  *
- * 🔴 SO AT 6 THE PRODUCT DOES NOT EXIST. Every parlay from three legs upward
- * pays exactly the same, and three is the minimum - so adding a fourth, fifth
- * or sixth leg strictly increases the chance of losing for no increase in
- * return. That is not a hard parlay, it is a dominated one, and nobody who
- * notices will build another.
+ * 🔴 EVERY PARLAY AT OR ABOVE THE MINIMUM PAID THE SAME. Three legs is the
+ * floor, so a fourth leg strictly increased the chance of losing for no
+ * increase in return. That is a DOMINATED product, not a hard one, and nobody
+ * who noticed would have built a second one.
  *
- * The cap is not a financial control here: Marbles cannot be bought, sold or
- * cashed out, and the bank refills every game. It exists so the board is not
- * dominated by lottery tickets - and a parlay IS the lottery ticket,
- * deliberately, with a floor of three legs on it. That is the argument for it
- * having its own ceiling rather than inheriting the single-call one.
+ * At 50 the ladder pays for its own risk at every step:
  *
- * Whatever the answer, it is ONE number and everything else here is finished.
+ *     2 legs  ->   4.00x        5 legs  ->  32.00x
+ *     3 legs  ->   8.00x        6 legs  ->  50.00x  (from 64, capped)
+ *     4 legs  ->  16.00x
+ *
+ * 🔴 WHY A SEPARATE CEILING IS THE RIGHT SHAPE, rather than raising 6. The 6x
+ * cap exists so the BOARD is not dominated by lottery tickets - a single call
+ * at 60x would make every other call on the screen pointless. A parlay is the
+ * lottery ticket, on purpose, and it already carries its own admission price:
+ * a floor of three legs and one leg per game. It is the one instrument here
+ * that has earned a longer tail, and giving it one leaves 6x untouched
+ * everywhere else in the app.
+ *
+ * Still not a financial control. Marbles cannot be bought, sold or cashed out
+ * and the bank refills every game, so the ceiling is about what the board
+ * looks like, never about exposure.
  */
-export const PARLAY_MAX_PAYOUT = 6;
+export const PARLAY_MAX_PAYOUT = 50;
 
 export type StakeLeg = {
   gameId: string;
