@@ -1156,7 +1156,8 @@ function gameCard(ctx, game) {
    * Jason: "have the selector of w/ or w/o the spread on each card." When the
    * card is showing WINNER there is no spread on the tiles, so the label
    * comes back - it is the one state where it is not a repeat. */
-  const hlNow = ctx.headlineFor(game.id);
+  const inUse = ctx.headlineMarket(game);
+  const hlNow = inUse ? inUse.id : ctx.headlineFor(game.id);
   /* 🔴 NOT `offered` - gameCard already declares that name eighty lines down
      for the same list, and two `const`s of one name in one function is a
      parse error, not a shadow. Caught by the module-parse test, which exists
@@ -1168,21 +1169,44 @@ function gameCard(ctx, game) {
     const seg = el('div', 'p6a-seg');
     seg.setAttribute('role', 'group');
     seg.setAttribute('aria-label', 'What this row lets you pick');
+    /* 🔴 BOTH BUTTONS ALWAYS, ONE OF THEM DISABLED IF ITS MARKET IS NOT ON
+     * OFFER. Jason: "You deleted the press/moneyline. Toggle."
+     *
+     * I skipped a market that was unavailable and then refused to draw the
+     * control at all if fewer than two survived - so on Villanova at
+     * Louisville -36.5, where the moneyline falls outside the price band,
+     * the toggle simply was not there. The card next to it had one. A
+     * control that disappears on some rows and not others reads as a bug,
+     * and the person has no way to learn the rule.
+     *
+     * Present and disabled says the thing that is true: this game has no
+     * moneyline worth offering. Same principle as the parlay picker's
+     * blocked tiles, which name their reason rather than greying out for an
+     * undifferentiated no. */
     for (const m of HEADLINE_MARKETS) {
-      if (!avail.some((o) => o.id === m.id)) continue;
+      const has = avail.some((o) => o.id === m.id);
       const b = el('button', 'p6a-segb');
       b.type = 'button';
       b.textContent = m.label;
-      if (m.id === hlNow) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
-      b.addEventListener('click', (e) => {
-        /* Inside a <summary>: without these the browser also toggles the
-           card, so changing the question would unfurl fifteen markets. */
-        e.preventDefault(); e.stopPropagation();
-        ctx.setHeadline(game.id, m.id);
-      });
+      if (!has) {
+        b.disabled = true;
+        b.setAttribute('title', m.id === 'winner'
+          ? 'No moneyline on this game'
+          : 'No spread posted on this game');
+        b.setAttribute('aria-label', b.textContent + ' — ' + b.getAttribute('title'));
+      }
+      if (has && m.id === hlNow) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
+      if (has) {
+        b.addEventListener('click', (e) => {
+          /* Inside a <summary>: without these the browser also toggles the
+             card, so changing the question would unfurl fifteen markets. */
+          e.preventDefault(); e.stopPropagation();
+          ctx.setHeadline(game.id, m.id);
+        });
+      }
       seg.appendChild(b);
     }
-    if (seg.childNodes.length > 1) top.appendChild(seg);
+    top.appendChild(seg);
   } else if (num(game.spread)) {
     const fav = game.spread <= 0 ? game.home : game.away;
     const abbr = (fav && fav.abbrev) || '';
@@ -1418,9 +1442,17 @@ export function render(root, data, state) {
       this.repaint(gameId);
     },
     headlineMarket(game) {
-      const m = GAME_MARKETS.find((x) => x.id === this.headlineFor(game.id));
-      if (!m) return null;
-      return marketsFor(game, [m], this.now, this.sport).length ? m : null;
+      /* 🔴 FALL BACK RATHER THAN SHOW NOTHING. A card stored on ML whose
+       * moneyline later leaves the band would otherwise render no inline
+       * tiles at all - a row with a selector and nothing to pick. The other
+       * market is a better answer than an empty row. */
+      const want = this.headlineFor(game.id);
+      const order = [want].concat(HEADLINE_MARKETS.map((h) => h.id).filter((id) => id !== want));
+      for (const id of order) {
+        const m = GAME_MARKETS.find((x) => x.id === id);
+        if (m && marketsFor(game, [m], this.now, this.sport).length) return m;
+      }
+      return null;
     },
     stakeFor() {
       /* One number, for every game and every market. See FLAT_STAKE. */

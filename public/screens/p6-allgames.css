@@ -574,3 +574,7 @@
 /* The old mark at the end of the metadata line goes - two disclosure marks
    on one row is two things claiming to be the control. */
 .scr-p6-allgames .p6a-game > .p6a-top::after { content: none; }
+
+/* A market not on offer is shown and disabled, never removed - a control
+   that vanishes on some rows teaches nobody the rule. */
+.scr-p6-allgames .p6a-segb:disabled { opacity: .38; }
