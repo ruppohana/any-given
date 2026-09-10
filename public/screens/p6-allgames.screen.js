@@ -540,6 +540,20 @@ export async function fetchSlate(sport, week, byId) {
          an hour apart and only the first one was visible. */
       period: num(g.period) ? g.period : null,
       clock: g.clock || null,
+      /* 🔴 THIRD TIME THIS MAPPER HAS SWALLOWED A NEW FIELD. It rebuilds a
+         game key by key, so anything the capture starts writing is invisible
+         here until somebody adds a line - and the symptom is never an error,
+         it is a feature that quietly does nothing. `period` did it this
+         afternoon (every in-play market read as shut); rank and conference
+         did it again (the filter row rendered with one chip). Worth naming
+         rather than fixing silently: an allow-list mapper is a place where
+         "I shipped the data" and "the screen has the data" are different
+         facts. */
+      rankHome: num(g.rankHome) ? g.rankHome : null,
+      rankAway: num(g.rankAway) ? g.rankAway : null,
+      conferences: Array.isArray(g.conferences) ? g.conferences : [],
+      periodsHome: Array.isArray(g.periodsHome) ? g.periodsHome : null,
+      periodsAway: Array.isArray(g.periodsAway) ? g.periodsAway : null,
       home: byId[g.homeTeamId] || null,
       away: byId[g.awayTeamId] || null,
       homeTeamId: g.homeTeamId, awayTeamId: g.awayTeamId,
@@ -868,6 +882,62 @@ const PILL = { in_progress: 'Live', final: 'Final', locked: 'Closed' };
  * the board is finished, and a finished game collapses to the two lines that are
  * still about you.
  */
+/* ------------------------------------------------------------------ *
+ * 🔴 FILTERS. Jason: "Sort by top 25, conference?"
+ *
+ * Collapsing the games took Saturday from 161 screens to 12, which makes the
+ * board navigable. It does not make it ANSWERABLE - "what have the SEC teams
+ * got" is still twelve screens of reading, and 62 of the 86 games are ones
+ * most people will never look at.
+ *
+ * 🔴 A FILTER, NOT A SEARCH FIELD. The doctrine line is explicit about it:
+ * sixty games answered with a search box is the failure. A search box asks
+ * you to know what you are looking for and type it correctly; a chip row
+ * shows you what is THERE and how much of it, which is the question somebody
+ * opening a college slate actually has.
+ *
+ * 🔴 EVERY CHIP CARRIES ITS COUNT, and chips with no games are not drawn. A
+ * filter that can return nothing is a filter that teaches you not to trust
+ * it, and on a slate that changes every week a hardcoded conference list
+ * would do exactly that in about a fortnight.
+ * ------------------------------------------------------------------ */
+
+export const FILTER_ALL = 'all';
+export const FILTER_TOP25 = 'top25';
+
+export function filterKey(sport) { return 'ag.allgames.filter.' + sport; }
+
+/** Does this game pass? `all`, `top25`, or a conference name. */
+export function gamePasses(game, filter) {
+  if (!filter || filter === FILTER_ALL) return true;
+  if (filter === FILTER_TOP25) return !!(game.rankHome || game.rankAway);
+  return Array.isArray(game.conferences) && game.conferences.includes(filter);
+}
+
+/**
+ * The chips this slate can offer, with their counts, most games first.
+ *
+ * 🔴 TOP 25 SITS SECOND WHATEVER ITS COUNT, because it is the one filter that
+ * is not a category - it is the answer to "which of these actually matter",
+ * and burying it below the MAC because the MAC has more games would be
+ * sorting by the wrong thing.
+ */
+export function filterOptions(games) {
+  const list = Array.isArray(games) ? games : [];
+  const conf = new Map();
+  let top = 0;
+  for (const g of list) {
+    if (g.rankHome || g.rankAway) top++;
+    for (const c of g.conferences || []) conf.set(c, (conf.get(c) || 0) + 1);
+  }
+  const out = [{ id: FILTER_ALL, label: 'All', n: list.length }];
+  if (top) out.push({ id: FILTER_TOP25, label: 'Top 25', n: top });
+  for (const [c, n] of [...conf].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
+    out.push({ id: c, label: c, n });
+  }
+  return out;
+}
+
 /* 🔴 A GAME OPENS. IT DOES NOT SIT OPEN. Measured on the deployed board with
  * the real 86-game slate at 375x812, before this change:
  *
@@ -1148,8 +1218,38 @@ export function render(root, data, state) {
   }
   paintTally();
 
+  /* The filter, above the board. Persisted per sport, because the answer to
+     "which league am I in" and "which conference do I care about" are the
+     same answer every week for most people. */
+  let filter = FILTER_ALL;
+  const fsport = (d && d.sport) || chosenSport();
+  try { filter = localStorage.getItem(filterKey(fsport)) || FILTER_ALL; } catch { /* private mode */ }
+  const opts = filterOptions(games);
+  /* A stored filter for a conference that is not playing this week would
+     render an empty board with no explanation. Fall back rather than explain. */
+  if (!opts.some((o) => o.id === filter)) filter = FILTER_ALL;
+
+  const chips = el('div', 'p6a-filters ag-scroll-x');
+  chips.setAttribute('role', 'group');
+  chips.setAttribute('aria-label', 'Filter the week');
+  for (const o of opts) {
+    const b = el('button', 'p6a-filter');
+    b.type = 'button';
+    b.appendChild(el('span', 'p6a-filter-l', o.label));
+    b.appendChild(el('span', 'p6a-filter-n num', String(o.n)));
+    if (o.id === filter) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
+    b.onclick = () => {
+      try { localStorage.setItem(filterKey(fsport), o.id); } catch { /* private mode */ }
+      render(root, data, state);
+    };
+    chips.appendChild(b);
+  }
+  root.appendChild(chips);
+
+  const shown = games.filter((g) => gamePasses(g, filter));
+
   const list = el('div', 'p6a-list');
-  for (const g of groupsOf(games)) {
+  for (const g of groupsOf(shown)) {
     const day = el('details', 'p6a-day');
     const allPast = g.games.every((x) => x.status === 'final');
     /* A finished day rolls up on its own: present, countable, one tap from open.

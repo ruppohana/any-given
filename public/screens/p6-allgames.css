@@ -359,3 +359,29 @@
 @media (prefers-reduced-motion: reduce) {
   .scr-p6-allgames .p6a-game > .p6a-top::after { transition: none; }
 }
+
+/* ── THE FILTER ROW ───────────────────────────────────────────────────
+   Sticky, because it is the answer to "where am I in 86 games" and a control
+   that scrolls away is one you stop using. It sits above the day cards and
+   below the header, so it never covers a price. */
+.scr-p6-allgames .p6a-filters {
+  position: sticky; top: 0; z-index: 4;
+  display: flex; gap: 6px; padding: 8px 2px;
+  background: var(--bg);
+}
+.scr-p6-allgames .p6a-filter {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+  font: inherit; min-height: 34px; padding: 0 11px;
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--card); color: var(--fg); white-space: nowrap;
+}
+.scr-p6-allgames .p6a-filter-l { font-size: var(--t-micro); font-weight: 700; }
+/* The count is the point of the chip - it says how much is behind it before
+   you spend a tap finding out. Quieter than the label, never hidden. */
+.scr-p6-allgames .p6a-filter-n {
+  font-size: 10px; font-weight: 800; color: var(--dim);
+}
+.scr-p6-allgames .p6a-filter[data-on="true"] {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+.scr-p6-allgames .p6a-filter[data-on="true"] .p6a-filter-n { color: var(--on-accent); opacity: .8; }

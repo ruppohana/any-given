@@ -90,6 +90,21 @@ export async function captureSlate(env: any, sport: string, season: number) {
     .map((x: any) => String(x.$ref || '').split('/events/')[1]?.split('?')[0])
     .filter(Boolean);
 
+  /* 🔴 CONFERENCE IS LOOKED UP ONCE PER TEAM, EVER - NOT ONCE PER RUN.
+   * Jason: "Sort by top 25, conference?" Both are real needs at 86 games and
+   * they cost very differently.
+   *
+   * The RANK is free: `curatedRank.current` is inline on the competitor we
+   * already fetch. The CONFERENCE is one more request per team, and this
+   * capture runs every ten minutes - 150 teams x 6 an hour is 900 requests
+   * an hour for a fact that changes once a year. So it is held in KV and only
+   * teams we have never seen are looked up. A normal run makes zero of these
+   * requests. */
+  let confMap: Record<string, string> = {};
+  const confKey = `teams:${sport}:conference`;
+  try { confMap = JSON.parse((await env.LIVE.get(confKey)) || '{}') || {}; } catch { confMap = {}; }
+  let confNew = 0;
+
   const teamCache = new Map<string, any>();
   const games: any[] = [];
   const live: string[] = [];
@@ -145,8 +160,21 @@ export async function captureSlate(env: any, sport: string, season: number) {
             if (vals.length) periods = vals;
           } catch { /* absent stays absent */ }
         }
+        /* AP/CFP rank. ESPN uses 0 or 99 for unranked, so anything outside
+           1-25 is stored as null rather than as a number nobody means. */
+        const rk = Number(c.curatedRank?.current);
+        const rank = Number.isFinite(rk) && rk >= 1 && rk <= 25 ? rk : null;
+
+        if (confMap[tid] === undefined && t.groups?.$ref) {
+          try {
+            const grp = await get(String(t.groups.$ref));
+            confMap[tid] = String(grp?.shortName || grp?.name || '');
+            confNew++;
+          } catch { /* leave it unknown; the next run tries again */ }
+        }
+
         sides.push({
-          periods,
+          periods, rank, conference: confMap[tid] || null,
           id: tid, abbrev: t.abbreviation || '', name: t.displayName || '',
           short: t.shortDisplayName || t.name || '',
           primary: col(t.color), secondary: col(t.alternateColor),
@@ -222,9 +250,16 @@ export async function captureSlate(env: any, sport: string, season: number) {
         venue, broadcast,
         /* site.api only - kept from whatever the host capture last wrote. */
         lastMeeting: was.lastMeeting ?? null,
-        teams: [home, away].map(({ homeAway, score, ...t }) => ({
+        teams: [home, away].map(({ homeAway, score, periods, ...t }) => ({
           ...t, form: (wasTeams.get(String(t.id)) || {}).form ?? null
         })),
+        /* 🔴 ON THE GAME AS WELL AS ON THE TEAMS. A board filtering to "Top 25"
+           asks a question about the GAME - does either side carry a rank - and
+           making every caller dig through two team objects to answer it is how
+           two screens end up disagreeing about what a ranked game is. */
+        rankHome: home.rank ?? null,
+        rankAway: away.rank ?? null,
+        conferences: [...new Set([home.conference, away.conference].filter(Boolean))],
         /* Quarter scores, home and away, in period order. Null until a game
            starts. This is what lets every half and quarter market settle
            without a play list. */
@@ -244,6 +279,12 @@ export async function captureSlate(env: any, sport: string, season: number) {
    * a slate of zero games, wiping a correct capture. A capture that found
    * nothing is a FAILED RUN, not a week with no football in it. */
   if (!games.length) return { key, week, wrote: 0, live: 0, skipped: 'empty capture', src: url };
+
+  /* Only when it grew. A write per run for an unchanged map is a write per
+     run for nothing. */
+  if (confNew) {
+    try { await env.LIVE.put(confKey, JSON.stringify(confMap)); } catch { /* next run */ }
+  }
 
   games.sort((a, b) => a.kickoffUtc - b.kickoffUtc);
   await env.LIVE.put(key, JSON.stringify({
