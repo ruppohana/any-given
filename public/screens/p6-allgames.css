@@ -524,3 +524,40 @@
    padding rather than a fixed min-height so a row that wraps still fits. */
 .scr-p6-allgames .p6a-game > .p6a-top { padding: 9px 4px; row-gap: 7px; }
 .scr-p6-allgames .p6a-game { padding: calc(var(--nest-inset) + 2px); }
+
+/* ── THE DISCLOSURE, UNDER THE @ ──────────────────────────────────────
+   Jason: "Move the more bets carrot, to below the @. Use '^ MORE ^' but
+   with the carrots pointing downward."
+
+   The chevrons are U+2304 DOWN ARROWHEAD - a real glyph rather than a
+   rotated border, so it needs no transform to point the right way and it
+   inherits the text colour and weight like any other character. On open it
+   flips to the up arrowhead via a rotation, which keeps one element
+   authoritative about the state instead of two glyphs that can disagree. */
+.scr-p6-allgames .p6a-mid {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  flex: 0 0 auto; min-width: 0;
+}
+.scr-p6-allgames .p6a-more {
+  display: flex; align-items: center; gap: 3px;
+  font-size: 9px; font-weight: 800; letter-spacing: .08em; color: var(--dim);
+  line-height: 1; white-space: nowrap;
+}
+.scr-p6-allgames .p6a-more-c {
+  font-size: 11px; line-height: 1; transition: transform .15s ease;
+  display: inline-block;
+}
+.scr-p6-allgames .p6a-game[open] .p6a-more-c { transform: rotate(180deg); }
+/* Both words occupy the same cell, so the widest one sets the width once and
+   opening a card cannot nudge the teams either side of it. */
+.scr-p6-allgames .p6a-more-t { display: grid; }
+.scr-p6-allgames .p6a-more-w { grid-area: 1 / 1; }
+.scr-p6-allgames .p6a-more-w:last-child { visibility: hidden; }
+.scr-p6-allgames .p6a-game[open] .p6a-more-w:first-child { visibility: hidden; }
+.scr-p6-allgames .p6a-game[open] .p6a-more-w:last-child { visibility: visible; }
+@media (prefers-reduced-motion: reduce) {
+  .scr-p6-allgames .p6a-more-c { transition: none; }
+}
+/* The old mark at the end of the metadata line goes - two disclosure marks
+   on one row is two things claiming to be the control. */
+.scr-p6-allgames .p6a-game > .p6a-top::after { content: none; }

@@ -48,6 +48,11 @@ import { teamChip, TEAM_CHIP_CSS, applyTeamVars } from '/components/team-chip.js
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { pageHeader } from '/components/header.js';
 import { progress, crowdLabel } from '/components/fmt.js';
+/* 🔴 THE FILTER IS IMPORTED, NOT REIMPLEMENTED. Two screens deciding
+   separately what "Top 25" means is how one of them ends up counting a game
+   the other does not - and the counts are printed on the chips, so the
+   disagreement would be visible and unexplainable. p6 owns the rule. */
+import { filterOptions, gamePasses, FILTER_ALL, filterKey } from '/screens/p6-allgames.screen.js';
 
 export const id = 'p2-slate';
 export const title = 'The slate';
@@ -277,6 +282,13 @@ function lcg(seed) {
 
 function slateGame(o) {
   return {
+    /* 🔴 RANK AND CONFERENCE TRAVEL. Same allow-list mapper hazard p6 had
+       three times today: this rebuilds a game key by key, so a field the
+       capture starts writing is invisible here until somebody adds a line -
+       and the symptom is a filter that renders one chip, never an error. */
+    rankHome: typeof o.rankHome === 'number' ? o.rankHome : null,
+    rankAway: typeof o.rankAway === 'number' ? o.rankAway : null,
+    conferences: Array.isArray(o.conferences) ? o.conferences : [],
     id: o.id, week: 2, kickoffUtc: o.kickoffUtc, home: o.home, away: o.away,
     venue: o.venue || null, broadcast: o.broadcast || null,
     spreadProvider: o.spreadProvider || null,
@@ -600,6 +612,7 @@ async function realSlate(byId, sport) {
         spread: typeof g.spread === 'number' ? g.spread : null,
         status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
         homeScore: g.homeScore, awayScore: g.awayScore,
+        rankHome: g.rankHome, rankAway: g.rankAway, conferences: g.conferences,
         lastMeeting: g.lastMeeting || null
       });
     }).filter((g) => g.home && g.away);
@@ -1513,7 +1526,45 @@ export function render(root, data, state) {
 
   head(root, data, null);
 
-  const groups = groupsOf(data.games);
+  /* 🔴 THE SAME FILTERS AS ALL GAMES. This screen is 86 rows and 22 screens
+   * of scroll, and it is the one an INVITE LINK OPENS - the first thing
+   * somebody sees. It had a jump strip, which moves you around the week, and
+   * nothing at all for "show me the games worth looking at".
+   *
+   * The jump strip and this are not the same tool and both stay: one changes
+   * where you are, this changes which games exist. The strip's own comment
+   * says so - "it is NOT a filter" - and that was a correct description of a
+   * gap rather than an argument against filling it. */
+  const fsport = (data && data.sport) || 'college-football';
+  let filter = FILTER_ALL;
+  try { filter = localStorage.getItem(filterKey(fsport)) || FILTER_ALL; } catch { /* private */ }
+  const fopts = filterOptions(data.games);
+  if (!fopts.some((o) => o.id === filter)) filter = FILTER_ALL;
+
+  if (fopts.length > 1) {
+    const chips = el('div', 'p2-filters ag-scroll-x');
+    chips.setAttribute('role', 'group');
+    chips.setAttribute('aria-label', 'Filter the week');
+    for (const o of fopts) {
+      const b = el('button', 'p2-filter');
+      b.type = 'button';
+      b.appendChild(el('span', 'p2-filter-l', o.label));
+      b.appendChild(el('span', 'p2-filter-n num', String(o.n)));
+      if (o.id === filter) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
+      b.onclick = () => {
+        try { localStorage.setItem(filterKey(fsport), o.id); } catch { /* private */ }
+        render(root, data, state);
+      };
+      chips.appendChild(b);
+    }
+    requestAnimationFrame(() => {
+      if (chips.scrollWidth > chips.clientWidth + 2) chips.classList.add('is-scrollable');
+    });
+    root.appendChild(chips);
+  }
+
+  const shown = data.games.filter((g) => gamePasses(g, filter));
+  const groups = groupsOf(shown);
   const days = daysOf(groups);
 
   /* THE JUMP STRIP. 131 games is roughly 8,000px of scroll and Sunday is unreachable

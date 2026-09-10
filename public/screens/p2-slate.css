@@ -556,3 +556,29 @@
    is context for the spread above it, never a number anybody is picking on. */
 .scr-p2-slate .p2-seed { font-size: 9px; color: var(--dim); font-weight: 700;
   white-space: nowrap; }
+
+/* ── THE FILTER ROW ───────────────────────────────────────────────────
+   Same control as All games, because it is the same question - and this is
+   the screen an invite link opens, so it is the first place somebody needs
+   it. Sticky under the top bar; --topbar-h so the two cannot drift. */
+.scr-p2-slate .p2-filters {
+  position: sticky; top: var(--topbar-h); z-index: 4;
+  display: flex; gap: 6px; padding: 8px 2px; background: var(--bg);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+.scr-p2-slate .p2-filters:not(.is-scrollable) {
+  -webkit-mask-image: none; mask-image: none;
+}
+.scr-p2-slate .p2-filter {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+  font: inherit; min-height: 34px; padding: 0 11px;
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--card); color: var(--fg); white-space: nowrap;
+}
+.scr-p2-slate .p2-filter-l { font-size: var(--t-micro); font-weight: 700; }
+.scr-p2-slate .p2-filter-n { font-size: 10px; font-weight: 800; color: var(--dim); }
+.scr-p2-slate .p2-filter[data-on="true"] {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+.scr-p2-slate .p2-filter[data-on="true"] .p2-filter-n { color: var(--on-accent); opacity: .8; }

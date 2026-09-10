@@ -118,3 +118,23 @@
 .p7-leg[data-result="won"] .p7-leg-r { color: var(--up); }
 .p7-leg[data-result="lost"] .p7-leg-r { color: var(--down); }
 .p7-leg[data-result="lost"] .p7-leg-t { opacity: .6; }
+
+/* ── THE FILTER ROW ───────────────────────────────────────────────────
+   Same control, same rule, third screen. It sits BELOW the slip rather than
+   above it: the slip is what you are building and it must not be pushed off
+   screen by chrome. */
+.scr-p7-parlay .p7-filters {
+  display: flex; gap: 6px; padding: 2px 2px 0;
+}
+.scr-p7-parlay .p7-filter {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+  font: inherit; min-height: 32px; padding: 0 11px;
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--card); color: var(--fg); white-space: nowrap;
+}
+.scr-p7-parlay .p7-filter-l { font-size: var(--t-micro); font-weight: 700; }
+.scr-p7-parlay .p7-filter-n { font-size: 10px; font-weight: 800; color: var(--dim); }
+.scr-p7-parlay .p7-filter[data-on="true"] {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+.scr-p7-parlay .p7-filter[data-on="true"] .p7-filter-n { color: var(--on-accent); opacity: .8; }

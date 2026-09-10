@@ -195,5 +195,44 @@
     <main class="ag-main" id="root"></main>
   </div>
   <script type="module" src="/app.js"></script>
+  <!-- 🔴 THE SMOKE HOOK. tools/smoke.mjs drives every route in headless
+       Chrome after a deploy, because the 678 unit tests cannot see a blank
+       screen - three separate times today a screen died at RENDER with every
+       file returning 200 and every test green, and each one was found by
+       Jason looking at his phone.
+
+       It lives in the page rather than in the tool because Chrome's
+       --dump-dom cannot inject a script: the page walks its own routes and
+       leaves the verdict in #smoke-result for the tool to read. It costs
+       nothing when the flag is absent, and the flag is the only thing that
+       makes any of it run. -->
+  <script type="module">
+  if (new URLSearchParams(location.search).has('smoke')) {
+    const ROUTES = ['home','live','allgames','buildparlay','slate','slate131',
+      'picks','parlay','standings','create','invite','rules','now','landed',
+      'missed','game','board','delay','cold','alerts','share','settings','offline'];
+    const errs = [];
+    addEventListener('error', (e) => errs.push(String(e.message || e)));
+    addEventListener('unhandledrejection', (e) => errs.push(String(e.reason)));
+    (async () => {
+      const out = [];
+      for (const r of ROUTES) {
+        location.hash = '#/' + r;
+        await new Promise((z) => setTimeout(z, 1200));
+        const main = document.querySelector('.ag-main');
+        const text = ((main && main.innerText) || '').trim();
+        const boundary = [...document.querySelectorAll('.state-title')]
+          .map((x) => x.textContent)
+          .filter((t) => /did not load|went wrong/i.test(t));
+        out.push({ route: r, chars: text.length, boundary: boundary[0] || null,
+          thin: text.length < 40, detail: boundary[0] ? text.slice(0, 200) : null });
+      }
+      const pre = document.createElement('pre');
+      pre.id = 'smoke-result';
+      pre.textContent = JSON.stringify({ out, errs });
+      document.body.appendChild(pre);
+    })();
+  }
+  </script>
 </body>
 </html>

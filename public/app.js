@@ -98,7 +98,32 @@ function currentRoute() {
 }
 
 let TITLE_OBS = null;
+let ROOT_OBS = null;
+
+/* 🔴 A SCREEN THAT RE-RENDERS ITSELF DETACHES THE NODE WE ARE WATCHING.
+ *
+ * wireTopbarTitle observes the page's h1, and mount() calls it after the
+ * render. That covers navigation and nothing else: several screens re-render
+ * in place without going through mount at all - the slate's filter chips and
+ * All games' both call `render(root, data, state)` directly - which throws
+ * the observed h1 away and leaves the observer watching a detached node.
+ * The bar then keeps whatever state it had, so the title sat visible over a
+ * page that was showing its own title. Exactly the duplication the observer
+ * exists to prevent, reappearing the moment anybody used a filter.
+ *
+ * One MutationObserver on #root, watching only direct children, re-wires it.
+ * Cheaper than making every self-rendering screen remember to call back, and
+ * it cannot be forgotten by a screen that does not exist yet. */
+function watchRoot() {
+  if (ROOT_OBS) return;
+  const root = document.getElementById('root');
+  if (!root || typeof MutationObserver !== 'function') return;
+  ROOT_OBS = new MutationObserver(() => wireTopbarTitle());
+  ROOT_OBS.observe(root, { childList: true });
+}
+
 function wireTopbarTitle() {
+  watchRoot();
   const tb = document.getElementById('topbar-title');
   if (!tb) return;
   if (TITLE_OBS) { TITLE_OBS.disconnect(); TITLE_OBS = null; }

@@ -1193,8 +1193,39 @@ function gameCard(ctx, game) {
 
   /* The matchup sits inside the summary so the closed row shows who is
      playing - a time and a spread with no teams on it is a row about nothing. */
+  /* 🔴 THE DISCLOSURE MARK MOVES UNDER THE @, AND IT SAYS WHAT IT DOES.
+   * Jason: "Move the more bets carrot, to below the @. Use '^ MORE ^' but
+   * with the carrots pointing downward."
+   *
+   * It was a bare chevron at the end of the metadata line, sharing that row
+   * with the time, the channel and the market selector - so the one control
+   * that opens the other fourteen markets was the least prominent thing on
+   * the row, and a bare glyph does not say what it opens.
+   *
+   * Under the @ it sits on the centre line between the two teams, which is
+   * the only dead space on the card and the place the eye already passes
+   * through on its way from one side to the other. */
   const teams = el('div', 'p6a-teams');
-  teams.append(teamBlock(ctx, game, 'away'), el('span', 'p6a-at', '@'), teamBlock(ctx, game, 'home'));
+  const mid = el('div', 'p6a-mid');
+  mid.appendChild(el('span', 'p6a-at', '@'));
+  /* 🔴 THE WORD SWAPS, IT DOES NOT DISAPPEAR. First pass hid "MORE" on open
+     and kept its width, so an open card showed two carets floating either
+     side of a gap - which reads as a rendering fault rather than a control.
+     Both words are drawn and CSS shows one, so the element never changes
+     width and the row cannot shift as you open it. */
+  const more = el('span', 'p6a-more');
+  more.appendChild(el('span', 'p6a-more-c', '⌄'));
+  /* 🔴 NOT `word` - gameCard already binds that name to the status pill
+     eighty lines up, and two `const`s of one name in one function is a parse
+     error, not a shadow. Second time today in this exact function; the
+     module-parse test caught both. */
+  const moreWord = el('span', 'p6a-more-t');
+  moreWord.appendChild(el('span', 'p6a-more-w', 'MORE'));
+  moreWord.appendChild(el('span', 'p6a-more-w', 'LESS'));
+  more.appendChild(moreWord);
+  more.appendChild(el('span', 'p6a-more-c', '⌄'));
+  mid.appendChild(more);
+  teams.append(teamBlock(ctx, game, 'away'), mid, teamBlock(ctx, game, 'home'));
   top.appendChild(teams);
 
   const offered = marketsFor(game, ctx.markets);

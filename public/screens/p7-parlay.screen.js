@@ -39,6 +39,11 @@ import { playsFromPeriods } from '/src/lib/price-model.js';
 import {
   marketsFor, priceFor, priceLabel, chosenSport, chosenWeek,
   fetchSlate, resolveWeek, groupsOf, groupLabel, timeLabel, spreadText, num, FLAT_STAKE,
+  /* 🔴 ONE DEFINITION OF "TOP 25", SHARED BY THREE SCREENS. Three screens
+     deciding separately what a chip counts is how two of them print
+     different numbers for the same word - and the counts are ON the chips,
+     so the disagreement would be visible and unexplainable. p6 owns it. */
+  filterOptions, gamePasses, FILTER_ALL, filterKey,
 } from '/screens/p6-allgames.screen.js';
 
 export const id = 'p7-parlay';
@@ -482,7 +487,43 @@ export function render(root, data, state) {
 
   /* Grouped by day and kick window, one header per group — the same shape the
      slate and the All games board use. */
-  for (const g of groupsOf(live)) {
+  /* 🔴 THE SAME FILTERS AS THE OTHER TWO SCREENS. This picker is the same 86
+     games, and it is where scanning matters most: you are hunting three to
+     six specific games, not browsing. It shipped without them purely because
+     I built the filter after the picker. */
+  let filter = FILTER_ALL;
+  try { filter = localStorage.getItem(filterKey(sport)) || FILTER_ALL; } catch { /* private */ }
+  const fopts = filterOptions(live);
+  if (!fopts.some((o) => o.id === filter)) filter = FILTER_ALL;
+  if (fopts.length > 1) {
+    const chips = el('div', 'p7-filters ag-scroll-x');
+    chips.setAttribute('role', 'group');
+    chips.setAttribute('aria-label', 'Filter the week');
+    for (const o of fopts) {
+      const b = el('button', 'p7-filter');
+      b.type = 'button';
+      b.appendChild(el('span', 'p7-filter-l', o.label));
+      b.appendChild(el('span', 'p7-filter-n num', String(o.n)));
+      if (o.id === filter) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
+      b.onclick = () => {
+        try { localStorage.setItem(filterKey(sport), o.id); } catch { /* private */ }
+        render(root, data, state);
+      };
+      chips.appendChild(b);
+    }
+    root.appendChild(chips);
+  }
+
+  const picked = live.filter((g) => gamePasses(g, filter));
+  if (!picked.length) {
+    root.appendChild(stateBlock('empty', {
+      title: 'Nothing in that filter',
+      body: 'No game left in this filter is still open. Try All, or another conference.',
+    }));
+    return;
+  }
+
+  for (const g of groupsOf(picked)) {
     const sec = el('section', 'p7-group');
     sec.appendChild(el('h2', 'p7-group-h', groupLabel(g)));
     for (const game of g.games) {
