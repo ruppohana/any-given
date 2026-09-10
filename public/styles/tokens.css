@@ -248,6 +248,18 @@
   --t-section:17px;
   --t-figure: 21px;
   --t-score:  24px;
+  /* 🔴 THE SCOREBUG NUMERAL, AND IT IS A NEW STEP RATHER THAN A MAGIC NUMBER.
+   * Jason: "the score needs to be centered vertically like it was before and
+   * larger." --t-bank was the ceiling at 30px and is used by four other
+   * screens, so raising it would have enlarged the live board's figure, the
+   * result screen and the leaderboard along with it.
+   *
+   * The alternative was a literal 38px inside one component, which is how a
+   * type scale stops being a scale - one exception, then another, and then
+   * nobody can say what the sizes are. A named step is honest about what it
+   * is: the scale grew by one, for the largest numeral in the product, and
+   * anything else wanting this size has to say so by name. */
+  --t-scorebug: 38px; /* live layer, the scorebug only */
   --t-bank:   30px;   /* THE LARGEST TYPE IN THE APP - live layer only.
                        * The pool has no bank strip and no 30px figure. Its own
                        * headline figure is deliberately unassigned: do not

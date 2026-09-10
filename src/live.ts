@@ -131,6 +131,8 @@ export type LivePlay = {
   statYardage: number | null;
   /** "2nd & 8 at SEA 28" as the feed writes it, after this play. */
   endSpotText: string | null;
+  /** Yards to the defending end zone after this play. Drawable; the text is not. */
+  endYardsToEndzone: number | null;
   /** When ESPN says the play happened. The delay is measured from THIS. */
   wallclockMs: number | null;
   /** 7.2 — emitted by the parser, never worked out by a view. */
@@ -345,6 +347,12 @@ export function readPlays(summary: any): LivePlay[] {
          * that logic for thirty years; this is the same rule as 7.2, where
          * deriving the star from play text got the wrong player. */
         endSpotText: String(p.end?.downDistanceText || '') || null,
+        /* WHERE THE BALL IS, AS A NUMBER. The spot text says "SEA 31" and a
+         * person reads that instantly; nothing can DRAW from it, because "SEA
+         * 31" is two different places depending on who has the ball. This is
+         * yards to the defending end zone, which is unambiguous, and it is what
+         * the field strip is built on. */
+        endYardsToEndzone: n(p.end?.yardsToEndzone),
         startTeamId: p.start?.team?.id != null ? String(p.start.team.id) : null,
         endTeamId: p.end?.team?.id != null ? String(p.end.team.id) : null,
         statYardage: n(p.statYardage),

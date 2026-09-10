@@ -33,7 +33,10 @@ import { detect } from '/src/lib/detect.js';
  * on; it can never say what YOU just called, because it is one picture per URL
  * cached hard by the crawler. Web Share Level 2 attaches an actual PNG. */
 import { shareResult, shareReaction, MOMENTS } from '/components/sharecard.js';
-import { teamChip, applyTeamVars } from '/components/team-chip.js';
+/* `tooClose` and `normalizeColor` come from the chip rather than being written
+   again here - the bug and the slate have to agree about when two teams clash,
+   or the same fixture is legible in one place and not the other. */
+import { teamChip, applyTeamVars, tooClose, normalizeColor } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { adSlot } from '/components/ad.js';
 import { signed, signClass, clock } from '/components/fmt.js';
@@ -44,6 +47,7 @@ export const bar = null;   /* No comp. Nobody ships this. */
 export const states = ['live'];
 
 const POLL_MS = 5000;
+/* 5 first: the typical stake, and the one a new player should meet. */
 const STAKES = [5, 10, 25];
 const START_BANK = 200;
 const MAX_PAYOUT = 6;
@@ -82,6 +86,19 @@ async function nextGameKey(sport) {
     const res = await fetch('/api/state/slate:' + sport + ':2026:' + wk);
     if (!res.ok) return null;
     const d = await res.json();
+    /* 🔴 KEEP THE SLATE THIS ALREADY FETCHED. The scorebug wants team records
+     * and the live feed does not carry them - the weekly capture does, because
+     * the poller pulls them for the info card. This function was downloading
+     * that exact document, reading one field out of it and dropping the rest
+     * on the floor, five minutes apart, for ever.
+     *
+     * The records were coming back empty on the bug not because the data was
+     * missing but because the only code that cached it was the "also on" card,
+     * which does not render on this screen. Two callers, one document, one
+     * cache. */
+    if (!S.also || S.also.sport !== sport) {
+      S.also = { sport, at: Date.now(), games: d.games || [] };
+    }
     const up = (d.games || [])
       .filter((g) => g && g.id && g.status !== 'final')
       .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
@@ -395,6 +412,396 @@ function waitingCard() {
   return c;
 }
 
+/* ONE GLYPH PER KIND OF MOMENT. Jason: "you can highlight big moments or
+ * highlights with a emoji."
+ *
+ * The play-by-play replaced a highlight card, and the risk in that trade was
+ * losing the ability to SCAN - twenty-five rows of identical grey text is a
+ * transcript, and a transcript is read rather than glanced at. A glyph at the
+ * head of a row is found by the eye before any of the words are, which is the
+ * job the old card was doing badly.
+ *
+ * IT IS THE DETECTOR'S EVENT, NEVER A GUESS FROM THE TEXT. Same rule as the
+ * star: the parser already says what kind of moment this was, and a view that
+ * works it out again from the prose gets it wrong - which is how a tackler
+ * became a ball carrier and how a punt became a big play.
+ *
+ * Deliberately short. Anything needing explanation does not belong in a glyph,
+ * and a row with no entry gets none rather than a shrug. */
+const MOMENT_EMOJI = {
+  touchdown: '\u{1F3C8}',
+  safety: '\u{1F6E1}\uFE0F',
+  field_goal: '\u{1F3AF}',
+  interception: '\u{1F91A}',
+  fumble: '\u{1F4A5}',
+  turnover: '\u{1F501}',
+  downs: '\u{1F501}',
+  big_play: '\u26A1',
+  fourth_down: '\u{1F3B2}',
+  red_zone: '\u{1F3AF}',
+  overtime: '\u23F1\uFE0F',
+  close_game: '\u23F1\uFE0F'
+};
+
+/* THE FIELD, IN PERSPECTIVE. Jason sent a picture of what he meant after two
+ * flat attempts got "booo on the field" and "it look terrible": a field seen
+ * from the side and slightly above, bright turf, dark end zones, goalposts,
+ * numbers painted both ways, sitting on a slab.
+ *
+ * SO THE THING HE ASKED FOR TWICE WAS NEVER FLATNESS. "we have a 2d/3d motion
+ * graphic before, right?" - I checked sports-live, found a flat 2D SVG, and
+ * answered the question I had asked myself instead of the one he asked. The
+ * old field is what he remembered LIKING; the picture is what he wants NOW,
+ * and those are different claims. A reference image ends an argument that
+ * three rounds of adjectives could not.
+ *
+ * HOW THE PROJECTION WORKS, because it is the whole trick and it is small:
+ * every point is given in FIELD coordinates - u along the length, 0 at the
+ * left of the window and 1 at the right; v across the width, 0 at the far
+ * touchline and 1 at the near one - and `pt()` maps that onto a trapezium
+ * whose top edge is shorter than its bottom. Nothing is drawn in screen
+ * coordinates, so the markings cannot drift out of agreement with each other.
+ *
+ * v is eased before it is used. Real foreshortening is projective, not linear,
+ * and a linear field reads as a wonky rectangle rather than as ground; one
+ * exponent is enough to fix that at this size and costs nothing.
+ *
+ * STILL A WINDOW, and still for the reason he gave: "we probably dont need the
+ * entire field, maybe 30-40 yards max. enough context but make it all
+ * readable." A hundred yards in perspective puts the far numbers under a
+ * pixel. Forty yards is legible AND says where you are.
+ */
+const FIELD_WINDOW_YDS = 40;
+
+/* THE CAMERA MOVES; IT DOES NOT CUT. Jason: "can you move the field and/or
+ * ball? not a quick regeneration? it is choppy."
+ *
+ * It was choppy because it was a regeneration. paint() rebuilds the whole
+ * screen on every poll, so the field was thrown away and drawn again from
+ * scratch five times a second - and when the ball moved eight yards, the
+ * window jumped eight yards between two frames. Nothing was animating because
+ * nothing survived long enough to animate.
+ *
+ * TWO THINGS HAD TO CHANGE AND ONLY ONE OF THEM IS THE TWEEN. The node itself
+ * now persists across repaints - it is kept on S and re-appended rather than
+ * rebuilt, so appendChild MOVES it instead of replacing it. A transition needs
+ * something continuous to happen to, and a component that is destroyed every
+ * cycle can never have one however it is styled.
+ *
+ * Then the window centre is eased from where it was to where it should be over
+ * ~700ms, redrawing the markings each frame. Redrawing rather than
+ * transforming, because the perspective FAN is centred on the camera: pan a
+ * fixed fan and the vanishing point slides off with it, which looks like the
+ * stadium leaning over. Recomputing is what keeps the geometry honest, and at
+ * ~200 nodes it is cheap enough to do at frame rate for two thirds of a second.
+ *
+ * easeOutCubic, because a camera operator decelerates onto a spot and never
+ * arrives at full speed. A linear pan is the other kind of wrong. */
+/* 1 -> 1ST. Used for the quarter and the down, which a bug writes the same way
+ * because they are the same kind of word. Overtime is OT, not 5TH. */
+const ORDINAL = { 1: '1ST', 2: '2ND', 3: '3RD', 4: '4TH', 5: 'OT', 6: '2OT' };
+
+const FIELD_PAN_MS = 700;
+let FIELD_CAM = null;   /* where the camera is now, in yards */
+let FIELD_RAF = null;
+
+function panField(node, target, draw) {
+  if (FIELD_CAM == null) { FIELD_CAM = target; draw(node, FIELD_CAM); return; }
+  if (Math.abs(target - FIELD_CAM) < 0.05) { draw(node, FIELD_CAM); return; }
+  const from = FIELD_CAM, t0 = performance.now();
+  if (FIELD_RAF) cancelAnimationFrame(FIELD_RAF);
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / FIELD_PAN_MS);
+    const e = 1 - Math.pow(1 - k, 3);
+    FIELD_CAM = from + (target - from) * e;
+    draw(node, FIELD_CAM);
+    /* Stop when the node leaves the document - a screen change must not leave
+       an animation running against a detached tree for ever. */
+    if (k < 1 && node.isConnected) FIELD_RAF = requestAnimationFrame(step);
+    else FIELD_RAF = null;
+  };
+  FIELD_RAF = requestAnimationFrame(step);
+}
+
+/* WHERE THE BALL IS SHOWN, which is not always where the spot is. Jason: "the
+ * ball is on the 0".
+ *
+ * He is right and it cannot be anything else: there is no such thing as first
+ * and goal at the nought. A spot of zero yards to the end zone only ever means
+ * the ball CROSSED the line, so drawing it balanced on the paint is drawing a
+ * position that does not occur in football. It should be in the end zone,
+ * because that is where it is.
+ *
+ * Both the camera and the frame ask this, so they cannot disagree - the pan
+ * targeting one yard and the marker drawn at another is the sort of bug that
+ * looks like a rendering glitch and is actually two opinions. */
+function spotYard(state) {
+  const si = state && state.situation;
+  const ytg = si && typeof si.yardsToGoal === 'number' ? si.yardsToGoal : null;
+  if (ytg == null) return null;
+  const p = state.plays && state.plays[state.plays.length - 1];
+  const t = p ? ((p.typeText || '') + ' ' + (p.text || '')) : '';
+  const scored = !!(p && p.scoringPlay) && /touchdown/i.test(t);
+  /* Four yards past the line: far enough to be unmistakably in, not so far it
+     looks like the back of the end zone. */
+  return scored ? 104 : 100 - ytg;
+}
+
+function fieldStrip(state) {
+  const si = state && state.situation;
+  const ytg = si && typeof si.yardsToGoal === 'number' ? si.yardsToGoal : null;
+  const teams = (state && state.teams) || {};
+  const off = si && si.offenseTeamId ? teams[si.offenseTeamId] : null;
+  if (ytg == null || ytg < 0 || ytg > 100) return null;
+
+  /* Yards from the offense's own goal line, so the picture runs left to right
+     the way they are attacking. */
+  const ball = spotYard(state);
+  if (ball == null) return null;
+
+  /* The node outlives the repaint. Everything below draws INTO it. */
+  const wrapNode = S.fieldNode || (S.fieldNode = el('div', 'lg-field'));
+  panField(wrapNode, ball, (node, cam) => drawField(node, state, ball, cam));
+  return wrapNode;
+}
+
+/* One frame of the field, at a camera position that may be mid-pan. Separated
+ * from fieldStrip so the tween has something to call sixty times a second
+ * without re-deciding anything about the game. */
+function drawField(wrap, state, ball, cam) {
+  const si = state.situation;
+  /* From the SITUATION, never from the drawn ball - the two differ on a score,
+     and the caption must say the real distance rather than the one implied by
+     where the marker was put. */
+  const ytg = typeof si.yardsToGoal === 'number' ? si.yardsToGoal : Math.max(0, 100 - ball);
+  const teams = (state && state.teams) || {};
+  const off = si && si.offenseTeamId ? teams[si.offenseTeamId] : null;
+  const H = FIELD_WINDOW_YDS / 2;
+  let lo = cam - H, hi = cam + H;
+  /* The window keeps its width at the ends. A window that shrinks changes the
+     scale, and a scale that moves is one nobody can read a distance off. */
+  if (lo < -12) { lo = -12; hi = lo + FIELD_WINDOW_YDS; }
+  if (hi > 112) { hi = 112; lo = hi - FIELD_WINDOW_YDS; }
+
+  /* WIDE AND SHORT, AND IT BLEEDS OFF EVERY EDGE. Jason sent the reference a
+   * second time to be clear which one he meant: it is a 3.3:1 crop where the
+   * turf runs out of frame on all four sides. Mine was 2.5:1 sitting on a slab
+   * with air around it - a picture OF a field. His is a view FROM the
+   * touchline, and the difference is entirely that the frame cuts the ground
+   * off rather than containing it. */
+  const W = 400, VH = 122;
+  /* The trapezium: far edge inset and short, near edge wide and low. */
+  /* MILD perspective, from his second reference: the yard lines tilt, they do
+     not converge on a vanishing point. A strong trapezium turns a 40-yard
+     window into a wedge and the far numbers vanish - which is the legibility
+     complaint that started this. */
+  const TL = [-8, -2], TR = [408, -2], BR = [474, 116], BL = [-74, 116];
+  const NS = 'http://www.w3.org/2000/svg';
+
+  /* u: 0..1 along the window. v: 0 far touchline, 1 near. */
+  const pt = (u, v) => {
+    const e = Math.pow(Math.min(1, Math.max(0, v)), 1.12);
+    const tx = TL[0] + (TR[0] - TL[0]) * u, ty = TL[1] + (TR[1] - TL[1]) * u;
+    const bx = BL[0] + (BR[0] - BL[0]) * u, by = BL[1] + (BR[1] - BL[1]) * u;
+    return [tx + (bx - tx) * e, ty + (by - ty) * e];
+  };
+  const U = (yard) => (yard - lo) / (hi - lo);
+  const P = (yard, v) => pt(U(yard), v);
+  const xy = (a) => a[0].toFixed(2) + ',' + a[1].toFixed(2);
+  const mk = (tag, attrs, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const k of Object.keys(attrs)) e.setAttribute(k, String(attrs[k]));
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  /* A quad between two yard lines, which is how every band on this field is
+     drawn - turf stripes, end zones, the red zone. */
+  const quad = (y0, y1, cls, extra) => {
+    const a = P(Math.max(y0, lo), 0), b = P(Math.min(y1, hi), 0);
+    const c = P(Math.min(y1, hi), 1), d = P(Math.max(y0, lo), 1);
+    return mk('polygon', Object.assign({ points: [xy(a), xy(b), xy(c), xy(d)].join(' '), class: cls }, extra || {}));
+  };
+
+  wrap.textContent = '';
+
+  /* "0 YARDS TO THE END ZONE" IS NOT A SENTENCE ABOUT A FOOTBALL GAME. Jason,
+   * looking at the goal line: "what is this telling me touchdown?"
+   *
+   * It was telling him nothing, and the fault is a unit label wrapped around a
+   * number with no check on what the number means. Zero yards to the end zone
+   * is not a distance - it is an EVENT, and which event depends on the play:
+   * the ball crossed the line, or it is sitting on it. The app knows which,
+   * because the play says so, and it was throwing that away to print
+   * arithmetic.
+   *
+   * A distance of zero is the classic case where a template stops being true.
+   * The rest of the time "68 yards to the end zone" is exactly right; at the
+   * boundary it needs a different sentence, not a smaller number. */
+  const lastVis = state.plays && state.plays[state.plays.length - 1];
+  const lastTxt = lastVis ? ((lastVis.typeText || '') + ' ' + (lastVis.text || '')) : '';
+  const scored = !!(lastVis && lastVis.scoringPlay) && /touchdown/i.test(lastTxt);
+  const scoredBy = scored && lastVis.offenseTeamId && teams[lastVis.offenseTeamId];
+
+  const cap = el('div', 'lg-fieldcap');
+  const leftTxt = scored
+    ? ('Touchdown' + (scoredBy ? ' — ' + (scoredBy.abbrev || scoredBy.short) : ''))
+    : (si.downDistanceText || (ytg === 0 ? 'On the goal line' : ''));
+  if (leftTxt) cap.appendChild(el('span', '', leftTxt));
+  /* No distance line when the distance is the thing that just happened, and
+     none when there is no sentence to put it beside. */
+  if (!scored && ytg > 0) {
+    const right = el('span', '');
+    right.appendChild(el('b', '', String(ytg)));
+    /* "96 yards to the end zone", not "96 to the end zone". Jason: "52 'yards'
+       to the end zone". A bare number beside a picture of a field could be a
+       yard line, a down or a score - the unit is what makes it a distance. */
+    right.appendChild(document.createTextNode(' yards to the end zone'));
+    cap.appendChild(right);
+  }
+
+  const svg = mk('svg', {
+    viewBox: '0 0 ' + W + ' ' + VH, class: 'lg-fieldsvg', role: 'img',
+    'aria-label': ((off && off.abbrev ? off.abbrev + ' ' : '') + (si.downDistanceText || '')
+      + ', ' + ytg + ' yards to the end zone')
+  });
+
+  /* No slab. The turf runs off the frame; there is nothing for it to sit on
+     because you are standing on the touchline, not looking at a model. */
+  svg.appendChild(quad(lo, hi, 'lg-f-turf'));
+  /* Mown stripes every five yards, which is what makes green ground read as a
+     pitch and not as a bar. */
+  for (let a = Math.floor(lo / 10) * 10; a < hi; a += 10) {
+    if (a + 5 <= lo) continue;
+    svg.appendChild(quad(a, a + 5, 'lg-f-mow'));
+  }
+  /* End zones, only when the window reaches one. */
+  if (lo < 0) svg.appendChild(quad(lo, 0, 'lg-f-ez'));
+  if (hi > 100) svg.appendChild(quad(100, hi, 'lg-f-ez'));
+  /* The red zone, as a region rather than an edge. */
+  if (hi > 80) svg.appendChild(quad(Math.max(80, lo), Math.min(100, hi), 'lg-f-rz'));
+
+  const line = (yard, cls, w) => {
+    const a = P(yard, 0), b = P(yard, 1);
+    return mk('line', { x1: a[0].toFixed(2), y1: a[1].toFixed(2), x2: b[0].toFixed(2), y2: b[1].toFixed(2),
+      class: cls, 'stroke-width': w });
+  };
+
+  for (let a = Math.ceil(lo / 5) * 5; a <= hi; a += 5) {
+    if (a < 0 || a > 100) continue;
+    svg.appendChild(line(a, a % 10 === 0 ? 'lg-f-l10' : 'lg-f-l5', a % 10 === 0 ? 1.6 : 1));
+  }
+  /* Hash marks: the texture that says this is a football field and not a
+     soccer pitch. Two rows, a yard apart in field space. */
+  for (let a = Math.ceil(lo); a <= hi; a += 1) {
+    if (a < 0 || a > 100 || a % 5 === 0) continue;
+    for (const v of [0.06, 0.36, 0.64, 0.94]) {
+      const h0 = P(a, v - 0.03), h1 = P(a, v + 0.03);
+      svg.appendChild(mk('line', { x1: h0[0].toFixed(2), y1: h0[1].toFixed(2),
+        x2: h1[0].toFixed(2), y2: h1[1].toFixed(2), class: 'lg-f-hash' }));
+    }
+  }
+  /* The near touchline and the apron beyond it - the white band across the
+     bottom of his reference, which is what stops the picture looking like a
+     texture and starts it looking like somewhere you are standing. */
+  const s0 = P(lo, 1), s1 = P(hi, 1);
+  svg.appendChild(mk('polygon', {
+    points: [xy(s0), xy(s1), (s1[0] + 40) + ',' + VH, (s0[0] - 40) + ',' + VH].join(' '),
+    class: 'lg-f-apron'
+  }));
+  svg.appendChild(mk('line', { x1: s0[0].toFixed(2), y1: s0[1].toFixed(2),
+    x2: s1[0].toFixed(2), y2: s1[1].toFixed(2), class: 'lg-f-side' }));
+
+  /* ONE ROW OF NUMBERS, NOT TWO. Jason: "fix the upside down numbers (what is
+     this)".
+ 
+     They were the FAR-side numbers, and on grass they are correct - a field is
+     painted twice, once for each touchline, so the far set is upside down from
+     where you are standing. Both references show them, which is why I drew
+     them.
+ 
+     They are still wrong here. On a real field the far numbers are forty yards
+     away and read by people sitting opposite; in a 122px strip they are 6px of
+     rotated glyph nobody is standing across from. Copying a marking because it
+     exists in the reference, without asking what it is FOR, is how you end up
+     with a photograph of a thing instead of a drawing of it. */
+  for (let a = Math.ceil(lo / 10) * 10; a <= hi; a += 10) {
+    if (a <= 0 || a >= 100) continue;
+    const label = String(a <= 50 ? a : 100 - a);
+    const near = P(a, 0.78);
+    svg.appendChild(mk('text', { x: near[0].toFixed(2), y: near[1].toFixed(2),
+      class: 'lg-f-num', 'text-anchor': 'middle' }, label));
+    /* The triangle beside every number, pointing at the nearer end zone. It is
+       on a real field and it is the one marking that tells you which way is
+       which without reading anything. */
+    if (a !== 50) {
+      const dir = a < 50 ? -1 : 1;
+      const tw = 4.5, tx = near[0] + dir * 15, ty = near[1] - 3.5;
+      svg.appendChild(mk('polygon', {
+        points: [(tx) + ',' + (ty - tw / 2), (tx) + ',' + (ty + tw / 2),
+                 (tx + dir * tw) + ',' + ty].join(' '), class: 'lg-f-tri' }));
+    }
+  }
+
+  /* Goalposts, when an end zone is actually in shot. Drawn from the back line
+     of the end zone, uprights rising toward the viewer's eye. */
+  const posts = (yard) => {
+    const base = P(yard, 0.5);
+    const g = mk('g', { class: 'lg-f-post' });
+    g.appendChild(mk('line', { x1: base[0], y1: base[1], x2: base[0], y2: base[1] - 26, 'stroke-width': 2 }));
+    g.appendChild(mk('line', { x1: base[0] - 9, y1: base[1] - 26, x2: base[0] + 9, y2: base[1] - 26, 'stroke-width': 2 }));
+    g.appendChild(mk('line', { x1: base[0] - 9, y1: base[1] - 26, x2: base[0] - 9, y2: base[1] - 44, 'stroke-width': 2 }));
+    g.appendChild(mk('line', { x1: base[0] + 9, y1: base[1] - 26, x2: base[0] + 9, y2: base[1] - 44, 'stroke-width': 2 }));
+    return g;
+  };
+  if (hi >= 110) svg.appendChild(posts(110));
+  if (lo <= -10) svg.appendChild(posts(-10));
+
+  /* The first-down line in the color every broadcast has used for thirty
+     years, and the line of scrimmage in white. */
+  const fdYard = si.down && typeof si.distance === 'number' ? ball + si.distance : null;
+  if (fdYard != null && fdYard > lo && fdYard < hi && fdYard <= 100) {
+    svg.appendChild(line(fdYard, 'lg-f-fd', 2.4));
+  }
+  svg.appendChild(line(ball, 'lg-f-los', 2.2));
+
+  /* The ball, sat on the near hash where a spot actually is. */
+  const bp = P(ball, 0.62);
+  svg.appendChild(mk('ellipse', { cx: bp[0].toFixed(2), cy: bp[1].toFixed(2), rx: 6.4, ry: 4,
+    class: 'lg-f-ball' }));
+  svg.appendChild(mk('line', { x1: (bp[0] - 2.6).toFixed(2), y1: bp[1].toFixed(2),
+    x2: (bp[0] + 2.6).toFixed(2), y2: bp[1].toFixed(2), class: 'lg-f-lace' }));
+
+  /* Which way they are attacking. Without it the picture is symmetrical and
+     says nothing about whether that yellow line is ahead of them or behind. */
+  const a0 = P(Math.min(hi - 1, ball + 3), 0.62), a1 = P(Math.min(hi - 0.5, ball + 8), 0.62);
+  svg.appendChild(mk('path', {
+    d: 'M' + a0[0].toFixed(1) + ' ' + a0[1].toFixed(1) + ' L' + a1[0].toFixed(1) + ' ' + a1[1].toFixed(1)
+      + ' M' + (a1[0] - 5).toFixed(1) + ' ' + (a1[1] - 4).toFixed(1)
+      + ' L' + a1[0].toFixed(1) + ' ' + a1[1].toFixed(1)
+      + ' L' + (a1[0] - 5).toFixed(1) + ' ' + (a1[1] + 4).toFixed(1),
+    class: 'lg-f-arrow'
+  }));
+
+  wrap.appendChild(svg);
+  /* 🔴 NO CAPTION. Jason: "remove this now", of the line under the field.
+   *
+   * It said "2nd & 8 at SEA 28   72 yards to the end zone" - and by the time
+   * he asked, the scorebug two inches above was already saying 2ND & 8 in its
+   * own cell, and the field itself was showing the ball on the 28 with the
+   * first-down line ahead of it. Three statements of one fact stacked
+   * vertically.
+   *
+   * It earned its place when it was the only thing saying where the ball was.
+   * The bug took over the down and distance and the graphic took over the
+   * spot, and nobody removed the thing they had replaced - which is how a
+   * screen silts up: every element was justified on the day it shipped.
+   *
+   * The code that builds it is kept a few lines up because the touchdown and
+   * goal-line wording it works out is still the honest way to say those, and
+   * it will be wanted the first time the field is shown somewhere without a
+   * bug over it. */
+}
+
 function downLine(state) {
   /* 🔴 NULL-SAFE ON THE STATE ITSELF, NOT JUST ON THE SITUATION. Moving this out
    * of the call card moved it OUT of a branch that had already proved there was
@@ -536,6 +943,10 @@ function held(raw, delayMs, now) {
       /* The feed's own sentence for where the ball is, after the last play you
          have been shown - never the live one. */
       downDistanceText: last.endSpotText || raw.situation.downDistanceText,
+      /* From the last VISIBLE play - the field must never draw the ball where
+         the withheld play left it. */
+      yardsToGoal: last.endYardsToEndzone != null
+        ? last.endYardsToEndzone : raw.situation.yardsToGoal,
       /* The clock and the last play text belong to the play you can see, not to
        * the one being withheld. */
       clock: last.clock || raw.situation.clock,
@@ -897,6 +1308,10 @@ export function render(root, _data, screenState) {
    * whatever is next on the slate. */
   S.forced = !!forced;
   /* Reset on arrival, so Home is a door and not a wizard somebody is stuck in. */
+  /* A new game is a new camera. Without this the field pans from wherever the
+     last game left the ball, which looks like a mistake because it is one. */
+  S.fieldNode = null; FIELD_CAM = null;
+  if (FIELD_RAF) { cancelAnimationFrame(FIELD_RAF); FIELD_RAF = null; }
   S.homeStep = 'mode';
   /* 🔴 AND THE REPAINT SIGNATURE, WHICH IS A HARD BLOCKER IF IT SURVIVES A MOUNT.
    *
@@ -1188,20 +1603,325 @@ function paint(wrap) {
    * not for a list row. 22 was the slate's number, carried over — and a slate row
    * is one of sixty while this is the only place on screen that says WHICH GAME
    * you are in. Jason: "Logos not in and to small." */
-  if (away) head.appendChild(teamChip({ id: state.awayTeamId, ...away }, { size: 34, league }));
-  head.appendChild(el('span', 'lg-score num', `${state.awayScore} – ${state.homeScore}`));
-  if (home) head.appendChild(teamChip({ id: state.homeTeamId, ...home }, { size: 34, league }));
-  const meta = el('span', 'lg-meta num');
-  meta.textContent = state.status === 'pre' ? 'Not started'
-    : state.situation ? `Q${state.situation.quarter} ${state.situation.clock}` : state.status;
-  head.appendChild(meta);
-  /* 🔴 WHERE IT IS ON. Jason: "Do we also want to add where the game is
-   * televised, if it is." Yes — and it belongs on the LIVE header, not only
-   * before kickoff, because this app is useless without the game on a screen in
-   * front of you. Somebody who opens it mid-game and cannot find the broadcast
-   * is holding a scoreboard. `if it is` is the whole condition: no channel in the
-   * feed means no line, never a guess. */
-  if (state.broadcast) head.appendChild(el('span', 'lg-tv', state.broadcast));
+  /* 🔴 THE SCOREBOARD IS THE SECOND BIGGEST THING ON THE SCREEN. Jason: "the
+   * header is lame, the logos and score need to be bigger, it is probably the
+   * second most important thing here."
+   *
+   * He is right and it had been shrinking by accident. It was a flex ROW -
+   * crest, score, crest, clock, channel - so everything competed for one line
+   * at 393px, and the only way for anything to fit was for all of it to stay
+   * small. A 34px crest and a 24px score in a row with two more chips reads as
+   * a status bar, and the score is not a status.
+   *
+   * 🔴 THE ORDER OF IMPORTANCE ON THIS SCREEN IS: what am I being asked, what
+   * is the score, how many marbles do I have. The question is a whole card.
+   * The score was a line of chips. Now it is a three-column grid with the
+   * figure in the middle at --t-bank, which is the largest type this system
+   * has and is reserved for the live layer - exactly this.
+   *
+   * The clock and the channel drop to a line UNDER the score, where they read
+   * as what they are: notes about the game, not competitors with it. */
+  /* THE SCOREBUG. Jason sent a picture of a broadcast bug - the horizontal bar
+   * every network has run for twenty years - with its states: the base line,
+   * a stat strip above it, a yellow FLAG segment, and a full-width TOUCHDOWN
+   * banner.
+   *
+   * IT IS A BETTER SHAPE THAN THE ONE I BUILT AN HOUR AGO, and the reason is
+   * worth keeping. I had made a centred scoreboard: crests either side, score
+   * in the middle, clock beneath. That is what a scoreboard looks like when it
+   * is the SUBJECT of the screen. On a broadcast it never is - it is a strip
+   * that has to say six things while a football game happens behind it, and
+   * every one of those six has a fixed place so your eye goes straight to the
+   * one it wants without reading the others.
+   *
+   * This screen has exactly that problem. The subject is the call; the score,
+   * the clock and the down are things you check without looking away. A bug is
+   * the right instrument and a scoreboard was not.
+   *
+   * WHAT IS TAKEN AND WHAT IS NOT. Taken: the horizontal run, team blocks in
+   * team color, the possession segment carrying the down and distance in that
+   * team's color, and the two states. Not taken: the play clock, because ESPN's
+   * summary does not carry one and a guessed number on a bug is worse than a
+   * missing one - the whole point of a bug is that it is trusted at a glance.
+   */
+  const sb = el('div', 'lg-bug');
+  const poss = state.situation && state.situation.offenseTeamId;
+
+  /* 🔴 TWO NAVY PANELS ARE ONE PANEL. Jason: "fix the gos and the colors" -
+   * and this one is in the DATA, not the stylesheet. Straight off the wire:
+   *
+   *     NE  primary 002a5c  secondary c60c30
+   *     SEA primary 002a5c  secondary 69be28
+   *
+   * ESPN gives the Patriots and the Seahawks the SAME navy. Not similar -
+   * identical, to the byte. So the bug drew two blocks of one color and the
+   * scoreboard stopped saying which score belonged to whom.
+   *
+   * 🔴 THE BUILD BRIEF WARNED ABOUT THIS IN THOSE WORDS: "the test set is every
+   * PAIR of navy / yellow / null, including navy against navy." teamChip
+   * already takes an `adjacentTo` for exactly this and exports `tooClose` to
+   * decide it - I wrote a second colour path on the bug and did not use
+   * either, which is how a documented hazard arrives anyway.
+   *
+   * The away side gives way, because the home team is the one the spread and
+   * the field are quoted on and its color should be the stable one. Secondary
+   * first; a neutral if that clashes too, which is honest - a team whose whole
+   * palette collides with its opponent's does not get to be represented by a
+   * colour here, and a grey block that reads is worth more than a navy one
+   * that does not. */
+  const panelColors = (() => {
+    const ap = normalizeColor(away && away.primary);
+    const hp = normalizeColor(home && home.primary);
+    if (!tooClose(ap, hp)) return { away: ap, home: hp };
+    const as = normalizeColor(away && away.secondary);
+    if (as && !tooClose(as, hp)) return { away: as, home: hp };
+    return { away: null, home: hp };
+  })();
+
+  /* 🔴 NO MARK ON THE LEFT. Jason: "i dont need any graphic on the left side".
+   *
+   * I had put our football in the slot the network's eye occupies, reasoning
+   * that if the reference brands its bug we should brand ours. Wrong reason.
+   * A network's logo is there because the bug is THEIR furniture on somebody
+   * else's picture - it is a credit, and it exists to be seen by people who
+   * did not choose to be looking at it.
+   *
+   * Ours sits inside our own app, on a screen the person opened deliberately,
+   * three inches under a nav bar with our mark on it. Nothing about it needs
+   * to say whose app this is, and it was spending 31px of a 393px bar to
+   * repeat something already answered - which is why the down and distance
+   * clipped to "1st &". Branding was crowding out the score. */
+
+  const colorFor = (id) => (String(id) === String(state.awayTeamId)
+    ? panelColors.away : panelColors.home);
+
+  /* The cached slate, if this screen has fetched one. Absent is absent. */
+  const recordOf = (id) => {
+    const games = (S.also && S.also.games) || [];
+    for (const g of games) {
+      for (const t of (g.teams || [])) {
+        if (String(t.id) === String(id) && t.record && t.record !== '0-0') return t.record;
+      }
+    }
+    return null;
+  };
+  const teamBlock = (id, t) => {
+    const b = el('div', 'lg-bug-team');
+    const c = colorFor(id);
+    if (c) {
+      b.style.setProperty('--tc', c);
+      b.dataset.tinted = 'true';
+    }
+    if (id && poss && String(id) === String(poss)) b.dataset.poss = 'true';
+    b.dataset.side = id === state.awayTeamId ? 'away' : 'home';
+    /* 🔴 THE MARK IS THE WHOLE PANEL AND THE ABBREVIATION IS GONE. Jason: "i
+       dont need the team name, just oversize the logo like the pic i sent."
+     
+       Every bug on his reference sheet does this - a big crest and a big
+       number, no lettering. Which is right, because the crest IS the name: a
+       person watching the Patriots recognises that logo faster than they read
+       three capital letters, and printing both spends half the panel saying
+       the same thing twice.
+     
+       teamChip's `size` is the MARK, not the element - it adds its own ring
+       and padding, so 20 came back 28 and 28 comes back ~40, which fills a
+       46px row. I have now measured that twice rather than assuming it.
+     
+       🔴 THE NAME STILL EXISTS FOR ANYONE NOT LOOKING. A crest with no text is
+       an image with no alternative, so the panel carries the team name as its
+       label - the information is unchanged, only the ink is. */
+    /* 🔴 96px OF CREST IN A 62px BAR. Jason: "can you not make the logo larger
+       and bleed out? yes or no?" - yes, and the reason it took so long is worth
+       one line: the mark used to be IN the flow, so every size I asked for the
+       row grew to hold, and the bleed was impossible by construction. Once it
+       came out of flow the two stopped fighting, and the size is now free.
+
+       teamChip multiplies by 1.4 to correct for ESPN's padded canvas, so 68
+       renders 95px - about 17px of overhang top and bottom, cropped by the
+       bar. */
+    if (t) b.appendChild(teamChip({ id, ...t }, { size: 68, league }));
+    if (t) {
+      b.setAttribute('role', 'img');
+      b.setAttribute('aria-label', t.name || t.short || t.abbrev || '');
+    }
+    /* 🔴 NO RECORD ON THE BUG. Jason: "honestly i dont need the 0-1 and 1-0 in
+       the graphic."
+
+       I put it there because both of his reference bugs carry one, and that
+       was the wrong reason - those bugs are made for a broadcast where the
+       viewer arrived at a random moment and may not know who these teams are.
+       Somebody in this app chose this game, on a slate that shows the records,
+       to place a call on it. They know.
+
+       A reference tells you what a good version of this thing looks like; it
+       does not tell you which of its parts your product needs. Copying the
+       parts that solve somebody else's problem is how a clean bar fills up. */
+    return b;
+  };
+  /* 🔴 THE SCORE IS THE BIGGEST THING ON THE BUG. From the reference sheet, and
+   * it agrees with the order Jason set out hours ago - "score, down and
+   * distance and what is our pick". Every bug on that sheet does the same
+   * thing: the number is enormous, white, on the team's color, and everything
+   * else on the bar is a caption to it. Ours had the score at --t-emph, the
+   * same size as the abbreviation beside it, which made the bar a list of six
+   * equal facts instead of a scoreboard. */
+  const scoreBlock = (id, n) => {
+    const d = el('div', 'lg-bug-sc num', String(n == null ? 0 : n));
+    if (id && poss && String(id) === String(poss)) d.dataset.poss = 'true';
+    return d;
+  };
+
+  /* 🔴 TWO LINES, SPLIT WHERE JASON SPLIT THEM: "maybe the score and posession
+   * in the first line and the time down and distance on the second line?"
+   *
+   * That is the right cut and not merely a way to fit. Six segments on one
+   * 393px bar meant every one of them was as narrow as the longest could be
+   * allowed to get, and the down clipped to "1st &" - the bug failing at the
+   * one job that made it worth building.
+   *
+   * The split is along a real seam. Line one is WHO AND HOW MANY - it changes
+   * a handful of times a game and you glance at it. Line two is WHERE WE ARE -
+   * it changes every snap and it is what you are calling on. Two things that
+   * update at different rates and get read for different reasons should not be
+   * competing for width on the same row. */
+  /* 🔴 THE SCORES MEET IN THE MIDDLE AND EVERY BLOCK WEARS ITS TEAM'S COLOR.
+   * Jason: "the colors match the team" and "scores in the center".
+   *
+   * I had the scores on a neutral dark block between two tinted ones, which
+   * made the bar read as four unrelated segments. On the reference sheet each
+   * side is ONE panel - mark, abbreviation and score all on the same color -
+   * and the two panels meet at the centre, so the two numbers you are
+   * comparing sit next to each other instead of at opposite ends.
+   *
+   * That is the whole reason to centre them: a score is never read alone, it
+   * is read as a difference. Ten and thirteen a screen apart is two facts;
+   * "10 13" is one. */
+  const r1 = el('div', 'lg-bug-r');
+  const awayScoreEl = scoreBlock(state.awayTeamId, state.awayScore);
+  const homeScoreEl = scoreBlock(state.homeTeamId, state.homeScore);
+  if (panelColors.away) { awayScoreEl.style.setProperty('--tc', panelColors.away); awayScoreEl.dataset.tinted = 'true'; }
+  if (panelColors.home) { homeScoreEl.style.setProperty('--tc', panelColors.home); homeScoreEl.dataset.tinted = 'true'; }
+  const homeBlock = teamBlock(state.homeTeamId, home);
+  /* The home side mirrors, so its mark sits against the outer edge the way the
+     away side's does. A bug that is symmetrical about the score reads as a
+     matchup; one that runs left to right reads as a list. */
+  homeBlock.dataset.mirror = 'true';
+  /* 🔴 EACH SIDE IS EXACTLY HALF THE BAR. Jason: "the middle of the top line is
+   * not the same as the second line or the field below?"
+   *
+   * It was not, and it MOVED. The row was four flex items - panel, score,
+   * score, panel - with the panels flexing and the scores sized to their
+   * digits. So the seam between the two scores sat whereever the numbers put
+   * it, and it shifted every time a score went from one digit to two. Row two
+   * is a 1fr 1fr grid and the field is centred on the page, so the bar had one
+   * moving centre line against two fixed ones.
+   *
+   * Wrapping each side in a half that owns 50% pins it. The panel pushes to the
+   * outside, the score to the middle, and the seam is at the centre of the
+   * screen whatever the score is - which is what lets the eye read down the
+   * three elements as one column. */
+  const half = (side, a, b) => {
+    const h = el('div', 'lg-bug-half');
+    h.dataset.side = side;
+    h.append(a, b);
+    return h;
+  };
+  r1.append(half('away', teamBlock(state.awayTeamId, away), awayScoreEl),
+            half('home', homeScoreEl, homeBlock));
+  sb.appendChild(r1);
+  /* 🔴 CLOCK LEFT, DOWN AND DISTANCE RIGHT, AND NO CHANNEL. Jason, correcting
+   * himself immediately - "sorry, time is on the left of the second line" -
+   * and then "remove the NBC, we dont need that here".
+   *
+   * The channel had been on this bar since the day it was added, on the
+   * argument that an app about calling plays is useless without the game on a
+   * screen in front of you. True the first time somebody opens it; false on
+   * every snap after, because by then they are watching it. It is a fact you
+   * need ONCE, and the bug is the one element that is always present - the
+   * worst possible home for something read once.
+   *
+   * Two cells now, and the row reads the way the line above it does: what is
+   * fixed on the left, what changes every snap on the right. */
+  const r2 = el('div', 'lg-bug-r lg-bug-r2');
+  sb.appendChild(r2);
+
+  /* Quarter and clock, as one thing - they are never read apart. */
+  r2.appendChild(el('div', 'lg-bug-clock num',
+    state.status === 'pre' ? 'PRE'
+      : state.status === 'final' ? 'FINAL'
+      : state.situation ? `${ORDINAL[state.situation.quarter] || ('Q' + state.situation.quarter)} ${state.situation.clock}` : ''));
+
+  /* THE POSSESSION SEGMENT, and it is the one that changes color. On a bug the
+   * right-hand block belongs to whoever has the ball, which is how you know
+   * without being told. */
+  /* `lastPlay`, not `last` - the head builder already binds `last` further
+     down and a second const in the same scope is a SyntaxError, which the ship
+     gate caught before it reached anybody. Sixth name collision today. */
+  const lastPlay = state.plays && state.plays[state.plays.length - 1];
+  const txt = lastPlay ? ((lastPlay.typeText || '') + ' ' + (lastPlay.text || '')) : '';
+  const isFlag = /penalty/i.test(txt);
+  const isTd = !!(lastPlay && lastPlay.scoringPlay) && /touchdown/i.test(txt);
+
+  const right = el('div', 'lg-bug-dd');
+  const offC = poss ? colorFor(poss) : null;
+  if (offC) right.style.setProperty('--tc', offC);
+  if (isFlag) {
+    right.dataset.state = 'flag';
+    right.textContent = 'FLAG';
+  } else if (state.status === 'final') {
+    /* The clock cell already says FINAL. Saying it twice on one bar is the
+       kind of thing a bug is specifically supposed not to do. */
+    right.textContent = '';
+  } else {
+    /* "2ND & 7", not "2nd & 7". Small caps is how a bug has written a down for
+       forty years, and at 393px an ordinal in caps is legible where mixed case
+       is a smudge - the "nd" and "rd" are the two smallest glyphs on the bar. */
+    /* 🔴 A DOWN IS 1, 2, 3 OR 4. NOTHING ELSE IS A DOWN. Jason's screenshot of
+     * the touchdown banner had "-1 & 10" underneath it.
+     *
+     * The guard was `state.situation.down ? ... : ''`, which asks whether the
+     * value is TRUTHY - and -1 is truthy. After a score ESPN reports the down
+     * as -1, meaning "there isn't one", and the ordinal table has no entry for
+     * it so the raw number printed straight through.
+     *
+     * 🔴 A TRUTHINESS CHECK IS NOT A VALIDITY CHECK, and this is the shape it
+     * fails in: every sensible value passes, so it looks right for a whole
+     * game, and the one moment it breaks is the moment everybody is looking -
+     * a touchdown. Same family as "0 yards to the end zone" an hour ago: a
+     * template applied to a number that had stopped being a measurement.
+     *
+     * There is no down after a score, so the cell says nothing. The banner
+     * above it is doing the talking. */
+    const dn = state.situation && state.situation.down;
+    const dist = state.situation && state.situation.distance;
+    right.textContent = (dn >= 1 && dn <= 4)
+      ? ORDINAL[dn] + ' & ' + (dist === 0 ? 'GOAL' : dist)
+      : '';
+  }
+  r2.appendChild(right);
+  head.appendChild(sb);
+
+  /* THE STRIP ABOVE, which on a broadcast carries whatever the director wants
+   * to say right now. Ours says the one thing the app knows and the bug cannot
+   * fit: what the flag was for, or that somebody scored. Absent otherwise -
+   * a permanently-present strip is a second bug, not an announcement. */
+  if (isTd) {
+    const banner = el('div', 'lg-bug-banner', 'T O U C H D O W N');
+    /* The ADJUSTED colour, not the team's raw primary - the panels already
+       swapped New England to its secondary because both teams are the same
+       navy, and a banner in the unswapped colour would celebrate in a shade
+       that appears nowhere else on the bar. */
+    const scorerC = lastPlay && lastPlay.offenseTeamId ? colorFor(lastPlay.offenseTeamId) : null;
+    if (scorerC) banner.style.setProperty('--tc', scorerC);
+    head.insertBefore(banner, sb);
+  } else if (isFlag) {
+    /* The feed writes "PENALTY on SEA-E.Saubert, False Start, 5 yards" - the
+       middle clause is the foul, and it is the only part worth a banner. */
+    const m = (lastPlay.text || '').match(/PENALTY on [^,]+,\s*([^,]+)/i);
+    if (m) head.insertBefore(el('div', 'lg-bug-tab', m[1].trim().toUpperCase()), sb);
+  }
+
+  /* The channel lives on the bug now - see the left cell of row two. */
   /* 🔴 NOT BEFORE KICKOFF. The head is the live scoreboard - two crests, the
    * score, the quarter and the channel - and before a game has started it says
    * "0 - 0, Not started" directly above an Upcoming card carrying the same two
@@ -1257,19 +1977,32 @@ function paint(wrap) {
 
   /* ---- the bank ---- */
   const rows = settleAll(state);
-  const bank = el('div', 'card lg-bank');
+  /* NOT A CARD ANY MORE. Jason, ranking the screen: "score, down and distance
+   * and what is our pick are probably the most important" - and of the bank,
+   * "probably not the top 3 most important items".
+   *
+   * He is right, and the balance had been given a full white card with a lead
+   * line and the largest type in the system since the day it was built. It is
+   * a fact you check between calls, not one of the three things the screen is
+   * FOR. A card is the strongest container this app has, and spending one on
+   * a fourth-place fact pushes the first three down the page.
+   *
+   * So it becomes a strip: one line, no panel, no lead sentence. "329 Marbles
+   * +129" says everything the card said - the word Marbles still carries the
+   * legal point that it is a thing you HAVE - in a fifth of the height. */
+  const bank = el('div', 'lg-bank');
   /* 🔴 A NUMBER WITH NO SENTENCE IS A SCORE. Jason: "add 'you have...' above the
    * 200." A bare 200 could be points, a rank, or a countdown; "You have 200
    * Marbles" is the only reading that says it is YOURS and that it is a stake
    * you are about to spend. It also seats the balance in the one sentence the
    * legal position rests on — a thing you HAVE, never a thing you bought. */
-  bank.appendChild(el('div', 'lg-bank-lead', 'You have'));
   const bal = el('div', 'lg-bal num', String(S.bank));
   bank.append(bal, el('span', 'lg-unit', 'Marbles'));
   const d = el('span', 'lg-delta num ' + signClass(S.bank - START_BANK));
   d.textContent = signed(S.bank - START_BANK);
   bank.appendChild(d);
-  wrap.appendChild(bank);
+  /* Built here, DRAWN further down - see where it is appended, above the play
+     by play. The order of this file is not the order of the screen. */
 
   /* 🔴 BETWEEN THE BANK AND THE QUESTION. Jason, live: "Move down and dist pill
    * to between the marbles pill and the what to do pill."
@@ -1279,13 +2012,54 @@ function paint(wrap) {
    * it is a fact about the GAME sitting between what you have and what you are
    * being asked, which is the order you actually read them in: how many marbles,
    * where the ball is, what is the call. */
-  const dl = downLine(state);
+  /* THE PILL IS GONE, AND IT IS THE FIELD'S FAULT IN A GOOD WAY. It said
+   * "1st & 10 at NE 47  SEA" and sat directly above a field graphic whose own
+   * caption says "1st & 10 at NE 47" - the same sentence twice, six pixels
+   * apart, which is the mistake that killed the first info card.
+   *
+   * It was right when it shipped: there was no field then, and the spot had to
+   * be somewhere. The field says it better - it shows the spot and then names
+   * it - and possession, the one thing the pill added, is the yellow dot on the
+   * scorebug. When a new component makes an old one redundant, the old one
+   * goes; keeping both is how a screen fills up with things that were each
+   * justified on the day. */
+  const dl = null;
   if (dl) wrap.appendChild(dl);
   const bl = breakLine(state);
   if (bl) wrap.appendChild(bl);
+  /* Directly under the spot it illustrates - the pill says "3rd & 5 at SEA 31"
+     and this is the same sentence in a picture. */
+  const fs = fieldStrip(state);
+  if (fs) wrap.appendChild(fs);
   /* Under the question, where the thumb already is - a timing button you have to
      go and find measures reaction time to the button, not the television. */
-  const tv = tvCard(state, wrap);
+  /* 🔴 OFF THE BOARD, NOT OUT OF THE CODE. Jason: "lets remove the snap button,
+   * we dont need it anymore, right?" Right - it answered its question. His
+   * television is 39 seconds behind on 16 samples, the feed is 53, snaps are 41
+   * apart, and the conclusion it bought was that this product does not need a
+   * paid data feed. That is a large answer for one button and it has been got.
+   *
+   * 🔴 IT IS KEPT BECAUSE THE ANSWER IS HIS, NOT EVERYBODY'S. The condition the
+   * whole live layer rests on -
+   *
+   *     feed_lag < tv_lag + gap_between_snaps
+   *
+   * has a term that belongs to the VIEWER. Jason streams and is 39s behind; a
+   * person on an aerial is nearer 10, and for them we would be asking about a
+   * snap they had already watched. This is the only instrument that can tell us
+   * that about somebody who is not in the room, and deleting it would mean
+   * rebuilding it the first time a stranger says the questions feel late.
+   *
+   * So: hidden by default, one flag to bring it back. `?tvlag=1` turns it on
+   * and remembers, `?tvlag=0` turns it off. */
+  let showTv = false;
+  try {
+    const q = new URLSearchParams(location.search).get('tvlag');
+    if (q === '1') localStorage.setItem('ag.tvlag', '1');
+    if (q === '0') localStorage.removeItem('ag.tvlag');
+    showTv = localStorage.getItem('ag.tvlag') === '1';
+  } catch { /* no storage, no meter */ }
+  const tv = showTv ? tvCard(state, wrap) : null;
 
   /* ---- the question ---- */
   const type = questionFor(state);
@@ -1371,13 +2145,29 @@ function paint(wrap) {
     card.appendChild(sub);
     card.appendChild(el('div', 'lg-nextq', 'You are calling the NEXT snap'));
 
-    const ladder = el('div', 'lg-stakes');
-    for (const s of STAKES) {
-      const b = el('button', 'lg-stake' + (s === S.stake ? ' is-on' : ''), String(s));
-      b.onclick = () => { S.stake = s; store.set('stake', s); paint(wrap); };
-      ladder.appendChild(b);
-    }
-    card.appendChild(ladder);
+    /* ONE CHIP, NOT THREE BUTTONS. Jason: "should we just put a typical amount
+     * say 5 so we get more realestate on the page?"
+     *
+     * The ladder was a full 44px row on every question card, permanently, to
+     * express a choice most people make once and never touch again. That is a
+     * row of screen spent on a setting - and the three things that matter are
+     * below it, pushed down on every single snap.
+     *
+     * It is not removed, because the stake IS the game and a fixed stake would
+     * make every call the same size. It cycles: tap it and it steps 5 -> 10 ->
+     * 25 -> 5. Cheap to change, invisible when you are not changing it, and the
+     * amount is still on the tile beside what it pays. */
+    const stakeChip = el('button', 'lg-stakechip');
+    stakeChip.type = 'button';
+    stakeChip.appendChild(el('span', 'lg-stakechip-n num', String(S.stake)));
+    stakeChip.appendChild(el('span', 'lg-stakechip-l', 'Marbles · tap to change'));
+    stakeChip.onclick = () => {
+      const i = STAKES.indexOf(S.stake);
+      S.stake = STAKES[(i + 1) % STAKES.length];
+      store.set('stake', S.stake);
+      paint(wrap);
+    };
+    card.appendChild(stakeChip);
 
     const priced = priceFor(type, state, state.situation?.offenseTeamId || last.offenseTeamId);
     const tiles = el('div', 'lg-tiles' + (priced.length > 3 ? ' is-4' : ''));
@@ -1431,6 +2221,21 @@ function paint(wrap) {
   /* ---- what just happened, in words ---- */
   const said = commentary(state);
   if (tv) wrap.appendChild(tv);
+  /* THE BALANCE SITS HERE, BELOW THE DECISION. Jason: "maybe move the marbles
+   * to just above the play by play?"
+   *
+   * Which completes the ranking he set out - "score, down and distance and what
+   * is our pick are probably the most important". Those three now run
+   * uninterrupted from the top: scoreboard, the spot, the question. The balance
+   * used to sit in the middle of that run, between the score and the down, so
+   * every glance at the thing you are deciding crossed a number about your
+   * wallet.
+   *
+   * Above the play by play is the right home for it rather than merely a place
+   * out of the way: it is the last line of the ACTIVE half of the screen and
+   * the first of the record - what you have, then what happened. The delta
+   * beside it is the join between the two. */
+  if (bank) wrap.appendChild(bank);
   if (said) wrap.appendChild(said);
 
   /* ---- and a picture of it, if it was worth one ---- */
@@ -2308,45 +3113,67 @@ function commentary(state) {
     });
   } catch { return null; }
 
-  const big = dets.filter((d) => (d.reasons || []).some((r) => r.severity >= 2)).slice(-4).reverse();
-  if (!big.length) return null;
+  /* 🔴 PLAY BY PLAY, NOT HIGHLIGHTS. Jason: "big moments should just be play
+   * by play."
+   *
+   * The card began as "What just happened", was corrected to "Big moments" when
+   * it turned out to be a highlight reel, and then had its filter fixed twice -
+   * once because every 4th-down punt qualified, once because a kick return was
+   * counting as a big play. 🔴 THREE ROUNDS OF TUNING A FILTER IS THE FILTER
+   * TELLING YOU IT SHOULD NOT EXIST. Every fix made it a slightly better guess
+   * at what matters, and the honest answer is that the person watching decides
+   * that, not a severity score.
+   *
+   * A plain list is also the thing the screen was missing. The card above shows
+   * ONE play - the last one - and everything before it was only reachable if an
+   * algorithm had ranked it interesting. Now the game is on the page.
+   *
+   * The detector still runs, because the star (7.2) and the headline come from
+   * it and must never be re-derived in a view. What is dropped is its opinion
+   * about which rows are worth showing.
+   *
+   * 🔴 HELD PLAYS ONLY. state.plays is already the delayed view - a full
+   * play-by-play built from the raw feed would hand over the play the app is
+   * still asking about, which is the leak the whole delay exists to prevent. */
+  const byId = new Map(dets.map((d) => [d.id, d]));
+  const rows = state.plays.slice(-25).reverse();
+  if (!rows.length) return null;
 
   const card = el('div', 'card lg-say');
-  /* 🔴 IT IS NOT "WHAT JUST HAPPENED" AND IT NEVER WAS. Jason, live: "What
-   * happened is still stale."
-   *
-   * It is not stale - it is a HIGHLIGHT card. The filter three lines up keeps
-   * only plays the parser marked severity >= 2, so a 10-yard scramble does not
-   * appear and the punt from four plays ago is still the most recent thing that
-   * qualifies. The card was doing exactly what it was built to do while its
-   * heading promised the last play.
-   *
-   * 🔴 A HEADING THAT PROMISES MORE THAN THE FILTER DELIVERS READS AS A BUG, and
-   * the person reading it is right to call it one - they cannot see the filter.
-   * The last play is already printed under the question, which is where it
-   * belongs, so this card's job is the moments worth remembering rather than the
-   * most recent thing that occurred. Now it says so. */
-  card.appendChild(el('div', 'lg-say-h', 'Big moments'));
-  for (const d of big) {
-    const r = (d.reasons || []).filter((x) => x.severity >= 2).sort((a, b) => b.severity - a.severity)[0];
-    if (!r) continue;
+  card.appendChild(el('div', 'lg-say-h', 'Play by play'));
+
+  for (const p of rows) {
+    const d = byId.get(p.id);
+    const r = d && (d.reasons || []).filter((x) => x.severity >= 2)
+      .sort((a, b) => b.severity - a.severity)[0];
     const row = el('div', 'lg-sayrow');
-    const t = state.teams[d.offenseTeamId];
+    if (r) row.dataset.big = 'true';
+
     const head = el('div', 'lg-say-line');
-    head.appendChild(el('span', 'lg-say-when num', `Q${d.quarter} ${d.clock}`));
-    head.appendChild(el('b', 'lg-say-head', r.headline));
+    head.appendChild(el('span', 'lg-say-when num', `Q${p.quarter} ${p.clock}`));
+    /* The situation the play was run in, in the feed's own words where it has
+       them - the same rule as the down-and-distance pill. */
+    const t = state.teams[p.offenseTeamId];
+    const dd = p.startDown
+      ? `${['1st', '2nd', '3rd', '4th'][p.startDown - 1]} & ${p.distance === 0 ? 'goal' : p.distance}`
+      : null;
+    if (r && MOMENT_EMOJI[r.event]) {
+      const e = el('span', 'lg-say-emoji', MOMENT_EMOJI[r.event]);
+      /* Decoration to a screen reader - the headline beside it already says
+         what happened, and "football emoji touchdown" is worse than silence. */
+      e.setAttribute('aria-hidden', 'true');
+      head.appendChild(e);
+    }
+    head.appendChild(el('b', 'lg-say-head',
+      r ? r.headline : [dd, t && t.abbrev].filter(Boolean).join(' — ') || 'Play'));
     row.appendChild(head);
-    row.appendChild(el('div', 'lg-say-detail', r.detail));
-    /* The star, with the role the parser gave it. Never re-derived here — the
-     * parenthesised name at the end of a play is the TACKLER, and a view that
-     * works that out for itself gets it wrong. */
-    if (d.star && d.star.name) {
-      /* The role in the words a person uses, and the jersey where the feed gave
-       * one — the 2026 grammar carries numbers and the older one does not. */
-      const who = (d.star.jersey ? '#' + d.star.jersey + ' ' : '') + d.star.name;
-      const side = d.star.teamId && state.teams[d.star.teamId];
+
+    row.appendChild(el('div', 'lg-say-detail', p.text || ''));
+    if (p.star && p.star.name) {
+      const who = (p.star.jersey ? '#' + p.star.jersey + ' ' : '') + p.star.name;
+      const side = p.star.teamId && state.teams[p.star.teamId];
       row.appendChild(el('div', 'lg-say-star',
-        `${who} · ${d.star.role}${side ? ' · ' + side.abbrev : ''}`));
+        `${who} · ${p.star.role}${side ? ' · ' + side.abbrev : ''}`));
     }
     card.appendChild(row);
   }
@@ -2750,6 +3577,7 @@ const CSS = `
 .lg-invite-h { font-size: var(--t-emph); font-weight: 800; color: var(--accent); }
 .lg-invite-b { font-size: var(--t-micro); color: var(--dim); overflow-wrap: anywhere; }
 /* The channel reads as a label, not as a score. */
+.lg-head .lg-tv { margin: 0; }
 .lg-tv { font-size: var(--t-micro); font-weight: 700; letter-spacing: .04em; color: var(--dim);
   border: 1px solid var(--line); border-radius: var(--radius-chip); padding: 1px 6px; }
 .lg-say { display: grid; gap: 0; padding: 4px 12px 8px; }
@@ -2911,15 +3739,38 @@ const CSS = `
 .lg-bprofit { font-weight: 800; }
 .lg-delay-l.is-live { color: var(--down); }
 .lg-delay input { width: 100%; accent-color: var(--accent); }
-.lg-head { display: flex; align-items: center; gap: 8px; }
-.lg-score { font-size: var(--t-score); font-weight: 800; }
-.lg-meta { margin-left: auto; font-size: var(--t-micro); color: var(--dim); }
+/* 🔴 A SCOREBOARD, NOT A STATUS BAR. Three columns with the score in the
+   middle, so the two crests are the same size as each other whatever the
+   figure does, and the figure is not competing with a clock for the same line.
+   See the note in the head builder. */
+.lg-head { display: grid; justify-items: center; gap: 2px; padding: 2px 0 6px; }
+.lg-head-main { display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; justify-items: center; gap: 10px; width: 100%; }
+.lg-head-side { display: grid; justify-items: center; gap: 3px; }
+.lg-head-ab { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em;
+  color: var(--dim); }
+.lg-score { font-size: var(--t-bank); font-weight: 800; line-height: 1;
+  white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The clock and the channel are notes about the game, under it. */
+.lg-meta { font-size: var(--t-body); font-weight: 700; color: var(--dim); }
 /* The lead sits on its own line above the figure, so the row underneath keeps
    the baseline alignment the balance, the unit and the delta all share. */
-.lg-bank { display: flex; align-items: baseline; gap: 6px; padding: 10px 12px; flex-wrap: wrap; }
+/* A strip, not a card - see the note where it is built. */
+.lg-bank { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 0; }
+.lg-stakechip { display: inline-flex; align-items: baseline; gap: 6px; font: inherit;
+  min-height: var(--tap-min); padding: 6px 14px; margin: 2px 0 8px;
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--surface-3); color: var(--fg); }
+.lg-stakechip-n { font-size: var(--t-emph); font-weight: 800; }
+.lg-stakechip-l { font-size: var(--t-micro); color: var(--dim); }
 .lg-bank-lead { flex: 0 0 100%; font-size: var(--t-micro); color: var(--dim);
   letter-spacing: .04em; margin-bottom: -2px; }
-.lg-bal { font-size: var(--t-bank); font-weight: 800; }
+/* THE BANK IS SMALLER THAN THE SCORE NOW. Jason: "the you have, is to large."
+   It was --t-bank, 30px, and so is the scoreboard - two figures at the largest
+   size the system has, on one screen, competing. He had just said the score is
+   the second most important thing here, which settles which of the two gives
+   way. The balance is a fact you check; the score is what you are watching. */
+.lg-bal { font-size: var(--t-figure); font-weight: 800; }
 .lg-unit { font-size: var(--t-micro); color: var(--dim); }
 .lg-delta { margin-left: auto; font-size: var(--t-figure); font-weight: 700; }
 .lg-call, .lg-called { padding: 12px; }

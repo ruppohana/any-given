@@ -78,3 +78,281 @@
    scale, so it needs no explaining, and it reverts itself in 900ms. */
 .scr-live-game .lg-tvlag-go { transition: background-color .12s ease; }
 .scr-live-game .lg-tvlag-go.is-hit { background: var(--up); }
+
+/* A notable play still reads as notable inside the list - the detector's
+   opinion becomes emphasis rather than a filter that hides everything else. */
+.scr-live-game .lg-sayrow[data-big="true"] .lg-say-head { color: var(--accent); }
+
+/* THE FIELD IN PERSPECTIVE — colors taken off Jason's second reference rather
+   than chosen: two greens a real mower makes, thick white paint, and numbers
+   big enough to read at 393px. See fieldStrip() for the geometry. */
+.scr-live-game .lg-field { margin: 2px 0 10px; }
+/* THE SPOT IS BOLD; THE DISTANCE IS NOT. Jason: "bold 1st & 10 at the NE 4".
+   The two halves of this line are not equals - the left is the situation, and
+   it is one of the three things he ranked as most important on this screen.
+   The right is a supporting number. Giving both the same weight made the line
+   read as two captions rather than as a fact with a footnote. */
+.scr-live-game .lg-fieldcap { display: flex; justify-content: space-between;
+  gap: 10px; font-size: var(--t-body); color: var(--dim); margin-top: 6px; }
+.scr-live-game .lg-fieldcap > :first-child { font-weight: 800; color: var(--fg); }
+.scr-live-game .lg-fieldcap > :last-child { font-size: var(--t-micro); }
+.scr-live-game .lg-fieldcap b { color: var(--fg); font-variant-numeric: tabular-nums; }
+/* ROUNDED TO MATCH EVERYTHING ELSE. Jason: "can you round the corners of the
+   field to match everything else?" The turf bleeds to all four edges of its
+   viewBox by design, so the rounding has to be a clip on the element rather
+   than a shape in the drawing - and it is set in SCREEN pixels with the same
+   token the cards use, so it matches them exactly at any width. A radius in
+   viewBox units would scale with the graphic and drift away from the cards
+   above and below it. */
+.scr-live-game .lg-fieldsvg { display: block; width: 100%; height: auto;
+  border-radius: var(--radius-card); overflow: hidden; }
+.scr-live-game .lg-f-apron { fill: #4a7a3f; }
+.scr-live-game .lg-f-turf { fill: #6f9c52; }
+/* The mown stripe. A real contrast, not the 4% wash of the first attempt -
+   the stripes are what make green ground read as a pitch. */
+.scr-live-game .lg-f-mow { fill: #a8c98a; }
+.scr-live-game .lg-f-ez { fill: #35682f; }
+.scr-live-game .lg-f-rz { fill: #ff3b30; fill-opacity: .12; }
+.scr-live-game .lg-f-l5 { stroke: #ffffff; stroke-opacity: .9; }
+.scr-live-game .lg-f-l10 { stroke: #ffffff; }
+.scr-live-game .lg-f-hash { stroke: #ffffff; stroke-opacity: .85; stroke-width: 1; }
+.scr-live-game .lg-f-side { stroke: #ffffff; stroke-width: 2.4; }
+.scr-live-game .lg-f-num { fill: #ffffff; font-size: 15px; font-weight: 800;
+  font-style: italic; font-family: inherit; }
+.scr-live-game .lg-f-tri { fill: #ffffff; }
+.scr-live-game .lg-f-post { stroke: #ffd400; fill: none; stroke-linecap: round; }
+.scr-live-game .lg-f-fd { stroke: #ffd400; }
+.scr-live-game .lg-f-los { stroke: #1f2d1f; stroke-opacity: .75; }
+.scr-live-game .lg-f-ball { fill: #7b3f1d; stroke: #ffffff; stroke-width: 1.2; }
+.scr-live-game .lg-f-lace { stroke: #ffffff; stroke-width: 1.1; stroke-linecap: round; }
+.scr-live-game .lg-f-arrow { stroke: #ffffff; stroke-width: 1.8; fill: none;
+  stroke-linecap: round; stroke-linejoin: round; }
+
+
+/* ── THE SCOREBUG ───────────────────────────────────────────────────────────
+   A broadcast bar, from Jason's reference. One row, fixed slots, so the eye
+   goes to the one thing it wants without reading the rest. See the note in the
+   head builder for why this replaced a centred scoreboard. */
+/* OURS. The radius is the same token as the cards and the field, so the bug
+   belongs to this app rather than sitting on it; the neutrals are derived from
+   --fg instead of picked, so they hold in both themes. */
+.scr-live-game .lg-bug { display: flex; flex-direction: column; width: 100%;
+  border-radius: var(--radius-card); overflow: hidden; box-shadow: var(--lift);
+  font-variant-numeric: tabular-nums; }
+/* Each line is its own run of segments; the rounding is on the bug, so the
+   rows meet flush in the middle and only the outer corners curve. */
+.scr-live-game .lg-bug-r { display: flex; align-items: stretch; min-height: 38px; }
+/* Taller, so the crest has somewhere to be. Jason: "can you make the logos any
+   larger?" - three times now, and each time the honest answer has been that
+   ESPN's PNGs are mostly transparent margin, so the only ways to gain crest
+   are to give the row more height or to scale past it and crop. Doing both:
+   54px of row, and the mark drawn larger still and clipped top and bottom the
+   way his reference clips them. */
+.scr-live-game .lg-bug-r:first-child { min-height: 54px; }
+/* Row two is a GRID so the clock is centred on the bar rather than on
+   whatever happens to be left of it. */
+/* Two equal halves, each centred on itself - the reference splits the bottom
+   bar down the middle rather than pushing its two facts to the outer edges.
+
+   🔴 BLACK, AND THE POSSESSION TINT COMES OFF IT. Jason: "make the second line
+   black bg with white text." The right half had been carrying the offense's
+   color, which was a second way of saying what the dot beside the score
+   already says - and it meant the bottom bar changed colour every time the
+   ball changed hands, so the one strip on the screen that should be a fixed
+   reference kept restyling itself. One job per signal: the dot says who has
+   it, the black line says where the ball is and how long is left. */
+/* SHORTER THAN THE LINE ABOVE IT. Jason: "and shrink the second line (top to
+   bottom)". The two rows had the same height, which made them read as equals -
+   and they are not. The top line is the matchup and the score; this one is a
+   caption on it. A caption that is as tall as its subject is a second
+   headline. */
+/* 🔴 TWO CLASSES, BECAUSE THE ELEMENT HAS BOTH. The row is
+   `class="lg-bug-r lg-bug-r2"` and `.lg-bug-r` sets min-height: 38px - two
+   single-class selectors of equal specificity, so the shorter value only wins
+   if it happens to come later in the file. It did not, and the row measured
+   38px while the rule said 26. Specificity, not source order, is what settles
+   an override you actually depend on. */
+.scr-live-game .lg-bug-r.lg-bug-r2 { display: grid; grid-template-columns: 1fr 1fr;
+  min-height: 0; background: #000000; color: #ffffff; }
+/* 🔴 THE PADDING IS THE HEIGHT HERE, not min-height. Jason: "there is to much
+   room above and below the text", then "make the black second line narrower".
+   The row is as tall as its cells, and the cells were 38px because a shared
+   `.lg-bug-r` rule set that floor - so lowering min-height on the row changed
+   nothing while the children kept their own. Set both, and let padding decide
+   the rest. */
+.scr-live-game .lg-bug-r2 > * { min-height: 0; padding: 4px 10px; line-height: 1; }
+/* ONE SIZE FOR BOTH CELLS. Jason: "1st qtr - 4:35, same font as 2nd & 1".
+   They had drifted apart - the clock at --t-micro and the down at --t-body -
+   because each was styled where it was built rather than where it is read.
+   Two halves of one line are one typeface at one size, or the line reads as
+   two things that happen to be adjacent. */
+.scr-live-game .lg-bug-r2 .lg-bug-clock,
+.scr-live-game .lg-bug-r2 .lg-bug-dd { font-size: var(--t-body); font-weight: 800;
+  letter-spacing: .06em; }
+.scr-live-game .lg-bug-r2 .lg-bug-clock { justify-content: center;
+  background: transparent; color: #ffffff; }
+.scr-live-game .lg-bug-r2 .lg-bug-dd { justify-content: center;
+  background: transparent; color: #ffffff;
+  border-left: 1px solid rgba(255,255,255,.18); }
+/* The flag still overrides everything - a penalty is the one thing on this bar
+   that has to be seen before it is read. */
+.scr-live-game .lg-bug-r2 .lg-bug-dd[data-state="flag"] { background: #ffd400;
+  color: #1a1c1a; }
+/* Line one shares the width between the two teams, so the bar is symmetrical
+   whatever the abbreviations are. */
+/* Two halves, so the seam is the centre of the bar and cannot drift. */
+/* 🔴 STRETCH, AND IT NEEDS THE EXTRA CLASS TO SURVIVE. `.lg-bug-r > *` sets
+   align-items: center and comes later in this file, so a half declared with
+   stretch was being centred instead - its panel and score stopped filling the
+   row and the bar's own background showed as a pale band across the middle.
+   That band is what made the centre look wrong: the seam measured dead centre
+   at 187.7px on all three elements while a light strip sat beside it. */
+.scr-live-game .lg-bug-r .lg-bug-half { display: flex; align-items: stretch;
+  flex: 1 1 0; min-width: 0; }
+.scr-live-game .lg-bug-half .lg-bug-team { flex: 1 1 auto; min-width: 0; }
+.scr-live-game .lg-bug-half[data-side="away"] .lg-bug-team { justify-content: flex-start; }
+.scr-live-game .lg-bug-half[data-side="home"] .lg-bug-team { justify-content: flex-end; }
+/* The score hugs the middle on both sides. */
+.scr-live-game .lg-bug-half .lg-bug-sc { flex: 0 0 auto; justify-content: center; }
+/* The slot the network's logo occupies on a broadcast, carrying our football. */
+.scr-live-game .lg-bug-cap { padding: 0 7px; flex: 0 0 auto; background: var(--accent);
+  color: var(--on-accent); }
+.scr-live-game .lg-bug-r > * { display: flex; align-items: center; }
+/* 🔴 PADDING CLEARS THE ROUNDED CORNER. Jason: "fix the gos" - the marks were
+   flush to the outer edge of a 16px radius with overflow hidden, so the corner
+   ate a bite out of each crest. A rounded container needs its content inset by
+   at least the radius on the side that curves. */
+/* 🔴 THE CREST IS DRAWN BIGGER THAN THE ROW AND THE ROW CROPS IT. Jason:
+   "what is the problem with the logos?" - ESPN's PNGs carry their own
+   transparent margin, so a 39px box renders about 28px of actual crest. The
+   box was never the problem; the artwork inside it is inset. Asking for a mark
+   taller than the bar and letting the bar clip is what his reference does, and
+   it is the only way to get a logo that fills its panel from files that are
+   padded. */
+.scr-live-game .lg-bug-team { gap: 7px; padding: 0 8px; flex: 0 0 auto;
+  background: color-mix(in srgb, var(--fg) 86%, #ffffff); color: #ffffff; }
+/* 🔴 MEASURED, NOT NUDGED. Five rounds of "can it be bigger" got answered with
+   guesses; the numbers say what was actually happening:
+
+     row              63px
+     chip box         77px   already larger than the row
+     the image        500x500 natural, object-fit: contain
+     the crest in it  roughly 78% of that canvas - ESPN pads every logo
+
+   So `contain` was fitting the CANVAS to the box and the visible crest came
+   out at ~60px: the box was never the constraint, the transparent margin
+   inside the file was. Scaling the box scales the margin with it, which is
+   why each increase bought so little.
+
+   Asking teamChip for a box of ~90px puts the crest itself near 70px in a
+   63px row, which bleeds top and bottom the way his reference does. And the
+   transform is gone - a scaled element resamples its own text, which matters
+   the moment somebody turns marks off and the chip draws letters instead. */
+/* 🔴 THE CREST IS OUT OF FLOW, WHICH IS THE WHOLE FIX. Jason: "the change you
+   just made is bad" - and it was: asking for a 90px mark made the ROW 111px
+   tall, because a panel sizes to its contents and the logo was one of them.
+   Every previous attempt hit the same wall from the other side - keep the row
+   short and the logo could not grow; grow the logo and the row grew with it.
+
+   Absolute positioning is what breaks that trade. The mark no longer
+   contributes height, so the bar is whatever we say it is and the crest is
+   whatever size it needs to be, overflowing top and bottom.
+
+   🔴 AND IT ANCHORS OUTWARD: "right justify the right logo and left justify
+   the left logo". Each crest sits against the outer edge of the bar and the
+   score against the middle, so the two marks frame the scoreline instead of
+   drifting in the panel. */
+.scr-live-game .lg-bug-r:first-child { height: 62px; }
+.scr-live-game .lg-bug-team { position: relative; }
+.scr-live-game .lg-bug-team .tchip { position: absolute; top: 50%;
+  transform: translateY(-50%); transform-origin: center; }
+.scr-live-game .lg-bug-half[data-side="away"] .tchip { left: 4px; }
+.scr-live-game .lg-bug-half[data-side="home"] .tchip { right: 4px; }
+/* Nothing in the panel but the floating crest now, so it needs no room made
+   for a label that is gone. */
+.scr-live-game .lg-bug-half[data-side="away"] .lg-bug-team { padding: 0 0 0 4px; }
+.scr-live-game .lg-bug-half[data-side="home"] .lg-bug-team { padding: 0 4px 0 0; }
+/* (The record is off the bug - see the note where it used to be built.) */
+/* The team's own color, dimmed onto the bar's dark ground rather than used
+   raw - 760 primaries include several that are black, and a black block on a
+   dark bar is a missing block. */
+.scr-live-game .lg-bug-team[data-tinted="true"] {
+  background: color-mix(in srgb, var(--tc) 78%, #23262c); }
+/* The abbreviation is retired from the bug - the crest carries the name. Kept
+   as a rule because the pre-game head and the share card still use it. */
+.scr-live-game .lg-bug-ab { font-size: var(--t-body); font-weight: 800;
+  letter-spacing: .02em; white-space: nowrap; }
+/* Possession: the marker every bug uses, and it costs no width. */
+/* The number the whole bar exists to carry, on its own team's color.
+   🔴 CENTRED IN ITS BLOCK, EXPLICITLY. The block stretches the full row height
+   now, and a stretched block does not centre its text - it puts it on the
+   first baseline, which is why the digits sat high once the panels started
+   filling the bar. Being the right height and having the text in the right
+   place are two separate declarations. */
+.scr-live-game .lg-bug-sc { padding: 0 14px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--fg) 86%, #ffffff); color: #ffffff;
+  font-size: var(--t-scorebug); font-weight: 800; line-height: 1; }
+.scr-live-game .lg-bug-sc[data-tinted="true"] {
+  background: color-mix(in srgb, var(--tc) 78%, #23262c); }
+/* The home half mirrors about the centre. */
+.scr-live-game .lg-bug-team[data-mirror="true"] { flex-direction: row-reverse; }
+/* 🔴 THE CREST BLEEDS OUT OVER THE COLOR. Jason: "and have them bleed out over
+   the color?"
+ 
+   This rule used to read "nothing in a panel may exceed the row", which was
+   the right instinct and the wrong conclusion. The scale transform already
+   draws the mark larger than its box - transforms do not affect layout - so
+   the crest WAS bigger and the panel was cutting it off at its own edge.
+   Removing the clip is all it takes for it to sit proud of its block and
+   overlap the color beside it, which is what a broadcast bug does and is why
+   the logo reads as an object on the bar rather than a picture inside a cell.
+ 
+   The bug itself still clips, so nothing escapes the rounded rectangle - the
+   crest crosses an internal seam, never the outer edge. */
+.scr-live-game .lg-bug-team { overflow: visible; position: relative; z-index: 2; }
+.scr-live-game .lg-bug-sc { position: relative; z-index: 1; }
+.scr-live-game .lg-bug-team > :first-child { flex: 0 0 auto; }
+/* Possession sits with the score - beside the number you are reading anyway.
+   🔴 ABSOLUTE, SO IT COSTS NO WIDTH. As an inline dot it made the possessing
+   team's score block 13px wider than the other, which pushed that digit off
+   the centre line and is the other half of why row one looked shifted. A
+   marker that changes the layout when it appears is a marker that moves the
+   thing it is marking. */
+.scr-live-game .lg-bug-sc[data-poss="true"]::after {
+  content: ''; position: absolute; top: 50%; margin-top: -3px; right: 2px;
+  width: 6px; height: 6px; border-radius: 50%; background: #ffd400; }
+.scr-live-game .lg-bug-half[data-side="home"] .lg-bug-sc[data-poss="true"]::after {
+  right: auto; left: 2px; }
+
+.scr-live-game .lg-bug-clock { padding: 0 12px; flex: 0 0 auto; background: color-mix(in srgb, var(--fg) 86%, #ffffff); color: #ffffff;
+  font-size: var(--t-micro); font-weight: 700; white-space: nowrap; }
+/* The right-hand block belongs to whoever has the ball. */
+/* 🔴 THE SEGMENT THAT GIVES WAY. It overflowed at 393px and clipped to
+   "1st &" - a scorebug that cannot show the down is not a scorebug. Everything
+   left of it is fixed-width because it is fixed-content: two abbreviations,
+   two scores, a clock. This one is the variable, so it takes the remainder and
+   shrinks into it rather than pushing the bar past the screen. */
+.scr-live-game .lg-bug-dd { flex: 1 1 0; min-width: 0; justify-content: center; padding: 0 6px;
+  background: color-mix(in srgb, var(--tc, #3b6fd4) 80%, #23262c);
+  color: #ffffff; font-size: var(--t-body); font-weight: 800; letter-spacing: .06em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scr-live-game .lg-bug-dd[data-state="flag"] { background: #ffd400; color: #1a1c1a;
+  letter-spacing: .12em; }
+/* The strip above. Absent unless there is something to say. */
+.scr-live-game .lg-bug-tab { align-self: center; margin: 0 auto 3px; padding: 3px 14px;
+  background: #ffd400; color: #1a1c1a; font-size: var(--t-micro); font-weight: 800;
+  letter-spacing: .1em; border-radius: 6px 6px 0 0; }
+.scr-live-game .lg-bug-banner { width: 100%; margin-bottom: 3px; padding: 7px 0;
+  text-align: center; border-radius: 8px;
+  background: color-mix(in srgb, var(--tc, var(--accent)) 82%, #23262c);
+  color: #ffffff; font-size: var(--t-emph); font-weight: 800; letter-spacing: .22em; }
+/* 🔴 ONE RADIUS FOR THE BANNER AND THE BAR. Jason: "i like the rounding on
+   touchdown. have the other match." They had drifted - the banner was written
+   with a literal 8px and the bug with var(--radius-card) - so two pieces of
+   one component, stacked three pixels apart, curved differently. Both now
+   name the same token, which is the only way they stay matched through the
+   next change to either. */
+.scr-live-game .lg-bug-banner,
+.scr-live-game .lg-bug { border-radius: var(--radius-card); }
+.scr-live-game .lg-head { display: grid; justify-items: center; gap: 4px; padding: 2px 0 8px; }

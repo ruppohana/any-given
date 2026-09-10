@@ -38,7 +38,7 @@ if (!token) { console.error('no push token'); process.exit(1); }
  * college says "1st down OU" in the sentence and the NFL does not. Replaying an
  * NFL game as college would grade every sack the wrong way and quietly prove
  * nothing. */
-const sport = flag('sport', /nfl/i.test(name) ? 'nfl' : 'college-football');
+const sportFlag = flag('sport', null);
 
 /* 🔴 RESOLVE THE FILE, DO NOT ASSUME ITS NAME. This built a path from a naming
  * convention - `<name>-260905-final.json`, or `fixtures/nfl/<name>.json` for
@@ -66,6 +66,22 @@ if (!file) {
   process.exit(1);
 }
 const raw = JSON.parse(readFileSync(file, 'utf8'));
+
+/* THE FIXTURE SAYS WHICH LEAGUE IT IS; THE FILENAME ONLY LOOKS LIKE IT DOES.
+ * This guessed `/nfl/i.test(name)`, and the first NFL capture is called
+ * `real-ne-at-sea-260909-final` - no "nfl" in it - so replaying the opener
+ * would have graded it as COLLEGE, where a sack is a run instead of a pass.
+ * Every sack in the game would settle the wrong way, silently, in the one tool
+ * whose job is to prove the app works.
+ *
+ * Third time tonight: the test suite decided a fixture's grammar from its
+ * filename, and the shim decided a play's drive from the first number in a URL.
+ * ESPN stamps `header.league.slug` on every summary. Read it, and let --sport
+ * override for the deliberate cross-league test the comment above describes. */
+const docSlug = String(raw?.header?.league?.slug || '');
+const sport = sportFlag
+  || (/^nfl$/i.test(docSlug) ? 'nfl' : docSlug ? 'college-football' : null)
+  || (/nfl/i.test(name) ? 'nfl' : 'college-football');
 const full = readLive(raw, '999', sport, Date.now());
 console.log(`${name}: ${full.plays.length} plays, replaying from ${from} every ${every / 1000}s -> ${base}/api/state/${key}`);
 

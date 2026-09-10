@@ -103,7 +103,18 @@ test('7.1 the grammar of each captured fixture is measured, never assumed', () =
   let sawNumbered = false, sawNamed = false;
   for (const [f, doc] of DOCS) {
     const g = grammarProfile(doc);
-    const nfl = /nfl/i.test(f);
+    /* THE DOCUMENT SAYS WHICH LEAGUE IT IS. THE FILENAME ONLY LOOKS LIKE IT
+     * DOES. This read `/nfl/i.test(f)` and the first real NFL capture was named
+     * for the teams - real-ne-at-sea-260909-final.json - so it was tested as
+     * college football and failed for having no jersey numbers, which is
+     * exactly correct NFL text. The capture was right and the test was wrong
+     * about what it was looking at.
+     *
+     * It is the vault's own rule arriving in a test: never name a file without
+     * opening it. ESPN stamps `header.league.slug` on every summary; the
+     * filename falls back only for a capture old enough to lack it. */
+    const slug = String(doc?.header?.league?.slug || doc?.header?.league?.abbreviation || '');
+    const nfl = slug ? /^nfl$/i.test(slug) : /nfl/i.test(f);
     console.log(`  7.1 ${f}  plays=${g.plays} numbered=${g.numbered} named=${g.named} none=${g.none}`);
     if (nfl) {
       sawNamed = true;
