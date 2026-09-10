@@ -1094,6 +1094,37 @@ export function headlineKey(sport, week) {
   return 'ag.allgames.hl.' + sport + '.' + week;
 }
 
+/* 🔴 A WAY OUT AT THE BOTTOM. Jason: "Add a less button with carrots at the
+ * bottom. To roll it up."
+ *
+ * An open card is fifteen markets and roughly 1,500px - five screens. The
+ * only way to shut it was the MORE row at the TOP, which by then is four
+ * screens behind you, so closing a card you had finished with meant
+ * scrolling back up past everything you had just read. On an 86-game board
+ * that is the difference between browsing and committing.
+ *
+ * It mirrors the top control rather than inventing a second language: same
+ * arrowheads, same word, pointing the other way. And it scrolls the card
+ * back into view as it closes - without that you are left wherever the
+ * collapse dumped you, which on a long card is somewhere in the middle of a
+ * different game. */
+function lessRow(card) {
+  const b = el('button', 'p6a-less');
+  b.type = 'button';
+  b.appendChild(el('span', 'p6a-less-c', '⌃'));
+  b.appendChild(el('span', 'p6a-less-t', 'LESS'));
+  b.appendChild(el('span', 'p6a-less-c', '⌃'));
+  b.setAttribute('aria-label', 'Close this game');
+  b.addEventListener('click', () => {
+    card.open = false;
+    /* `block: nearest` rather than `start`: the card is already near the top
+       once it collapses, and forcing it to the top would jump the board for
+       no reason the person asked for. */
+    card.scrollIntoView({ block: 'nearest' });
+  });
+  return b;
+}
+
 /* 🔴 A GAME OPENS. IT DOES NOT SIT OPEN. Measured on the deployed board with
  * the real 86-game slate at 375x812, before this change:
  *
@@ -1272,6 +1303,7 @@ function gameCard(ctx, game) {
     const list = el('div', 'p6a-mkts');
     for (const m of mine) list.appendChild(marketBlock(ctx, game, m));
     card.appendChild(list);
+    card.appendChild(lessRow(card));
     return card;
   }
 
@@ -1287,6 +1319,7 @@ function gameCard(ctx, game) {
   const list = el('div', 'p6a-mkts');
   for (const m of offered) list.appendChild(marketBlock(ctx, game, m));
   card.appendChild(list);
+  card.appendChild(lessRow(card));
   return card;
 }
 

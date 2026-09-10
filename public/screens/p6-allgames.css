@@ -578,3 +578,20 @@
 /* A market not on offer is shown and disabled, never removed - a control
    that vanishes on some rows teaches nobody the rule. */
 .scr-p6-allgames .p6a-segb:disabled { opacity: .38; }
+
+/* ── THE WAY OUT, AT THE FOOT OF AN OPEN CARD ─────────────────────────
+   Mirrors the MORE control exactly - same arrowheads, same word, same
+   weight - because it is the same control seen from the other end. A
+   different treatment here would read as a different kind of thing. */
+.scr-p6-allgames .p6a-less {
+  width: 100%; font: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  font-size: 9px; font-weight: 800; letter-spacing: .08em; color: var(--dim);
+  line-height: 1; white-space: nowrap;
+  /* A real tap target. The top control gets away with less because the whole
+     summary row is clickable; this one is only itself. */
+  min-height: var(--tap-min); margin-top: 2px;
+  border: 0; border-radius: var(--radius-chip); background: transparent;
+}
+.scr-p6-allgames .p6a-less:active { background: var(--surface-1); }
+.scr-p6-allgames .p6a-less-c { font-size: 11px; line-height: 1; display: inline-block; }
