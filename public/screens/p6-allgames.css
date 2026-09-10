@@ -522,7 +522,7 @@
    sized by its content with no room around it, which reads as cramped on a
    card that is now the primary tap target for a pick. The height comes from
    padding rather than a fixed min-height so a row that wraps still fits. */
-.scr-p6-allgames .p6a-game > .p6a-top { padding: 9px 4px; row-gap: 7px; }
+.scr-p6-allgames .p6a-game > .p6a-top { padding: 9px 4px 0; row-gap: 7px; }
 .scr-p6-allgames .p6a-game { padding: calc(var(--nest-inset) + 2px); }
 
 /* ── THE DISCLOSURE, UNDER THE @ ──────────────────────────────────────
@@ -542,7 +542,19 @@
   flex: 1 0 100%; order: 4;
   display: flex; align-items: center; justify-content: center; gap: 4px;
   font-size: 9px; font-weight: 800; letter-spacing: .08em; color: var(--dim);
-  line-height: 1; white-space: nowrap; padding-top: 1px;
+  line-height: 1; white-space: nowrap;
+  /* 🔴 IT SITS DOWN IN THE ROOM THE CARD ALREADY HAD. Jason: "Move down
+     since there is room on the card." The control was tucked immediately
+     under the teams with ~23px of empty card below it - so the card looked
+     bottom-heavy AND the one thing you tap was crowded against the row above
+     it. Pushing it into that gap costs no height, because the gap was
+     already being paid for. */
+  /* 18 above, nothing below. The card's own inset is uniform - concentric
+     corners are an all-four-sides property and trimming one edge to move a
+     child would break the radius that sits on it - so the control is moved
+     by its OWN top padding and the summary's bottom padding goes to zero.
+     Measured after: ~18px above, ~14px below, which is the card's inset. */
+  padding: 18px 0 0;
 }
 .scr-p6-allgames .p6a-more-c {
   font-size: 11px; line-height: 1; transition: transform .15s ease;
