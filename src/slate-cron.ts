@@ -22,6 +22,7 @@
  * than no cloud job.
  */
 import { idFromRef } from './core-feed.ts';
+import { shouldPoll } from './lib/poll-window.ts';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
   + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
@@ -230,7 +231,11 @@ export async function captureSlate(env: any, sport: string, season: number) {
         periodsHome: home.periods || null,
         periodsAway: away.periods || null
       });
-      if (status === 'in_progress') live.push(String(id));
+      /* One rule, in src/lib/poll-window.ts, shared with the ensure endpoint
+         so the cron cannot start pollers the API then refuses to know about. */
+      if (shouldPoll({ status, kickoffUtc: Date.parse(ev.date) }, Date.now())) {
+        live.push(String(id));
+      }
     } catch { /* one bad event must not cost the week */ }
   }
 

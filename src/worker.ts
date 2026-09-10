@@ -1,3 +1,4 @@
+import { pollDecision } from './lib/poll-window.ts';
 import { captureSlate } from './slate-cron.ts';
 export { LivePoller } from './poller-do.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
@@ -280,16 +281,26 @@ export default {
         const sp = u0.searchParams.get('sport') === 'college-football' ? 'college-football' : 'nfl';
         if (!gid) return json({ error: 'game required' }, 400);
         const season = Number(env.SEASON) || 2026;
+        /* 🔴 THE GATE IS pollDecision AND IT READS THE CLOCK, NOT THE STATUS.
+         * The stored slate is up to ten minutes stale, so this used to refuse
+         * a poller for a game that had genuinely kicked - answering the one
+         * action a person takes when the feed looks dead with "not in
+         * progress on our slate". Same rule as the cron, one file. */
         let ok = false;
-        for (let wk = 1; wk <= 20 && !ok; wk++) {
+        let why = 'no game by that id on any slate';
+        for (let wk = 1; wk <= 20; wk++) {
           const raw = await env.LIVE.get(`slate:${sp}:${season}:${wk}`);
           if (!raw) continue;
+          let g: any = null;
           try {
-            const g = (JSON.parse(raw).games || []).find((x: any) => String(x.id) === gid);
-            if (g) { ok = g.status === 'in_progress'; break; }
-          } catch { /* next week */ }
+            g = (JSON.parse(raw).games || []).find((x: any) => String(x.id) === gid);
+          } catch { continue; }
+          if (!g) continue;
+          const d = pollDecision(g, Date.now());
+          ok = d.poll; why = d.why;
+          break;
         }
-        if (!ok) return json({ ok: false, reason: 'not in progress on our slate' });
+        if (!ok) return json({ ok: false, reason: why });
         const stub0 = env.POLLER.get(env.POLLER.idFromName(`${sp}:${gid}`));
         await stub0.fetch(new Request('https://do/start', {
           method: 'POST', body: JSON.stringify({ gameId: gid, sport: sp })
