@@ -30,42 +30,40 @@ import { settleMarket } from '../markets.ts';
 
 export { PARLAY_MIN_LEGS, PARLAY_MAX_LEGS };
 
-/* 🔴 50x, AND IT IS THE PARLAY'S OWN CEILING - NOT A CHANGE TO THE 6x ON A
- * SINGLE CALL. Jason settled it 2026-09-10, on the evidence below.
+/* 🔴 250x, AND THE CAP NOW ONLY TRIMS THE ABSURD TAIL. Jason, 2026-09-10:
+ * "a 6 parlay should win big."
  *
- * This shipped at 6 first, deliberately, because doctrine says `stake / p`
- * capped at 6x and the builder may not decide that. What 6 did to a parlay
- * was recorded as a passing test rather than argued about:
+ * It did not, and 50 was the reason. The most ORDINARY six-leg parlay there
+ * is - six coin flips at 2.00x - prices at 64x, so a 50 ceiling trimmed the
+ * exact bet that is supposed to be the headline. The cap was biting at the
+ * top of the ladder instead of past the end of it.
  *
- *     2 legs of 2.00x  ->   4.00x
- *     3 legs           ->   8.00x  -> capped to 6.00
- *     4 legs           ->  16.00x  -> capped to 6.00
- *     6 legs           ->  64.00x  -> capped to 6.00
+ * 🔴 THAT IS THE RULE THIS NUMBER NOW FOLLOWS: A CAP MUST NOT BITE A
+ * PLAUSIBLE PARLAY. It exists to stop a chain of long shots compounding into
+ * a number that makes every other row on the board pointless - not to shave
+ * the ordinary case. Anywhere it touches something a person would actually
+ * build, it is set wrong.
  *
- * 🔴 EVERY PARLAY AT OR ABOVE THE MINIMUM PAID THE SAME. Three legs is the
- * floor, so a fourth leg strictly increased the chance of losing for no
- * increase in return. That is a DOMINATED product, not a hard one, and nobody
- * who noticed would have built a second one.
+ *     legs of 2.00x    2 ->   4      4 ->  16      6 ->  64   all uncapped
+ *     the tail         six legs averaging 2.6x  ->  308  ->  250
  *
- * At 50 the ladder pays for its own risk at every step:
+ * 🔴 WHY IT CANNOT SIMPLY BE REMOVED. Each leg is already capped at 6x by the
+ * single-call rule, so six maximum-price legs multiply to 6^6 = 46,656x. A
+ * 25-marble stake would return over a million against a bank that starts at a
+ * few hundred - one bet that ends the board for everybody on it. The tail is
+ * real and it needs an end; 250 is where it stops being a game.
  *
- *     2 legs  ->   4.00x        5 legs  ->  32.00x
- *     3 legs  ->   8.00x        6 legs  ->  50.00x  (from 64, capped)
- *     4 legs  ->  16.00x
+ * The three numbers and what each is for, so none is ever read as the others:
  *
- * 🔴 WHY A SEPARATE CEILING IS THE RIGHT SHAPE, rather than raising 6. The 6x
- * cap exists so the BOARD is not dominated by lottery tickets - a single call
- * at 60x would make every other call on the screen pointless. A parlay is the
- * lottery ticket, on purpose, and it already carries its own admission price:
- * a floor of three legs and one leg per game. It is the one instrument here
- * that has earned a longer tail, and giving it one leaves 6x untouched
- * everywhere else in the app.
+ *     6x    one call            keeps the BOARD from being all lottery tickets
+ *     50x   -- retired --       bit the ordinary six-fold. See above
+ *     250x  one parlay          ends the long-shot tail, touches nothing else
  *
  * Still not a financial control. Marbles cannot be bought, sold or cashed out
- * and the bank refills every game, so the ceiling is about what the board
- * looks like, never about exposure.
+ * and the bank refills every game, so every one of these is about what the
+ * board looks like, never about exposure.
  */
-export const PARLAY_MAX_PAYOUT = 50;
+export const PARLAY_MAX_PAYOUT = 250;
 
 export type StakeLeg = {
   gameId: string;

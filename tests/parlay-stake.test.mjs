@@ -56,16 +56,39 @@ test('a bad leg price poisons the whole price rather than being skipped', () => 
  * drifted to match the code. */
 test('every added leg increases the return, up to the cap', () => {
   const evens = (n) => Array(n).fill(2);
-  assert.equal(PARLAY_MAX_PAYOUT, 50);
+  assert.equal(PARLAY_MAX_PAYOUT, 250);
   assert.equal(parlayPrice(evens(2)), 4);
   assert.equal(parlayPrice(evens(3)), 8);
   assert.equal(parlayPrice(evens(4)), 16);
   assert.equal(parlayPrice(evens(5)), 32);
-  assert.equal(parlayPrice(evens(6)), 50);        // 64 -> capped
+  assert.equal(parlayPrice(evens(6)), 64);        // uncapped: see below
   for (let n = PARLAY_MIN_LEGS; n < PARLAY_MAX_LEGS; n++) {
     assert.ok(parlayPrice(evens(n + 1)) > parlayPrice(evens(n)),
       n + ' legs must pay less than ' + (n + 1));
   }
+});
+
+/* 🔴 THE PROPERTY JASON ASKED FOR, AS A TEST. "a 6 parlay should win big."
+ *
+ * A cap must not bite a PLAUSIBLE parlay. Six coin flips is the most ordinary
+ * six-leg bet there is and it is the headline of the whole feature, so if the
+ * ceiling ever trims it again this fails. That is the guard - not the value
+ * 250, which is free to move as long as it stays past the end of the ladder
+ * rather than on top of it. */
+test('the cap never touches an ordinary six-leg parlay', () => {
+  const evens = (n) => Array(n).fill(2);
+  assert.equal(parlayPrice(evens(PARLAY_MAX_LEGS)), 2 ** PARLAY_MAX_LEGS,
+    'six coin flips must pay their true price, uncapped');
+  assert.ok(PARLAY_MAX_PAYOUT > 2 ** PARLAY_MAX_LEGS,
+    'the ceiling must sit past the end of the all-evens ladder');
+});
+
+/* And it still ends the long-shot tail, which is the only thing it is for.
+ * Each leg is capped at 6x by the single-call rule, so six maximum-price legs
+ * would otherwise multiply to 46,656x - one bet that ends the board. */
+test('the cap still ends the tail a chain of long shots would run to', () => {
+  assert.equal(parlayPrice(Array(6).fill(6)), PARLAY_MAX_PAYOUT);
+  assert.equal(parlayPrice(Array(6).fill(2.6)), PARLAY_MAX_PAYOUT);
 });
 
 /* The single-call cap is untouched, and that is the point of a separate one. */
