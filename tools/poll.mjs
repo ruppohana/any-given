@@ -60,6 +60,28 @@ const url = `https://site.api.espn.com/apis/site/v2/sports/football/${path}/summ
 const key = `${sport}:${gameId}`;
 
 let lastPlayId = null;
+/* 🔴 THE PUBLISH LAG, MEASURED THE ONLY WAY IT CAN BE: at the moment a play we
+ * have never seen before turns up, how old is it?
+ *
+ * The screen was reporting `now - newest play's wallclock`, which is NOT the
+ * feed's lag - it is the lag PLUS however long the game has been standing
+ * still. During the two-minute warning it read 211 seconds and the feed was
+ * perfectly healthy; nothing had happened for two minutes, which is what a
+ * two-minute warning is. That number then drove the conclusion that the snap
+ * market was impossible by a margin of nearly three minutes.
+ *
+ * 🔴 A LATENCY MEASURED AT AN ARBITRARY MOMENT IS NOT A LATENCY. It only means
+ * anything at the instant of arrival, which only the poller can see. Sampled
+ * properly the answer is far better than the number the app was showing, and it
+ * changes what is worth building. */
+const lags = [];
+function noteLag(ms) { lags.push(ms); if (lags.length > 12) lags.shift(); }
+function medianLag() {
+  if (!lags.length) return null;
+  const a = [...lags].sort((x, y) => x - y);
+  return a[Math.floor(a.length / 2)];
+}
+const seenPlays = new Set();
 let pushes = 0, failures = 0, skipped = 0, lastSig = null;
 /* 🔴 THE HEARTBEAT AND THE SCREEN'S ALARM ARE ONE NUMBER NOW, AND THEY WERE TWO
  * CONTRADICTORY ONES. Found live, in the first quarter of the opener: Jason's
@@ -194,13 +216,39 @@ async function tick() {
     }
     lastSig = sig;
 
+    /* Every play we have not seen before, timed at the instant we first hold
+       it. Nothing here is derived later or averaged over a gap. */
+    /* 🔴 THE FIRST POLL SEEDS, IT DOES NOT MEASURE. On a restart every play in
+     * the game is "new to us", so timing them against their wallclock measures
+     * how long ago the first quarter was - it reported 420 SECONDS, which is
+     * not a latency, it is the age of the game.
+     *
+     * 🔴 THIS IS THE SAME MISTAKE I HAD JUST FINISHED DIAGNOSING, committed in
+     * the fix for it. Both are "a duration that is only meaningful at one
+     * instant, taken at a different instant" - the screen measured across a
+     * stoppage, this measured across a restart. A latency has to be timed from
+     * an arrival, and on the first poll nothing has arrived; we have simply
+     * opened our eyes. */
+    const arrivedAt = Date.now();
+    const warm = seenPlays.size > 0;
+    for (const pl of state.plays || []) {
+      if (!pl.id || seenPlays.has(pl.id)) continue;
+      seenPlays.add(pl.id);
+      if (warm && pl.wallclockMs) noteLag(arrivedAt - pl.wallclockMs);
+    }
+
     const push = await fetch(base + '/api/push', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-push-token': token },
       /* The cadence travels WITH the state, so the screen's staleness alarm is
          derived from what this poller actually promises rather than from a
          number somebody typed into the other file. See HEARTBEAT_MS. */
-      body: JSON.stringify({ key, state: { ...state, heartbeatMs: HEARTBEAT_MS } })
+      body: JSON.stringify({ key, state: {
+        ...state,
+        heartbeatMs: HEARTBEAT_MS,
+        /* What the feed's delay ACTUALLY is, measured on arrival. */
+        publishLagMs: medianLag()
+      } })
     });
     if (!push.ok) throw new Error('push ' + push.status);
     pushes++;

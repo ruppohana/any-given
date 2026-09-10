@@ -94,3 +94,19 @@ binding = "DB"
 database_name = "anygiven"
 database_id = "6dfcb86c-03ff-48d3-bdf0-5bc7ce8a4a7d"
 migrations_dir = "migrations"
+
+# 🔴 THE LIVE POLLER, IN CLOUDFLARE RATHER THAN ON A LAPTOP. Jason, 2026-09-09:
+# "Remove the puller off my machine."
+#
+# A Durable Object rather than a cron, and the reason is measured rather than
+# stylistic: cron's floor is one minute, and tonight put the whole mechanic
+# inside a 27-second window. A minute of granularity does not make the app
+# slower, it removes the product. A DO alarm reschedules itself every ten
+# seconds and has no lid to close.
+[[durable_objects.bindings]]
+name = "POLLER"
+class_name = "LivePoller"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LivePoller"]

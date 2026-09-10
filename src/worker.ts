@@ -1,3 +1,4 @@
+export { LivePoller } from './poller-do.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
  *
  * That sentence is the whole reason the original exists and it is not negotiable
@@ -145,6 +146,116 @@ export default {
           expirationTtl: 60 * 60 * 6
         });
         return json({ ok: true, key: body.key });
+      }
+
+      /* ---- THE TV LAG MEASUREMENT, SO IT STOPS LIVING ONLY ON ONE PHONE ----
+       *
+       * 🔴 Jason: "Can it pass this info to you or do you need a screen shot?"
+       * Screenshots, until now - the taps were in localStorage, which is the
+       * one place nothing else in the system can read. The feed's own lag was
+       * always on the wire; the half of the equation that decides whether this
+       * product works was not.
+       *
+       * 🔴 UNAUTHENTICATED ON PURPOSE, AND SAFE BECAUSE OF WHAT IT CANNOT DO.
+       * The push endpoint above is token-protected because a client that can
+       * write a score can grade its own pick. This writes a diagnostic under a
+       * fixed `tvlag:` prefix and nothing reads it back into settlement, the
+       * board, the bank or a price. The worst a forged post achieves is a wrong
+       * number in a measurement Jason is reading with his own eyes.
+       *
+       * Bounded anyway: the key prefix is fixed here rather than taken from the
+       * body, the device id is pattern-checked, and at most 20 samples are
+       * kept - so it cannot be used to write arbitrary keys or fill KV. */
+      if (p === '/api/tvlag' && req.method === 'POST') {
+        const b = await req.json() as { deviceId?: string; gaps?: unknown; tvLagSec?: unknown };
+        const id = String(b.deviceId || '').replace(/[^a-z0-9-]/gi, '').slice(0, 64);
+        if (!id) return json({ error: 'deviceId required' }, 400);
+        const gaps = Array.isArray(b.gaps)
+          ? b.gaps.filter((g) => typeof g === 'number' && g > -600 && g < 600).slice(-20)
+          : [];
+        const rec = JSON.stringify({
+          deviceId: id, gaps,
+          tvLagSec: typeof b.tvLagSec === 'number' ? b.tvLagSec : null,
+          at: Date.now()
+        });
+        /* Per device, and a `latest` copy so a reading can be found without
+         * knowing which phone produced it. */
+        await env.LIVE.put('tvlag:' + id, rec, { expirationTtl: 60 * 60 * 24 * 7 });
+        await env.LIVE.put('tvlag:latest', rec, { expirationTtl: 60 * 60 * 24 * 7 });
+        return json({ ok: true, samples: gaps.length });
+      }
+
+      /* ---- CAN A WORKER REACH ESPN AT ALL? ----
+       * Everything about moving the poller off Jason's laptop depends on this
+       * one fact, and the vault records site.api 403ing from Cloudflare. Worth
+       * ten lines to know rather than assume - the last three assumptions about
+       * this feed were all wrong. Token-protected because it is an outbound
+       * fetch on demand. */
+      if (p === '/api/probe' && req.method === 'GET') {
+        const token = req.headers.get('x-push-token') || '';
+        if (!env.PUSH_TOKEN || token !== env.PUSH_TOKEN) return json({ error: 'no' }, 401);
+        const out: Record<string, unknown> = {};
+        const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+          + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+        for (const [name, url] of [
+          ['site', 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=401872656'],
+          ['core', 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/401872656'],
+          ['coreplays', 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/401872656/competitions/401872656/plays?limit=400'],
+          ['corecomp', 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/401872656/competitions/401872656/drives?limit=100']
+        ] as [string, string][]) {
+          const t0 = Date.now();
+          try {
+            const r = await fetch(url, { headers: { 'user-agent': UA } });
+            let plays: number | null = null;
+            if (r.ok && (name === 'coreplays' || name === 'corecomp')) {
+              const j = await r.json() as any;
+              const it = j?.items || [];
+              const lastItem = it[it.length - 1] || {};
+              out[name + ':shape'] = {
+                count: it.length,
+                keys: Object.keys(lastItem).slice(0, 22),
+                wallclock: lastItem.wallclock || null,
+                text: String(lastItem.text || '').slice(0, 40)
+              };
+            }
+            if (r.ok && name === 'site') {
+              const j = await r.json() as any;
+              const d = j?.drives?.current || (j?.drives?.previous || []).slice(-1)[0];
+              plays = (d?.plays || []).length;
+            }
+            out[name] = { status: r.status, ms: Date.now() - t0, plays };
+          } catch (e: any) {
+            out[name] = { error: String(e?.message || e), ms: Date.now() - t0 };
+          }
+        }
+        return json(out);
+      }
+
+      /* ---- START AND STOP THE CLOUD POLLER ----
+       * Token-protected: it makes an outbound loop run, and the same rule as
+       * /api/push applies - a client that can start a poller can point it at
+       * anything. One object per game, named for the game, so starting twice
+       * is idempotent rather than the four-poller pileup that corrupted an
+       * hour of tonight's data. */
+      if (p.startsWith('/api/poller/')) {
+        const token = req.headers.get('x-push-token') || '';
+        if (!env.PUSH_TOKEN || token !== env.PUSH_TOKEN) return json({ error: 'no' }, 401);
+        const u = new URL(req.url);
+        const gameId = (u.searchParams.get('game') || '').replace(/\D/g, '');
+        const sport = u.searchParams.get('sport') || 'nfl';
+        if (!gameId) return json({ error: 'game required' }, 400);
+        const id = env.POLLER.idFromName(`${sport}:${gameId}`);
+        const stub = env.POLLER.get(id);
+        const action = p.slice('/api/poller/'.length) || 'status';
+        const res = await stub.fetch(new Request(`https://do/${action}`, {
+          method: action === 'status' ? 'GET' : 'POST',
+          body: action === 'start' ? JSON.stringify({ gameId, sport,
+            everyMs: Number(u.searchParams.get('every')) || undefined }) : undefined
+        }));
+        return new Response(await res.text(), {
+          status: res.status,
+          headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+        });
       }
 
       /* ---- what the poller last pushed ---- */

@@ -15,7 +15,7 @@
  */
 import { stripTypeScriptTypes } from 'node:module';
 import { readdir, readFile, writeFile, mkdir, rm, cp } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, extname, dirname, relative } from 'node:path';
 
@@ -75,3 +75,41 @@ const bytes = (await Promise.all(files.map(async (f) => (await readFile(f)).leng
   .reduce((a, b) => a + b, 0);
 console.log(`dist/  ${files.length} files, ${(bytes / 1048576).toFixed(2)} MB, ${stripped} modules stripped`);
 console.log('deploy:  npx wrangler pages deploy dist --project-name any-given');
+
+/* 🔴 A BUILD STAMP ON EVERY CODE URL, BECAUSE "HARD REFRESH" IS NOT A DEPLOY
+ * STRATEGY. Written 2026-09-09 during the opener, after Jason spent the evening
+ * reporting bugs that were already fixed - a stale module told him halftime was
+ * "the end of the quarter" and the delay chip said 774s while the card two
+ * inches below it, from the same state object, said 47s.
+ *
+ * 🔴 THE HEADERS WERE ALREADY RIGHT AND IT STILL HAPPENED. Assets serve
+ * `max-age=0, must-revalidate`, which is correct and which a browser is
+ * entitled to satisfy from its own module map for the life of a page. The only
+ * thing a client cannot ignore is a DIFFERENT URL.
+ *
+ * So the screen modules and stylesheets are loaded with `?v=<stamp>`, the stamp
+ * changes on every build, and a deploy invalidates by name rather than by
+ * politeness. The unstamped files stay on disk, so anything importing them
+ * directly still works.
+ *
+ * It costs one cache miss per deploy per client, which is exactly what a deploy
+ * should cost. */
+const BUILD_STAMP_INJECTED = true;
+{
+  const stamp = Date.now().toString(36);
+  const idx = join(DIST, 'index.html');
+  if (existsSync(idx)) {
+    writeFileSync(idx, readFileSync(idx, 'utf8').replace('</head>',
+      `<script>window.__BUILD__=${JSON.stringify(stamp)}</script></head>`));
+  }
+  const appjs = join(DIST, 'app.js');
+  if (existsSync(appjs)) {
+    let a = readFileSync(appjs, 'utf8');
+    a = a.replace("import('/screens/' + name + '.screen.js')",
+                  "import('/screens/' + name + '.screen.js?v=' + (window.__BUILD__ || ''))");
+    a = a.replace("const href = '/screens/' + name + '.css';",
+                  "const href = '/screens/' + name + '.css?v=' + (window.__BUILD__ || '');");
+    writeFileSync(appjs, a);
+  }
+  console.log('build stamp', stamp);
+}

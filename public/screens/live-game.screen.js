@@ -142,6 +142,11 @@ const S = {
      gap - the play they watched is usually one we have not been told about yet,
      so the answer does not exist at the moment of the tap. */
   taps: store.get('taps', []),
+  /* Transient, never stored: it drives a 900ms confirmation flash and must not
+     survive a reload as a stuck green button. */
+  lastTapAt: 0,
+  /* Last reading posted, so a repaint every five seconds does not repost it. */
+  sentTv: null,
   /* afterPlayId -> 1. Snaps deliberately sat out. Kept SEPARATE from calls on
      purpose: a skip must never be able to settle, score or reach the board, and
      the surest way to guarantee that is for it not to live in the same object
@@ -229,15 +234,22 @@ function breakLine(state) {
    * feed today: the fix is to read a real payload, not to reason about wording.
    * Seen live: "Official Timeout at 07:29.", "END QUARTER 1", "Two-minute
    * warning". */
-  const what = /official timeout/i.test(t) ? 'Commercial break'
+  /* 🔴 THE END OF THE SECOND QUARTER IS HALF TIME, AND IT IS NOT "A COUPLE OF
+   * MINUTES". Caught with the game sitting on it: the feed writes the same
+   * "END QUARTER n" for a two-minute break and a thirteen-minute one, and the
+   * only thing telling them apart is n. */
+  const isHalf = /end (of )?(the )?half|halftime/i.test(t)
+    || (/end (of )?(the )?(quarter|period)|end quarter/i.test(t) && last.quarter === 2);
+  const what = isHalf ? 'Half time'
+    : /official timeout/i.test(t) ? 'Commercial break'
     : /two.minute warning/i.test(t) ? 'Two-minute warning'
     : /end (of )?(the )?(quarter|period)|end quarter/i.test(t) ? 'End of the quarter'
-    : /end (of )?(the )?half|halftime|end of 2nd quarter/i.test(t) ? 'Half time'
     : null;
   if (!what) return null;
   const line = el('div', 'lg-break');
   line.appendChild(el('span', 'lg-break-d', what));
-  line.appendChild(el('span', 'lg-break-t', 'no snap for a couple of minutes'));
+  line.appendChild(el('span', 'lg-break-t',
+    isHalf ? 'no football for about thirteen minutes' : 'no snap for a couple of minutes'));
   return line;
 }
 
@@ -298,12 +310,32 @@ function resolveTaps(state) {
  * one thing. */
 function tvCard(state, wrap) {
   const c = el('div', 'card lg-tvlag');
-  const b = el('button', 'lg-tvlag-go', 'SNAP — tap the moment it happens on your TV');
+  /* 🔴 THE TAP HAS TO ANSWER. Jason: "When I hit snap. Turn the color so I know."
+   *
+   * This is a button whose whole job is to record an instant, pressed while the
+   * person is looking at a television rather than at the phone. With no
+   * response it is impossible to know whether the tap landed - and a tap you are
+   * unsure about gets pressed again, which puts a second sample two seconds late
+   * into a median built from thirteen. 🔴 SO THE FEEDBACK IS NOT POLISH HERE, IT
+   * IS PART OF THE MEASUREMENT.
+   *
+   * Green, because the up/down scale in this app already means landed and
+   * missed, and a tap that registered is the same idea. It reverts on its own
+   * so the button is ready for the next snap without being touched. */
+  const hit = S.lastTapAt && Date.now() - S.lastTapAt < 900;
+  const b = el('button', 'lg-tvlag-go' + (hit ? ' is-hit' : ''),
+    hit ? '✓  GOT IT' : 'SNAP — tap the moment it happens on your TV');
   b.type = 'button';
   b.onclick = () => {
     S.taps = [...S.taps, Date.now()].slice(-20);
     store.set('taps', S.taps);
+    S.lastTapAt = Date.now();
+    /* A short buzz, where the hardware has one - the eye is on the game, not on
+       the phone, and a hand knows a buzz without looking. */
+    try { if (navigator.vibrate) navigator.vibrate(25); } catch { /* no haptics */ }
     paint(wrap);
+    /* And put it back, so the next snap meets a button that says SNAP. */
+    setTimeout(() => paint(wrap), 900);
   };
   c.appendChild(b);
 
@@ -318,9 +350,26 @@ function tvCard(state, wrap) {
      drag an average and there are only a handful of samples. */
   const sorted = [...gaps].sort((a, b2) => a - b2);
   const tv = sorted[Math.floor(sorted.length / 2)];
-  const plays = ((state && state.plays) || []).filter((p) => p.wallclockMs);
-  const newest = plays.length ? plays[plays.length - 1].wallclockMs : null;
-  const ours = newest ? Math.round((Date.now() - newest) / 1000) : null;
+  /* 🔴 SENT UP, ONCE PER NEW READING. The measurement is worthless if it only
+   * exists on the phone that took it - it is the number that decides whether
+   * this product needs a paid feed, and it was being read off screenshots.
+   * Fire-and-forget: a failed post costs a diagnostic, never a pick. */
+  if (S.sentTv !== tv + ':' + gaps.length) {
+    S.sentTv = tv + ':' + gaps.length;
+    try {
+      fetch('/api/tvlag', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ deviceId: deviceId(), gaps, tvLagSec: tv })
+      }).catch(() => {});
+    } catch { /* no network, no problem */ }
+  }
+  /* 🔴 THE POLLER'S MEASURED PUBLISH LAG, NOT THE AGE OF THE NEWEST PLAY. Those
+   * are different numbers and the difference is "how long since anything
+   * happened" - which during a two-minute warning is two minutes of pure
+   * stoppage being reported as feed latency. It read 211s while the feed was
+   * healthy and 50 seconds slow. */
+  const ours = typeof state.publishLagMs === 'number'
+    ? Math.round(state.publishLagMs / 1000) : null;
 
   const rows = el('div', 'lg-tvlag-rows');
   const row = (k, v) => {
@@ -329,7 +378,7 @@ function tvCard(state, wrap) {
     rows.appendChild(r);
   };
   row('Your TV, behind the stadium', tv + 's');
-  if (ours != null) row('This app, behind the stadium', ours + 's');
+  if (ours != null) row('The feed, behind the stadium', ours + 's');
   if (ours != null) {
     const edge = ours - tv;
     row(edge > 0 ? 'You see it before we ask, by' : 'We ask before you see it, by',
@@ -505,9 +554,34 @@ function held(raw, delayMs, now) {
 }
 
 /** What question does this moment ask? */
+/** True when the last thing we can see is the end of the half. */
+function atHalfTime(state) {
+  const plays = (state && state.plays) || [];
+  const last = plays[plays.length - 1];
+  if (!last) return false;
+  const t = (last.typeText || '') + ' ' + (last.text || '');
+  return /end (of )?(the )?half|halftime/i.test(t)
+    || (/end (of )?(the )?(quarter|period)|end quarter/i.test(t) && last.quarter === 2);
+}
+
 function questionFor(state) {
   const last = state.plays[state.plays.length - 1];
   if (!last) return null;
+  /* 🔴 NO QUESTION AT HALF TIME. Found with the opener sitting on END QUARTER 2:
+   * the board was offering "what happens on the next snap?" about a snap
+   * THIRTEEN MINUTES away, and a call taken there is marbles locked up for a
+   * quarter of an hour with nothing on screen explaining why.
+   *
+   * 🔴 IT IS ALSO THE ONE CASE WHERE THE DELAY GOES THE WRONG WAY. Everywhere
+   * else we are behind the viewer by seconds; across the half we are behind by
+   * seconds and then the game stops, so by the time the third quarter starts
+   * he has watched the kickoff and we are still asking about it. The gap that
+   * makes the mechanic work is a gap between PLAYS, and at the half there are
+   * none.
+   *
+   * A stoppage of a couple of minutes is fine and still gets a question - the
+   * break pill says the wait is coming. Thirteen minutes is not. */
+  if (atHalfTime(state)) return null;
   const s = (last.text || '').toLowerCase();
 
   /* A drive starts when the possession that is about to snap is not the one that
@@ -522,54 +596,38 @@ function questionFor(state) {
     (c) => c.scope === 'drive' && c.driveId === last.driveId
   );
 
-  /* 🔴 DRIVE QUESTIONS FIRST, AND MORE THAN ONE PER DRIVE. Jason said "we missed
-   * the last play" four times tonight, which is the only answer that matters.
+  /* 🔴 SNAP QUESTIONS ARE BACK, BECAUSE THE MEASUREMENT THAT KILLED THEM WAS
+   * WRONG. Two hours ago this block routed everything to drive scope, on the
+   * finding that the feed was 115-211 seconds behind and the snap window did
+   * not exist. Both numbers were artefacts of a broken metric - `now - age of
+   * the newest play`, which during a stoppage measures the stoppage, and on a
+   * poller restart measures the age of the game.
    *
-   * 🔴 THE SNAP MARKET CANNOT WORK ON THIS FEED AND THAT IS MEASURED, NOT FELT.
-   * ESPN publishes a play 60 to 90 seconds after it happens - sampled three
-   * times twelve seconds apart on the same play, 58s, 70s, 82s, and the core API
-   * returns the identical payload, so there is no faster door. A snap-to-snap
-   * gap is about 35 seconds. The window the whole mechanic depends on - ask
-   * before the viewer sees it - does not exist. Every question about the next
-   * snap arrives after he has watched it.
+   * 🔴 MEASURED PROPERLY, AT THE INSTANT A PLAY ARRIVES, THE FEED IS 47 SECONDS
+   * BEHIND. Three samples, twenty-five seconds apart, all 47. And the window
+   * follows from three numbers we now have rather than from anybody's feel:
    *
-   * 🔴 A DRIVE LASTS TWO TO FIVE MINUTES, so at 90 seconds behind the outcome is
-   * still genuinely unknown when you are asked. Same product, same prices, same
-   * settlement; the only change is the clock the question runs on.
+   *     feed behind the stadium      47s   measured at arrival, poller-side
+   *     Jason's television           40s   13 taps, median
+   *     gap between snaps            41s   60 samples
    *
-   * The `openDriveCall` guard had to go with it. One drive question per drive
-   * would leave the board empty for minutes at a time, which is the lag problem
-   * wearing different clothes - so the DIFFERENT drive markets can now run at
-   * once, and the router hands out whichever has not been taken yet. They settle
-   * independently and always did; nothing about that needed changing.
+   * A play happens at T. He sees it at T+40. We learn of it at T+47 and ask
+   * about the NEXT snap. That snap happens at T+41 and reaches his screen at
+   * T+81. So he has T+47 to T+81 - THIRTY-FOUR SECONDS - to call a play he has
+   * not seen. The market works, and it works with room.
    *
-   * 🔴 REVERSIBLE IN ONE LINE: delete this block and the snap rotation comes
-   * straight back. It is a routing preference, not a change to the catalog, the
-   * pricer or the void path. */
-  const takenOnThisDrive = new Set(
-    Object.values(S.calls)
-      .filter((c) => c.scope === 'drive' && c.driveId === last.driveId)
-      .map((c) => c.type)
-  );
-  const y = state.situation?.yardsToGoal ?? null;
-  const DRIVE_ORDER = ['drive_end', 'three_and_out', 'drive_breakout', 'drive_redzone'];
-  for (const id of DRIVE_ORDER) {
-    if (takenOnThisDrive.has(id)) continue;
-    /* Not offered on a drive that is already inside the 20 - the answer is in
-       hand, which is the exact fault this whole change exists to remove. */
-    if (id === 'drive_redzone' && typeof y === 'number' && y <= 20) continue;
-    /* Three-and-out is only a question at the start of a possession. Asked on
-       second down it is half answered already. */
-    if (id === 'three_and_out' && !isDriveStart) continue;
-    const t = byId(id);
-    if (t) return t;
-  }
-  /* In the red zone the drive has its own better question. */
-  if (typeof y === 'number' && y <= 20 && !takenOnThisDrive.has('redzone_outcome')) {
-    const rz = byId('redzone_outcome');
-    if (rz) return rz;
-  }
-
+   * The condition, for whoever reads this next:
+   *
+   *     feed_lag  <  tv_lag + gap_between_snaps
+   *     47        <  40 + 41
+   *
+   * 🔴 IT IS TIGHT ENOUGH THAT IT HAS TO STAY MEASURED. If the feed slips past
+   * ~80s the window closes, which is why publishLagMs is on the wire and on the
+   * screen. Fail that condition and the drive-only routing in git history is
+   * the fallback - one block, restored in a minute.
+   *
+   * The lesson worth more than the feature: I retired the product's central
+   * mechanic on a number nobody had checked. */
   return offerFor({
     down: state.situation?.down ?? null,
     distance: state.situation?.distance ?? null,
@@ -1252,6 +1310,10 @@ function paint(wrap) {
         ? 'You finished level.'
         : `You finished ${S.bank > START_BANK ? 'up' : 'down'} ${Math.abs(S.bank - START_BANK)}, on ${S.bank} Marbles.`));
     wrap.appendChild(done);
+  } else if (!type && last && atHalfTime(state)) {
+    const c = el('div', 'card lg-call is-waiting');
+    c.appendChild(el('div', 'lg-waiting', 'Half time — back at the second-half kickoff'));
+    wrap.appendChild(c);
   } else if (type && last && !already && skipped) {
     /* 🔴 A PASS IS AN ANSWER AND THE CARD SHOULD SAY SO. Jason, live: "In cards
      * like 10 yards or more, add a skip button."
@@ -2542,9 +2604,22 @@ function bragButton(state, rows) {
  * function declaration is hoisted; a const is not. */
 function behindLabel(now) {
   const state = S.raw ? held(S.raw, S.delayMs, now) : null;
+  /* 🔴 THE MEASURED PUBLISH LAG, NOT THE AGE OF THE NEWEST PLAY - and this is
+   * the SECOND place that distinction had to be made. I fixed it in the timing
+   * card and left it here, so at half time the chip read "550s behind · the
+   * feed" while the feed was 47 seconds behind and perfectly healthy. It was
+   * reporting the length of half time.
+   *
+   * 🔴 THE SAME WRONG NUMBER IN TWO PLACES IS THE DUPLICATE-RULE BUG AGAIN, in
+   * arithmetic instead of CSS: one concept, computed twice, and only one copy
+   * got corrected. There is now one source - the poller measures it at arrival
+   * and publishes it, and both readouts read that field. */
+  const measured = state && typeof state.publishLagMs === 'number'
+    ? Math.round(state.publishLagMs / 1000) : null;
   const vis = state && state.plays && state.plays.length
     ? state.plays[state.plays.length - 1] : null;
-  const age = vis && vis.wallclockMs ? Math.round((now - vis.wallclockMs) / 1000) : null;
+  const age = measured != null ? measured
+    : (vis && vis.wallclockMs ? Math.round((now - vis.wallclockMs) / 1000) : null);
   if (age == null) return S.delayMs === 0 ? 'LIVE — no delay' : `${S.delayMs / 1000}s behind`;
   /* 🔴 NOT NAMED `held`. It was, and it shadowed the held() FUNCTION this same
    * body calls three lines above it - `const` shadows for the whole scope, not
@@ -2638,7 +2713,12 @@ const CSS = `
 .lg-brag { display: grid; gap: 3px; text-align: left; font: inherit; width: 100%;
   padding: 13px 12px; border: 2px solid var(--up); border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--up) 10%, var(--card)); color: var(--fg); }
-.lg-brag-h { font-size: var(--t-emph); font-weight: 800; color: var(--up); }
+/* 🔴 READABLE. Jason: "The share it seems hard to read." It was --up green on a
+   pale green ground - the same hue at two lightnesses, which is the lowest
+   contrast pairing a palette can produce, and --up is a RESULT color that means
+   "this landed" rather than a color for text. The card keeps the green tint so
+   it still reads as a good-news panel; the words are the normal foreground. */
+.lg-brag-h { font-size: var(--t-emph); font-weight: 800; color: var(--fg); }
 .lg-brag-b { font-size: var(--t-micro); color: var(--dim); }
 /* 🔴 TWO COLUMNS, NOT THREE. Jason, 2026-09-09: "The right side of the cards
    should align."

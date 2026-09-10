@@ -458,7 +458,17 @@ export function detect(
 
     /* ---- fourth down ------------------------------------------------ */
     // Reference: does not repeat for the same offense on consecutive snaps.
-    if (wasFourth && !admin && !(prevDown4Team !== null && prevDown4Team === offense)) {
+    /* 🔴 A PUNT ON FOURTH DOWN IS NOT A MOMENT. Jason, looking at the card:
+     * "Here are the big moments. Not that big." Three of the four were punts,
+     * filed as `fourth_down` NOTABLE - because every 4th-down play qualified,
+     * and most 4th downs are punts.
+     *
+     * What makes fourth down interesting is the DECISION to play it. A punt is
+     * the absence of that decision, and a field goal is its own event with its
+     * own row. So this fires when they went for it, which is the thing worth
+     * looking up for. */
+    if (wasFourth && !admin && !punt && !isFieldGoal
+      && !(prevDown4Team !== null && prevDown4Team === offense)) {
       add('fourth_down', NOTABLE, `4th & ${p.distance ?? '?'} — ${off}`, clean, `4d:${p.id}`);
     }
     prevDown4Team = admin ? prevDown4Team : (wasFourth ? offense : null);
@@ -481,7 +491,13 @@ export function detect(
     /* ---- big play ---------------------------------------------------- */
     // A 30-yard kick return is not a big play. The reference's rule, kept —
     // and a scoring play already speaks for itself, so it is excluded too.
-    if (!admin && !kickoff && !punt && !touchdown && !isFieldGoal &&
+    /* 🔴 AND THE KICKOFF GUARD HAS TO READ THE TEXT, NOT ONLY THE FLAG. A 28-yard
+     * kickoff return came through as a big play with `kickoff` false - the
+     * comment above already says a kick return is not a big play, and the rule
+     * was right while the flag it depended on was not. The feed writes
+     * "A.Borregales kicks 63 yards from NE 35", which is unambiguous. */
+    const looksLikeKick = /kicks\s+\d+\s+yards\s+from|kickoff/i.test(p.text || '');
+    if (!admin && !kickoff && !looksLikeKick && !punt && !touchdown && !isFieldGoal &&
       p.yards >= cfg.bigPlayYards) {
       add('big_play', NOTABLE, `${p.yards} yards — ${off}`, clean, `bp:${p.id}`);
     }

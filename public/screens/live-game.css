@@ -73,3 +73,8 @@
 .scr-live-game .lg-tvlag-k { font-size: var(--t-body); color: var(--dim); }
 .scr-live-game .lg-tvlag-v { font-size: var(--t-emph); font-weight: 800; }
 .scr-live-game .lg-tvlag-n2 { font-size: var(--t-micro); color: var(--dim); }
+
+/* The tap landed. Green is already this app's word for "landed" on the up/down
+   scale, so it needs no explaining, and it reverts itself in 900ms. */
+.scr-live-game .lg-tvlag-go { transition: background-color .12s ease; }
+.scr-live-game .lg-tvlag-go.is-hit { background: var(--up); }
