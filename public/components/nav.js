@@ -192,6 +192,21 @@ export const NAV_CSS = [
      passes under the pill instead of being cut by its edge. */
   '.ag-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;',
   '  grid-template-columns: repeat(4, 1fr); gap: 2px;',
+  /* 🔴 TRANSLUCENT, WITH THE OPAQUE VERSION AS THE FLOOR. Jason, 2026-09-10:
+     "Can the nav bar be transparent to some extent?" - asked one message after
+     the scrim stopped painting a grey plinth under it, and the two are the same
+     idea arriving twice: a bar only reads as floating if the page is visibly
+     behind it.
+
+     🔴 THE DECLARATION ORDER IS LOAD-BEARING. `var(--card)` stays as the plain
+     background and the translucent version is applied only inside @supports.
+     Without a working backdrop-filter, 70% white over a moving scoreboard is
+     not "subtle", it is unreadable - the icons sit on whatever colour happens
+     to be passing underneath. The blur is what makes transparency legible, so
+     transparency is not applied unless the blur is.
+
+     Safari needs the -webkit- prefix on iOS and it is where this will mostly be
+     seen, so both the query and the property are doubled. */
   '  background: var(--card); border: 1px solid var(--line);',
   /* 🔴 A LIGHT RING AS WELL AS THE LIFT. Jason: "Add an outline. Light."
      The 1px hairline is there and it is not enough on its own: a white capsule
@@ -231,6 +246,15 @@ export const NAV_CSS = [
   '.ag-nav-ico { width: 24px; height: 24px; transform: translateY(2px); }',
   /* The active pill keeps its own centring - the nudge is on the mark inside. */
   '.ag-nav-item { position: relative; }',
+  /* 70% is the number: enough that a card sliding under the bar is legibly
+     there, not so much that a white icon on it loses its ground. The active
+     tab stays FULLY OPAQUE - a selection that is see-through is a selection
+     you have to squint at, and it is the one element here carrying state. */
+  '@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {',
+  '  .ag-nav { background: color-mix(in srgb, var(--card) 70%, transparent);',
+  '    -webkit-backdrop-filter: blur(18px) saturate(1.6);',
+  '    backdrop-filter: blur(18px) saturate(1.6); }',
+  '}',
   /* THE SCRIM. Not a bar and not a border - a short fade of the page's own
      ground behind the pill, so what scrolls under it goes out on a gradient. An
      edge says "cut off"; a fade says "there is more, and it is behind this".

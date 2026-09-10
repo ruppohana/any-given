@@ -330,14 +330,40 @@ export default {
       }
 
       /* ---- what the poller last pushed ---- */
+      /* The current-week pointer is a bare number, not JSON - served as text
+         so a client can read it without a shape to agree on. */
+      if (/^\/api\/state\/slate:[a-z-]+:current$/.test(p)) {
+        const v = await env.LIVE.get(p.slice('/api/state/'.length));
+        if (!v) return new Response('', { status: 404 });
+        return new Response(v, { headers: { 'content-type': 'text/plain', 'cache-control': 'no-store' } });
+      }
+
       if (p.startsWith('/api/state/')) {
         const key = p.slice('/api/state/'.length);
         const raw = await env.LIVE.get(key);
         if (!raw) return json({ error: 'nothing pushed for that game yet', key }, 404);
-        /* No cache header: KV is already the shared copy, and a stale read here
-         * would be a second layer of staleness on top of the poll interval. */
+        /* 🔴 no-store, EXPLICITLY - and the comment that used to be here was the
+         * bug. It read "No cache header: KV is already the shared copy, and a
+         * stale read here would be a second layer of staleness", which states
+         * the right intent and then relies on OMISSION to achieve it. Omitting
+         * cache-control does not mean "do not cache"; it means "you decide",
+         * and the edge decides yes.
+         *
+         * Caught 2026-09-10, minutes after the college capture was fixed: the
+         * cron wrote 86 games, the key held 86 games, and the app kept drawing
+         * a 24-game week. Same URL with a random query string returned 86
+         * immediately. So the truncation bug was fixed and STILL on screen,
+         * behind a cached copy of itself - the most expensive kind of wrong,
+         * because every check of the source agrees with you.
+         *
+         * The `:current` branch twelve lines above already sends no-store. One
+         * of two adjacent handlers had it, which is how it went unnoticed. */
         return new Response(raw, {
-          headers: { 'content-type': 'application/json; charset=utf-8', 'access-control-allow-origin': '*' }
+          headers: {
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'no-store',
+            'access-control-allow-origin': '*'
+          }
         });
       }
 
