@@ -658,8 +658,15 @@ function teamBlock(ctx, game, side) {
      seventh" - they say "number seven Miami" - but putting the mark first
      would ragged the left edge of the one thing the eye scans down a list of
      86 rows. So it sits after the name and annotates it. */
+  /* 🔴 THE ANNOTATIONS GET THEIR OWN LINE. At 320px - an iPhone SE, the
+     narrowest phone anyone still carries - putting the rank and the record
+     beside the name truncated 26 of 48 names, so "Florida A&M" read as
+     "Florida ...". The name is the only part of the row a person needs to
+     identify the game; the annotations were winning against the thing they
+     annotate. One extra line, and the name gets the whole width. */
+  const meta = el('div', 'p6a-tmeta');
   const rank = side === 'home' ? game.rankHome : game.rankAway;
-  if (num(rank)) b.appendChild(el('span', 'p6a-trank num', '#' + rank));
+  if (num(rank)) meta.appendChild(el('span', 'p6a-trank num', '#' + rank));
 
   /* 🔴 THE RECORD, NOT THE HEAD-TO-HEAD. Jason asked for the all-time series
      and it is not available: it only ever came from the site.api summary,
@@ -668,7 +675,8 @@ function teamBlock(ctx, game, side) {
      a row it answers the better question - "are these two any good" rather
      than "what happened in 2019". */
   const rec = team && team.record;
-  if (rec) b.appendChild(el('span', 'p6a-trec', rec));
+  if (rec) meta.appendChild(el('span', 'p6a-trec', rec));
+  if (meta.childNodes.length) b.appendChild(meta);
 
   /* 🔴 A GAME THAT HAS NOT KICKED HAS NO SCORE, AND 0 IS NOT THE SAME AS
      NONE. `num(sc)` is true for 0, so every scheduled game was rendering a

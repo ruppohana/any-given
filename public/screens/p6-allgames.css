@@ -396,3 +396,48 @@
 .scr-p6-allgames .p6a-trec {
   font-size: 10px; color: var(--dim); flex: 0 0 auto; white-space: nowrap;
 }
+
+/* 🔴 THE RANK AND RECORD GO UNDER THE NAME, NOT BESIDE IT.
+   Measured at 320px - an iPhone SE, which is the narrowest phone anyone still
+   carries: 26 of 48 team names truncated, "Florida A&M" rendering as
+   "Florida ...". The row was crest + name + record + @ + crest + name + rank
+   + record on one line, and the name is the only part of that a person needs
+   to identify the game. Annotations were winning against the thing they
+   annotate.
+
+   Stacking them costs one line of height on a 55px summary and gives the name
+   the whole width. It also reads better: "Miami / #7 1-0" is a heading with a
+   subtitle, which is what it is. */
+.scr-p6-allgames .p6a-team {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  align-items: center; gap: 6px; min-width: 0;
+}
+/* The home side mirrors: crest on the right, text right-aligned into it, so
+   the two teams read outward from the @ rather than both leftward. */
+.scr-p6-allgames .p6a-team[data-side="home"] { grid-template-columns: minmax(0, 1fr) auto; }
+.scr-p6-allgames .p6a-team[data-side="home"] .tchip { order: 2; }
+.scr-p6-allgames .p6a-team[data-side="home"] .p6a-tname,
+.scr-p6-allgames .p6a-team[data-side="home"] .p6a-tmeta { text-align: right; justify-content: flex-end; }
+
+.scr-p6-allgames .p6a-tmeta {
+  display: flex; align-items: baseline; gap: 5px; min-width: 0; line-height: 1.1;
+}
+/* A score belongs with the name's weight, not with the annotations - it is the
+   subject of a live row, so it stays on the name line. */
+.scr-p6-allgames .p6a-team > .p6a-tsc { grid-column: 2; justify-self: end; }
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc { grid-column: 1; justify-self: start; }
+
+/* Explicit placement, because three children in a two-column grid otherwise
+   wrap the third onto a new row in column one - under the crest, not under
+   the name. The crest spans both rows so it stays optically centred against
+   the two-line block. */
+.scr-p6-allgames .p6a-team { grid-template-rows: auto auto; row-gap: 1px; }
+.scr-p6-allgames .p6a-team > .tchip { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+.scr-p6-allgames .p6a-team > .p6a-tname { grid-column: 2; grid-row: 1; }
+.scr-p6-allgames .p6a-team > .p6a-tmeta { grid-column: 2; grid-row: 2; }
+.scr-p6-allgames .p6a-team[data-side="home"] > .tchip { grid-column: 2; grid-row: 1 / span 2; }
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tname { grid-column: 1; grid-row: 1; }
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tmeta { grid-column: 1; grid-row: 2; }
+/* A team with no rank and no record has no second row, so the name centres
+   on its own rather than sitting high against an empty band. */
+.scr-p6-allgames .p6a-team:not(:has(.p6a-tmeta)) > .p6a-tname { grid-row: 1 / span 2; align-self: center; }
