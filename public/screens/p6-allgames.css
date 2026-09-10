@@ -304,3 +304,58 @@
 .p6-toparlay-h { font-size: var(--t-body); font-weight: 800; color: var(--accent); }
 .p6-toparlay-b { font-size: var(--t-micro); color: var(--dim); }
 .p6-toparlay:active { background: var(--surface-1); }
+
+/* ── L2 BECOMES A DISCLOSURE ──────────────────────────────────────────
+   🔴 THE GAME OPENS RATHER THAN SITTING OPEN. Measured with the real 86-game
+   slate at 375x812: the board was 130,355px, 161 phone screens, with 2,956
+   tap targets in one document. It was not slow - 774ms, 10MB heap - it was
+   unnavigable. See the note on gameCard for the per-group numbers.
+
+   The summary is now the closed row: time, channel, spread, and the matchup
+   under it. Everything else is one tap away. */
+.scr-p6-allgames .p6a-game > .p6a-top {
+  cursor: pointer; list-style: none; flex-wrap: wrap;
+  /* The row is its own tap target and it has to clear the 44px minimum on its
+     own, because the teams line inside it is not always tall enough. */
+  min-height: var(--tap-min); align-content: center; row-gap: 4px;
+}
+/* Safari draws its own triangle and it is the wrong shape and the wrong side. */
+.scr-p6-allgames .p6a-game > .p6a-top::-webkit-details-marker { display: none; }
+.scr-p6-allgames .p6a-game > .p6a-top::marker { content: ''; }
+
+/* The matchup moved INSIDE the summary, so it needs the full width back -
+   a flex row would otherwise squeeze it against the time and the spread.
+   🔴 `order` PUTS IT ON THE SECOND LINE WITHOUT PUTTING THE CHEVRON THERE
+   TOO. A ::after is always last in DOM order, so with everything at the
+   default order the full-width teams row wrapped first and pushed the mark
+   onto a third line of its own, left-aligned under the crests - which read
+   as a stray glyph rather than as "this opens". Ordering the teams AFTER the
+   mark keeps the mark on the metadata line where the tap target is. */
+.scr-p6-allgames .p6a-game > .p6a-top > .p6a-teams { flex: 1 0 100%; order: 3; }
+
+/* The headline number on the closed row. Accent, because it is the only
+   figure on a collapsed card and the thing most people came for. */
+.scr-p6-allgames .p6a-sprd {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: var(--t-micro); font-weight: 800; color: var(--accent); white-space: nowrap;
+}
+/* A pill and a spread both want the right-hand end. The pill is a STATE and
+   outranks a number, so when both are present the spread gives up its auto
+   margin and sits beside the channel instead. */
+.scr-p6-allgames .p6a-game > .p6a-top:has(.p6a-pill) .p6a-sprd { margin-left: 0; }
+
+/* 🔴 A HINT THAT THERE IS MORE, because a row with no affordance is a row
+   nobody taps. It rotates rather than swapping glyphs: one element, and the
+   open state cannot get out of step with the mark. */
+.scr-p6-allgames .p6a-game > .p6a-top::after {
+  content: ''; flex: 0 0 auto; width: 7px; height: 7px; margin-left: 2px; order: 2;
+  border-right: 2px solid var(--dim); border-bottom: 2px solid var(--dim);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform .15s ease;
+}
+.scr-p6-allgames .p6a-game[open] > .p6a-top::after {
+  transform: rotate(-135deg) translate(-2px, -2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .scr-p6-allgames .p6a-game > .p6a-top::after { transition: none; }
+}

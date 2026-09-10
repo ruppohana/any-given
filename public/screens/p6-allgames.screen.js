@@ -868,14 +868,47 @@ const PILL = { in_progress: 'Live', final: 'Final', locked: 'Closed' };
  * the board is finished, and a finished game collapses to the two lines that are
  * still about you.
  */
+/* 🔴 A GAME OPENS. IT DOES NOT SIT OPEN. Measured on the deployed board with
+ * the real 86-game slate at 375x812, before this change:
+ *
+ *     Sat morning    17 games   25,572px    31 screens
+ *     Sat afternoon  29 games   44,624px    55 screens
+ *     Sat evening    28 games   41,343px    51 screens
+ *     THE WHOLE WEEK 86 games  130,355px   161 SCREENS
+ *
+ * plus 2,956 tap targets in one document. It painted in 774ms on a 10MB heap,
+ * so nothing was SLOW - it was unnavigable. Reaching the Saturday night games
+ * meant scrolling past 149 screens of other people's football.
+ *
+ * The day and window grouping was already here and already right; what it
+ * grouped was games that each rendered all fifteen markets inline, about
+ * 1,500px apiece. Invisible at three fixture games, and the entire board at
+ * eighty-six. The doctrine line "sixty games answered with a search field
+ * instead of grouping" was satisfied to the letter and missed in substance:
+ * grouping that still costs 161 screens has not grouped anything.
+ *
+ * 🔴 THE CLOSED ROW STILL CARRIES THE SPREAD, which is what makes this a
+ * summary rather than a lid. A row you must open to learn anything is a menu,
+ * and it would trade 161 screens of scrolling for 86 taps. Teams, time and
+ * the number most people came for, on one line; everything else one tap away.
+ *
+ * Same pattern the parlay screen already uses, which renders the same 86
+ * games comfortably - so this is adopting a solved problem rather than
+ * inventing one. */
 function gameCard(ctx, game) {
-  const card = el('article', 'p6a-game');
+  const card = el('details', 'p6a-game');
   card.dataset.gameId = game.id;
   card.dataset.status = game.status;
   const locked = isLocked(game, ctx.now);
   if (locked) card.dataset.locked = 'true';
 
-  const top = el('div', 'p6a-top');
+  /* 🔴 A GAME YOU HAVE STAKED ON OPENS ITSELF, and only that. It is the one
+     card whose contents you have already asked to see, and re-finding your
+     own pick behind a tap is the worst version of this change. */
+  const staked0 = ctx.store[game.id] || {};
+  if (Object.keys(staked0).length) card.open = true;
+
+  const top = el('summary', 'p6a-top');
   top.appendChild(el('span', 'p6a-time num', timeLabel(game.kickoffUtc)));
   if (game.broadcast) top.appendChild(el('span', 'p6a-chan', game.broadcast));
   /* Only the states the card cannot show by itself. There is no chip for "open"
@@ -888,11 +921,21 @@ function gameCard(ctx, game) {
     p.dataset.state = game.status === 'scheduled' ? 'locked' : game.status;
     top.appendChild(p);
   }
+  /* The headline number, on the closed row. ESPN's home convention, quoted on
+     the favourite so it reads the way somebody would say it out loud. */
+  if (num(game.spread)) {
+    const fav = game.spread <= 0 ? game.home : game.away;
+    const abbr = (fav && fav.abbrev) || '';
+    top.appendChild(el('span', 'p6a-sprd num',
+      abbr + ' ' + spreadText(game.spread, game.spread <= 0 ? 'home' : 'away')));
+  }
   card.appendChild(top);
 
+  /* The matchup sits inside the summary so the closed row shows who is
+     playing - a time and a spread with no teams on it is a row about nothing. */
   const teams = el('div', 'p6a-teams');
   teams.append(teamBlock(ctx, game, 'away'), el('span', 'p6a-at', '@'), teamBlock(ctx, game, 'home'));
-  card.appendChild(teams);
+  top.appendChild(teams);
 
   const offered = marketsFor(game, ctx.markets);
   const staked = ctx.store[game.id] || {};
