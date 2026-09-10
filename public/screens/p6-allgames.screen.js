@@ -82,6 +82,26 @@ export const states = ['ready', 'empty', 'loading', 'offline', 'error'];
  *  cap, because a marble is a marble wherever it is staked. */
 export const STAKES = [5, 10, 25];
 export const DEFAULT_STAKE = 5;
+
+/* 🔴 EVERY PICK ON THIS BOARD IS 5. Jason, 2026-09-10: "Flat 5 except for
+ * the head to head."
+ *
+ * The ladder was here from the day this screen was three fixture games, and
+ * at 86 games it was 86 copies of a control almost nobody varies row to row.
+ * It also caused a bug this afternoon - tapping a stake rebuilt the card and
+ * collapsed it.
+ *
+ * 🔴 BUT THE REAL ARGUMENT IS THAT IT WAS NEVER A CHOICE. This screen has no
+ * bank; its own header says so - "No balance, because this screen does not
+ * own the bank." Nothing constrains the stake, so a person could put 25 on
+ * all 1,290 markets and give up nothing. A size with no budget behind it is
+ * not sizing, it is a bigger number, and anybody playing to win picks the
+ * biggest one on every row.
+ *
+ * The LIVE board is where the ladder belongs and where it stays: 200 marbles
+ * a game, so choosing 25 genuinely costs you calls later. That is the same
+ * control doing real work because there is something to spend. */
+export const FLAT_STAKE = 5;
 export const MAX_PAYOUT = 6;
 
 /** 🔴 THE BALANCE IS CALLED MARBLES. Never credits, never coins, never chips,
@@ -643,7 +663,15 @@ function settlementFor(game, market, pick) {
  *  abbreviation; the name is beside it for anyone who does not know the crest. */
 function teamBlock(ctx, game, side) {
   const team = game[side];
-  const b = el('div', 'p6a-team');
+  /* 🔴 THE TEAM BLOCK IS THE TAP TARGET when a headline market is on. Jason:
+   * "I would love to pick the winner, against the spread or money line
+   * without having to open the full pull down." Making the whole block the
+   * button rather than adding a small one beside it keeps the row two lines
+   * and gives the target the width of a team - which is the difference
+   * between a thumb and a stylus at 320px. */
+  const hm = ctx.headlineMarket ? ctx.headlineMarket(game) : null;
+  const b = el(hm ? 'button' : 'div', 'p6a-team');
+  if (hm) b.type = 'button';
   b.dataset.side = side;
   /* --team-a / --team-b, PER ELEMENT. Never at :root - this screen can be 131
    * games and ~260 teams on one scroll. */
@@ -676,6 +704,39 @@ function teamBlock(ctx, game, side) {
      than "what happened in 2019". */
   const rec = team && team.record;
   if (rec) meta.appendChild(el('span', 'p6a-trec', rec));
+  /* 🔴 THE PRICE, ON THE CLOSED ROW. This is the differentiator and it does
+     not get an exception for being on a summary - if a side is tappable here
+     it shows what it pays here. */
+  if (hm) {
+    const choice = { id: side };
+    const price = priceFor(game, hm, choice, ctx.idsFor(game), ctx.sport);
+    if (hm.needsLine === 'spread') {
+      meta.appendChild(el('span', 'p6a-tline num', spreadText(game.spread, side)));
+    }
+    meta.appendChild(el('span', 'p6a-tprice num', priceLabel(price)));
+
+    const pick = ctx.pickFor(game.id, hm.id);
+    const mine = !!(pick && pick.choice === side);
+    if (mine) b.dataset.staked = 'on';
+    b.setAttribute('aria-pressed', String(mine));
+    const locked = isLocked(game, ctx.now);
+    b.disabled = locked;
+    b.setAttribute('aria-label',
+      ((team && (team.short || team.name)) || side) + ' · ' + hm.label
+      + ' at ' + priceLabel(price) + ' · ' + FLAT_STAKE + ' ' + BALANCE_NOUN
+      + (locked ? ' – closed' : ''));
+    if (!locked) {
+      b.addEventListener('click', (e) => {
+        /* 🔴 A BUTTON INSIDE A <summary> STILL TOGGLES THE <details>. The
+           click bubbles to the summary and the browser opens the card - so
+           picking a side would unfurl fifteen markets underneath you, which
+           is the exact thing this feature exists to avoid. */
+        e.preventDefault();
+        e.stopPropagation();
+        ctx.onStake(game.id, hm.id, side);
+      });
+    }
+  }
   if (meta.childNodes.length) b.appendChild(meta);
 
   /* 🔴 A GAME THAT HAS NOT KICKED HAS NO SCORE, AND 0 IS NOT THE SAME AS
@@ -984,6 +1045,55 @@ export function filterOptions(games) {
   return out;
 }
 
+/* ------------------------------------------------------------------ *
+ * 🔴 THE HEADLINE PICK - one market, tappable on the CLOSED row.
+ *
+ * Jason: "I would love to pick the winner, against the spread or money line
+ * without having to open the full pull down."
+ *
+ * Collapsing the games fixed the scroll and cost him the common case. Most
+ * picks on a weekly board are one of two questions - who wins, and who
+ * covers - and both were behind a tap that also unfurls thirteen markets
+ * nobody asked for.
+ *
+ * 🔴 WINNER AND MONEYLINE ARE THE SAME MARKET HERE. He named three; there
+ * are two. `winner` is priced off the moneyline - that is the one market on
+ * the board where the two sides differ and the whole reason to take an
+ * underdog - so "moneyline" is what `winner` already is.
+ *
+ * 🔴 AND IT IS ONE CONTROL FOR THE BOARD, NOT ONE PER GAME. The stake ladder
+ * is the cautionary tale sitting right beside this: a per-game control on an
+ * 86-game board is 86 copies of a decision almost nobody varies row to row,
+ * and it caused its own bug this afternoon. Which question you are answering
+ * this week is a property of you, not of the Michigan game.
+ *
+ * Total stays behind the chevron on purpose: Over and Under are not sides, so
+ * they cannot live in the two team blocks without inventing a third layout
+ * for one market.
+ * ------------------------------------------------------------------ */
+
+/* 🔴 PER GAME, NOT PER BOARD - AND THAT IS THE OPPOSITE OF THE STAKE.
+ * Jason: "have the selector of w/ or w/o the spread on each card."
+ *
+ * I put this at board level first, on the argument that had just retired the
+ * stake ladder: 86 copies of a control nobody varies row to row. Wrong here,
+ * and the difference is whether the choice costs anything. The stake had no
+ * budget behind it on this screen, so sizing was free and everybody picks the
+ * biggest number - a control with no tradeoff. Spread-or-moneyline is a real
+ * fork on every single game: you take Miami giving 59.5 on one card and the
+ * moneyline on the next, and which you want is a fact about THAT game.
+ *
+ * A control belongs where the decision is made, and the test is not "how many
+ * copies" - it is whether the copies would ever differ. */
+export const HEADLINE_MARKETS = [
+  { id: 'spread', label: 'Spread' },
+  { id: 'winner', label: 'ML' },
+];
+
+export function headlineKey(sport, week) {
+  return 'ag.allgames.hl.' + sport + '.' + week;
+}
+
 /* 🔴 A GAME OPENS. IT DOES NOT SIT OPEN. Measured on the deployed board with
  * the real 86-game slate at 375x812, before this change:
  *
@@ -1037,9 +1147,43 @@ function gameCard(ctx, game) {
     p.dataset.state = game.status === 'scheduled' ? 'locked' : game.status;
     top.appendChild(p);
   }
-  /* The headline number, on the closed row. ESPN's home convention, quoted on
-     the favourite so it reads the way somebody would say it out loud. */
-  if (num(game.spread)) {
+  /* 🔴 THE SELECTOR TAKES THE SPREAD LABEL'S PLACE, because with the inline
+   * tiles on they were the same fact twice. Line one said "MIA -59.5" and
+   * then both team tiles said "-59.5" and "+59.5" directly underneath it -
+   * the header-repeats-the-row rule this screen's own head() comment already
+   * calls out, arriving one element along.
+   *
+   * Jason: "have the selector of w/ or w/o the spread on each card." When the
+   * card is showing WINNER there is no spread on the tiles, so the label
+   * comes back - it is the one state where it is not a repeat. */
+  const hlNow = ctx.headlineFor(game.id);
+  /* 🔴 NOT `offered` - gameCard already declares that name eighty lines down
+     for the same list, and two `const`s of one name in one function is a
+     parse error, not a shadow. Caught by the module-parse test, which exists
+     because a screen that does not parse is a blank page no unit test can
+     see. */
+  const avail = marketsFor(game, ctx.markets, ctx.now, ctx.sport);
+  const canHeadline = avail.some((m) => m.id === 'spread' || m.id === 'winner');
+  if (canHeadline && !locked) {
+    const seg = el('div', 'p6a-seg');
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', 'What this row lets you pick');
+    for (const m of HEADLINE_MARKETS) {
+      if (!avail.some((o) => o.id === m.id)) continue;
+      const b = el('button', 'p6a-segb');
+      b.type = 'button';
+      b.textContent = m.label;
+      if (m.id === hlNow) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
+      b.addEventListener('click', (e) => {
+        /* Inside a <summary>: without these the browser also toggles the
+           card, so changing the question would unfurl fifteen markets. */
+        e.preventDefault(); e.stopPropagation();
+        ctx.setHeadline(game.id, m.id);
+      });
+      seg.appendChild(b);
+    }
+    if (seg.childNodes.length > 1) top.appendChild(seg);
+  } else if (num(game.spread)) {
     const fav = game.spread <= 0 ? game.home : game.away;
     const abbr = (fav && fav.abbrev) || '';
     top.appendChild(el('span', 'p6a-sprd num',
@@ -1077,7 +1221,6 @@ function gameCard(ctx, game) {
     return card;
   }
 
-  card.appendChild(ladder(ctx, game));
   const list = el('div', 'p6a-mkts');
   for (const m of offered) list.appendChild(marketBlock(ctx, game, m));
   card.appendChild(list);
@@ -1195,6 +1338,19 @@ export function render(root, data, state) {
   bar.appendChild(tally);
   root.appendChild(bar);
 
+  /* 🔴 DECLARED ABOVE ctx, WHICH CLOSES OVER IT. A `let` referenced by a
+   * function defined earlier in the same scope is fine until something calls
+   * that function before the declaration runs - and this file has been bitten
+   * by five temporal-dead-zone faults already, one of which blanked the whole
+   * screen below the scorebug. Declaring it first removes the question rather
+   * than answering it. */
+  const fsport = (d && d.sport) || chosenSport();
+  /* Which market each card offers inline, by game id. Defaults to the spread
+     - it is the number already printed on the row, so the tiles agree with
+     the headline without anybody choosing anything. */
+  let hlMap = {};
+  try { hlMap = JSON.parse(localStorage.getItem(headlineKey(fsport, week)) || '{}') || {}; } catch { hlMap = {}; }
+
   const ctx = {
     now: num(d.now) ? d.now : Date.now(),
     sport: d.sport || 'college-football',
@@ -1210,9 +1366,26 @@ export function render(root, data, state) {
       const g = this.store[gameId];
       return (g && g[marketId]) || null;
     },
-    stakeFor(gameId) {
-      if (this.steps[gameId] == null) this.steps[gameId] = stakeForGame(this.store, gameId);
-      return this.steps[gameId];
+    /* The market the closed row lets you pick, for THIS game - null when the
+       game cannot offer it, so a row without a posted spread simply has no
+       inline tiles rather than two that say 2.00x for no reason. */
+    headlineFor(gameId) {
+      const v = hlMap[gameId];
+      return HEADLINE_MARKETS.some((m) => m.id === v) ? v : 'spread';
+    },
+    setHeadline(gameId, id) {
+      hlMap[gameId] = id;
+      try { localStorage.setItem(headlineKey(fsport, week), JSON.stringify(hlMap)); } catch { /* private */ }
+      this.repaint(gameId);
+    },
+    headlineMarket(game) {
+      const m = GAME_MARKETS.find((x) => x.id === this.headlineFor(game.id));
+      if (!m) return null;
+      return marketsFor(game, [m], this.now, this.sport).length ? m : null;
+    },
+    stakeFor() {
+      /* One number, for every game and every market. See FLAT_STAKE. */
+      return FLAT_STAKE;
     },
     /* The four identity fields sideOfChoice matches against, computed once per
      * game rather than once per choice. */
@@ -1288,7 +1461,6 @@ export function render(root, data, state) {
      "which league am I in" and "which conference do I care about" are the
      same answer every week for most people. */
   let filter = FILTER_ALL;
-  const fsport = (d && d.sport) || chosenSport();
   try { filter = localStorage.getItem(filterKey(fsport)) || FILTER_ALL; } catch { /* private mode */ }
   const opts = filterOptions(games);
   /* A stored filter for a conference that is not playing this week would
@@ -1310,7 +1482,12 @@ export function render(root, data, state) {
     };
     chips.appendChild(b);
   }
+  /* Only fade the edge when there is something past it. */
+  requestAnimationFrame(() => {
+    if (chips.scrollWidth > chips.clientWidth + 2) chips.classList.add('is-scrollable');
+  });
   root.appendChild(chips);
+
 
   const shown = games.filter((g) => gamePasses(g, filter));
 

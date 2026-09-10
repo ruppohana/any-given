@@ -606,12 +606,28 @@ test('every product screen uses the shared header, and it carries the league mar
    * width as they change value make a header jitter on a timer-driven screen. */
   assert.match(HEAD, /\.ag-hd-s[^}]*tabular-nums/s, 'the header sub line must be tabular');
 
-  /* 🔴 THE MENU IS MOVED INTO THE HEADER, NOT CLONED. There is exactly one #gear
-   * in the document; cloning it would need a second listener and the two would
-   * drift the first time one was changed. */
-  assert.match(HEAD, /getElementById\('gear'\)/, 'the header must adopt the one menu button');
-  assert.match(HEAD, /\.ag-hd \.ag-gear[^}]*position:\s*static/s,
-    'the menu must stop floating once it is inside the header');
+  /* 🔴 INVERTED 2026-09-10, ON PURPOSE AND ON JASON'S INSTRUCTION. This
+   * asserted that the header ADOPTS the one #gear, which was right while the
+   * only alternative was a button floating loose in the corner.
+   *
+   * He asked for "a header at the top that stays put with the ellipses", so
+   * the menu now lives in .ag-topbar - a sticky bar outside #root. The page
+   * header must NOT take it back: two owners of one singleton meant boot put
+   * the gear in the bar and the first render pulled it out into a header that
+   * scrolls away, so the control was right for one frame and then gone.
+   * Jason: "Good but I lost the ellipsis."
+   *
+   * The old hazard is retired with it rather than merely dodged: the gear used
+   * to be adopted into a container screens empty with `root.innerHTML = ''`,
+   * which once deleted the button until a reload. Nothing inside #root can
+   * touch it now. */
+  assert.doesNotMatch(HEAD, /getElementById\('gear'\)/,
+    'the page header must NOT adopt the menu - the top bar owns it');
+  const SHELL = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(SHELL, /<header class="ag-topbar">[\s\S]*id="gear"[\s\S]*<\/header>/,
+    'the menu must be inside the sticky top bar');
+  assert.match(SHELL, /\.ag-topbar\s*\{[^}]*position:\s*sticky/s,
+    'the top bar must be sticky so the menu stays put');
 
   /* 🔴 THE LEAGUE IS A MARK, NOT THE WORD. Jason: "can we consistently have the
    * ncaa logo and an icon of a football? Consistency and anchoring?" A pill

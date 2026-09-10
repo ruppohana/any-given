@@ -97,6 +97,22 @@ function currentRoute() {
   return ROUTES.find((r) => r.id === id) || ROUTES.find((r) => r.id === 'home') || ROUTES[0];
 }
 
+const TITLES = {
+  home: 'Any Given',
+  live: 'Call it live',
+  allgames: 'All games',
+  buildparlay: 'Build a parlay',
+  slate: 'The slate',
+  slate131: 'The slate',
+  picks: 'My picks',
+  parlay: 'The parlay',
+  standings: 'Standings',
+  create: 'Create a pool',
+  invite: 'Invite',
+  rules: 'Rules',
+  settings: 'Settings',
+};
+
 async function mount() {
   const route = currentRoute();
   const root = document.getElementById('root');
@@ -113,6 +129,14 @@ async function mount() {
 
   ensureCss(route.screen);
   root.classList.add('scr-' + route.screen);
+
+  /* 🔴 THE BAR SAYS WHERE YOU ARE. A persistent header with a fixed word on it
+   * is furniture; one that names the screen is orientation, and it is the only
+   * thing on this app that survives a scroll. TITLES is deliberately short of
+   * the route list - a route with no entry keeps "Any Given", which is right
+   * for the design-harness routes: they are not places a person navigates to. */
+  const tb = document.getElementById('topbar-title');
+  if (tb) tb.textContent = TITLES[route.id] || 'Any Given';
 
   /* 🔴 SAY WHEN THE GAMES ARE NOT REAL. Jason, 2026-09-08, looking at My picks:
    * "These are not correct games, right?" They are not. Notre Dame did not beat

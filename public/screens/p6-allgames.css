@@ -368,14 +368,24 @@
   position: sticky; top: 0; z-index: 4;
   display: flex; gap: 6px; padding: 8px 2px;
   background: var(--bg);
-  /* 🔴 IT KEEPS OUT OF THE MENU'S LANE. The kebab is `position: fixed` at the
-     top-right corner of the VIEWPORT, so a sticky row pinned to top: 0 runs
-     straight underneath it - and a chip that stops mid-scroll under a 44px
-     button is a chip you cannot read or tap. Ending the scroller short of
-     that corner means no chip can ever be there, which is a stronger fix
-     than padding: padding leaves a gap at the end of the scroll and content
-     still travels through it on the way. */
-  margin-right: 46px;
+  /* 🔴 FULL WIDTH AGAIN, AND IT STICKS BELOW THE BAR. The 46px reservation
+     here existed to dodge a menu button floating loose in the corner; the
+     menu now lives in a real top bar that takes its own height, so there is
+     nothing to dodge and the row gets the screen back. Jason: "I don't like
+     the house slider truncated."
+
+     44px is the bar. Hardcoding it is the same hazard as --nav-space at the
+     other end of the page, so it is a token both of them read. */
+  top: var(--topbar-h);
+  /* A scroller cut dead at the edge reads as a broken layout rather than as
+     more content. The fade says "keep going" without adding a control. */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+/* No fade once you reach the end - a permanent one looks like a rendering
+   fault on a row of four chips that all fit. */
+.scr-p6-allgames .p6a-filters:not(.is-scrollable) {
+  -webkit-mask-image: none; mask-image: none;
 }
 .scr-p6-allgames .p6a-filter {
   flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
@@ -449,3 +459,68 @@
 /* A team with no rank and no record has no second row, so the name centres
    on its own rather than sitting high against an empty band. */
 .scr-p6-allgames .p6a-team:not(:has(.p6a-tmeta)) > .p6a-tname { grid-row: 1 / span 2; align-self: center; }
+
+/* ── THE HEADLINE PICK ────────────────────────────────────────────────
+   One control for the board, under the filters. */
+.scr-p6-allgames .p6a-headline {
+  display: flex; align-items: center; gap: 6px; padding: 0 2px 8px;
+}
+.scr-p6-allgames .p6a-headline-l {
+  font-size: 10px; font-weight: 800; letter-spacing: .06em; color: var(--dim);
+}
+.scr-p6-allgames .p6a-hb {
+  font: inherit; font-size: var(--t-micro); font-weight: 700;
+  min-height: 30px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--dim);
+}
+.scr-p6-allgames .p6a-hb[data-on="true"] {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+
+/* The team block, when it is a button. It must not look like a button - it is
+   the row, and a bordered control per side would double the chrome on 86
+   rows. The staked state is what gets the accent. */
+.scr-p6-allgames button.p6a-team {
+  font: inherit; text-align: left; border: 1px solid transparent;
+  border-radius: var(--radius-chip); background: none; color: inherit;
+  padding: 3px 5px; margin: -3px -5px; width: calc(100% + 10px);
+}
+.scr-p6-allgames button.p6a-team[data-side="home"] { text-align: right; }
+.scr-p6-allgames button.p6a-team:active { background: var(--surface-1); }
+.scr-p6-allgames button.p6a-team[data-staked="on"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.scr-p6-allgames button.p6a-team:disabled { opacity: .5; }
+/* The line and the price sit with the record on the meta row. The price is
+   the accent because it is the thing being offered; the line is a fact. */
+.scr-p6-allgames .p6a-tline { font-size: 10px; font-weight: 700; color: var(--fg); flex: 0 0 auto; }
+.scr-p6-allgames .p6a-tprice { font-size: 10px; font-weight: 800; color: var(--accent); flex: 0 0 auto; }
+
+/* ── THE PER-CARD SELECTOR ────────────────────────────────────────────
+   Spread or moneyline, on the row, where the decision is. It takes the
+   place the spread label used to hold: with the inline tiles on, that label
+   was the same number twice. */
+.scr-p6-allgames .p6a-seg {
+  margin-left: auto; flex: 0 0 auto; display: flex; gap: 2px;
+  padding: 2px; border-radius: var(--radius-chip); background: var(--track);
+}
+.scr-p6-allgames .p6a-segb {
+  font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .02em;
+  min-height: 24px; padding: 0 9px; border: 0;
+  border-radius: calc(var(--radius-chip) - 2px);
+  background: transparent; color: var(--dim);
+}
+.scr-p6-allgames .p6a-segb[data-on="true"] { background: var(--card); color: var(--accent); }
+/* A pill and a selector both want the right-hand end; the pill is state and
+   outranks a control, same rule the spread label follows. */
+.scr-p6-allgames .p6a-game > .p6a-top:has(.p6a-pill) .p6a-seg { margin-left: 0; }
+
+/* 🔴 A LITTLE TALLER. Jason: "I would like the cards to be a little taller."
+   At 89px the two lines were touching their own edges - the summary was
+   sized by its content with no room around it, which reads as cramped on a
+   card that is now the primary tap target for a pick. The height comes from
+   padding rather than a fixed min-height so a row that wraps still fits. */
+.scr-p6-allgames .p6a-game > .p6a-top { padding: 9px 4px; row-gap: 7px; }
+.scr-p6-allgames .p6a-game { padding: calc(var(--nest-inset) + 2px); }

@@ -114,21 +114,26 @@ export function pageHeader(opts) {
   const r = document.createElement('div');
   r.className = 'ag-hd-r';
   if (o.right) r.appendChild(o.right);
-  /* 🔴 THE MENU IS MOVED, NOT COPIED - AND THAT NEARLY DESTROYED IT. Jason,
-   * 2026-09-09: "The ellipsis or hamburger is gone."
+  /* 🔴 THE MENU LIVES IN THE TOP BAR NOW, AND THIS NO LONGER TAKES IT.
+   * Jason, 2026-09-10: "Good but I lost the ellipsis."
    *
-   * There is exactly one #gear in the document and this relocates it into
-   * whichever header is on screen, which avoids two copies drifting apart. What
-   * it did not survive is a screen that re-renders with `root.innerHTML = ''`:
-   * that removes the gear along with the header holding it, and because the only
-   * reference to it was getElementById, the next lookup returned null and the
-   * button was gone from the app until a full reload.
+   * There is one #gear in the document and this used to relocate it into
+   * whichever page header was on screen. That was the right answer while the
+   * only alternative was a button floating loose in the corner. It became the
+   * wrong one the moment a persistent .ag-topbar existed: the boot code moved
+   * the gear into the bar, then the first render moved it straight back out
+   * into a header that scrolls away - so the control was correct for about
+   * one frame and then gone.
    *
-   * So the node is remembered here the first time it is seen. Moving a shared
-   * singleton into a container somebody else empties is only safe if something
-   * outside that container still holds it. */
-  const gear = document.getElementById('gear') || KEPT_GEAR;
-  if (gear) { KEPT_GEAR = gear; r.appendChild(gear); }
+   * Two owners of one singleton is the bug. The bar wins, because "stays put"
+   * is the whole reason Jason asked for the bar.
+   *
+   * 🔴 AND THE OLD HAZARD IS GONE WITH IT rather than merely avoided: the gear
+   * used to be adopted into a container that screens empty with
+   * `root.innerHTML = ''`, which once deleted the button from the app until a
+   * reload. The bar is outside `#root`, so nothing any screen does can remove
+   * it, and the KEPT_GEAR rescue this file used to need is no longer load-
+   * bearing. */
   h.appendChild(r);
   return h;
 }

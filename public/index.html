@@ -104,23 +104,38 @@
      the top of the live screen, where a delay slider had been living
      permanently. It floats over the shell so it is reachable from every screen
      without any of them having to draw it. */
-  /* 🔴 IT CARRIES ITS OWN GROUND. Jason: "The ellipsis get lost."
-     It was `background: transparent`, which is fine over the page ground and
-     invisible the moment anything scrolls under it - and something always
-     does, because it is FIXED over a scrolling document. The All games filter
-     row made it obvious: a white chip slides beneath a grey glyph on no
-     background and the control disappears into the word SEC.
-     A persistent floating control cannot be transparent. Same argument as the
-     nav pill, which has had a ground and a ring since the day it started
-     floating. */
-  .ag-gear { position: fixed; top: 6px; right: 6px; z-index: 40;
-    width: 44px; height: 44px; display: grid; place-items: center;
+  /* 🔴 A REAL TOP BAR, NOT A BUTTON FLOATING OVER THE PAGE. Jason: "can I
+     have a header at the top stay put with the ellipses and maybe an icon or
+     text that stays put."
+
+     The menu was `position: fixed` on its own in the corner with no bar
+     behind it, which is why it kept getting lost - first over a filter chip,
+     then over a card. Giving it a translucent ground made it legible and left
+     it looking like a sticker. It is not a sticker; it is the app's only
+     persistent control, and the thing that makes a control feel fixed rather
+     than dropped on top is a surface that goes edge to edge.
+
+     Sticky rather than fixed, and a real element in the flow, so it RESERVES
+     its own height. Fixed would put every screen's first line underneath it
+     and need a second number kept in sync by hand - the same class of bug as
+     --nav-space at the other end of the page, which took two goes to get
+     right. */
+  .ag-topbar { position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; gap: 8px;
+    height: 44px; padding: 0 10px 0 12px;
+    background: color-mix(in srgb, var(--bg) 84%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(1.6);
+    backdrop-filter: blur(12px) saturate(1.6);
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+  .ag-topbar-mark { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 5px; }
+  .ag-topbar-t { font-size: var(--t-body); font-weight: 800; letter-spacing: -.01em;
+    color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ag-topbar .spacer { flex: 1 1 auto; }
+  /* In the bar now, so it needs no ground of its own - the bar is the ground. */
+  .ag-gear { flex: 0 0 auto;
+    width: 40px; height: 40px; display: grid; place-items: center;
     border: 0; border-radius: var(--radius-nav, 10px);
-    background: color-mix(in srgb, var(--card) 82%, transparent);
-    -webkit-backdrop-filter: blur(10px) saturate(1.6);
-    backdrop-filter: blur(10px) saturate(1.6);
-    box-shadow: 0 0 0 1px rgba(16, 20, 16, .06);
-    color: var(--fg); }
+    background: transparent; color: var(--fg); }
   .ag-gear:active { background: var(--card); }
   .ag-sheet { border: 0; padding: 0; background: transparent; color: var(--fg);
     width: min(420px, 94vw); margin: auto; }
@@ -147,7 +162,13 @@
   .ag-sample { margin: 0 0 10px; padding: 8px 10px; font-size: 12px; line-height: 1.4;
     color: var(--dim); border: 1px dashed var(--line); border-radius: 10px; }
   </style>
-  <button id="gear" class="ag-gear" aria-label="Settings" aria-expanded="false">
+  <dialog id="settings" class="ag-sheet"></dialog>
+  <div class="ag-shell">
+    <header class="ag-topbar">
+      <img class="ag-topbar-mark" src="/icons/favicon-32.png" alt="" aria-hidden="true">
+      <span class="ag-topbar-t" id="topbar-title">Any Given</span>
+      <span class="spacer"></span>
+      <button id="gear" class="ag-gear" aria-label="Menu" aria-expanded="false">
     <!-- 🔴 THREE DOTS, NOT A COGWHEEL. Jason: "the gear icon sucks." He is right,
          and it was not a drawing problem: a 24-viewBox cog rendered at 20px is a
          circle with a bumpy edge, because the teeth are sub-pixel. It reads as a
@@ -161,8 +182,9 @@
       <circle cx="12" cy="19" r="2" fill="currentColor"/>
     </svg>
   </button>
-  <dialog id="settings" class="ag-sheet"></dialog>
-  <div class="ag-shell"><main class="ag-main" id="root"></main></div>
+    </header>
+    <main class="ag-main" id="root"></main>
+  </div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

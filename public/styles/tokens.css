@@ -284,6 +284,10 @@
    * because a shadow on #14161a does nothing but muddy the edge, which is the
    * argument DESIGN.md made and it is still correct there. */
   --lift: 0 1px 2px rgba(16, 20, 16, 0.04), 0 2px 8px rgba(16, 20, 16, 0.03);
+  /* The sticky top bar's height. Read by anything that sticks beneath it, so
+     the two cannot drift - the same lesson --nav-space taught at the bottom
+     of the page. */
+  --topbar-h:     44px;
   --tap-min:      44px;   /* one-handed, at night, possibly on a moving couch */
 
   --font: ui-sans-serif, system-ui, sans-serif;
