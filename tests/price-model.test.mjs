@@ -212,3 +212,61 @@ test('everything is open before kickoff and nothing after full time', () => {
 test('an in-progress game with no period known closes everything', () => {
   assert.deepEqual(openOn({ status: 'in_progress', period: null }), []);
 });
+
+/* ------------------------------------------------- the score moves the price */
+
+const h2 = GAME_MARKETS.find((m) => m.id === 'h2_winner');
+const atHalf = (hs, as) => ({
+  spread: -3, total: 44.5, status: 'in_progress', period: 2, homeScore: hs, awayScore: as,
+});
+const h2Price = (g) => M.priceMarket(g, h2, 'nfl').prices;
+
+/* 🔴 JASON: "Then the odds should change, right." They do now, and the reason
+ * is behaviour rather than ability. The spread does not move when a game goes
+ * 21-0 - the teams are as good as they were - but the LEADER STOPS TRYING TO
+ * WIN and starts trying to end it. */
+test('a lead pulls the next period back toward level', () => {
+  const flat = h2Price({ spread: -3, total: 44.5, status: 'scheduled', kickoffUtc: 9e12 });
+  const up21 = h2Price(atHalf(28, 7));
+  assert.ok(up21.home > flat.home, 'leading big makes you a longer price to win the second half');
+  assert.ok(up21.away < flat.away, 'and the trailing side shortens');
+});
+
+test('a big enough lead makes the leader an underdog for the next period', () => {
+  const p = h2Price(atHalf(42, 7));
+  assert.ok(p.home > p.away,
+    `up 35 the home side should be the longer price: home ${p.home} away ${p.away}`);
+});
+
+test('it works in both directions, symmetrically', () => {
+  const up = h2Price(atHalf(28, 7));
+  const down = h2Price(atHalf(7, 28));
+  assert.ok(down.home < up.home && down.away > up.away);
+});
+
+/* The pregame model must be untouched by a field that does not exist yet. */
+test('a scheduled game prices exactly as it did before any of this', () => {
+  const sched = M.winnerProbs(-3, 0.5, 'nfl', 0);
+  const noLead = M.winnerProbs(-3, 0.5, 'nfl');
+  assert.deepEqual(sched, noLead);
+  const g = { spread: -3, total: 44.5, status: 'scheduled', kickoffUtc: 9e12 };
+  assert.deepEqual(h2Price(g), h2Price({ ...g, homeScore: 28, awayScore: 7 }),
+    'a score on a scheduled game is not a lead');
+});
+
+test('a final game is not repriced - there is nothing left to price', () => {
+  const g = { spread: -3, total: 44.5, status: 'final', period: 4, homeScore: 42, awayScore: 7 };
+  assert.equal(M.marketIsOpen(g, h2, Date.now()), false);
+});
+
+/* 🔴 THE TOTALS DO NOT MOVE, AND THAT IS DELIBERATE. Their line is what
+ * settlement reads, so repricing one live would settle a bet against a number
+ * that was never on the tile - the same defect the parlay's stored `lines`
+ * exists to prevent. Singles do not store a line yet, so this stays fixed
+ * until they do. */
+test('a totals market is not moved by the score', () => {
+  const t = GAME_MARKETS.find((m) => m.id === 'h2_total');
+  const flat = M.priceMarket({ spread: -3, total: 44.5, status: 'scheduled' }, t, 'nfl');
+  const live = M.priceMarket(atHalf(42, 7), t, 'nfl');
+  assert.deepEqual(flat.prices, live.prices);
+});

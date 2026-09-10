@@ -73,6 +73,37 @@ const QUARTER_SHARE = [0.21, 0.29, 0.22, 0.28];
  * against a known rate, not a taste. There is a test for it. */
 const TIE_WIDTH = 2.6;
 
+/* 🔴 HOW MUCH A CURRENT LEAD PULLS THE NEXT PERIOD BACK. Jason: "Then the
+ * odds should change, right." Right - and this is the only honest way the
+ * score can change them.
+ *
+ * The spread does not move when a game goes 21-0. The two teams are as good
+ * as they were at kickoff, so the naive answer is that a future period should
+ * price exactly as it did pre-game. That is wrong for a reason that has
+ * nothing to do with ability: BEHAVIOUR CHANGES. A side up three scores plays
+ * the clock, runs the ball, punts on fourth; the side down three throws on
+ * every down and stops the clock. The leader is not trying to win the fourth
+ * quarter, they are trying to end it.
+ *
+ * So the expected margin in a period yet to be played is the pregame
+ * expectation pulled back toward zero in proportion to the current lead. At
+ * 0.12 points per point of lead:
+ *
+ *     home -3, up 21 at the half  ->  H2 expectation 1.5 becomes +0.24
+ *     home -3, up 35 at the half  ->  H2 expectation 1.5 becomes -0.60
+ *
+ * A team 35 up being a slight underdog in the second half is the correct
+ * shape - that is garbage time, and everybody watching knows it.
+ *
+ * 🔴 WHAT THIS DELIBERATELY DOES NOT DO IS MOVE A LINE. Only the WINNER
+ * markets reprice off the score. The half and quarter TOTALS keep their
+ * derived line, because that line is what settlement reads and moving it
+ * live would settle somebody's bet against a number that was never on their
+ * tile. That is the same defect the parlay's stored `lines` exists to
+ * prevent, and the fix is the same one - store the line per bet - which
+ * singles do not do yet. Named as the gap rather than half-built. */
+const LEAD_REGRESSION = 0.12;
+
 /* 🔴 THE FLOOR, AND IT IS A PRODUCT RULE RATHER THAN A MATHEMATICAL ONE. A
  * tile at 1.01x is not a bet, it is a rounding error with a tap target - and
  * the old board carried 24 of them. Below this a market is NOT OFFERED at all,
@@ -172,10 +203,12 @@ export function shareOf(scope: string, period?: number): number | null {
 }
 
 /** The margin distribution over a slice of the game, from the posted spread. */
-export function marginDist(spread: number, share: number, sport: string) {
+export function marginDist(spread: number, share: number, sport: string, lead = 0) {
   const sd = SD_MARGIN[sport] ?? SD_MARGIN['college-football'];
+  const base = -spread * share;       // ESPN convention: home number, negative = home favoured
+  const pull = isNum(lead) ? LEAD_REGRESSION * lead * share : 0;
   return {
-    mu: -spread * share,              // ESPN convention: home number, negative = home favoured
+    mu: base - pull,                  // a lead pulls the NEXT period back toward level
     sigma: sd * Math.sqrt(share),     // variance adds over time, deviation goes as sqrt
   };
 }
@@ -187,8 +220,8 @@ export function marginDist(spread: number, share: number, sport: string) {
  * already sum to about 1, and they are divided through anyway - a rounding
  * drift of a thousandth is not worth the class of bug it leaves open.
  */
-export function winnerProbs(spread: number, share: number, sport: string) {
-  const { mu, sigma } = marginDist(spread, share, sport);
+export function winnerProbs(spread: number, share: number, sport: string, lead = 0) {
+  const { mu, sigma } = marginDist(spread, share, sport, lead);
   const tie = Math.min(0.4, normPdf(-mu / sigma) / sigma * TIE_WIDTH);
   const rest = 1 - tie;
   /* P(home leads) among the non-tie mass. */
@@ -323,6 +356,13 @@ export function priceMarket(
     return { offerable: true, prices };
   }
 
+  /* 🔴 THE LEAD ONLY EXISTS WHILE THE GAME DOES. A scheduled game has no
+     score to read and a final one has nothing left to price, so both go
+     through at zero and the pregame model is unchanged. */
+  const lead = (game.status === 'in_progress'
+    && isNum(game.homeScore) && isNum(game.awayScore))
+    ? game.homeScore - game.awayScore : 0;
+
   let probs: Record<string, number> | null = null;
   if (market.id === 'margin') {
     probs = marginProbs(spread, sport) as unknown as Record<string, number>;
@@ -335,7 +375,7 @@ export function priceMarket(
        real price from a real book, and a model built out of the spread has
        nothing to add to it. p6-allgames still owns that one. */
     if (market.id === 'winner') return none;
-    probs = winnerProbs(spread, share, sport) as unknown as Record<string, number>;
+    probs = winnerProbs(spread, share, sport, lead) as unknown as Record<string, number>;
   }
 
   const cap = capFor(market);
