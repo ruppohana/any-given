@@ -57,7 +57,34 @@ export async function captureSlate(env: any, sport: string, season: number) {
   const prevById = new Map<string, any>();
   for (const g of (prev?.games || [])) prevById.set(String(g.id), g);
 
-  const list = await get(`${base}/seasons/${season}/types/2/weeks/${week}/events?limit=400`);
+  /* 🔴 BY DATE, NOT BY WEEK NUMBER - AND THE DIFFERENCE IS 62 GAMES. Jason
+   * asked how many FBS games there are in a weekend, which is the question
+   * that found this.
+   *
+   *     weeks/2/events            24 games
+   *     events?dates=Sep 8-14     86 games, 80 of them on the Saturday
+   *
+   * Same league, same week, same API. ESPN's week-indexed event list is
+   * simply incomplete for college football - it is exact for the NFL, which
+   * is why this went unnoticed: sixteen is sixteen either way, so every check
+   * I ran on the NFL agreed with itself while the college slate was 28%
+   * captured.
+   *
+   * 🔴 A NUMBER THAT LOOKS PLAUSIBLE IS THE HARDEST KIND OF WRONG. Twenty-four
+   * college games is a believable Saturday if you do not know the sport, and
+   * nothing in the capture could have told us: no error, no empty page, no
+   * truncation warning - the endpoint reports count 24, pageCount 1, and
+   * means it.
+   *
+   * The week document gives the real boundaries, so the week is still what we
+   * ask for; only the lookup changes. */
+  const wk = await get(`${base}/seasons/${season}/types/2/weeks/${week}`);
+  const ymd = (iso: string) => String(iso || '').slice(0, 10).replace(/-/g, '');
+  const from = ymd(wk?.startDate), to = ymd(wk?.endDate);
+  const url = (from && to)
+    ? `${base}/events?dates=${from}-${to}&limit=500`
+    : `${base}/seasons/${season}/types/2/weeks/${week}/events?limit=400`;
+  const list = await get(url);
   const ids = (list.items || [])
     .map((x: any) => String(x.$ref || '').split('/events/')[1]?.split('?')[0])
     .filter(Boolean);
@@ -155,12 +182,24 @@ export async function captureSlate(env: any, sport: string, season: number) {
    * 2026-09-09: a bug made every event throw and the run cheerfully published
    * a slate of zero games, wiping a correct capture. A capture that found
    * nothing is a FAILED RUN, not a week with no football in it. */
-  if (!games.length) return { key, week, wrote: 0, live: 0, skipped: 'empty capture' };
+  if (!games.length) return { key, week, wrote: 0, live: 0, skipped: 'empty capture', src: url };
 
   games.sort((a, b) => a.kickoffUtc - b.kickoffUtc);
   await env.LIVE.put(key, JSON.stringify({
     sport, season, week, schema: 3, games, fetchedAt: Date.now(), by: 'cron'
   }), { expirationTtl: 60 * 60 * 24 * 14 });
+
+  /* 🔴 A POINTER TO THE WEEK THAT IS ON. Every screen that wants "this week"
+   * was working it out for itself, and defaulting to 1 when it could not -
+   * which is correct for the NFL today and wrong for college, already on
+   * week 2. The All games screen rendered a perfectly good empty state for a
+   * week that simply was not the current one.
+   *
+   * The cron is the only thing that KNOWS, because it asks ESPN which week is
+   * on every ten minutes. Writing that down costs one key and saves every
+   * client from guessing. */
+  await env.LIVE.put(`slate:${sport}:current`, String(week),
+    { expirationTtl: 60 * 60 * 24 * 14 });
 
   /* 🔴 AND THE LIVE POLLERS START THEMSELVES. This is the piece that makes
    * Sunday work: eight games kick at once, and each one gets its own Durable
@@ -176,5 +215,8 @@ export async function captureSlate(env: any, sport: string, season: number) {
     } catch { /* a poller that will not start is not worth losing the slate over */ }
   }
 
-  return { key, week, wrote: games.length, live: live.length };
+  /* `src` and `found` are returned so a run can be told apart from the code
+     that made it - the difference between "24 games exist" and "we asked the
+     wrong endpoint" is invisible without it, and cost a deploy to find. */
+  return { key, week, wrote: games.length, live: live.length, found: ids.length, src: url };
 }
