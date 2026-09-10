@@ -8,7 +8,13 @@
 # is worse than not running the tests at all: it produces the paperwork of having
 # checked.
 set -e
-out="$(npm test 2>&1)"
+# 🔴 `|| true` IS LOAD-BEARING. With `set -e` above and a bare assignment, a
+# failing suite kills the script AT THIS LINE - so the gate refuses to deploy
+# (right) and prints nothing at all (useless). Every line below, including the
+# REFUSING message and the list of failures, was unreachable in exactly the case
+# it was written for. Found 2026-09-09: a red suite produced an empty log and a
+# bare exit 1.
+out="$(npm test 2>&1)" || true
 fails="$(printf '%s' "$out" | grep -oE '^ℹ fail [0-9]+' | grep -oE '[0-9]+' || echo 0)"
 printf '%s\n' "$out" | grep -E '^ℹ (tests|pass|fail)'
 if [ "$fails" != "0" ]; then

@@ -5,3 +5,71 @@
  * This file exists so the shell's automatic <link> for every screen does not
  * 404. A missing stylesheet is harmless and a 404 in the console during a live
  * game is a red herring somebody chases at kickoff. */
+
+/* The down, the distance and who has the ball — the state the question is
+   being asked in. Read from the HELD situation, never the live one. */
+/* Standing on its own between two cards now, so it needs its own vertical
+   rhythm rather than the tight spacing it had inside a card. */
+.scr-live-game .lg-dd { display: flex; margin: 10px 0 2px; padding: 0 2px; }
+.scr-live-game .lg-dd-pill { display: inline-flex; align-items: baseline; gap: 8px;
+  padding: 6px 14px; border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.scr-live-game .lg-dd-d { font-size: var(--t-emph); font-weight: 800; color: var(--accent); }
+.scr-live-game .lg-dd-t { font-size: var(--t-body); font-weight: 800; color: var(--accent);
+  letter-spacing: .04em; }
+
+/* SKIP — a real choice, kept quiet. Below the prices, no border, no fill: it
+   must not compete with the tiles, and it must not read as "close this card". */
+.scr-live-game .lg-skip { display: block; width: 100%; margin: 6px 0 0;
+  padding: 10px 0; min-height: var(--tap-min); font: inherit;
+  font-size: var(--t-body); font-weight: 700; color: var(--dim);
+  background: none; border: 0; text-decoration: underline; }
+.scr-live-game .lg-call.is-skipped { opacity: .7; }
+.scr-live-game .lg-skip-undo { display: block; margin: 8px 0 0; padding: 8px 0;
+  min-height: var(--tap-min); font: inherit; font-size: var(--t-body);
+  font-weight: 700; color: var(--accent); background: none; border: 0;
+  text-decoration: underline; }
+
+/* THE STOPPAGE. Same pill shape as the down and distance, deliberately in a
+   different colour: one says where the ball is, this says nothing is about to
+   happen to it. Neutral rather than accent — it is not a call to action. */
+.scr-live-game .lg-break { display: flex; margin: 6px 0 2px; padding: 0 2px; }
+.scr-live-game .lg-break > * { display: inline-flex; align-items: baseline; }
+.scr-live-game .lg-break { gap: 0; }
+.scr-live-game .lg-break-d { padding: 6px 12px 6px 14px; font-size: var(--t-body);
+  font-weight: 800; color: var(--fg); background: var(--track);
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill); }
+.scr-live-game .lg-break-t { padding: 6px 14px 6px 8px; font-size: var(--t-micro);
+  font-weight: 700; color: var(--dim); background: var(--track);
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0; }
+
+/* WAITING — a line, never a card. It fills the space a dismissed question left
+   so the screen does not read as having lost its place, and it must not look
+   like something to act on. */
+/* Inside a card now, so it carries the card's own padding and just needs to sit
+   centred in it - the panel holds the layout still while the game catches up. */
+.scr-live-game .lg-waiting { margin: 0; padding: 10px 0; text-align: center;
+  font-size: var(--t-emph); font-weight: 700; color: var(--dim); }
+
+/* The completed play, labelled as such, and one line saying what is being
+   asked. Without the label the finished play reads as the question's subject. */
+.scr-live-game .lg-sub-k { font-size: 10px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dim); margin-right: 6px; }
+.scr-live-game .lg-sub-t { font-size: var(--t-micro); color: var(--dim); }
+.scr-live-game .lg-nextq { margin: 6px 0 2px; font-size: var(--t-micro);
+  font-weight: 800; letter-spacing: .04em; color: var(--accent); }
+
+/* THE TV LAG METER. A big target, because it is timed by a thumb and a small
+   button measures how well you aim rather than how far behind your TV is. */
+.scr-live-game .lg-tvlag-go { display: block; width: 100%; min-height: 52px;
+  font: inherit; font-size: var(--t-body); font-weight: 800; letter-spacing: .02em;
+  color: var(--on-accent); background: var(--accent); border: 0;
+  border-radius: var(--radius-button); padding: 12px; }
+.scr-live-game .lg-tvlag-n { margin: 8px 0 0; font-size: var(--t-micro); color: var(--dim); }
+.scr-live-game .lg-tvlag-rows { margin-top: 10px; display: grid; gap: 6px; }
+.scr-live-game .lg-tvlag-row { display: flex; justify-content: space-between;
+  align-items: baseline; gap: 10px; }
+.scr-live-game .lg-tvlag-k { font-size: var(--t-body); color: var(--dim); }
+.scr-live-game .lg-tvlag-v { font-size: var(--t-emph); font-weight: 800; }
+.scr-live-game .lg-tvlag-n2 { font-size: var(--t-micro); color: var(--dim); }

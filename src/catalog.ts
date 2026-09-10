@@ -645,6 +645,14 @@ export function settleDrive(
   }
 
   if (typeId === 'drive_end') {
+    /* 🔴 NO RESULT MEANS IT HAS NOT ENDED, NOT THAT IT ENDED IN A WAY WE DO NOT
+     * KNOW. Reaching the map with an empty string produced "unhandled drive
+     * result" and voided the call - which is what a duplicate drive entry made
+     * happen to every drive call in the opener. readDrives now prevents it at
+     * source; this is the second lock, because a settlement function that can
+     * void a live call on missing data is one bad feed away from doing it
+     * again. */
+    if (!result) return { landed: null, because: 'the drive has not ended' };
     /* A drive that ends the half ended nobody's way. The one void path again. */
     if (/END OF/.test(result)) return { landed: null, because: 'the half ended' };
     const map: Record<string, string> = {

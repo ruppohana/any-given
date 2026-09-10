@@ -18,13 +18,13 @@
 
 /* ---- the day jump strip. Grouping made navigable. Not a filter, not a search box. */
 .scr-p2-slate .p2-days { display: flex; gap: 6px; padding-bottom: 10px; }
-.scr-p2-slate .p2-day {
+.scr-p2-slate .p2-daychip {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
   min-height: var(--tap-min); padding: 0 12px;
   border: 1px solid var(--line); border-radius: var(--radius-pill);
   background: var(--card); color: var(--fg); font-size: var(--t-body); font-weight: 600;
 }
-.scr-p2-slate .p2-day-n { font-size: var(--t-micro); color: var(--dim); font-weight: 500; }
+.scr-p2-slate .p2-daychip-n { font-size: var(--t-micro); color: var(--dim); font-weight: 500; }
 
 /* ---- CBS's one element doing column labels and progress at once. Sticky: progress is
  * visible without leaving the screen, which is the whole requirement. */
@@ -43,7 +43,11 @@
 .scr-p2-slate .p2-bar {
   position: sticky; top: 0; z-index: 4;
   margin-inline: -10px; padding-inline: 10px;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  /* One centred figure now that the column labels are gone - and it keeps clear
+     of the fixed menu button at the top right, which is what it used to collide
+     with. */
+  display: grid; grid-template-columns: 1fr; justify-items: center;
+  align-items: center;
   min-height: 38px; background: var(--bg);
   border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
 }
@@ -65,7 +69,84 @@
    were a table. Now that each game is its own card, a white panel behind them is
    white on white: the cards vanish into it and the shadow has nothing to lift
    off. The ground does the containing, exactly as it does in Deuce. */
-.scr-p2-slate .p2-list { display: grid; gap: 8px; }
+/* Days are the top-level rhythm; games nest inside them. */
+/* 🔴 THE TWO GAPS HAVE TO DIFFER, AND BY MORE THAN 2px. Jason, 2026-09-09:
+   "Add a gap between the cards."
+
+   Days were 12px apart and the games inside a day 6px. That is the right
+   ORDER - a game is nearer its own day than a day is to the next - but 6px is
+   under the corner radius, so two adjacent game blocks had their 16px radii
+   meeting across a gap smaller than the curve. The eye reads that as one shape
+   pinched in the middle rather than as two cards, which is what the circle in
+   his screenshot is drawn around: a white wedge between two corners, not a gap.
+
+   🔴 A GAP MUST BE READ AGAINST THE RADIUS IT SEPARATES, never chosen on its
+   own. Below the radius the corners do the talking and the gap disappears. */
+.scr-p2-slate .p2-list { display: grid; gap: 16px; }
+
+/* 🔴 THE DAY CARD, and it is a <details>. `display: grid` on a details element
+   lays out the summary and the rows as its children, which is what we want and
+   is why the summary needs `list-style: none` further down - a grid item still
+   draws the disclosure marker. */
+/* 🔴 THE TWO SURFACES ARE THE WRONG WAY ROUND, AND THAT IS WHY THE GAP DOES NOT
+   READ. Jason, 2026-09-09, twice: "Add a gap between the cards." Then, with the
+   gap already at 10px and live: "Still need a gap between cards."
+
+   He is right both times and the number was never the problem. The stack was
+   WHITE day card -> GREY game blocks -> WHITE team zones, so the 10px between
+   two grey blocks was filled with WHITE. A thin white band between two grey
+   slabs is not read as space, it is read as a SEAM - a line drawn between two
+   halves of one object. Widening a seam makes a wider seam.
+
+   🔴 A GAP IS ONLY READ AS A GAP WHEN IT IS THE GROUND SHOWING THROUGH. That is
+   the whole mechanism in the reference: grey ground, white cards floating on it,
+   and the space between them is the same grey as everything behind them. Ours
+   inverted it and then tried to fix the result by measuring.
+
+   So the stack inverts to match: GREY day card -> WHITE game cards -> GREY team
+   zones. The white now lands on the game, which is the thing being decided, and
+   the gap between two games is the day's own ground.
+
+   🔴 AMENDED SAME DAY, and the amendment is the point. My first inversion made
+   the day card DARKER than the page and the game cards white - which fixed the
+   seam by putting the lightest surface in the middle of the stack, so the layer
+   above it had to come back down. Jason gave the ramp instead: "BG is ebebeb.
+   Larger card is f5f5f5. Smaller cards are f9f9f9."
+
+   Every step up is lighter, without exception. That is what lets somebody order
+   four surfaces they have never seen before without being told, and it is why
+   the gap now reads: the space between two #f9f9f9 cards is the day card's
+   #f5f5f5, DARKER than both, so it recedes instead of cutting.
+
+   The tokens are in tokens.css - see the ramp there. Nothing here hardcodes a
+   hex, so the ramp can be re-tuned in one place. */
+/* 🔴 THE GAP THAT ACTUALLY SEPARATES TWO GAME CARDS. It lives here, on a real
+   element wrapping the rows, because the day card cannot provide it - see the
+   group loop in render(). */
+.scr-p2-slate .p2-games { display: grid; gap: 16px; }
+
+/* 🔴 L1. Its padding IS the nest inset - see tokens.css. If the two ever stop
+   matching, the corners stop being concentric and no amount of retuning the
+   radius fixes it, because the radius is only half of the relationship. */
+/* 🔴 16px, NOT 10. Jason asked a fourth time: "Gap between cards." The ramp is
+   right and the direction is right, and #f5f5f5 against #f9f9f9 is FOUR VALUES -
+   a separation you can reason about and not one you can see at arm's length. A
+   gap that small has to be legible on its own, because the tone either side of
+   it is not going to help. Where two surfaces are nearly the same, the space is
+   the only separator left, so it has to be generous. */
+/* The day card's own gap separates the header from the games and nothing else -
+   a <details> slots everything after its summary into ONE anonymous box, so this
+   value never reached the space between two game cards. See .p2-games below.
+
+   🔴 AND IT IS THE SAME 16 AS EVERY OTHER GAP. Jason: "Close that gap to match
+   the others." It was 12 less a 4px negative margin on the header - 8 measured -
+   which was a deliberate choice to sit the label closer to its own card than the
+   games sit to each other. Wrong once the games actually had a gap: with one
+   space at 8 and seven at 16, the header read as slightly detached from the
+   rhythm rather than as part of it. One vertical step inside the card. */
+.scr-p2-slate .p2-day { display: grid; gap: 16px; padding: var(--nest-inset);
+  background: var(--surface-1); border: 1px solid var(--line);
+  border-radius: var(--radius-l1); box-shadow: none; }
 
 /* 🔴 AND THE DAY HEADER STOPS BEING STICKY. Pinned at top:38px it hung over the
    first card of the next day and clipped it - visible as a white strip with a
@@ -75,9 +156,9 @@
 
    The day chips at the top of the screen are the way to jump between days, and
    they were always the better answer to that question. */
-.scr-p2-slate .p2-grp { position: static; display: flex; align-items: baseline;
-  justify-content: space-between; gap: 8px; margin: 12px 2px 2px; padding: 0;
-  background: none; border: 0; }
+/* The day header now lives INSIDE the day card, so it is a row of it rather
+   than a label on the ground. */
+/* (declared once, with the summary rules below - see the duplicate guard.) */
 
 /* The day header stacks directly under the bar, and takes the same treatment so
    the two read as one pinned block rather than as a stripe inside a margin. */
@@ -92,71 +173,230 @@
 
    scroll-margin-top on every jump target is the fix, and it has to be the SUM of
    both bars plus a hair, not the height of either one. */
-.scr-p2-slate .p2-grp {
-  position: sticky; top: 38px; z-index: 3;
-  margin-inline: -10px; padding-inline: 14px;
-  scroll-margin-top: 72px;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  min-height: 30px;
-  background: var(--bg); border-bottom: 1px solid var(--line);
-}
-.scr-p2-slate .p2-grp-d { font-size: var(--t-micro); font-weight: 700; color: var(--fg); }
-.scr-p2-slate .p2-grp-n { font-size: var(--t-micro); color: var(--dim); }
+/* 🔴 A SECOND .p2-grp RULE LIVED HERE AND WON, AND IT IS WHAT JASON PHOTOGRAPHED.
+   Jason, 2026-09-09, on a screenshot of the day header: "Problem here."
+
+   The header above declares the day label as a plain row INSIDE the day card -
+   static, transparent, no border. This block was the retired STICKY version from
+   when the label sat on the ground above loose rows, and it overrode every one
+   of those properties: `background: var(--bg)` painted a grey band across a
+   white card, `margin-inline: -10px` pushed that band 10px past the card's edge
+   on both sides, and `border-bottom` drew a rule that ran out past the corner.
+
+   What you see in the shot is exactly that: a grey strip wider than the card it
+   is in, with the card's own rounded corners showing above and beside it.
+
+   🔴 THIRD TIME IN THIS FILE. Two `.p2-mkt` rules, two `.p2-day` selectors on
+   different elements, and now two `.p2-grp` rules - every one of them a block
+   left behind by a change and every one of them WINNING, because a stale rule is
+   always the later rule. The pattern: when a component's layout is rewritten,
+   the old block does not error, does not warn and does not lose. DELETE IT IN
+   THE SAME EDIT, and keep the note where the block was. */
+
+/* The jump target's clearance stays - it is the only thing in that block that
+   was still true, and the strip still scrolls to these. */
+
+/* 🔴 THE DAY HEADER IS A SUMMARY NOW - see the group loop in render(). It rolls
+   the day up, so it has to look tappable across its whole width and it has to
+   drop the platform's default disclosure triangle, which sits outside our type
+   and cannot be styled consistently. Our own chevron on the right, beside the
+   count, which is where Deuce puts it. */
+.scr-p2-slate .p2-grp { display: flex; align-items: baseline;
+  justify-content: space-between; gap: 8px; margin: 0; padding: 4px 6px;
+  background: none; border: 0;
+  list-style: none; cursor: pointer; user-select: none;
+  min-height: 32px; border-radius: 10px; scroll-margin-top: 72px;
+  /* No negative margin - see the day card above. The header takes the same step
+     as everything else in the stack. */
+  }
+.scr-p2-slate .p2-grp::-webkit-details-marker { display: none; }
+.scr-p2-slate .p2-grp:hover { background: var(--track); }
+.scr-p2-slate .p2-grp-r { display: inline-flex; align-items: center; gap: 6px; }
+.scr-p2-slate .p2-chev { font-size: 14px; line-height: 1; color: var(--dim);
+  transform: translateY(-3px) rotate(0deg); transition: transform .15s ease; }
+.scr-p2-slate .p2-day[open] > .p2-grp .p2-chev { transform: translateY(1px) rotate(180deg); }
+/* A rolled-up past day recedes the way a past row does - present, countable,
+   one tap from open, and not competing with the games you can still pick. */
+.scr-p2-slate .p2-day[data-when="past"]:not([open]) { opacity: .6; box-shadow: none; }
+.scr-p2-slate .p2-day:not([open]) { padding-bottom: 4px; }
+
+/* 🔴 THE DATE IS THE BIGGEST TYPE ON THE SCREEN NOW. Jason, 2026-09-09:
+   "Increase the font size of the date. 2x."
+
+   11px -> 21px, then ".75 of what you have now" -> 15px, then "Show me 17" ->
+   --t-section. Every one landed on a step: --t-figure, --t-emph, --t-section. DESIGN.md's
+   type scale is a closed set precisely so that "make it bigger" and "make it a
+   bit smaller" both resolve to a step rather than to a number somebody liked -
+   and two adjustments in a row is where a free-floating size would have started
+   drifting off the scale for good.
+
+   15px is also the honest answer to what this label is: larger than the row's
+   metadata by two steps, smaller than a page title, which is exactly the rank a
+   container's name should hold.
+
+   And it is the right element to enlarge, which is not what I would have said an
+   hour ago. Earlier today the day label was a 30px sticky heading and the note
+   in this file argues it down - "The days seems like the most important thing
+   here, which it is not." That was true of a heading floating over loose rows.
+   It is not true now: the day OWNS a card, the games sit on it, and the label is
+   what tells you which card you are inside. A container's name may be large; a
+   floating heading competing with the rows under it may not. */
+.scr-p2-slate .p2-grp-d { font-size: var(--t-section); font-weight: 700; color: var(--fg); }
+/* 🔴 BLACK, NOT GREY. Jason, 2026-09-09: "Make 1 game black."
+   The count is not a caption on the date - it is the second half of what the
+   header says, and "1 game" is the fact that tells you how much is behind a
+   rolled-up day. Grey made it read as a label about the heading rather than as
+   part of it. */
+.scr-p2-slate .p2-grp-n { font-size: var(--t-micro); color: var(--fg); font-weight: 700; }
 
 /* ---- the row. THE ROW IS THE UNIT and the PICK IS THE ROW. */
-/* ── THE GAME CARD ───────────────────────────────────────────────────────────
-   Deuce's shape, our function. Written fresh on 2026-09-09 rather than layered
-   over the old `1fr 76px 1fr` grid - see row() for why that could not work. */
-.scr-p2-slate .p2-row { display: grid; gap: 8px; padding: 10px;
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius-card); box-shadow: var(--lift); }
+/* ── THE MATCH ROW ───────────────────────────────────────────────────────────
+   Deuce's Match Schedule, column for column - see row() for the mapping.
+   Three columns: WHEN, WHO, and by what RULE it settles. */
+/* 🔴 MEASURED AT 375px, NOT GUESSED. The first cut was 62/1fr/58 with an 8px
+   gap - 128px of fixed columns plus 16px of gutters out of 355px of usable
+   width, leaving 211px for two team blocks and a VS. The prices clipped mid
+   character ("2.0(") and the right column printed over the home team's name.
 
-/* Line one: when it is, and how it is being played. */
-.scr-p2-slate .p2-center { display: flex; align-items: center; gap: 8px;
-  min-height: 0; }
-.scr-p2-slate .p2-time { font-size: var(--t-body); font-weight: 700;
-  color: var(--fg); white-space: nowrap; }
-.scr-p2-slate .p2-c-lo { font-size: 10px; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--dim); }
-.scr-p2-slate .p2-c-lo[data-live="true"] { color: var(--accent); font-weight: 700; }
-.scr-p2-slate .p2-score { display: flex; align-items: baseline; gap: 4px;
-  font-weight: 800; }
-.scr-p2-slate .p2-sc[data-loser="true"] { color: var(--dim); font-weight: 600; }
-/* The market switch and the info link sit at the right of line one, which is
-   where a modifier belongs - the decision is which team, below. */
-.scr-p2-slate .p2-mkt { margin: 0 0 0 auto; }
-.scr-p2-slate .p2-info { margin: 0; }
+   54/1fr/64 with a 6px gap gives the middle 225px, and the right column the
+   64px the Spread/Winner switch actually needs. Deuce's own right column is
+   ~80px on a 393 screen; ours is tighter because our left column is a time
+   rather than a time AND a court name. */
+/* 🔴 AN INSET BLOCK, NOT A FLOATING CARD. It sits ON the day card, so it cannot
+   be white - white on white is invisible and the lift has nothing to lift off.
+   A shade of the ground and no shadow: the day card is the thing that floats,
+   and the games are what is on it. Three surfaces, one lift. */
+/* 🔴 ONE COLUMN, TWO BANDS - see row() for the arithmetic that killed the third
+   column. The metadata is a strip across the top; the two tap targets own the
+   full width underneath. */
+.scr-p2-slate .p2-row { display: grid; grid-template-columns: minmax(0, 1fr);
+  /* 🔴 L2, AND THE PADDING IS UNIFORM ON ALL FOUR SIDES. Jason, 2026-09-09:
+     "Still a problem with the radius."
 
-/* Line two: the two sides. */
+     He was right and the radii were not the fault - measured in a real browser
+     at 375px, they came out 22 / 15 / 8 against an ideal of 22 / 15.33 / 8.67,
+     which is a third of a pixel. What was wrong was the INSET:
+
+         left 6.67   right 6.67   top 81.81   bottom 12.67
+
+     I had given this card `padding: 6px 6px 10px`, with a comment claiming the
+     extra air went "on the BOTTOM, where there is no nested corner to hold
+     true". 🔴 THAT SENTENCE WAS SIMPLY FALSE. The pick target's bottom-left
+     corner is a nested corner, and it was 6.67px from the card's left edge and
+     12.67px from its bottom - so the two curves ran parallel down the side and
+     then peeled apart through the arc. That is exactly the corner he
+     photographed, twice.
+
+     🔴 CONCENTRICITY IS AN ALL-FOUR-SIDES PROPERTY. One radius derived from one
+     inset holds only if that inset is the same on every side; a box inset 6 at
+     the left and 12 at the foot has no single radius that fits it. The extra air
+     a card wants goes in the GAP between its children, which moves content
+     without moving any edge. */
+  gap: 8px; padding: var(--nest-inset);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius-l2); box-shadow: var(--lift);
+  /* Every row is a landing point: a day chip scrolls to the group header, a
+     link into one game scrolls to its row. Same clearance as the header. */
+  scroll-margin-top: 72px; }
+
+/* THE STRIP. When it is and how it settles, on one line, at metadata weight. */
+.scr-p2-slate .p2-top { display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; min-height: 22px; }
+.scr-p2-slate .p2-when { display: flex; align-items: center; gap: 7px; min-width: 0; }
+/* 🔴 SMALL. Jason: "Start time/date to large." It was --t-body at 800 in a
+   column of its own, which made the kickoff hour the loudest thing on a card
+   whose subject is a pick. */
+.scr-p2-slate .p2-time { font-size: var(--t-micro); font-weight: 800;
+  white-space: nowrap; letter-spacing: .01em; }
+/* 🔴 `p2-chan`, NOT `p2-sub`. FOURTH collision found in this file in one pass,
+   and this one had been silently live: `.p2-sub` is the PAGE subtitle under the
+   screen title, and the row's channel had taken the same name. The row's rule is
+   later, so the page subtitle was rendering at 10px - a heading's deck shrunk by
+   a rule written about a TV network. Nothing errored and nothing looked broken;
+   it just looked slightly wrong forever. */
+.scr-p2-slate .p2-chan { font-size: 10px; color: var(--dim); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.scr-p2-slate .p2-pill { font-size: 9px; font-weight: 800; letter-spacing: .04em;
+  padding: 2px 7px; border-radius: var(--radius-pill);
+  background: var(--track); color: var(--dim); white-space: nowrap; }
+.scr-p2-slate .p2-pill[data-state="picked"] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.scr-p2-slate .p2-pill[data-state="won"] { background: color-mix(in srgb, var(--up) 14%, transparent); color: var(--up); }
+.scr-p2-slate .p2-pill[data-state="lost"] { background: color-mix(in srgb, var(--down) 14%, transparent); color: var(--down); }
+
+/* WHO. The two sides with VS between - and unlike Deuce's, these are the whole
+   interaction, so they are real 60px targets rather than decoration. */
 .scr-p2-slate .p2-sides { display: grid; grid-template-columns: 1fr auto 1fr;
-  align-items: stretch; gap: 6px; }
-.scr-p2-slate .p2-at { align-self: center; font-size: var(--t-micro);
-  color: var(--dim); font-weight: 700; }
+  align-items: stretch; gap: 4px; min-width: 0; }
+.scr-p2-slate .p2-at { align-self: center; font-size: var(--t-body); font-weight: 700;
+  color: var(--dim); letter-spacing: 0; padding: 0 2px; }
+/* 🔴 min-width:0 ON THE ZONE AND ON EVERY LINE INSIDE IT. A grid child defaults
+   to min-content width, so a long school name refuses to shrink and pushes the
+   price out of the card instead of truncating - which is exactly how "2.00x"
+   rendered as "2.0(". The ellipsis has to be allowed to happen. */
+/* 🔴 A STACK: crest, name, spread. See zone() - the crest can only be 32px
+   because it no longer shares a line with two other things. */
+/* 🔴 THE TWO SIDES ARE THE SAME HEIGHT AND THEIR ROWS LINE UP. `stretch` makes
+   the blocks equal height; the fixed line count in zone() makes their CONTENTS
+   line up inside that height. Both are needed - equal boxes with different
+   numbers of lines still put the crests at different heights. */
+.scr-p2-slate .p2-sides > .p2-zone { align-self: stretch; }
+/* 🔴 THE PICK TARGETS ARE GREY INSETS NOW, because the game card underneath
+   them turned white - see the day card above. Two white boxes on a white card
+   is the white-on-white problem this file already warned about, arriving one
+   layer down after the inversion.
 
-/* 🔴 EACH SIDE IS A CARD-SHAPED TAP TARGET, and it is 60px because a thumb at
-   night on a moving couch is the design case. Deuce's player blocks are
-   decorative; ours carry the entire pick affordance, so they get a real border
-   that changes rather than a tint that has to be noticed. */
-.scr-p2-slate .p2-zone { display: grid; gap: 3px; align-content: center;
-  min-height: 60px; padding: 8px 10px; font: inherit; text-align: left;
-  background: var(--card); color: var(--fg);
-  border: 1px solid var(--line); border-radius: var(--radius-button); }
-.scr-p2-slate .p2-zone[data-side="home"] { text-align: right; }
+   And a recessed grey panel on a white card is a better read for a BUTTON than
+   a raised white one was: it looks like something you press into rather than
+   something already selected. The picked state then has somewhere to go - it
+   fills with the accent, which a white block could only do by changing color
+   entirely.
+
+   🔴 AMENDED: they are the TOP of the ramp, not a recess. --surface-3 is the
+   only pure white left in the stack, and it lands on the two things you press -
+   which is the right place for the brightest surface on the screen. */
+.scr-p2-slate .p2-zone { display: grid; gap: 2px; align-content: center;
+  justify-items: center; min-height: 84px; padding: 8px 3px; min-width: 0;
+  font: inherit; text-align: center; background: var(--surface-3); color: var(--fg);
+  border: 1px solid var(--line); border-radius: var(--radius-l3); }
+.scr-p2-slate .p2-name { overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 100%; }
+.scr-p2-slate .p2-spread, .scr-p2-slate .p2-price { white-space: nowrap; }
 .scr-p2-slate .p2-zone:disabled { cursor: default; }
 .scr-p2-slate .p2-l1, .scr-p2-slate .p2-l2 { display: flex; align-items: center;
-  gap: 6px; min-width: 0; }
-.scr-p2-slate .p2-zone[data-side="home"] .p2-l1,
-.scr-p2-slate .p2-zone[data-side="home"] .p2-l2 { justify-content: flex-end; }
-.scr-p2-slate .p2-meta { display: flex; align-items: baseline; gap: 6px;
-  min-width: 0; }
-
-/* 🔴 THE CHOSEN SIDE IS AN OUTLINE, NOT A WASH. A tint has to compete with 760
-   team colors sitting inside it; a border cannot be mistaken for one. */
+  justify-content: center; gap: 4px; min-width: 0; max-width: 100%; }
+/* The three stacked lines. The spread is the loudest of them - it is what the
+   pick is about. The payout is quieter and in the signature color, because it
+   is ours rather than the market's. */
+.scr-p2-slate .p2-spread { font-size: var(--t-body); font-weight: 800; line-height: 1.1; }
+.scr-p2-slate .p2-price { font-size: var(--t-micro); font-weight: 800;
+  color: var(--accent); line-height: 1.1; }
+.scr-p2-slate .p2-price.is-thin { color: var(--dim); font-weight: 700; }
+.scr-p2-slate .p2-meta { display: flex; align-items: baseline; gap: 5px; }
+/* The chosen side is an outline. A tint has to compete with 760 team colors
+   sitting inside it; a border cannot be mistaken for one. */
 .scr-p2-slate .p2-zone[data-pick="on"] { border-color: var(--accent);
-  border-width: 2px; padding: 7px 9px;
-  background: color-mix(in srgb, var(--accent) 7%, var(--card)); }
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-3)); }
 .scr-p2-slate .p2-row[data-state="picked"] .p2-zone:not([data-pick="on"]) .p2-name,
 .scr-p2-slate .p2-row[data-state="picked"] .p2-zone:not([data-pick="on"]) .p2-rec { opacity: .55; }
+
+/* BY WHAT RULE. Deuce puts "Round of 16 / Best of 3 sets" here - the rules of
+   the contest - and Spread-or-Winner is exactly that for us. */
+.scr-p2-slate .p2-rules { display: flex; align-items: center; gap: 8px;
+  flex: 0 0 auto; }
+/* 🔴 SIDE BY SIDE AGAIN, AND THIS TIME BECAUSE THERE IS ROOM. It was stacked to
+   survive a 60px column; on the strip it has the width a two-state switch wants,
+   and a horizontal segmented control is what a segmented control looks like.
+   Stacked, it read as two separate buttons that happened to be adjacent. */
+.scr-p2-slate .p2-mkt { display: inline-flex; gap: 2px; margin: 0;
+  border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 1px;
+  /* The switch sits ON the game card, so it takes the step above it - not
+     --card, which is a different value from --surface-3 in dark and would put
+     the control BELOW the card it sits on. */
+  background: var(--surface-3); }
+.scr-p2-slate .p2-mkt-b { font: inherit; font-size: 9px; font-weight: 800;
+  padding: 3px 9px; min-height: 20px; border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--dim); white-space: nowrap; }
+.scr-p2-slate .p2-mkt-b.is-on { background: var(--accent); color: var(--on-accent); }
 
 .scr-p2-slate .p2-row[data-state="void"] { background: repeating-linear-gradient(
   135deg, transparent 0 7px, var(--track) 7px 8px); }
@@ -187,9 +427,12 @@
 /* ---- desktop. The row keeps the phone measure; shell.css caps it. CBS at ~1900px puts
  * two team names at the extreme edges with a lake between them, and widening this grid
  * is exactly how that happens - so the center column grows instead of the zones. */
+/* The row is one column at every width now, so there is no three-column grid to
+   re-proportion here - `p2-sides` is the thing that widens, and it already caps
+   itself. What is left is the type, which can afford to grow. */
 @media (min-width: 560px) {
-  .scr-p2-slate .p2-row { grid-template-columns: 1fr 110px 1fr; }
   .scr-p2-slate .p2-name { font-size: var(--t-body); }
+  .scr-p2-slate .p2-time { font-size: var(--t-body); }
 }
 
 /* The half-of-the-app kicker and the league tag. Both exist because two
@@ -216,9 +459,8 @@
    the styles that dimmed them would now be lying about them. */
 .p2-c-t { font-size: var(--t-micro); color: var(--dim); }
 
-/* Every row is a possible landing point too - a day chip scrolls to the group
-   header, but a link into one game scrolls to its row. Same clearance. */
-.scr-p2-slate .p2-row { scroll-margin-top: 72px; }
+/* (The row's own scroll-margin is declared with the row, not here - one
+   selector, one block. See the duplicate-selector guard in the tests.) */
 /* And the container, so anything using scrollIntoView inherits the offset
    without each call site having to know about the bars. */
 .scr-p2-slate { scroll-padding-top: 72px; }
@@ -227,12 +469,11 @@
    Dead centre between the two sides it re-prices, so it reads as belonging to
    the row rather than to a team. Small, because it is a modifier and not the
    decision: the decision is which team, and it is 60px tall on either side. */
-.scr-p2-slate .p2-mkt { display: flex; gap: 2px; margin-top: 3px;
-  border: 1px solid var(--line); border-radius: 999px; padding: 1px; }
-.scr-p2-slate .p2-mkt-b { flex: 1 1 0; font: inherit; font-size: 10px; font-weight: 800;
-  letter-spacing: .02em; padding: 3px 0; min-height: 22px; border: 0; border-radius: 999px;
-  background: transparent; color: var(--dim); }
-.scr-p2-slate .p2-mkt-b.is-on { background: var(--accent); color: var(--bg); }
+/* 🔴 A SECOND .p2-mkt RULE LIVED HERE AND WON. It was the original horizontal
+   switch from when the toggle sat under the time; the stacked version further up
+   was being overridden by it and the two words clipped out of a 58px column all
+   afternoon. Deleted rather than reordered - two rules for one component is the
+   bug, whichever one wins. */
 
 /* THE INFO LINK — under the market switch, in the centre column. Deliberately
    quiet: it is a way to check your reasoning, not a call to action, and the
@@ -265,7 +506,53 @@
 /* Both value columns are the same fixed width so the two teams line up down the
    card - the whole point of a head-to-head is reading across. */
 .p2-h2h-v { font-size: var(--t-body); font-weight: 700; min-width: 56px; text-align: right; }
+/* The one line the table cannot hold: it is about the PAIR, not about either
+   column, so it sits under the table rather than in it. */
+.p2-h2h-last { padding: 0 16px 10px; font-size: var(--t-body); font-weight: 700;
+  font-variant-numeric: tabular-nums; }
 .p2-dlg-n { margin: 0; padding: 0 16px 12px; font-size: var(--t-micro); color: var(--dim); }
 .p2-dlg-x { display: block; width: 100%; font: inherit; font-size: var(--t-emph);
   font-weight: 800; min-height: var(--tap-min); border: 0; border-top: 1px solid var(--line);
   color: var(--accent); }
+
+/* ── PAST, NEXT, UPCOMING ────────────────────────────────────────────────────
+   The week has a shape and the list shows it. See row() for the reasoning:
+   what is done recedes, what is next is unmissable, everything else waits. */
+
+/* PAST — dimmed, never hidden. A finished game is the evidence behind the
+   standings, and a list that drops rows is not the week. */
+.scr-p2-slate .p2-row[data-when="past"] { opacity: .55; box-shadow: none; }
+.scr-p2-slate .p2-row[data-when="past"] .p2-time { font-weight: 600; }
+
+/* NEXT — the one you are about to watch. Larger type, the signature outline,
+   and it is the only card on the screen that is not white-on-grey, so it is
+   found without being read. */
+.scr-p2-slate .p2-row[data-when="next"] { border-color: var(--accent);
+  /* 🔴 NO PADDING OVERRIDE AT ALL. It was `12px 8px`, then `10px 6px 12px`, and
+     both broke the concentric corner on the ONE card the eye is pulled to -
+     which is why the mismatch got photographed on this card and not on the
+     others. Emphasis may not touch a card's inset, in ANY direction, because the
+     radius inside it was derived from that inset. It says its piece with the
+     outline, the tint, the tag and the taller targets, and it says it loudly
+     enough. Extra air, if it is ever wanted here, goes in the gap. */
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-2));
+  box-shadow: var(--lift); gap: 10px; }
+/* NOT the time. Enlarging the hour was the emphasis landing on the metadata,
+   which is the same mistake the strip was built to fix - so `next` says it with
+   the outline, the tint, the tag and the taller blocks, and leaves the clock
+   the size it is everywhere else. */
+.scr-p2-slate .p2-row[data-when="next"] .p2-time { font-size: var(--t-body); }
+.scr-p2-slate .p2-row[data-when="next"] .p2-zone { min-height: 96px; }
+.scr-p2-slate .p2-row[data-when="next"] .p2-name { font-weight: 800; }
+/* The label that says why this one is bigger. Without it the emphasis is a
+   mystery, and an unexplained highlight reads as a bug. */
+.scr-p2-slate .p2-row[data-when="next"] .p2-when-tag { display: block; }
+.scr-p2-slate .p2-when-tag { display: none;
+  font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 2px; }
+
+
+/* The rank-or-record line under each team - Deuce's "World #1" slot. Quiet: it
+   is context for the spread above it, never a number anybody is picking on. */
+.scr-p2-slate .p2-seed { font-size: 9px; color: var(--dim); font-weight: 700;
+  white-space: nowrap; }

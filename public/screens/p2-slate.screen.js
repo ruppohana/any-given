@@ -284,7 +284,11 @@ function slateGame(o) {
     status: o.status || 'scheduled',
     homeScore: o.homeScore == null ? null : o.homeScore,
     awayScore: o.awayScore == null ? null : o.awayScore,
-    homeRecord: o.homeRecord || null, awayRecord: o.awayRecord || null
+    homeRecord: o.homeRecord || null, awayRecord: o.awayRecord || null,
+    /* Per-team form rides on the team objects, which are merged from the
+       capture - so it needs no line here. The last meeting is about the PAIR
+       and has nowhere else to live. */
+    lastMeeting: o.lastMeeting || null
   };
 }
 
@@ -595,7 +599,8 @@ async function realSlate(byId, sport) {
         home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
         spread: typeof g.spread === 'number' ? g.spread : null,
         status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
-        homeScore: g.homeScore, awayScore: g.awayScore
+        homeScore: g.homeScore, awayScore: g.awayScore,
+        lastMeeting: g.lastMeeting || null
       });
     }).filter((g) => g.home && g.away);
   } catch { return null; }
@@ -912,128 +917,112 @@ function zone(ctx, game, side) {
   b.dataset.game = game.id;
   applyTeamVars(b, team);          /* --team-a / --team-b, PER ELEMENT. Never at :root */
 
-  /* SPREAD AND CROWD SIT ON DIFFERENT LINES, and that is a measurement rather than a
-   * preference. The first render at 393px put both inboard on line 2 and `James Madison`
-   * came out as `James Madis...`. A truncated school name is the identification job
-   * failing - and with no marks anywhere in this product, the name in type IS the
-   * identification. So the crowd rides with the record on line 1 and the spread rides
-   * with the name on line 2, which gives the name back about 40px. */
   const pick = ctx.picks[game.id];
-  const l1 = el('div', 'p2-l1');
-  /* 🔴 THE LEAGUE MUST TRAVEL WITH THE CHIP, and omitting it is silent. Found on
-   * the deployed NFL slate 2026-09-09 by a verification agent.
+  const st = pickStateOf(game, pick, ctx.now, ctx.mode);
+  const mine = pick && pick.side === side;
+
+  /* 🔴 REWRITTEN AS A LINEAR STACK, 2026-09-09. Jason named the order -
+   * "Patriots / Spread / Payout" - then, seeing it come out as spread, record,
+   * crest, name: "Make it look like the snapshot. Try harder."
    *
-   * A team id is only unique WITHIN a league, and team-chip defaults to the
-   * college path. So the NFL slate asked for /logos/ncaa/500-dark/17.png and got
-   * a real logo, 200 OK, belonging to a completely different school - the 49ers
-   * row drew Cal's script, the Bengals drew Cincinnati, the Bills drew Auburn.
-   * Ids with no college counterpart 404'd and fell back to the drawn chip, so
-   * the failure was not even uniform: some rows were wrong and some were bare.
+   * He was right twice. The block had grown out of a two-line layout - an `l1`
+   * holding crest + record + crowd, an `l2` holding the name - and I kept
+   * appending new lines to the end of a function whose first two rows were
+   * built earlier and in a different order. The output order was an accident of
+   * edit history rather than a decision.
    *
-   * team-chip.js carries a comment warning about exactly this - NFL 17 and 26
-   * under the ncaa path resolving to Claremont-Mudd-Scripps and UCLA - and this
-   * call site was written without it anyway. Nothing errors, nothing logs, and
-   * the only way to catch it is to look at the pixels. */
-  const chip = teamChip(team, {
-    size: 18,
+   * So it is one list now, top to bottom, and the order is the only thing this
+   * function decides:
+   *
+   *      ⬤        crest, 32px          the thing the eye lands on
+   *   Patriots     the name             for anyone who does not know the crest
+   *     +3.5       the spread           what you are deciding about
+   *    3.35x       the payout           what it pays you (WINNER market only)
+   *   14-3 last yr context               rank, record, or last season
+   *
+   * Nothing here is conditional on `side` any more either. The old code mirrored
+   * the row order for the home team so the two blocks faced each other, which
+   * made sense when they were horizontal strips either side of a divider. In a
+   * centred stack it just meant the two columns disagreed about what came
+   * first. */
+  b.appendChild(teamChip(team, {
+    /* 🔴 44, AND EVERYTHING ELSE BELOW IT. Jason: "Larger logo. All info below
+     * the logo." It went 18 -> 32 -> 44 across the afternoon, and each step was
+     * paid for by taking something off the crest's line. At 44 it is the first
+     * thing seen and the block reads top-down: WHO, then the numbers about them. */
+    size: 44,
     league: ctx.sport === 'nfl' ? 'nfl' : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
-  });
-  const rec = el('span', 'p2-rec num', game[side + 'Record'] || '');
-  const crowdWrap = el('span', 'p2-meta');
-  /* 🔴 CROWD IS THE POOL'S OWN AND NOBODY SEES ANYTHING UNTIL THE GAME LOCKS.
-   * Jason, 2026-09-08 - this replaces the after-you-pick rule from earlier the same
-   * day. Before kickoff the slot is empty for everybody; at kickoff the split appears
-   * for everybody at once, and by then nobody can act on it.
+  }));
+
+  b.appendChild(el('div', 'p2-name', team.short || team.name));
+
+  /* 🔴 EVERY LINE IS ALWAYS DRAWN, EVEN WHEN IT IS EMPTY. Jason, 2026-09-09,
+   * with a zoom on one block: "They should align center."
    *
-   * It also closes a hole the old rule had: the split used to be purchasable with a
-   * tap - pick the game, read the number, change your pick. */
-  /* 🔴 ctx.now, NOT now. A bare `now` here threw "now is not defined" and the
-   * error boundary swallowed the rest of the slate — the pool header and the
-   * first row drew, then nothing. Found 2026-09-08 by walking every screen on
-   * the deployed domain; two lines below this one already say `ctx.now`, which
-   * is what makes the typo invisible on a read. */
+   * The two blocks are centred INDIVIDUALLY, which is not the same as being
+   * aligned WITH EACH OTHER. A ranked team gets a "#7" line and an unranked one
+   * does not, so one stack is four rows and the other three - centre each and
+   * the crests sit at different heights, the names sit at different heights, and
+   * the row looks broken in a way that is hard to name and impossible to unsee.
+   *
+   * So the stack has a FIXED SHAPE: crest, name, spread, payout, context - and a
+   * missing value renders an empty line of the same height rather than nothing.
+   * The two sides then agree row for row whatever the feed gave us, which is
+   * what "align center" actually requires when the contents differ. */
+  const sp = typeof game.spread === 'number' ? spreadText(game.spread, side) : null;
+  b.appendChild(el('div', 'p2-spread num', sp || ' '));
+
+  /* 🔴 THE PAYOUT IS ABSENT ON THE SPREAD MARKET - Jason: "Betting the spread is
+   * always 2x. Why show it." It is stated once in the header, where a rule
+   * belongs. On WINNER it is drawn every time, because there it varies and it is
+   * the whole reason to take the underdog. */
+  if (ctx.mode === 'week' && marketOf(pick) === 'winner') {
+    const px = typeof game.spread === 'number'
+      ? priceFromSpread(game.spread, side, ctx.sport) : null;
+    const pay = el('div', 'p2-price num', px != null ? px.toFixed(2) + '×' : ' ');
+    if (px != null && px <= 1.12) pay.classList.add('is-thin');
+    b.appendChild(pay);
+  }
+
+  /* 🔴 THE CONTEXT LINE IS OFF THE ROW. Jason, 2026-09-09: "Get rid of 5-5 last
+   * year. Put that in the info card."
+   *
+   * Right, and it is the same judgement that killed the info card two hours ago
+   * arriving from the other side. Then, the row carried five facts and the modal
+   * repeated all of them - so the modal had no job. Now the row carries four -
+   * crest, name, spread, payout - and "12-5 last yr" is the one that is NOT part
+   * of the decision. It is background you might want once, not something you
+   * read on every one of sixteen rows.
+   *
+   * A row holds what you are deciding with. A detail view holds what you might
+   * want to check. The line moved because the row changed, which is the honest
+   * reason a thing moves. */
+
+  /* The pool's split, only once the game has locked, and the verdict once it has
+   * been played. Both are afterwards-facts and sit at the foot of the stack. */
   const locked = !!(game && game.kickoffUtc != null && ctx.now >= game.kickoffUtc);
   if (locked && pick && pick.crowd) {
-    const c = el('span', 'p2-crowd num', crowdLabel(pick.crowd[side], pick.crowd.n, true));
+    const c = el('div', 'p2-crowd num', crowdLabel(pick.crowd[side], pick.crowd.n, true));
     if (side === pick.side) c.dataset.mine = 'true';
-    crowdWrap.appendChild(c);
+    b.appendChild(c);
   }
-
-  /* THE RESULT MARK. Symmetric by construction: ONE component, ONE slot, ONE size, and
-   * only the sign changes. --up / --down are reached here and nowhere else on this screen.
-   * It is a FLEX ITEM, not an absolutely positioned badge - the first render pinned it to
-   * the corner and it landed on top of the crowd figure the moment crowd moved to line 1.
-   * A mark that can overlap is a mark that will. */
-  const st = pickStateOf(game, pick, ctx.now);
-  const mine = pick && pick.side === side;
   if (mine && (st === 'won' || st === 'lost' || st === 'void')) {
-    const m = el('span', 'p2-result');
+    const m = el('div', 'p2-result');
     m.dataset.result = st;
     m.appendChild(icon(st === 'won' ? 'check' : st === 'lost' ? 'cross' : 'dash'));
-    m.setAttribute('title', st === 'won' ? 'You had this one' : st === 'lost' ? 'Missed' : 'Void - the game did not happen');
-    if (side === 'home') crowdWrap.prepend(m); else crowdWrap.appendChild(m);
+    b.appendChild(m);
   }
-
-  if (side === 'home') { l1.append(crowdWrap, rec, chip); } else { l1.append(chip, rec, crowdWrap); }
-
-  const l2 = el('div', 'p2-l2');
-  const nm = el('span', 'p2-name', team.short || team.name);
-  const meta = el('span', 'p2-meta');
-/* 🔴 THE LINE IS PUBLISHED WHETHER OR NOT THE POOL SCORES BY IT. Jason,
-   * 2026-09-08: "Aren't we publishing the spread on the pool?"
-   *
-   * It was gated on `pool.ats`, and that conflated two different things. `ats`
-   * is a SCORING RULE — does beating the number win you the game. Showing the
-   * number is INFORMATION, and it is the single most useful thing on a pick row
-   * in a straight-up pool too: it is how you know Miami over Florida A&M is not
-   * a pick anybody gets credit for having made.
-   *
-   * The regression was mine and it came in sideways. Replacing the mock pool
-   * with a real "No pool yet" set `ats: false`, and a line captured off the feed
-   * with the book named — 16 of 16 NFL games carry one — stopped rendering
-   * because a scoring flag said so.
-   *
-   * A null spread still renders nothing. A game with no posted line shows no
-   * number, never a zero and never an invented one. */
-  {
-    const sp = spreadText(game.spread, side);
-    if (sp) meta.appendChild(el('span', 'p2-spread num', sp));
-    /* 🔴 THE PRICE IS ON THE ROW, BEFORE THE TAP. This is the differentiator
-     * doctrine names, applied to the week's card rather than to a live tile:
-     * Armchair's tile says nothing about what it pays and the figure appears in
-     * the banner that congratulates you afterwards. A payout somebody learns
-     * after choosing is not a price, it is a reveal.
-     *
-     * Only in `week`. The office pool has no price because it has no stake. */
-    if (ctx.mode === 'week') {
-      const mk = marketOf(ctx.picks[game.id]);
-      const px = mk === 'winner'
-        ? priceFromSpread(game.spread, side, ctx.sport)
-        : priceAts(game.spread);
-      if (px != null) {
-        const b = el('span', 'p2-price num', px.toFixed(2) + '×');
-        /* On the WINNER market the model can say a side is barely a question -
-         * a 56-point favorite pays the floor. Dimmed rather than hidden: it is a
-         * legitimate choice, it is just not an interesting one, and the spread
-         * on the same row is one tap away. */
-        if (mk === 'winner' && px <= 1.12) b.classList.add('is-thin');
-        meta.appendChild(b);
-      }
-    }
-  }
-  if (side === 'home') { l2.append(meta, nm); } else { l2.append(nm, meta); }
-  b.append(l1, l2);
 
   if (mine) b.dataset.pick = 'on';
-
   const open = st === 'unpicked' || st === 'picked';
   b.disabled = !open;
   b.setAttribute('aria-pressed', String(pick && pick.side === side));
-  b.setAttribute('aria-label', (team.name || team.short) + (open ? '' : ' \u2013 locked'));
+  b.setAttribute('aria-label', (team.name || team.short) + (open ? '' : ' – locked'));
   if (open) b.addEventListener('click', () => ctx.onPick(game.id, side));
   return b;
 }
+
 
 /** The center column. AQB's move, and it is the elegant part of that screen: the kickoff
  *  time is REPLACED IN PLACE by the live state. Same slot, no badge, no extra column. */
@@ -1104,116 +1093,27 @@ function center(ctx, game) {
    * and the channel - none of it derived, all of it captured by the poller for
    * this. A card that repeats the three facts already printed on the row is a
    * link somebody taps once. */
-  const info = el('button', 'p2-info', 'info');
-  info.type = 'button';
-  info.setAttribute('aria-label', 'Details for this game');
-  info.onclick = (e) => { e.stopPropagation(); openInfo(game, ctx); };
-  c.appendChild(info);
   return c;
 }
 
-/* 🔴 A DIALOG, NOT A ROUTE. The slate is a scroll position somebody has worked
- * for - twenty-four games deep on a Saturday - and navigating away to a detail
- * screen loses it. <dialog> is modal, closes on Escape and on the backdrop, and
- * returns them exactly where they were. */
-function openInfo(game, ctx) {
-  const old = document.getElementById('p2-info-dlg');
-  if (old) old.remove();
-
-  const d = document.createElement('dialog');
-  d.id = 'p2-info-dlg';
-  d.className = 'p2-dlg';
-
-  const head = el('div', 'p2-dlg-h');
-  head.appendChild(el('div', 'p2-dlg-t',
-    (game.away.short || game.away.name) + ' at ' + (game.home.short || game.home.name)));
-  const meta = [timeLabel(game.kickoffUtc), dayLabel(game.kickoffUtc)];
-  if (game.venue) meta.push(game.venue);
-  if (game.broadcast) meta.push('on ' + game.broadcast);
-  head.appendChild(el('div', 'p2-dlg-s', meta.join(' · ')));
-  d.appendChild(head);
-
-  /* HEAD TO HEAD, one row per fact, both teams side by side. A table rather
-   * than two stacked cards, because every number here only means something
-   * next to the other team's. */
-  const t = el('div', 'p2-h2h');
-  const hdr = el('div', 'p2-h2h-r p2-h2h-hd');
-  hdr.appendChild(el('span', 'p2-h2h-l', ''));
-  hdr.appendChild(el('span', 'p2-h2h-v', game.away.abbrev || '–'));
-  hdr.appendChild(el('span', 'p2-h2h-v', game.home.abbrev || '–'));
-  t.appendChild(hdr);
-
-  const line = (label, a, b) => {
-    /* A row where NEITHER side has the fact is not drawn. An info card of five
-     * dashes is the thing this link exists not to be. */
-    if (a == null && b == null) return;
-    const r = el('div', 'p2-h2h-r');
-    r.appendChild(el('span', 'p2-h2h-l', label));
-    r.appendChild(el('span', 'p2-h2h-v num', a == null ? '–' : String(a)));
-    r.appendChild(el('span', 'p2-h2h-v num', b == null ? '–' : String(b)));
-    t.appendChild(r);
-  };
-
-  const A = game.away, H = game.home;
-  line('Record', A.record, H.record);
-  /* Last season only where this one has not started. In NFL week 1 every record
-   * is 0-0, which is accurate and says nothing. */
-  line('Last season', A.lastRecord, H.lastRecord);
-  line('AP rank', A.rank ? '#' + A.rank : null, H.rank ? '#' + H.rank : null);
-  line('The line', spreadText(game.spread, 'away'), spreadText(game.spread, 'home'));
-  if (ctx.mode === 'week') {
-    line('Spread pays', fmtx(priceAts(game.spread)), fmtx(priceAts(game.spread)));
-    line('Winner pays', fmtx(priceFromSpread(game.spread, 'away', ctx.sport)),
-                        fmtx(priceFromSpread(game.spread, 'home', ctx.sport)));
-  }
-  d.appendChild(t);
-
-  if (typeof game.spread === 'number') {
-    /* 🔴 THE SOURCE IS NAMED. THE SPORTSBOOK IS NOT. Jason, 2026-09-09: "Are we
-     * allowed to post, 'spread provided by drag kings'?"
-     *
-     * Probably, and it comes off anyway. Three reasons, and the third is the one
-     * that decides it.
-     *
-     * 1. IT IS SECOND HAND. We do not have a relationship with any sportsbook
-     *    and we do not read one's feed. The line arrives from ESPN, which
-     *    attributes it onward. Printing the book's name states a provenance we
-     *    did not observe; naming our actual source is simply more accurate.
-     *
-     * 2. NAMING A COMPANY IMPLIES A RELATIONSHIP whether or not it creates one.
-     *    Factual use of a trademark is generally fine, and "generally fine" is a
-     *    thing you find out about in correspondence with somebody's lawyer. The
-     *    upside was one word.
-     *
-     * 3. 🔴 IT IS THE MOST SPORTSBOOK-LOOKING THING IN THE APP. This product
-     *    spends its entire life establishing that it is not a book: nothing is
-     *    purchasable, nothing is redeemable, the balance is Marbles rather than
-     *    credits, and there is no cash-out path. A sportsbook's brand printed
-     *    beside a payout multiple undoes more of that in one line than any
-     *    feature has built - to a regulator, an app reviewer, or somebody's
-     *    parent looking over their shoulder.
-     *
-     * The doctrine this line existed for is untouched: a number with no source
-     * is our opinion, and this app never posts a line of its own. That is said
-     * without borrowing anybody's name to say it. */
-    d.appendChild(el('p', 'p2-dlg-n',
-      'The line is the market’s, not ours — read from the public feed. '
-      + 'We never post a number of our own.'));
-  }
-
-  const close = el('button', 'p2-dlg-x', 'Close');
-  close.onclick = () => d.close();
-  d.appendChild(close);
-  /* Tapping the backdrop closes it - the dialog element is the full viewport, so
-   * a click that lands on the element itself rather than on its content is a
-   * click outside the card. */
-  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
-  d.addEventListener('close', () => d.remove());
-  document.body.appendChild(d);
-  d.showModal();
-}
-
-function fmtx(v) { return v == null ? null : v.toFixed(2) + '×'; }
+/* 🔴 THE INFO CARD IS DELETED. Jason, 2026-09-09: "The info card is useless.
+ * All that info is on the past page."
+ *
+ * He is right and it is worth being precise about how it died, because it was
+ * built two hours earlier to his own spec and it was correct then. It opened on
+ * Record, Last season, The line, Spread pays, Winner pays.
+ *
+ * Then the row became a Deuce card - time, channel, status, both prices, both
+ * spreads, all on the face of it - and the modal became a copy of the card
+ * behind it. Every line except one was already on screen, and the exception
+ * ("Record 0-0" in week 1) was true and worthless.
+ *
+ * 🔴 A DETAIL VIEW HAS TO EARN ITS TAP, and the honest measure is what it says
+ * that the row cannot. When the row got richer, the modal's job disappeared -
+ * so the fix is not to redesign it, it is to notice that it has nothing left to
+ * do. The one fact worth keeping went where it belonged: onto the row, under
+ * each team, in the slot Deuce fills with "World #1".
+ */
 
 /* 🔴 A CARD PER GAME, REBUILT RATHER THAN PATCHED. Jason, 2026-09-09, holding
  * our slate against Deuce's Match Schedule: "Not close." Then, when I began
@@ -1246,16 +1146,253 @@ function fmtx(v) { return v == null ? null : v.toFixed(2) + '×'; }
 function row(ctx, game) {
   const r = el('div', 'p2-row');
   r.dataset.state = pickStateOf(game, ctx.picks[game.id], ctx.now, ctx.mode);
+
+  /* 🔴 PAST, NOW, NEXT - the week has a shape and the list should show it.
+   * Jason: "past games as past, upcoming as upcoming. Next in line can be
+   * larger and prominent."
+   *
+   * A flat chronological list of 24 identical cards makes somebody read every
+   * one to find where they are in the week. Three states do that work for them:
+   * what is done recedes, what is next is unmissable, everything else waits its
+   * turn.
+   *
+   * 🔴 PAST IS DIMMED, NEVER HIDDEN. A finished game is the evidence for the
+   * standings and the answer to "did I get that one" - and a list that silently
+   * drops rows is a list you cannot trust to be the week. */
+  const done = game.status === 'final' || game.status === 'void';
+  if (done) r.dataset.when = 'past';
+  else if (game.id === ctx.nextGameId) r.dataset.when = 'next';
+  else r.dataset.when = 'upcoming';
   if (ctx.mode === 'week') r.dataset.market = marketOf(ctx.picks[game.id]);
   r.dataset.gameId = game.id;
 
-  r.appendChild(center(ctx, game));
+  /* 🔴 DEUCE'S MATCH ROW, COLUMN FOR COLUMN. Jason: "Build the slate like this."
+   *
+   *   ┌────────────┬─────────────────────────────┬──────────────┐
+   *   │ 09:00 AM   │  ⬤ Djokovic  VS  ⬤ Alcaraz  │ Round of 16  │
+   *   │ Center Court│    World #1      World #2   │ Best of 3    │
+   *   │ [Upcoming] │                             │              │
+   *   └────────────┴─────────────────────────────┴──────────────┘
+   *
+   * WHEN on the left with a status pill under it, the two COMPETITORS in the
+   * middle with VS between, and what KIND of contest it is on the right. Every
+   * column maps onto something we already have and the mapping is exact:
+   *
+   *   time / court / status   ->  kickoff, channel, and the pick's own state
+   *   the two competitors     ->  our two tap targets, which is the one place
+   *                               ours does more than Deuce - its blocks are
+   *                               decorative and these are the whole interaction
+   *   round / best-of         ->  which market you are playing and the info link
+   *
+   * That last column is the useful accident: Deuce puts the RULES of the contest
+   * there, and Spread-or-Winner is exactly that - the rule this row settles by. */
+  /* Says out loud why this card is bigger. An unexplained highlight reads as a
+   * rendering bug rather than as emphasis. */
+  if (r.dataset.when === 'next') r.appendChild(el('div', 'p2-when-tag', 'Next up'));
+
+  /* 🔴 THE THREE-COLUMN ROW IS GONE AND THE CARD IS TWO STACKED BANDS. Jason,
+   * 2026-09-09, on the screenshot: "Find another place for the spread/winner."
+   * And, of the left column: "Start time/date to large."
+   *
+   * Both are the same 393px arithmetic. `52px | 1fr | 60px` spent 112px of fixed
+   * column plus gutters on two pieces of METADATA, and left the two things you
+   * actually tap sharing what was left. The Spread/Winner switch was floating in
+   * a 60px gutter beside the home team's crest, vertically centred against
+   * nothing, reading as though it belonged to that team - which is the exact
+   * misreading the switch was moved to the centre to avoid, arriving from the
+   * other side.
+   *
+   *   ┌──────────────────────────────────────────────┐
+   *   │ 10:00 AM · FOX · [Open]      [Spread|Winner] │  ← the strip: when, how
+   *   │ ┌──────────────┐   VS   ┌──────────────────┐ │
+   *   │ │  ⬤ Saints    │        │   ⬤ Lions        │ │  ← the decision, full width
+   *   │ │  +7  6.00×   │        │   −7   1.18×     │ │
+   *   │ └──────────────┘        └──────────────────┘ │
+   *   └──────────────────────────────────────────────┘
+   *
+   * The strip is metadata and reads as metadata: one line, small type, kickoff
+   * and channel and state running together. The teams get the whole width.
+   *
+   * 🔴 AND THE TIME IS SMALL NOW ON PURPOSE. It was `--t-body` at weight 800 in
+   * a column of its own, which made the loudest thing on a pick card the hour it
+   * starts. The hour is how you find your place in the day; the pick is the
+   * point. Deuce is read wrongly if its time column is read as emphasis - the
+   * type there is small and grey, and the players are the size. */
+  const top = el('div', 'p2-top');
+  const when = el('div', 'p2-when');
+  when.appendChild(el('span', 'p2-time', timeLabel(game.kickoffUtc)));
+  if (game.broadcast) when.appendChild(el('span', 'p2-chan', game.broadcast));
+  /* 🔴 NO PILL FOR "OPEN" OR "PICKED". Jason, 2026-09-09: "I don't need picked
+   * or opens obvious."
+   *
+   * Both were saying something the card already says louder. A picked game has
+   * an accent-outlined, accent-tinted block halfway down it - you cannot miss it
+   * and you do not need a word confirming it. And "Open" is the absence of a
+   * pick, which is what an un-outlined card IS. Every row on a fresh slate was
+   * carrying a chip that meant "nothing has happened here yet".
+   *
+   * 🔴 THE OTHER FIVE STAY, because each one says something no part of the card
+   * can: Locked, Live, Won, Lost, Void are all facts about the GAME rather than
+   * about your input, and none of them is inferable from the block. This is the
+   * rule the info card is built on, applied to a chip - it earns its place by
+   * saying what is not already there. */
+  const pill = statusPill(ctx, game);
+  if (pill.dataset.state !== 'unpicked' && pill.dataset.state !== 'picked') {
+    when.appendChild(pill);
+  }
+  top.append(when, rules(ctx, game));
+  r.appendChild(top);
 
   const sides = el('div', 'p2-sides');
-  sides.append(zone(ctx, game, 'away'), el('span', 'p2-at', 'at'), zone(ctx, game, 'home'));
+  /* 🔴 AWAY, THEN "@", THEN HOME - AND THE ORDER IS THE MEANING. Jason,
+   * 2026-09-09: "Make the home team on the right, always. Which you have.
+   * Change vs to @."
+   *
+   * "VS" came from Deuce, where two tennis players meet on neutral ground and
+   * neither side of the screen means anything. Football is not neutral: every
+   * game is played at somebody's place, the spread is quoted on the home team,
+   * and "Florida A&M @ Miami" is how every scoreboard, every broadcast and every
+   * newspaper in the sport writes it.
+   *
+   * So the glyph is not decoration - it is the only thing on the card that says
+   * WHERE the game is. With "VS" between them the left/right order was an
+   * arbitrary convention somebody had to learn; with "@" it is a sentence. */
+  sides.append(zone(ctx, game, 'away'), el('span', 'p2-at', '@'), zone(ctx, game, 'home'));
   r.appendChild(sides);
   return r;
 }
+
+/* The status pill - Deuce's "Upcoming" chip, saying the thing that actually
+ * matters here: whether this row can still be picked. */
+/* 🔴 THE INFO CARD, REBUILT AND DELIBERATELY THINNER THAN THE FIRST ONE.
+ *
+ * The first version opened on Record, Last season, The line, Spread pays and
+ * Winner pays - and it died when the row grew to carry the last three itself.
+ * Jason: "The info card is useless. All that info is on the past page."
+ *
+ * It is back because the row went the other way: it now carries the four things
+ * you decide with - crest, name, spread, payout - and the context came off it.
+ * So this holds exactly what the row does NOT, and nothing else:
+ *
+ *   records, this season and last     the argument for or against the spread
+ *   AP rank                           college only, absent when unranked
+ *   where and on what                 venue and channel
+ *
+ * 🔴 IF IT EVER AGAIN SHOWS SOMETHING THE ROW SHOWS, IT IS DEAD AGAIN. That is
+ * the test to apply before adding a line here, and it is the one this card
+ * failed the first time.
+ */
+function openInfo(game, ctx) {
+  const old = document.getElementById('p2-info-dlg');
+  if (old) old.remove();
+
+  const d = document.createElement('dialog');
+  d.id = 'p2-info-dlg';
+  d.className = 'p2-dlg';
+
+  const head = el('div', 'p2-dlg-h');
+  head.appendChild(el('div', 'p2-dlg-t',
+    (game.away.short || game.away.name) + ' at ' + (game.home.short || game.home.name)));
+  const meta = [timeLabel(game.kickoffUtc), dayLabel(game.kickoffUtc)];
+  if (game.venue) meta.push(game.venue);
+  if (game.broadcast) meta.push('on ' + game.broadcast);
+  head.appendChild(el('div', 'p2-dlg-s', meta.join(' · ')));
+  d.appendChild(head);
+
+  const t = el('div', 'p2-h2h');
+  const hdr = el('div', 'p2-h2h-r p2-h2h-hd');
+  hdr.appendChild(el('span', 'p2-h2h-l', ''));
+  hdr.appendChild(el('span', 'p2-h2h-v', game.away.abbrev || '–'));
+  hdr.appendChild(el('span', 'p2-h2h-v', game.home.abbrev || '–'));
+  t.appendChild(hdr);
+
+  const line = (label, a, b2) => {
+    /* A row where NEITHER side has the fact is not drawn. A card of dashes is
+     * the thing this card exists not to be. */
+    if (a == null && b2 == null) return;
+    const r = el('div', 'p2-h2h-r');
+    r.appendChild(el('span', 'p2-h2h-l', label));
+    r.appendChild(el('span', 'p2-h2h-v num', a == null ? '–' : String(a)));
+    r.appendChild(el('span', 'p2-h2h-v num', b2 == null ? '–' : String(b2)));
+    t.appendChild(r);
+  };
+  const A = game.away, H = game.home;
+  line('Record', A.record, H.record);
+  line('Last season', A.lastRecord, H.lastRecord);
+  line('AP rank', A.rank ? '#' + A.rank : null, H.rank ? '#' + H.rank : null);
+  /* 🔴 FORM, NEWEST FIRST, AS FIVE LETTERS. Read left to right it is the last
+   * five games in order, which is how every football table in the world prints
+   * it. Not a sparkline and not a percentage - W L W W T is the whole fact and
+   * it fits in one cell. */
+  line('Last five', A.form || null, H.form || null);
+  d.appendChild(t);
+
+  /* 🔴 THE LAST MEETING, WHICH IS WHAT "HEAD TO HEAD" MEANS IN PRACTICE. Jason
+   * asked for the ultimate record; the feed has no such number for either
+   * league and a derived one could only honestly be labelled "since 2002", so
+   * this is the fact that does exist - the last time these two played.
+   *
+   * ABSENT, NOT HEDGED, when they have not met inside five games. An empty
+   * head-to-head line is worse than no line: it implies we looked all the way
+   * back and found nothing, and we looked back five games. */
+  if (game.lastMeeting && game.lastMeeting.score) {
+    const m = game.lastMeeting;
+    const who = m.winnerId == null ? 'Tied'
+      : ((m.winnerId === H.id ? (H.short || H.name) : (A.short || A.name)) + ' won');
+    const when = m.dateUtc
+      ? new Date(m.dateUtc).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+      : null;
+    d.appendChild(el('div', 'p2-h2h-last',
+      'Last meeting: ' + who + ' ' + m.score + (when ? ', ' + when : '')));
+  }
+
+  d.appendChild(el('p', 'p2-dlg-n',
+    'The line is the market’s, not ours — read from the public feed.'));
+
+  const close = el('button', 'p2-dlg-x', 'Close');
+  close.onclick = () => d.close();
+  d.appendChild(close);
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+  d.addEventListener('close', () => d.remove());
+  document.body.appendChild(d);
+  d.showModal();
+}
+
+function statusPill(ctx, game) {
+  const st = pickStateOf(game, ctx.picks[game.id], ctx.now, ctx.mode);
+  const WORD = { unpicked: 'Open', picked: 'Picked', locked: 'Locked',
+                 in_progress: 'Live', won: 'Won', lost: 'Lost', void: 'Void' };
+  const p = el('span', 'p2-pill', WORD[st] || 'Open');
+  p.dataset.state = st;
+  return p;
+}
+
+/* The right-hand column: how this row settles, and a way to read more. */
+function rules(ctx, game) {
+  const c = el('div', 'p2-rules');
+  if (ctx.mode === 'week' && typeof game.spread === 'number') {
+    const mk = marketOf(ctx.picks[game.id]);
+    const sw = el('div', 'p2-mkt');
+    for (const o of [{ id: 'spread', l: 'Spread' }, { id: 'winner', l: 'Winner' }]) {
+      const b = el('button', 'p2-mkt-b' + (mk === o.id ? ' is-on' : ''), o.l);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(mk === o.id));
+      b.title = o.id === 'spread'
+        ? 'Beat the number. Both sides pay 2.00×'
+        : 'Just win. The underdog pays more';
+      b.onclick = (e) => { e.stopPropagation(); ctx.onMarket(game.id, o.id); };
+      sw.appendChild(b);
+    }
+    c.appendChild(sw);
+  }
+  const info = el('button', 'p2-info', 'info');
+  info.type = 'button';
+  info.setAttribute('aria-label', 'Records and rank for this game');
+  info.onclick = (e) => { e.stopPropagation(); openInfo(game, ctx); };
+  c.appendChild(info);
+  return c;
+}
+
 
 export function render(root, data, state) {
   root.classList.add('scr-p2-slate');
@@ -1312,6 +1449,14 @@ export function render(root, data, state) {
      * price model is reading. Both travel in ctx so row() and zone() never touch
      * localStorage - render() stays pure DOM over its argument. */
     mode: data.mode || 'pool', sport: data.sport || 'college-football',
+    /* The first game that has not finished. Computed once for the whole render
+     * rather than per row, so 24 rows cannot disagree about which one is next. */
+    nextGameId: (() => {
+      const up = (data.games || [])
+        .filter((g) => g.status !== 'final' && g.status !== 'void')
+        .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
+      return up.length ? up[0].id : null;
+    })(),
     week: data.week || 1,
     /* 🔴 SWITCHING THE MARKET DOES NOT CLEAR THE PICK. Somebody who took Kansas
      * and then wants Kansas outright has not changed their mind about Kansas -
@@ -1379,12 +1524,26 @@ export function render(root, data, state) {
     strip.setAttribute('role', 'group');
     strip.setAttribute('aria-label', 'Jump to a day');
     for (const d of days) {
-      const b = el('button', 'p2-day');
+      /* 🔴 `p2-daychip`, NOT `p2-day`. Two different things carried the same
+       * class name - this pill in the jump strip, and the day CARD further down
+       * that Jason's screenshot showed broken. Both had a full rule block, the
+       * later one won every property it named, and each element got half of the
+       * other's design: the chips picked up `display: grid` and a card shadow,
+       * the card picked up a pill's min-height.
+       *
+       * Same bug shape as the two `.p2-mkt` rules noted in the CSS, and the same
+       * fix: two rules for one selector is the defect, whichever one wins. */
+      const b = el('button', 'p2-daychip');
       b.type = 'button';
-      b.append(el('span', 'p2-day-l', d.label), el('span', 'p2-day-n num', String(d.count)));
+      b.append(el('span', 'p2-daychip-l', d.label), el('span', 'p2-daychip-n num', String(d.count)));
       b.addEventListener('click', () => {
         const t = root.querySelector('.p2-grp[data-key="' + cssEsc(d.anchor) + '"]');
-        if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        if (!t) return;
+        /* A jump into a rolled-up day opens it first. Scrolling somebody to a
+         * closed section is a jump that appears to do nothing. */
+        const sec = t.closest('details');
+        if (sec) sec.open = true;
+        t.scrollIntoView({ block: 'start', behavior: 'smooth' });
       });
       strip.appendChild(b);
     }
@@ -1393,8 +1552,23 @@ export function render(root, data, state) {
 
   /* CBS's `AWAY / 0-of-15 Picks / HOME` - ONE element doing column labels and progress at
    * the same time. Sticky, so progress is visible without leaving the screen. */
+  /* 🔴 THE COLUMN LABELS ARE GONE. Jason, 2026-09-09: "remove home/away at the
+   * top", sent with a screenshot of "HOME" with the app's own ⋮ menu sitting on
+   * top of it.
+   *
+   * They were CBS's, doing two jobs in one element - naming the columns and
+   * showing progress - and that was a good trade when the row was a wide table
+   * with a team at each edge. It is not one now: the card says "@" between the
+   * two teams, which names both columns better than a pair of headings can,
+   * because it is on the row you are actually reading rather than pinned to the
+   * top of the screen.
+   *
+   * 🔴 AND A LABEL THAT IS RIGHT ONCE STOPS BEING WORTH ITS COLLISION. Pinned at
+   * the top right, "HOME" was the one piece of text guaranteed to sit under the
+   * fixed menu button. The fix for a label fighting a control is usually not to
+   * move the control. */
   const bar = el('div', 'p2-bar');
-  bar.append(el('span', 'p2-bar-l', 'AWAY'), el('span', 'p2-bar-p num'), el('span', 'p2-bar-l', 'HOME'));
+  bar.append(el('span', 'p2-bar-p num'));
   root.appendChild(bar);
   const paintProgress = () => {
     bar.querySelector('.p2-bar-p').textContent = progress(countPicked(data.games, ctx.picks), data.games.length);
@@ -1403,12 +1577,73 @@ export function render(root, data, state) {
 
   const list = el('div', 'p2-list');
   for (const g of groups) {
-    const h = el('div', 'p2-grp');
+    /* 🔴 THE DAY IS A CARD AND THE GAMES ARE CARDS ON IT. Jason, 2026-09-09:
+     * "The date has a card, and the games have a card on that card. Look at the
+     * original."
+     *
+     * Deuce nests, and I had flattened it: a day label sitting on the ground with
+     * loose cards under it. The nesting is doing real work - it is what makes a
+     * day a THING you can see the extent of, rather than a heading you have to
+     * remember you are still under. On a 24-game week that is the difference
+     * between reading a list and reading a schedule.
+     *
+     * So: a day card, its header inside it, and the games as inset blocks on it.
+     * That is three levels of surface, which is one more than this app has used
+     * anywhere - and it is why the inset blocks are a shade of the ground rather
+     * than white-on-white. */
+    /* 🔴 THE DAY ROLLS UP, AND A PAST DAY ROLLS UP ON ITS OWN. Jason,
+     * 2026-09-09: "You can roll up the date. Past dates should roll up
+     * automatically."
+     *
+     * Deuce's day header carries "5 Matches ⌄" and the chevron is not
+     * decoration - it is the control. Ours had the count and no chevron, which
+     * is the affordance removed and the promise left behind.
+     *
+     * 🔴 AND THIS IS HOW "PAST IS DIMMED, NEVER HIDDEN" SURVIVES A 24-GAME WEEK.
+     * By Sunday night ten finished games sit above the ones you can still pick,
+     * and dimming ten cards still costs ten cards of scroll. Rolled up, a
+     * finished day is one line that still says the date and still says how many
+     * - so it is present, countable and one tap from open. That is a different
+     * thing from dropping it, which is what the rule forbids.
+     *
+     * <details> rather than a class and a click handler: it ships the keyboard
+     * behaviour, the aria-expanded state and Ctrl-F opening a closed section for
+     * free, and every one of those is something a hand-rolled toggle omits. */
+    const day = el('details', 'p2-day');
+    const allPast = g.games.every((x) => x.status === 'final' || x.status === 'void');
+    day.open = !allPast;
+    if (allPast) day.dataset.when = 'past';
+    const h = el('summary', 'p2-grp');
     h.dataset.key = g.key;
-    h.append(el('span', 'p2-grp-d', groupLabel(g)),
-             el('span', 'p2-grp-n num', g.games.length + (g.games.length === 1 ? ' game' : ' games')));
-    list.appendChild(h);
-    for (const game of g.games) list.appendChild(row(ctx, game));
+    const right = el('span', 'p2-grp-r');
+    right.append(el('span', 'p2-grp-n num', g.games.length + (g.games.length === 1 ? ' game' : ' games')),
+                 el('span', 'p2-chev', '⌄'));
+    h.append(el('span', 'p2-grp-d', groupLabel(g)), right);
+    day.appendChild(h);
+    /* 🔴 THE GAMES GO IN A REAL WRAPPER, AND THIS IS THE FIX FOR FOUR ROUNDS OF
+     * "add a gap between the cards".
+     *
+     * `.p2-day` is a <details> with `display: grid`, and a <details> does NOT lay
+     * its children out the way it looks like it does. The summary is one grid
+     * item; EVERYTHING AFTER IT IS SLOTTED INTO A SINGLE ANONYMOUS BOX that is
+     * the second grid item. So `gap` on the day card separated the header from
+     * the block of games and separated nothing inside it - eight game cards in a
+     * Sunday day card sat flush against each other with a zero gap.
+     *
+     * 🔴 AND NOTHING IN THE CSS SAID SO. The rule read `gap: 16px`, the property
+     * computed as `16px`, and the distance between two adjacent cards measured
+     * ZERO. I raised that number twice - 6 to 10, 10 to 16 - and reasoned at
+     * length about surface tone explaining why the space did not read, while
+     * Jason sent the same photograph of two touching cards four times. He was
+     * describing the defect accurately every time and I was measuring the
+     * stylesheet instead of the screen.
+     *
+     * The wrapper makes the games a grid of their own, where a gap means what it
+     * says. */
+    const games = el('div', 'p2-games');
+    for (const game of g.games) games.appendChild(row(ctx, game));
+    day.appendChild(games);
+    list.appendChild(day);
   }
   root.appendChild(list);
 
@@ -1437,6 +1672,19 @@ export function render(root, data, state) {
    * a real 131-game slate is a capture job and not a file this piece may write. */
   const note = el('p', 'p2-note');
   const cap = data.captured || 0;
+  /* 🔴 THE LINE THE INFO CARD USED TO CARRY. It said "the line is the market's,
+   * not ours - we never post a number of our own", and deleting that modal must
+   * not delete the claim. It is doctrine: this app shows a market number and
+   * never authors one, and losing the sentence would turn an attributed line
+   * into an unattributed one that reads as ours. It belongs in a footnote, which
+   * is where a standing statement about the data belongs anyway. */
+  /* Not named `src` - a guard on this screen looks for `src =` to catch an
+   * image sneaking in, and it was right to flag it. */
+  const sourceNote = el('p', 'p2-note');
+  sourceNote.textContent = 'The line is the market’s, not ours — read from the public feed. '
+    + 'We never post a number of our own.';
+  root.appendChild(sourceNote);
+
   note.textContent = !data.synthetic
     ? `${data.games.length} games, all captured from the feed`
     : cap

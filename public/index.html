@@ -24,7 +24,27 @@
   <meta name="twitter:description" content="Free. No account. Nothing to install.">
   <meta name="twitter:image" content="https://anygiven.app/og.png">
   <meta name="description" content="Call the next play before it happens. Free, no account, no install.">
-  <meta name="theme-color" content="#120a0e">
+  <!-- 🔴 THE BROWSER'S OWN CHROME. Jason, 2026-09-09, circling the white band
+       under the nav: "Can I see thru this? The white area?"
+
+       No - a page cannot make Safari's toolbar transparent, and nothing it can
+       do will show content behind it. What it CAN do is tell the browser what
+       color to paint it, which gets the thing he is actually after: one
+       continuous surface to the bottom of the screen instead of the app ending
+       at a white slab.
+
+       🔴 AND THE VALUE HERE WAS #120a0e - a near-black out of the RETIRED maroon
+       palette, left behind when the signature color changed. It was not doing
+       any harm only because Safari was ignoring it; the moment it was honoured
+       the chrome would have gone almost black under a light grey app. A stale
+       color in a meta tag is invisible until it is suddenly very visible.
+
+       Two tags, because the ground is not the same in both themes and one value
+       cannot serve both. -->
+  <meta name="theme-color" content="#ebebeb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Any Given…</title>
 <link rel="stylesheet" href="/styles/tokens.css">

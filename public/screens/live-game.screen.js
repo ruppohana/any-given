@@ -136,6 +136,17 @@ const S = {
   name: store.get('name', ''),
   stake: store.get('stake', 10),
   calls: store.get('calls', {}),   // afterPlayId -> { type, choice, stake, p }
+  /* 🔴 TV TAPS. Timestamps of "it just happened on my screen", used to measure
+     how far the person's own television is behind the stadium. Kept as raw
+     millisecond stamps and resolved later against the feed, never as a computed
+     gap - the play they watched is usually one we have not been told about yet,
+     so the answer does not exist at the moment of the tap. */
+  taps: store.get('taps', []),
+  /* afterPlayId -> 1. Snaps deliberately sat out. Kept SEPARATE from calls on
+     purpose: a skip must never be able to settle, score or reach the board, and
+     the surest way to guarantee that is for it not to live in the same object
+     that settlement walks. */
+  skips: store.get('skips', {}),
   seenIntro: !!store.get('seenIntro', 0),
   noGame: false,
   delayOpen: false,
@@ -174,14 +185,243 @@ const S = {
  * ago - not the newest play. This is one filter and it is the whole feature: a
  * play is visible only once it is older than the delay.
  */
+/* 🔴 THE STATE THE CALL IS BEING MADE IN, SAID OUT LOUD. Jason, live:
+ * "Below you have print the down and distance and who has the ball."
+ *
+ * He is right that it was missing and it is the most important line on the card.
+ * "Run or pass?" is a different question on 3rd & 1 than on 2nd & 12, and the
+ * app was asking it while showing only the text of the previous play - so the
+ * information the price is built on was the one thing not printed.
+ *
+ * 🔴 IT COMES FROM THE HELD SITUATION, WHICH IS THE ONLY REASON IT IS SAFE TO
+ * SHOW. held() derives the down, the distance and possession from the last
+ * VISIBLE play; the live values are deliberately not reachable here. Printing
+ * the live down beside a held play list is exactly the leak that was found six
+ * hours before kickoff - the header would state the result of the play being
+ * withheld. This line is the same fact the question was built from, so it can
+ * never disagree with it. */
+/* 🔴 THE GAME IS STOPPED, AND THE APP KNEW AND DID NOT SAY. Jason, live: "do we
+ * know when it is an official time out like for commercials?"
+ *
+ * We do, exactly - ESPN writes the stoppage into the play feed as its own row:
+ * "Official Timeout at 07:29.", "Two-minute warning", "End of Quarter". The
+ * parser already recognises all of them, because settlement has to: they are not
+ * run-or-pass snaps and a call made across one would void. So the fact was being
+ * read, used to protect the settlement, and then thrown away before the screen.
+ *
+ * 🔴 IT IS THE ANSWER TO "WHY IS NOTHING HAPPENING". A TV timeout is two minutes
+ * of no plays, and an app that just sits there looks broken - which is exactly
+ * how the false stale banner started. Saying "commercial break" turns a silence
+ * into information, and it is the honest thing to show while the feed genuinely
+ * has nothing to report.
+ *
+ * Absent, never guessed: only these three stoppages, matched on the feed's own
+ * words. Anything else gets no pill rather than an invented one. */
+function breakLine(state) {
+  const plays = (state && state.plays) || [];
+  const last = plays[plays.length - 1];
+  if (!last) return null;
+  const t = (last.typeText || '') + ' ' + (last.text || '');
+  /* 🔴 MATCHED AGAINST WHAT THE FEED ACTUALLY WRITES, WHICH IS NOT WHAT I
+   * GUESSED. I wrote /end of (quarter|period)/ and the feed says "END QUARTER 1"
+   * - no "of" - so the one stoppage on screen at the time went unlabelled while
+   * the code looked correct. Same shape as every other assumption about this
+   * feed today: the fix is to read a real payload, not to reason about wording.
+   * Seen live: "Official Timeout at 07:29.", "END QUARTER 1", "Two-minute
+   * warning". */
+  const what = /official timeout/i.test(t) ? 'Commercial break'
+    : /two.minute warning/i.test(t) ? 'Two-minute warning'
+    : /end (of )?(the )?(quarter|period)|end quarter/i.test(t) ? 'End of the quarter'
+    : /end (of )?(the )?half|halftime|end of 2nd quarter/i.test(t) ? 'Half time'
+    : null;
+  if (!what) return null;
+  const line = el('div', 'lg-break');
+  line.appendChild(el('span', 'lg-break-d', what));
+  line.appendChild(el('span', 'lg-break-t', 'no snap for a couple of minutes'));
+  return line;
+}
+
+/* 🔴 A CARD, SAYING ONE THING. Jason, refining it: "Sorry card can say, but the
+ * card says waiting for the snap."
+ *
+ * So the panel stays and its CONTENT changes - which is a better answer than
+ * either of my two attempts. Removing the card entirely made the page jump and
+ * left a gap where the subject of the screen had been; keeping a full card with
+ * the question and lit tiles left an answered question refusing to leave. A card
+ * holding one line keeps the layout still and says exactly what is true.
+ *
+ * The same component serves both endings - a call made and a snap sat out -
+ * because from here they are the same state: nothing to do until the next play.
+ * What you staked is in the list below, which is where a record belongs. */
+/* 🔴 THE MEASUREMENT THAT DECIDES WHETHER A PAID FEED IS NEEDED AT ALL. Jason,
+ * asked what a low-latency feed costs, then: "Yes. Snap."
+ *
+ * The whole product rests on ONE number nobody has measured: how far the
+ * viewer's television is behind the stadium. We know our own lag exactly now -
+ * ESPN publishes 60 to 90 seconds late - and we have been treating that as the
+ * gap. It is not. The gap that matters is
+ *
+ *     our lag  −  their television's lag
+ *
+ * and the second term has only ever been guessed. Cable runs 5-10s behind the
+ * stadium; a stream can be 30-60. If he is streaming, we may be 20 seconds
+ * ahead of his screen rather than a minute behind it, and the snap market is
+ * recoverable for the price of a smaller delay setting. If he is on cable, it
+ * is not, and a paid feed is the only door.
+ *
+ * 🔴 THE TAP CANNOT BE RESOLVED WHEN IT IS MADE, and pretending otherwise would
+ * invent the answer. The play he is watching is usually one ESPN has not
+ * published yet, so the tap is STORED and matched afterwards to the play whose
+ * wallclock is the latest one at or before it - the play that was happening when
+ * he tapped. It is only final once the feed has moved past that moment, which is
+ * what `settled` below waits for. Until then it says so rather than showing a
+ * number that will change. */
+function resolveTaps(state) {
+  const plays = ((state && state.plays) || []).filter((p) => p.wallclockMs);
+  const out = [];
+  for (const tap of S.taps) {
+    let watched = null;
+    let passed = false;
+    for (const p of plays) {
+      if (p.wallclockMs <= tap) { if (!watched || p.wallclockMs > watched) watched = p.wallclockMs; }
+      else passed = true;
+    }
+    if (watched && passed) out.push(Math.round((tap - watched) / 1000));
+  }
+  return out;
+}
+
+/* 🔴 `lg-tvlag`, NOT `lg-tv` - THAT NAME WAS ALREADY THE BROADCAST CHIP. Caught
+ * on the first click: querying `.lg-tv` returned the element reading "NBC".
+ * Fifth name collision today, after .p2-mkt, .p2-day, .p2-grp and .p2-sub, and
+ * the first one in a component rather than a stylesheet. Same rule: one name,
+ * one thing. */
+function tvCard(state, wrap) {
+  const c = el('div', 'card lg-tvlag');
+  const b = el('button', 'lg-tvlag-go', 'SNAP — tap the moment it happens on your TV');
+  b.type = 'button';
+  b.onclick = () => {
+    S.taps = [...S.taps, Date.now()].slice(-20);
+    store.set('taps', S.taps);
+    paint(wrap);
+  };
+  c.appendChild(b);
+
+  const gaps = resolveTaps(state);
+  if (!gaps.length) {
+    c.appendChild(el('p', 'lg-tvlag-n', S.taps.length
+      ? `${S.taps.length} tap${S.taps.length > 1 ? 's' : ''} recorded — waiting for the feed to reach them.`
+      : 'Tap it a few times during live snaps. It measures your television against the stadium clock, which is the one number nobody has.'));
+    return c;
+  }
+  /* The MEDIAN, not the mean - one late tap while reaching for the phone would
+     drag an average and there are only a handful of samples. */
+  const sorted = [...gaps].sort((a, b2) => a - b2);
+  const tv = sorted[Math.floor(sorted.length / 2)];
+  const plays = ((state && state.plays) || []).filter((p) => p.wallclockMs);
+  const newest = plays.length ? plays[plays.length - 1].wallclockMs : null;
+  const ours = newest ? Math.round((Date.now() - newest) / 1000) : null;
+
+  const rows = el('div', 'lg-tvlag-rows');
+  const row = (k, v) => {
+    const r = el('div', 'lg-tvlag-row');
+    r.append(el('span', 'lg-tvlag-k', k), el('span', 'lg-tvlag-v num', v));
+    rows.appendChild(r);
+  };
+  row('Your TV, behind the stadium', tv + 's');
+  if (ours != null) row('This app, behind the stadium', ours + 's');
+  if (ours != null) {
+    const edge = ours - tv;
+    row(edge > 0 ? 'You see it before we ask, by' : 'We ask before you see it, by',
+      Math.abs(edge) + 's');
+  }
+  rows.appendChild(el('div', 'lg-tvlag-n2', `${gaps.length} sample${gaps.length > 1 ? 's' : ''}`));
+  c.appendChild(rows);
+  return c;
+}
+
+function waitingCard() {
+  const c = el('div', 'card lg-call is-waiting');
+  c.appendChild(el('div', 'lg-waiting', 'Waiting for the snap…'));
+  return c;
+}
+
+function downLine(state) {
+  /* 🔴 NULL-SAFE ON THE STATE ITSELF, NOT JUST ON THE SITUATION. Moving this out
+   * of the call card moved it OUT of a branch that had already proved there was
+   * a state, into the main body of paint() where there may not be one yet - and
+   * `state.situation` on null throws, which takes the whole render with it and
+   * leaves a blank page with no console error to find. That is what Jason
+   * photographed as an empty live screen thirty seconds after it worked.
+   *
+   * Relocating a component moves it into a different set of guarantees. The
+   * guard has to come with it. */
+  const si = state && state.situation;
+  if (!si) return null;
+  const team = si.offenseTeamId && state.teams && state.teams[si.offenseTeamId];
+  const who = team ? (team.abbrev || team.short || team.name) : null;
+  /* 🔴 THE FEED'S SENTENCE FIRST. It carries the spot - "1st & 10 at SEA 32" -
+   * and the hand-built version below never could, because we only captured the
+   * down and the distance. The fallback stays for a play whose `end` block is
+   * missing, which does happen on a penalty. */
+  const dn = ['1st', '2nd', '3rd', '4th'][(si.down || 0) - 1] || null;
+  /* Absent rather than invented. A goal-line snap has no "& 10" and a kickoff
+   * has no down at all; printing "0 & 0" would be worse than printing nothing. */
+  const dd = si.downDistanceText
+    || (dn ? dn + ' & ' + (si.distance === 0 ? 'goal' : si.distance) : null);
+  if (!dd && !who) return null;
+  /* 🔴 ITS OWN PILL. Jason, live: "Make it its separate pill. Easy to see."
+   * A line of text under a heading is read after the heading; a pill is read
+   * BEFORE it, because it is a shape rather than a sentence. This is the fact
+   * the question depends on, so it should arrive first. */
+  const line = el('div', 'lg-dd');
+  const pill = el('span', 'lg-dd-pill');
+  if (dd) pill.appendChild(el('span', 'lg-dd-d num', dd));
+  /* 🔴 ONLY WHEN THE SENTENCE DOES NOT ALREADY NAME THEM. "1st & 10 at SEA 32"
+   * followed by a separate "SEA" chip is the same fact printed twice, which is
+   * the mistake that killed the first info card. */
+  if (who && !(dd && dd.includes(who))) pill.appendChild(el('span', 'lg-dd-t', who));
+  line.appendChild(pill);
+  return line;
+}
+
 function held(raw, delayMs, now) {
   if (!raw) return null;
-  /* The feed carries no per-play wall clock, so the poller's own read time is the
-   * best evidence of when a play became known. A play is released when the state
-   * that first carried it is older than the delay. */
+  /* 🔴 THE DELAY IS MEASURED FROM WHEN THE PLAY HAPPENED. Jason, live in the
+   * first quarter: "Timing is off."
+   *
+   * This used to say "the feed carries no per-play wall clock" and hold exactly
+   * ONE play until the whole push aged past the delay. Both halves were wrong.
+   * ESPN stamps every play with a wallclock - it was never read - and holding
+   * "the last one, until the push is old" is not a 45-second delay at all: with
+   * a push arriving every 12 to 20 seconds the state is almost never 45s old, so
+   * the app sat permanently one play behind, and how far behind THAT was in
+   * seconds depended on how long the teams took to snap it.
+   *
+   * 🔴 A DELAY HELD FROM ARRIVAL IS NOT A DELAY, IT IS A QUEUE. Everything
+   * upstream stacks on top of it - ESPN's own lag, the 12s poll, the push, the
+   * client's 5s poll - and none of it is visible to the person reading "45s
+   * behind". Held from the play's own clock the number is literally true, and it
+   * stays true if the pipeline gets slower or faster.
+   *
+   * That matters more here than anywhere else in the app: the whole product
+   * rests on the play being one the viewer has NOT seen yet. Too little delay
+   * and we ask about a play already on their screen; too much and we ask about
+   * one they watched a minute ago. Either way the question is a fake. */
   const cutoff = now - delayMs;
+  let cut = raw.plays.length;
+  for (let i = 0; i < raw.plays.length; i++) {
+    const w = raw.plays[i].wallclockMs;
+    /* The FIRST play too new to show ends the visible list - never a filter,
+     * which would punch a hole in the middle if a stamp arrived out of order. */
+    if (w && w > cutoff) { cut = i; break; }
+  }
+  /* A state from a poller too old to send wallclocks falls back to the previous
+   * rule rather than showing everything - old behaviour beats no delay. */
+  const anyClock = raw.plays.some((p) => p.wallclockMs);
   const asOf = raw.pushedAt || raw.fetchedAt || 0;
-  const visible = asOf <= cutoff ? raw.plays : raw.plays.slice(0, Math.max(0, raw.plays.length - 1));
+  const visible = anyClock ? raw.plays.slice(0, cut)
+    : (asOf <= cutoff ? raw.plays : raw.plays.slice(0, Math.max(0, raw.plays.length - 1)));
   const holding = raw.plays.length - visible.length;
 
   /* 🔴 THE SITUATION AND THE SCORE ARE HELD BACK TOO, AND NOT DOING THAT WAS
@@ -208,7 +448,28 @@ function held(raw, delayMs, now) {
    * score after itself and the down and distance it ended on. That is the only
    * honest source: it is what a viewer 45 seconds behind their television can
    * actually know. */
-  if (!holding || !visible.length) {
+  /* 🔴 THE SITUATION IS DERIVED WHETHER OR NOT ANYTHING IS BEING HELD. Jason,
+   * live: "Down and dist broken" - the pill printed the team and no down.
+   *
+   * This used to bail out here whenever `holding` was 0, on the reasoning that
+   * with nothing hidden the raw situation is already the truth. 🔴 THAT ASSUMES
+   * THE RAW SITUATION IS POPULATED, AND ON THIS FEED IT IS NOT. Straight off the
+   * wire, mid-drive:
+   *
+   *     situation: { down: null, distance: null, downDistanceText: null, ... }
+   *     last play: { startDown: 3, distance: 2, endDown: 4, endDistance: 1 }
+   *
+   * ESPN's summary `situation` block is frequently empty while the PLAY carries
+   * the down and distance perfectly well. So the derivation was not a
+   * delay-only correction at all - it was the only place those numbers were
+   * being worked out, and it was switched off in the exact case where the delay
+   * is holding nothing, which is most of tonight.
+   *
+   * 🔴 A CODE PATH THAT ONLY RUNS IN THE UNUSUAL CASE IS THE ONE THAT GETS
+   * TESTED, and the common case is the one that ships broken. Deriving always
+   * costs nothing - when holding is 0 the last visible play IS the newest play,
+   * so the derived values are the live ones. */
+  if (!visible.length) {
     return { ...raw, plays: visible, holding };
   }
   const last = visible[visible.length - 1];
@@ -223,6 +484,9 @@ function held(raw, delayMs, now) {
       ...raw.situation,
       down: last.endDown != null ? last.endDown : raw.situation.down,
       distance: last.endDistance != null ? last.endDistance : raw.situation.distance,
+      /* The feed's own sentence for where the ball is, after the last play you
+         have been shown - never the live one. */
+      downDistanceText: last.endSpotText || raw.situation.downDistanceText,
       /* The clock and the last play text belong to the play you can see, not to
        * the one being withheld. */
       clock: last.clock || raw.situation.clock,
@@ -257,6 +521,54 @@ function questionFor(state) {
   const openDriveCall = Object.values(S.calls).some(
     (c) => c.scope === 'drive' && c.driveId === last.driveId
   );
+
+  /* 🔴 DRIVE QUESTIONS FIRST, AND MORE THAN ONE PER DRIVE. Jason said "we missed
+   * the last play" four times tonight, which is the only answer that matters.
+   *
+   * 🔴 THE SNAP MARKET CANNOT WORK ON THIS FEED AND THAT IS MEASURED, NOT FELT.
+   * ESPN publishes a play 60 to 90 seconds after it happens - sampled three
+   * times twelve seconds apart on the same play, 58s, 70s, 82s, and the core API
+   * returns the identical payload, so there is no faster door. A snap-to-snap
+   * gap is about 35 seconds. The window the whole mechanic depends on - ask
+   * before the viewer sees it - does not exist. Every question about the next
+   * snap arrives after he has watched it.
+   *
+   * 🔴 A DRIVE LASTS TWO TO FIVE MINUTES, so at 90 seconds behind the outcome is
+   * still genuinely unknown when you are asked. Same product, same prices, same
+   * settlement; the only change is the clock the question runs on.
+   *
+   * The `openDriveCall` guard had to go with it. One drive question per drive
+   * would leave the board empty for minutes at a time, which is the lag problem
+   * wearing different clothes - so the DIFFERENT drive markets can now run at
+   * once, and the router hands out whichever has not been taken yet. They settle
+   * independently and always did; nothing about that needed changing.
+   *
+   * 🔴 REVERSIBLE IN ONE LINE: delete this block and the snap rotation comes
+   * straight back. It is a routing preference, not a change to the catalog, the
+   * pricer or the void path. */
+  const takenOnThisDrive = new Set(
+    Object.values(S.calls)
+      .filter((c) => c.scope === 'drive' && c.driveId === last.driveId)
+      .map((c) => c.type)
+  );
+  const y = state.situation?.yardsToGoal ?? null;
+  const DRIVE_ORDER = ['drive_end', 'three_and_out', 'drive_breakout', 'drive_redzone'];
+  for (const id of DRIVE_ORDER) {
+    if (takenOnThisDrive.has(id)) continue;
+    /* Not offered on a drive that is already inside the 20 - the answer is in
+       hand, which is the exact fault this whole change exists to remove. */
+    if (id === 'drive_redzone' && typeof y === 'number' && y <= 20) continue;
+    /* Three-and-out is only a question at the start of a possession. Asked on
+       second down it is half answered already. */
+    if (id === 'three_and_out' && !isDriveStart) continue;
+    const t = byId(id);
+    if (t) return t;
+  }
+  /* In the red zone the drive has its own better question. */
+  if (typeof y === 'number' && y <= 20 && !takenOnThisDrive.has('redzone_outcome')) {
+    const rz = byId('redzone_outcome');
+    if (rz) return rz;
+  }
 
   return offerFor({
     down: state.situation?.down ?? null,
@@ -901,10 +1213,27 @@ function paint(wrap) {
   bank.appendChild(d);
   wrap.appendChild(bank);
 
+  /* 🔴 BETWEEN THE BANK AND THE QUESTION. Jason, live: "Move down and dist pill
+   * to between the marbles pill and the what to do pill."
+   *
+   * It was inside the call card, under the heading - which made it read as part
+   * of the question rather than as the state the question is asked in. Out here
+   * it is a fact about the GAME sitting between what you have and what you are
+   * being asked, which is the order you actually read them in: how many marbles,
+   * where the ball is, what is the call. */
+  const dl = downLine(state);
+  if (dl) wrap.appendChild(dl);
+  const bl = breakLine(state);
+  if (bl) wrap.appendChild(bl);
+  /* Under the question, where the thumb already is - a timing button you have to
+     go and find measures reaction time to the button, not the television. */
+  const tv = tvCard(state, wrap);
+
   /* ---- the question ---- */
   const type = questionFor(state);
   const last = state.plays[state.plays.length - 1];
   const already = last ? S.calls[last.id] : null;
+  const skipped = last ? !!S.skips[last.id] : false;
 
   /* 🔴 A FINISHED GAME DOES NOT ASK YOU WHAT HAPPENS NEXT. Caught in a screenshot
    * on 2026-09-08: the head read Q4 0:00 with a final score above a card asking
@@ -923,11 +1252,62 @@ function paint(wrap) {
         ? 'You finished level.'
         : `You finished ${S.bank > START_BANK ? 'up' : 'down'} ${Math.abs(S.bank - START_BANK)}, on ${S.bank} Marbles.`));
     wrap.appendChild(done);
+  } else if (type && last && !already && skipped) {
+    /* 🔴 A PASS IS AN ANSWER AND THE CARD SHOULD SAY SO. Jason, live: "In cards
+     * like 10 yards or more, add a skip button."
+     *
+     * The only way not to bet was to not tap, which is silence rather than a
+     * decision - the question sat there looking unanswered for the whole snap,
+     * and on a question you do not fancy that is the app nagging you. Half the
+     * skill in this game is knowing which snaps to sit out; an app that only has
+     * a verb for BETTING treats sitting out as a failure to act.
+     *
+     * 🔴 IT STAKES NOTHING AND IT IS NOT A CALL. It never reaches S.calls, so it
+     * cannot settle, cannot appear on the board and cannot touch the bank. It is
+     * a note to the screen saying "stop asking me this one". */
+    /* 🔴 NOTHING. NOT A CARD SAYING YOU SKIPPED. Jason: "If I skip, take the
+     * card away and go to the next card. Or leave blank."
+     *
+     * The first version replaced the question with a card reading "Sat this one
+     * out" and an undo link - which is the app acknowledging itself. A skip is
+     * not an event worth a card; it is the ABSENCE of one, and the whole point
+     * of pressing it is to stop looking at that question. Confirming a dismissal
+     * with a panel in the same slot is the dismissal not working.
+     *
+     * The next snap replaces this space on its own, usually within a minute, so
+     * there is nothing to navigate to and nothing to restore. A mis-tap costs
+     * one snap out of a hundred and fifty.
+     *
+     * 🔴 BUT NOT AN EMPTY SPACE EITHER. Jason: "When we take everything away.
+     * Say waiting for the snap…"
+     *
+     * Right, and it is the difference between a dismissal and a hole. A card
+     * that vanishes leaving nothing reads as the app losing its place - the same
+     * failure as a frozen board that looks healthy, in miniature. One line says
+     * the screen is still working and something is coming, which is exactly what
+     * is true. It is a LINE, not a card: a panel here would be the "Sat this one
+     * out" card again in quieter clothes. */
+    wrap.appendChild(waitingCard());
   } else if (type && last && !already) {
     const card = el('div', 'card lg-call');
     card.appendChild(el('div', 'lg-q', type.question));
-    const sub = el('div', 'lg-sub', state.situation?.downDistanceText || last.text.slice(0, 70));
+    /* 🔴 SAY WHICH PLAY THIS IS, BECAUSE THE CARD READ AS THOUGH IT WAS ASKING
+     * ABOUT THE ONE PRINTED UNDER IT. Jason: "It asked left middle or right
+     * after the play and a while after I hit the play."
+     *
+     * The line under the question was the text of the play that has just
+     * FINISHED - context for the call, and the only thing on the card in a
+     * complete sentence. Directly beneath "Left, middle, or right?" it reads as
+     * the answer's subject, so a question about the next snap looks like a
+     * question about a pass you have already watched go left.
+     *
+     * Two words fix the sentence and nothing else changes: the question is about
+     * the NEXT snap, and this is what happened before it. */
+    const sub = el('div', 'lg-sub');
+    sub.appendChild(el('span', 'lg-sub-k', 'Last play'));
+    sub.appendChild(el('span', 'lg-sub-t', last.text.slice(0, 90)));
     card.appendChild(sub);
+    card.appendChild(el('div', 'lg-nextq', 'You are calling the NEXT snap'));
 
     const ladder = el('div', 'lg-stakes');
     for (const s of STAKES) {
@@ -953,40 +1333,42 @@ function paint(wrap) {
       priced[0].samples < 6
         ? 'Priced off a prior — the model has barely seen this game yet'
         : `${priced[0].samples} snaps from this offense tonight`));
+
+    /* 🔴 QUIET, AND BELOW THE PRICES. It is a real choice, not a call to action -
+     * a skip button styled like the tiles would compete with the thing you came
+     * to do, and one styled like a dismissal would read as "close this". */
+    const skip = el('button', 'lg-skip', 'Skip this one');
+    skip.type = 'button';
+    skip.onclick = () => { S.skips[last.id] = 1; store.set('skips', S.skips); paint(wrap); };
+    card.appendChild(skip);
     wrap.appendChild(card);
   } else if (already && last) {
-    /* 🔴 THE TILES STAY, AND THE ONE YOU TOOK IS LIT. Jason, 2026-09-08: "when
-     * you select a run or pass, it should highlight, it does not do that now."
+    /* 🔴 THE CARD GOES AWAY ONCE THE CALL IS MADE. Jason: "When I set a card,
+     * take it away. And say waiting for the snap."
      *
-     * It used to replace the whole card with a line of text, which throws away
-     * the two things worth looking at while you wait: WHAT YOU TOOK, in the same
-     * place you tapped it, and WHAT IT PAYS. A sentence saying "You called Run"
-     * is an acknowledgement; the lit tile is the bet. */
-    const type2 = byId(already.type);
-    const card = el('div', 'card lg-call is-called');
-    card.appendChild(el('div', 'lg-q', type2 ? type2.question : 'Your call'));
-    card.appendChild(el('div', 'lg-sub', 'Locked in — waiting on the snap.'));
-    if (type2) {
-      const tiles = el('div', 'lg-tiles' + (type2.choices.length > 3 ? ' is-4' : ''));
-      for (const ch of type2.choices) {
-        const mine = ch.id === already.choice;
-        const b = el('div', 'lg-tile' + (mine ? ' is-mine' : ' is-faded'));
-        b.appendChild(el('span', 'lg-tile-label', ch.label));
-        if (mine) {
-          b.appendChild(el('span', 'lg-tile-win num',
-            '+' + (Math.round(already.stake * payoutOf(already)) - already.stake)));
-          b.appendChild(el('span', 'lg-tile-x num',
-            payoutOf(already) + '× · ' + already.stake + ' Marbles'));
-        }
-        tiles.appendChild(b);
-      }
-      card.appendChild(tiles);
-    }
-    wrap.appendChild(card);
+     * 🔴 THIS REVERSES A CALL HE MADE ON 2026-09-08 - "when you select a run or
+     * pass, it should highlight, it does not do that now" - and the reversal is
+     * right for a reason worth recording. That instruction was against a card
+     * that replaced itself with a sentence, throwing away what you took and what
+     * it pays. The lit tile fixed a card you were still LOOKING at.
+     *
+     * Then two things changed. The bet became visible in the open-calls list
+     * below, so the tile is no longer the only record of it; and the feed turned
+     * out to be minutes behind, so the wait between a call and its answer is
+     * long. A lit card sitting through a two-minute wait is not feedback any
+     * more, it is a question you have already answered refusing to leave the
+     * screen - the same fault as the "Sat this one out" card, in the other half
+     * of the same branch.
+     *
+     * So both paths end the same way: the question is gone and the line says
+     * what is true. What you staked lives in the list below, which is where a
+     * record belongs. */
+    wrap.appendChild(waitingCard());
   }
 
   /* ---- what just happened, in words ---- */
   const said = commentary(state);
+  if (tv) wrap.appendChild(tv);
   if (said) wrap.appendChild(said);
 
   /* ---- and a picture of it, if it was worth one ---- */
@@ -1096,11 +1478,23 @@ async function makeCall(wrap, type, offer, afterPlay, state) {
  * A blank screen sends somebody to find out why; a stale one does not. So the
  * staleness is drawn, in the app, above everything else.
  *
- * THE THRESHOLD IS DERIVED, NEVER GUESSED. Live, the poller pushes every 10s, so
- * anything past ~45s is three missed pushes and not a slow network. Before
- * kickoff it deliberately pushes every five minutes — see the backoff in
- * poll.mjs — so the same 45s rule there would cry wolf all evening. The bar
- * knows which regime it is in because the state says so.
+ * 🔴 THE THRESHOLD IS DERIVED FROM THE POLLER'S OWN PROMISE, NOT FROM A GUESS
+ * ABOUT FOOTBALL. This said "the poller pushes every 10s, so anything past ~45s
+ * is three missed pushes" — and the poller does not push every 10s. It POLLS
+ * every 12s and DEDUPES, guaranteeing only a heartbeat write, which was four
+ * minutes. So the screen called the feed dead after 45 seconds of a silence the
+ * poller was designed to produce.
+ *
+ * 🔴 IT FIRED ON JASON'S PHONE IN THE FIRST QUARTER OF THE OPENER, over an
+ * official timeout, while the feed was healthy and 15 seconds from its last
+ * write. The banner is deliberately the loudest thing in the app — it has to be,
+ * because a frozen board that looks fine is the failure it exists to prevent —
+ * and pointing it at a working system is the fastest way to make people stop
+ * believing it.
+ *
+ * The poller now publishes its own heartbeat with the state, so this cannot
+ * drift from it again: an alarm is only meaningful against a promise, and the
+ * promise has to arrive from the thing making it.
  */
 export function staleness(state, now) {
   const at = state?.pushedAt || state?.fetchedAt || 0;
@@ -1108,7 +1502,13 @@ export function staleness(state, now) {
   const age = Math.max(0, now - at);
   /* Pre-kickoff the poller is on a five-minute cycle on purpose. Twelve minutes
    * is two missed slow pushes, which is a real fault rather than the backoff. */
-  const limit = state.status === 'pre' ? 12 * 60 * 1000 : 45 * 1000;
+  if (state.status === 'pre') return age > 12 * 60 * 1000 ? { age, limit: 12 * 60 * 1000 } : null;
+  /* Live: two missed heartbeats plus a network's worth of slack. The fallback is
+   * the OLD heartbeat, not the new one - a state published by a poller too old
+   * to send the field is a poller that really is on four minutes, and guessing
+   * 20s at it would recreate the false alarm from the other side. */
+  const beat = typeof state.heartbeatMs === 'number' ? state.heartbeatMs : 4 * 60 * 1000;
+  const limit = beat * 2 + 15 * 1000;
   return age > limit ? { age, limit } : null;
 }
 
@@ -1264,11 +1664,41 @@ function sportCard(wrap) {
       S.key = GAME_FOR[id];
       S.raw = null; S.board = [];
       /* Pool mode has its own screen. This one owns the live layer only. */
+      /* 🔴 THE SPORT'S HOME IS THE WEEK, NOT ONE GAME. Jason, 2026-09-09: "Why
+       * after selecting NFL is this the page? Why not the slate of this week.
+       * With the entire list, past games as past, upcoming as upcoming."
+       *
+       * He is right and the old answer was a hangover from when there WAS only
+       * one game. Choosing a league is choosing a body of football, and landing
+       * on a single fixture answers a question nobody asked - it picks for you,
+       * and it hides the fifteen other games from somebody who came to see what
+       * is on.
+       *
+       * The slate is that answer for BOTH halves, which also collapses a fork:
+       * the pool went here already, and the marbles side was the only thing
+       * that jumped straight to a game. One landing, one shape, and the live
+       * game is one tap from the top of it.
+       *
+       * 🔴 AND THAT IS STILL RIGHT FOR THE POOL AND WRONG FOR THE MARBLES, which
+       * is what stranded Jason at kickoff. Found 2026-09-09 with NE @ SEA live:
+       * there are TWO "NFL" buttons on step 2 - sportCard's, and this one, which
+       * marblesCard draws underneath it. They look identical and they did
+       * different things. Whichever one you happened to hit decided whether you
+       * reached the third page or were thrown to the week's card, and this one
+       * threw you.
+       *
+       * 🔴 TWO CONTROLS THAT LOOK THE SAME MUST DO THE SAME THING. The rule the
+       * duplicate-CSS guard enforces for selectors, arriving in the interaction
+       * layer - and it is worse here, because a person cannot tell them apart at
+       * all. Both now go to step 3 and let the person choose live or the week,
+       * which is the question the front door exists to ask. */
+      if (S.isHome) {
+        if (S.mode === 'pool') { location.hash = '#/slate'; return; }
+        S.homeStep = 'go';
+        paint(wrap);
+        return;
+      }
       if (S.mode === 'pool') { location.hash = '#/slate'; return; }
-      /* 🔴 THE SECOND CARD IS THE LAST ONE. Answering it is the whole reason
-       * somebody opened the front door, so it takes them THROUGH rather than
-       * repainting Home with a third thing on it. */
-      if (S.isHome) { location.hash = '#/live'; return; }
       paint(wrap);
       poll(wrap);
       refreshKey(wrap, id);
@@ -1372,6 +1802,24 @@ function modeCard(wrap, compact) {
       b.appendChild(img);
       b.appendChild(el('span', 'lg-mode-h', SPORT_LABEL[id]));
       b.onclick = () => {
+        /* 🔴 ON HOME THE SPORT BUTTON IS A DOOR, NOT A TOGGLE, AND THE EARLY
+         * RETURN BELOW WAS A DEAD END. Jason, 2026-09-09, live at kickoff: "I
+         * did. Home, play marbles, nfl, now I am at that screen." - and that
+         * screen had nowhere to go.
+         *
+         * `if (id === S.sport) return` is right when this card is a SETTING on
+         * the live board: re-picking the league you are already on should not
+         * tear down the feed. On the front door it meant that tapping NFL when
+         * NFL was already stored did nothing at all, so the most common path
+         * through the app - the returning user, whose sport is already set -
+         * stopped dead on step 2 with no third page and no error. */
+        if (S.isHome) {
+          S.sport = id; store.set('sport', id);
+          if (S.mode === 'pool') { location.hash = '#/slate'; return; }
+          S.homeStep = 'go';
+          paint(wrap);
+          return;
+        }
         if (id === S.sport) return;
         S.sport = id; store.set('sport', id);
         /* The constant paints now; the slate lookup corrects it, same as mount. */
@@ -1436,6 +1884,20 @@ function homeScreen(wrap) {
    * this a door rather than a wizard somebody can be stranded halfway down. The
    * stored mode and sport are NOT cleared - they still mark the current choice
    * and they are what every other screen reads. */
+  /* 🔴 STEP 3, WHICH THE COMMENT ABOVE HAS DESCRIBED ALL DAY AND THE CODE NEVER
+   * DREW. "3 · the game, how to enter it" is written into the plan at the top of
+   * this function and into a note in sportCard saying the doors "moved to
+   * homeScreen's step 3". They moved OUT of sportCard and never arrived, so the
+   * front door was a two-step wizard ending in a wall - and it ended there on
+   * the one night the live layer existed to be used.
+   *
+   * 🔴 A COMMENT SAYING WHERE SOMETHING WENT IS NOT EVIDENCE THAT IT ARRIVED.
+   * Both halves of that move were written down; only one was carried out, and
+   * the prose read as though the whole thing had been. */
+  if (S.homeStep === 'go') {
+    wrap.appendChild(goCard(wrap));
+    return;
+  }
   if (S.homeStep === 'sport') {
     wrap.appendChild(sportCard(wrap));
     /* The rules of the thing they just chose, under the question that follows
@@ -1445,6 +1907,49 @@ function homeScreen(wrap) {
     return;
   }
   wrap.appendChild(modeCard(wrap));
+}
+
+/* THE THIRD PAGE. Two doors, and a line saying what you chose to get here.
+ *
+ * They are not the same kind of thing and the card should not pretend they are:
+ * one is a game happening right now that you call snap by snap, the other is a
+ * card of sixteen you fill in once. So the live door leads, and it says what is
+ * actually on rather than describing itself - a door labelled with the game
+ * behind it is worth more than a door labelled "live". */
+function goCard(wrap) {
+  const c = el('div', 'card lg-mode-card');
+  c.appendChild(el('div', 'lg-mode-k', SPORT_LABEL[S.sport] + ' · marbles'));
+  c.appendChild(el('h2', 'lg-mode-h2', 'How do you want to play it?'));
+
+  const row = el('div', 'lg-mode-row');
+
+  /* What is on, read from the board we already hold - never invented. A door
+   * that names a game we cannot see is a door that lies. */
+  const raw = S.raw;
+  const live = raw && raw.status === 'live';
+  const teams = raw && raw.teams;
+  const name = (raw && teams && raw.awayTeamId && raw.homeTeamId && teams[raw.awayTeamId] && teams[raw.homeTeamId])
+    ? (teams[raw.awayTeamId].short + ' @ ' + teams[raw.homeTeamId].short)
+    : null;
+
+  const a = el('button', 'lg-mode');
+  a.appendChild(el('span', 'lg-mode-h', 'Call it live'));
+  a.appendChild(el('span', 'lg-mode-b',
+    live && name ? name + ' — on now. One call a snap, at a price you see first.'
+      : name ? name + ' — the board opens at kickoff.'
+      : 'One call a snap, at a price you see before you tap.'));
+  a.onclick = () => { location.hash = '#/live'; };
+  row.appendChild(a);
+
+  const b = el('button', 'lg-mode');
+  b.appendChild(el('span', 'lg-mode-h', "The week's card"));
+  b.appendChild(el('span', 'lg-mode-b',
+    'Every game this week, picked once, against the spread.'));
+  b.onclick = () => { location.hash = '#/slate'; };
+  row.appendChild(b);
+
+  c.appendChild(row);
+  return c;
 }
 
 function introCard(wrap) {
@@ -1745,7 +2250,21 @@ function commentary(state) {
   if (!big.length) return null;
 
   const card = el('div', 'card lg-say');
-  card.appendChild(el('div', 'lg-say-h', 'What just happened'));
+  /* 🔴 IT IS NOT "WHAT JUST HAPPENED" AND IT NEVER WAS. Jason, live: "What
+   * happened is still stale."
+   *
+   * It is not stale - it is a HIGHLIGHT card. The filter three lines up keeps
+   * only plays the parser marked severity >= 2, so a 10-yard scramble does not
+   * appear and the punt from four plays ago is still the most recent thing that
+   * qualifies. The card was doing exactly what it was built to do while its
+   * heading promised the last play.
+   *
+   * 🔴 A HEADING THAT PROMISES MORE THAN THE FILTER DELIVERS READS AS A BUG, and
+   * the person reading it is right to call it one - they cannot see the filter.
+   * The last play is already printed under the question, which is where it
+   * belongs, so this card's job is the moments worth remembering rather than the
+   * most recent thing that occurred. Now it says so. */
+  card.appendChild(el('div', 'lg-say-h', 'Big moments'));
   for (const d of big) {
     const r = (d.reasons || []).filter((x) => x.severity >= 2).sort((a, b) => b.severity - a.severity)[0];
     if (!r) continue;
@@ -1993,11 +2512,60 @@ function bragButton(state, rows) {
   return b;
 }
 
+/* 🔴 THE CHIP MUST SAY HOW FAR BEHIND WE ACTUALLY ARE, NOT HOW FAR WE ASKED TO
+ * BE. Jason, live: "Timing is off", then "We are about a play behind", then "Do
+ * we want a button for the snap so you can see what is happening with timing?"
+ *
+ * All three are the same finding and he got there before I did. The chip said
+ * "45s behind" because 45000 was the stored setting - it was reporting a
+ * PREFERENCE as though it were a measurement. On the wire at the time, the
+ * newest play was 76 seconds old and the delay was holding NOTHING back, because
+ * every play had already aged past the cutoff before it reached us.
+ *
+ * 🔴 SO THE 45s WAS NOT A DELAY WE WERE APPLYING, IT WAS A NUMBER WE WERE
+ * PRINTING. The real distance is ESPN's own publishing lag plus the pipeline,
+ * and it is bigger than the setting - which is why the question kept arriving
+ * about a snap he had already watched.
+ *
+ * This shows the measured age of the newest visible play, and says which of the
+ * two is doing the work:
+ *   held  - our delay is the binding constraint, the number is ours to set
+ *   feed  - the feed is already further behind than the setting, so adjusting
+ *           the slider does nothing and the person deserves to know that
+ *
+ * A number a person can check against their own television is worth more than a
+ * number that is always right because we defined it. */
+/* 🔴 IT DERIVES THE HELD VIEW ITSELF RATHER THAN TAKING ONE. delayBar is drawn
+ * near the top of paint(), and `const state = held(...)` is a hundred lines
+ * below it - passing it in would be a temporal dead zone reference, which this
+ * file has already been bitten by twice and warns about in paint() itself. A
+ * function declaration is hoisted; a const is not. */
+function behindLabel(now) {
+  const state = S.raw ? held(S.raw, S.delayMs, now) : null;
+  const vis = state && state.plays && state.plays.length
+    ? state.plays[state.plays.length - 1] : null;
+  const age = vis && vis.wallclockMs ? Math.round((now - vis.wallclockMs) / 1000) : null;
+  if (age == null) return S.delayMs === 0 ? 'LIVE — no delay' : `${S.delayMs / 1000}s behind`;
+  /* 🔴 NOT NAMED `held`. It was, and it shadowed the held() FUNCTION this same
+   * body calls three lines above it - `const` shadows for the whole scope, not
+   * from the line down, so the call landed in the temporal dead zone and threw
+   * "Cannot access 'held' before initialization". The live screen went blank
+   * mid-game and no console error surfaced, because the screen's own error
+   * boundary caught it and drew "That screen did not load".
+   *
+   * 🔴 FOURTH TDZ FAULT IN THIS FILE, and the first one caused by a NAME rather
+   * than by an order - which is worse, because moving the declaration does not
+   * fix it and the code reads as though it should work.
+   *
+   * Whichever is larger is the one you are actually experiencing. */
+  const wanted = Math.round(S.delayMs / 1000);
+  return age > wanted + 5 ? `${age}s behind · the feed` : `${age}s behind`;
+}
+
 function delayBar() {
   if (S.delayOpen || !S.seenIntro) return delayPanel();
   const line = el('button', 'lg-delayline');
-  line.appendChild(el('span', 'lg-delayline-l',
-    S.delayMs === 0 ? 'LIVE — no delay' : `${S.delayMs / 1000}s behind`));
+  line.appendChild(el('span', 'lg-delayline-l', behindLabel(Date.now())));
   line.appendChild(el('span', 'lg-delayline-a', 'adjust'));
   if (S.delayMs === 0) line.classList.add('is-live');
   line.onclick = () => { S.delayOpen = true; paint(document.querySelector('.lg').parentNode); };

@@ -61,6 +61,31 @@ const key = `${sport}:${gameId}`;
 
 let lastPlayId = null;
 let pushes = 0, failures = 0, skipped = 0, lastSig = null;
+/* 🔴 THE HEARTBEAT AND THE SCREEN'S ALARM ARE ONE NUMBER NOW, AND THEY WERE TWO
+ * CONTRADICTORY ONES. Found live, in the first quarter of the opener: Jason's
+ * phone said THE FEED HAS STOPPED - NOTHING NEW FOR 73s while this poller was
+ * healthy, writing, and 15 seconds from its last push.
+ *
+ * The comment this replaces said four minutes sat "inside its 45-second live
+ * alarm [because] the game itself is producing plays anyway". 🔴 THAT IS THE
+ * WHOLE BUG IN ONE SENTENCE, AND IT IS AN ASSUMPTION ABOUT FOOTBALL RATHER THAN
+ * A FACT ABOUT THE SYSTEM. Football is not producing plays during a timeout, a
+ * measurement, a review, a change of possession, an injury or the two-minute
+ * warning - the log for this very quarter shows eleven consecutive polls with
+ * nothing new and an "Official Timeout at 11:42". Every one of those is a
+ * routine quiet stretch longer than 45 seconds, and every one of them told the
+ * user the product was broken while it was working perfectly.
+ *
+ * 🔴 TWO NUMBERS THAT HAVE TO AGREE MUST NOT BE WRITTEN IN TWO FILES. The
+ * heartbeat is published WITH the state, and the screen derives its alarm from
+ * it - so the alarm cannot drift from the thing it is watching, and changing the
+ * cadence here changes the alarm there for free.
+ *
+ * 20s live: three writes a minute in the worst case, which the paid plan absorbs
+ * without noticing. The dedupe still does its job - it exists to stop a write
+ * PER POLL, and at 12s polls that is still most of them skipped. */
+let lastWriteAt = 0;
+const HEARTBEAT_MS = 20 * 1000;
 let lastStatus = null;
 
 /* 🔴 A GAME THAT HAS NOT KICKED OFF DOES NOT NEED A POLL EVERY TEN SECONDS.
@@ -133,7 +158,27 @@ async function tick() {
       state.situation && state.situation.distance
     ].join('|');
 
-    if (sig === lastSig) {
+    /* 🔴 A HEARTBEAT, BECAUSE DEDUPE BROKE THE ONE SIGNAL THAT MATTERS. Found
+     * 2026-09-09 on Jason's phone, three hours before the opener:
+     *
+     *     THE FEED HAS STOPPED - nothing new for 318 min
+     *
+     * It had not stopped. The dedupe I shipped this morning stops the poller
+     * writing when the game has not moved, and the screen's staleness indicator
+     * reads `pushedAt` - so "no news" became indistinguishable from "no poller".
+     * I wrote a comment predicting exactly this and then did not solve it.
+     *
+     * 🔴 AND IT WOULD HAVE FIRED DURING THE GAME. Halftime is fifteen minutes
+     * with no plays. Every viewer would have been told the feed was dead, at
+     * halftime, in the one product whose whole promise is that it is telling you
+     * the truth about what it knows.
+     *
+     * So: still deduped, but never silent for longer than the heartbeat. Writes
+     * go from 8,640 a day to at most ~360 - still twenty-four times better than
+     * before - and the freshness signal stays honest, which is worth far more
+     * than the difference. */
+    const quiet = Date.now() - lastWriteAt;
+    if (sig === lastSig && quiet < HEARTBEAT_MS) {
       /* 🔴 STILL RECORD THAT THE FEED IS ALIVE. The screen's staleness indicator
        * reads pushedAt, so a game that legitimately has not moved for two
        * minutes must not start looking like a dead poller. That is why the
@@ -152,10 +197,14 @@ async function tick() {
     const push = await fetch(base + '/api/push', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-push-token': token },
-      body: JSON.stringify({ key, state })
+      /* The cadence travels WITH the state, so the screen's staleness alarm is
+         derived from what this poller actually promises rather than from a
+         number somebody typed into the other file. See HEARTBEAT_MS. */
+      body: JSON.stringify({ key, state: { ...state, heartbeatMs: HEARTBEAT_MS } })
     });
     if (!push.ok) throw new Error('push ' + push.status);
     pushes++;
+    lastWriteAt = Date.now();
 
     const line = [
       new Date().toLocaleTimeString(),

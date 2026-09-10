@@ -129,6 +129,10 @@ export type LivePlay = {
   startTeamId: string | null;
   endTeamId: string | null;
   statYardage: number | null;
+  /** "2nd & 8 at SEA 28" as the feed writes it, after this play. */
+  endSpotText: string | null;
+  /** When ESPN says the play happened. The delay is measured from THIS. */
+  wallclockMs: number | null;
   /** 7.2 — emitted by the parser, never worked out by a view. */
   star: { name: string; jersey: string | null; teamId: string; role: string } | null;
 };
@@ -204,27 +208,61 @@ export function priceFrom(plays: LivePlay[], offenseTeamId: string): Offer[] {
 }
 
 /** The drives themselves, with the result the feed states rather than one we
- *  work out. `current` is the one still running, so it is never `ended`. */
+ *  work out.
+ *
+ * 🔴 ESPN PUTS THE RUNNING DRIVE IN `previous` AS WELL AS IN `current`, AND THAT
+ * COST A REAL STAKE IN THE FIRST QUARTER OF THE OPENER. Found 2026-09-09 live,
+ * from the wire:
+ *
+ *     {"id":"4018726562","result":"","ended":true}    <- from previous
+ *     {"id":"4018726562","result":"","ended":false}   <- from current
+ *
+ * One drive, two entries, the same id, contradicting each other about whether it
+ * is over. settleOne does `.find(d => d.id === call.driveId)` and `find` returns
+ * the FIRST match - the phantom - so a drive call placed on the drive actually
+ * being played was graded the instant it was made: ended, with no result, which
+ * falls through the result map and voids as "unhandled drive result".
+ *
+ * 🔴 EVERY DRIVE CALL WAS AFFECTED, because a drive call can only ever be placed
+ * on the drive in progress. The one market with a genuinely different timescale
+ * could not be played at all, and it failed as a VOID - the quietest possible
+ * failure, since a void looks like a rule working rather than a bug.
+ *
+ * TWO GUARDS, because either alone would have prevented it and the second is the
+ * one that survives ESPN changing shape again:
+ *
+ *  1. Dedupe by id, and let `current` win. It is the feed's own statement about
+ *     which drive is running now.
+ *  2. 🔴 A DRIVE WITH NO RESULT HAS NOT ENDED. `ended` is derived from the
+ *     result rather than from which list the object arrived in. The list is a
+ *     hint about ESPN's bookkeeping; the result is the fact. Deriving it also
+ *     fails SAFE - a finished drive whose result has not posted yet stays open
+ *     for a moment instead of being voided, and an open call can still land. */
 export function readDrives(summary: any): LiveDrive[] {
   const drives = summary?.drives || {};
-  const out: LiveDrive[] = [];
+  const byId = new Map<string, LiveDrive>();
+  const put = (d: LiveDrive) => { if (d.id) byId.set(d.id, d); };
+
   for (const d of drives.previous || []) {
-    out.push({
+    const result = String(d?.result || d?.displayResult || '').toUpperCase();
+    put({
       id: String(d?.id ?? ''),
       offenseTeamId: String(d?.team?.id ?? ''),
-      result: String(d?.result || d?.displayResult || '').toUpperCase(),
-      ended: true
+      result,
+      ended: Boolean(result)
     });
   }
+  /* Last, so it overwrites any copy of itself that came through `previous`. */
   if (drives.current) {
-    out.push({
+    const result = String(drives.current?.result || drives.current?.displayResult || '').toUpperCase();
+    put({
       id: String(drives.current?.id ?? ''),
       offenseTeamId: String(drives.current?.team?.id ?? ''),
-      result: '',
-      ended: false
+      result,
+      ended: Boolean(result)
     });
   }
-  return out;
+  return [...byId.values()];
 }
 
 /**
@@ -252,10 +290,24 @@ function starOf(text: string, typeText: string, offenseTeamId: string) {
 export function readPlays(summary: any): LivePlay[] {
   const out: LivePlay[] = [];
   const drives = summary?.drives || {};
+  /* 🔴 THE SAME DUPLICATE THAT BROKE THE DRIVE MARKET BREAKS THE PLAY LIST.
+   * ESPN puts the running drive in `previous` as well as `current`, so this
+   * concatenation emitted every play of the current drive TWICE. Seen on Jason's
+   * phone as the same punt printed twice in Big moments, and on the wire as 29
+   * plays where the feed had 21.
+   *
+   * 🔴 IT IS WORSE THAN A COSMETIC REPEAT. Settlement finds the play after the
+   * one a call was made on by INDEX - `findIndex` then `[i + 1]` - so a doubled
+   * play makes the next play be a copy of itself, and the call is graded against
+   * the snap it was made on rather than the one that answered it. The dedupe by
+   * id below is what stops that, and it is the same rule as readDrives: one id,
+   * one object, last write wins. */
   const all = [...(drives.previous || []), ...(drives.current ? [drives.current] : [])];
+  const seen = new Set<string>();
   for (const d of all) {
     const team = String(d?.team?.id ?? '');
     for (const p of d?.plays || []) {
+      if (seen.has(String(p.id))) continue;
       const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
       out.push({
         id: String(p.id),
@@ -277,11 +329,41 @@ export function readPlays(summary: any): LivePlay[] {
          * live screen: without this the delay leaks the result of the play it
          * is hiding. */
         endDistance: n(p.end?.distance),
+        /* 🔴 THE FEED WRITES THE WHOLE SENTENCE AND WE WERE REBUILDING HALF OF
+         * IT. Jason: "1st and 10 at SEA 32." — "Make it say that."
+         *
+         * ESPN ships `end.downDistanceText` already formatted: "2nd & 8 at SEA
+         * 28". We were reading `end.down` and `end.distance` and composing "2nd
+         * & 8" out of them, which is the same string minus the one part that
+         * says WHERE — and the spot is half of what a down means. 1st & 10 on
+         * your own 8 is a different proposition from 1st & 10 on their 32, and
+         * the price model knows that even though the screen did not say it.
+         *
+         * 🔴 TAKE THE FEED'S OWN WORDS WHERE IT HAS THEM. Composing it ourselves
+         * also meant owning the edge cases the league has and we do not - "1st &
+         * Goal", a spot at the 50 that belongs to neither team. ESPN has written
+         * that logic for thirty years; this is the same rule as 7.2, where
+         * deriving the star from play text got the wrong player. */
+        endSpotText: String(p.end?.downDistanceText || '') || null,
         startTeamId: p.start?.team?.id != null ? String(p.start.team.id) : null,
         endTeamId: p.end?.team?.id != null ? String(p.end.team.id) : null,
         statYardage: n(p.statYardage),
+        /* 🔴 WHEN THE PLAY ACTUALLY HAPPENED. ESPN stamps every play with a
+         * wallclock and this code went nine months without reading it - held()
+         * carried a comment saying "the feed carries no per-play wall clock",
+         * which was simply untrue and was never checked.
+         *
+         * It is the difference between a delay that MEANS 45 seconds and one
+         * that means "45 seconds after we happened to hear about it". Held from
+         * arrival, every bit of upstream lag stacks on top: ESPN's own delay,
+         * the 12s poll, the push, the client's 5s poll. Held from the play's own
+         * clock, the number on screen is the truth no matter how slow the
+         * pipeline is - and the pipeline can be improved without changing what
+         * the app promises. */
+        wallclockMs: Date.parse(p.wallclock || '') || null,
         star: starOf(p.text || '', p.type?.text || '', team)
       });
+      seen.add(String(p.id));
     }
   }
   return out;

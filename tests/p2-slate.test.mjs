@@ -241,6 +241,10 @@ test('§5 - no dependency, no icon font, no chart library, inline SVG only', () 
   assert.ok(/createElementNS/.test(CODE), 'the glyphs are inline SVG');
 });
 
+/* `p2-rec` was dropped from this list on 2026-09-09: the zone was rewritten as a
+ * linear stack and the separate record line became `p2-seed`, which is in the
+ * list below and is tabular. The class no longer exists; asserting on it was
+ * asserting that a deleted element is still formatted correctly. */
 test('§5 - every number is tabular', () => {
   /* The .num class in tokens.css does the font work. Every element carrying a figure -
    * record, spread, crowd, score, time, progress, the tiebreak input - must have it. */
@@ -248,7 +252,7 @@ test('§5 - every number is tabular', () => {
    * does not have, and the shared page header replaced it. Its rule - figures
    * are tabular so a header cannot jitter - moved to the template and is
    * asserted below rather than dropped. */
-  for (const cls of ['p2-rec', 'p2-spread', 'p2-crowd', 'p2-center', 'p2-bar-p', 'p2-tb-in', 'p2-day-n', 'p2-grp-n']) {
+  for (const cls of ['p2-spread', 'p2-crowd', 'p2-center', 'p2-bar-p', 'p2-tb-in', 'p2-daychip-n', 'p2-grp-n']) {
     const re = new RegExp(`['"\`]${cls}[^'"\`]*num`);
     assert.ok(re.test(CODE), `${cls} is not marked .num`);
   }
@@ -306,8 +310,15 @@ test('§5 - the screen never fetches. Data arrives as an argument', () => {
 
 test('§5 - tap targets. Nothing a thumb hits is under 44px', () => {
   /* The tap zone is 60px tall, the day chips and the tiebreak input read --tap-min. */
-  assert.ok(/\.p2-zone[^}]*min-height:\s*60px/s.test(CSSCODE));
-  assert.ok(/\.p2-day\b[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
+  /* 🔴 THE RULE IS 44px, NOT 60. This asserted the literal that happened to be
+   * in the file, so raising the zone to 84px - to stack a 32px crest over the
+   * name and the spread - failed a test about thumbs by making the thumb target
+   * bigger. A guard that pins a value cannot tell an improvement from a
+   * regression; it only tells you something moved. */
+  const zoneH = (CSSCODE.match(/\.p2-zone[^}]*min-height:\s*(\d+)px/s) || [])[1];
+  assert.ok(zoneH && Number(zoneH) >= 44,
+    `the pick target is ${zoneH}px - one-handed, at night, the floor is 44`);
+  assert.ok(/\.p2-daychip\b[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
   assert.ok(/\.p2-tb-in[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
 });
 
@@ -327,7 +338,14 @@ test('§5 / the dispatch - one tiebreak field, and the posted line is published'
    * posted line renders NOTHING. `spreadText` returns null on a null spread, and
    * an invented number in a real row is the failure this screen exists to avoid. */
   assert.ok(!/if \(ctx\.pool\.ats\)/.test(CODE), 'the posted line must not be gated on the scoring mode');
-  assert.ok(/const sp = spreadText\(game\.spread, side\)/.test(CODE), 'the spread still renders through spreadText');
+  /* 🔴 ASSERTS THE BEHAVIOUR, NOT THE LINE. This pinned the exact statement
+   * `const sp = spreadText(game.spread, side)`, so guarding a null spread -
+   * needed once every line in the block had to render even when empty, to keep
+   * the two teams aligned - failed a test about publishing the line. The rule is
+   * that the spread goes through spreadText and that a game without one prints
+   * no number; how that is written is not the rule. */
+  assert.ok(/spreadText\(game\.spread, side\)/.test(CODE), 'the spread still renders through spreadText');
+  assert.equal(mod.spreadText(null, 'home'), null, 'a game with no posted line shows no number');
   assert.equal(mod.spreadText(null, 'home'), null, 'a game with no posted line shows no number');
   /* 🔴 Crowd only after the GAME LOCKS (Jason, 2026-09-08) - not after the tap.
    * The guard is the kickoff, which nobody can bring forward, rather than the
@@ -685,4 +703,198 @@ test('no sportsbook is named in anything the screen draws', () => {
    * unattributed one that reads as our own. */
   assert.match(CODE, /never post a number of our own/,
     'the card must still say the line is not ours');
+});
+
+/* 🔴 ONE SELECTOR, ONE BLOCK. Written 2026-09-09 after the SAME BUG was found
+ * four times in one file in one afternoon:
+ *
+ *   .p2-mkt   declared twice - the stacked switch lost to a retired horizontal
+ *             one, and the two words clipped out of their column all afternoon
+ *   .p2-day   two different ELEMENTS given one class - the jump chip and the day
+ *             card - so each rendered with half of the other's design
+ *   .p2-grp   the in-card day header lost to a retired sticky rule, which
+ *             painted a grey band 10px wider than the card it sat in. This is
+ *             the one Jason photographed: "Problem here."
+ *   .p2-sub   the page subtitle and a row's TV channel, same name, so a heading
+ *             deck was silently rendering at 10px
+ *
+ * 🔴 WHY IT KEEPS HAPPENING AND WHY A TEST IS THE ONLY ANSWER. When a component
+ * is relaid out, the old block does not error, does not warn, and does not lose:
+ * it is later in the file, so it WINS, and it wins only the properties it names.
+ * The result is never a blank screen - it is an element wearing two designs at
+ * once, which reads as a styling opinion rather than as a bug. Three of the four
+ * above were found by eye, one of them by Jason's, and none by 568 tests.
+ *
+ * The rule this enforces is the one already written in the file's own comments:
+ * TWO RULES FOR ONE COMPONENT IS THE BUG, WHICHEVER ONE WINS. Merge them, or
+ * give the second element its own name.
+ *
+ * Scoped selectors are exempt on purpose - `.p2-row` and `.p2-row[data-when]`
+ * are different selectors doing different jobs, and a base rule plus its state
+ * variants is the pattern, not the defect. What is caught is the SAME selector
+ * text twice. */
+test('one selector, one block - no CSS rule is declared twice', () => {
+  /* Comments first: they contain braces and selector-shaped prose. */
+  let css = CSSCODE.replace(/\/\*[\s\S]*?\*\//g, '');
+  /* Then every at-rule body, by brace depth - a media query legitimately
+   * redeclares a selector, which is the whole point of a media query. */
+  let out = '', i = 0;
+  while (i < css.length) {
+    const at = css.indexOf('@', i);
+    if (at === -1) { out += css.slice(i); break; }
+    out += css.slice(i, at);
+    let j = css.indexOf('{', at);
+    if (j === -1) { i = css.length; break; }
+    let depth = 1; j++;
+    while (j < css.length && depth > 0) {
+      if (css[j] === '{') depth++;
+      else if (css[j] === '}') depth--;
+      j++;
+    }
+    i = j;
+  }
+  const seen = new Map();
+  const dupes = [];
+  for (const m of out.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+    const sel = m[1].split(/\s+/).join(' ').trim();
+    if (!sel) continue;
+    if (seen.has(sel)) dupes.push(sel);
+    else seen.set(sel, true);
+  }
+  assert.deepEqual(dupes, [],
+    `these selectors are declared more than once, so the later block silently ` +
+    `overrides the earlier one property by property: ${dupes.join(', ')}`);
+});
+
+/* 🔴 THE INFO CARD MAY ONLY SHOW WHAT THE ROW CANNOT. This is the rule the first
+ * info card died of - it opened on Record, Last season, The line, Spread pays
+ * and Winner pays, then the row grew to carry the last three and the modal
+ * became a copy of the card behind it. Jason: "The info card is useless. All
+ * that info is on the past page."
+ *
+ * It came back only because the row went the other way and the context line came
+ * off it. So the test is the rule: every fact in the card is absent from the
+ * row, and the two facts added for the head-to-head question - form and the last
+ * meeting - are card-only by construction. If one of them ever migrates onto a
+ * row, this fails and the card has to justify itself again. */
+test('the info card shows only what the row does not', () => {
+  /* zone() ends where center() begins - openInfo sits further down the file and
+   * must not be swept into the row's slice, or the card fails its own test.
+   *
+   * 🔴 AND THE COMMENTS COME OUT FIRST. This file argues with itself at length
+   * about rank, record and last season - zone()'s own comment block explains why
+   * the context line was REMOVED - so a guard that greps the raw text finds
+   * every one of those words in prose and fails on a row that draws none of
+   * them. Read the code, not the reasoning about the code. */
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const zone = strip(SRC.slice(SRC.indexOf('function zone('), SRC.indexOf('function center(')));
+  const card = strip(SRC.slice(SRC.indexOf('function openInfo('), SRC.indexOf('function statusPill(')));
+  for (const fact of ['lastMeeting', 'form', 'lastRecord', 'rank']) {
+    assert.ok(card.includes(fact), `the info card does not show ${fact} - it has nothing the row lacks`);
+    assert.ok(!zone.includes(fact),
+      `${fact} is on the ROW as well as in the info card - that is what killed the first one`);
+  }
+});
+
+/* 🔴 A NUMBER PRESENTED AS ALL-TIME MUST BE ALL-TIME. Jason asked for the
+ * ultimate head-to-head record; ESPN carries none for either league, and a
+ * derived one could only honestly be labelled "since 2002". The card says "Last
+ * meeting", which is exactly what it knows. This guards the wording, because the
+ * tempting edit is one adjective. */
+test('the head-to-head line never claims to be all-time', () => {
+  const card = SRC.slice(SRC.indexOf('function openInfo('), SRC.indexOf('function statusPill('));
+  const strings = (card.match(/'[^']*'/g) || []).join(' ').toLowerCase();
+  for (const word of ['all-time', 'all time', 'ultimate', 'series record', 'lifetime']) {
+    assert.ok(!strings.includes(word),
+      `the card says "${word}" - the feed has no such number, so it would be invented`);
+  }
+});
+
+/* 🔴 THE NESTED CORNERS STAY CONCENTRIC. Jason, 2026-09-09, zoomed in on one:
+ * "Can these offsets and radius' line up?"
+ *
+ * Two rounded rectangles one inside the other are concentric only when the inner
+ * radius equals the outer radius minus the distance between them. Give both the
+ * same radius - which is what --radius-card everywhere did - and the gap is
+ * correct along the straight edges and pinches through the corner.
+ *
+ * The relationship is expressed as calc() in tokens.css, so it holds by
+ * construction. What this guards is the OTHER half: the inset. Each level's
+ * padding has to be the inset the radii were derived from, and the way it breaks
+ * is somebody giving one card a little more air - which is exactly how the
+ * `next` card, the one card the eye is pulled to, ended up as the one in the
+ * screenshot. A radius derived from an inset that changed is not derived at all. */
+test('nested cards keep concentric corners - radius and inset move together', () => {
+  const block = (sel) => {
+    const i = CSSCODE.indexOf(sel + ' {');
+    assert.ok(i > -1, `${sel} has no rule`);
+    return CSSCODE.slice(i, CSSCODE.indexOf('}', i));
+  };
+  for (const [sel, radius] of [['.scr-p2-slate .p2-day', '--radius-l1'],
+                               ['.scr-p2-slate .p2-row', '--radius-l2'],
+                               ['.scr-p2-slate .p2-zone', '--radius-l3']]) {
+    assert.ok(block(sel).includes(radius),
+      `${sel} does not use var(${radius}) - a hand-picked radius cannot stay concentric`);
+  }
+  /* Every padding on a nesting level is the token, never a number. A literal
+   * here is the bug, whatever value it happens to be today. */
+  /* 🔴 THE INSET MUST BE THE SAME ON ALL FOUR SIDES, not merely present. The
+   * first version of this test only checked that the token APPEARED in the
+   * padding, and `padding: var(--nest-inset) var(--nest-inset) 10px` passed it
+   * while making the bottom-left corner non-concentric - measured in a browser
+   * at left 6.67 and bottom 12.67. A box inset 6 at the side and 12 at the foot
+   * has no single radius that fits it, so one shorthand value is the rule. */
+  for (const sel of ['.scr-p2-slate .p2-day', '.scr-p2-slate .p2-row']) {
+    const b = block(sel);
+    const pad = ((b.match(/padding:([^;]+);/) || [])[1] || '').trim();
+    assert.equal(pad, 'var(--nest-inset)',
+      `${sel} sets padding "${pad}" - concentric corners need ONE inset on all four sides, ` +
+      `and the radius inside was derived from it`);
+  }
+  /* And the emphasis state may not touch the inset in any direction. */
+  const next = CSSCODE.slice(CSSCODE.indexOf('.p2-row[data-when="next"] {'));
+  const nextPad = (next.slice(0, next.indexOf('}')).match(/padding:([^;]+);/) || [])[1];
+  assert.equal(nextPad, undefined,
+    `the next-up card overrides padding ("${nextPad}") - emphasis may change a card's tint, ` +
+    `outline and gap, never its inset`);
+});
+
+/* 🔴 EVERY CUSTOM PROPERTY USED IS DEFINED SOMEWHERE. Written 2026-09-09, having
+ * shipped `padding-bottom: var(--nav-space)` to production with --nav-space
+ * defined nowhere at all.
+ *
+ * 🔴 AN UNDEFINED CUSTOM PROPERTY IS THE QUIETEST FAILURE CSS HAS. It is not an
+ * error, it does not warn, and it does not fall back to anything sensible - the
+ * declaration is simply thrown away at compute time and the element keeps
+ * whatever it had. In that case the floating nav had just stopped reserving its
+ * own space and this was the padding meant to give it back, so the failure mode
+ * was the last game of the week sitting permanently under the bar with no
+ * scroll left to reach it.
+ *
+ * A typo in a token name does exactly the same thing, silently, and there is no
+ * amount of looking at a screen that distinguishes "this rule was dropped" from
+ * "this rule is doing nothing visible". */
+test('every var() in the stylesheets resolves to a defined token', () => {
+  /* 🔴 THE COMPONENT MODULES ARE IN THE LIST, and they were not the first time.
+   * This test was written after shipping an undefined --nav-space, and it then
+   * failed to catch an undefined --float in nav.js hours later, because it only
+   * scanned .css FILES - and the nav, the header and the icons all carry their
+   * CSS inside .js modules. A guard that checks three of the five places a rule
+   * can live is a guard that reports clean while the bug ships. */
+  const files = ['../public/styles/tokens.css', '../public/styles/shell.css',
+                 '../public/screens/p2-slate.css',
+                 '../public/components/nav.js', '../public/components/header.js',
+                 '../public/components/icons.js'];
+  const text = files.map((f) => readFileSync(new URL(f, import.meta.url), 'utf8')).join(String.fromCharCode(10));
+  const strip = text.replace(/\/\*[\s\S]*?\*\//g, '');
+  const defined = new Set();
+  for (const m of strip.matchAll(/(--[a-z0-9-]+)\s*:/gi)) defined.add(m[1]);
+  /* Component CSS lives in JS modules, so their definitions count too. */
+  for (const m of SRC.matchAll(/(--[a-z0-9-]+)\s*:/gi)) defined.add(m[1]);
+  const missing = new Set();
+  for (const m of strip.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) {
+    if (!defined.has(m[1])) missing.add(m[1]);
+  }
+  assert.deepEqual([...missing], [],
+    `used but never defined - the declaration is silently discarded: ${[...missing].join(', ')}`);
 });

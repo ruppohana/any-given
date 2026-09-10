@@ -24,17 +24,25 @@
  * had ridden up under a two-line caption with 900px of dead ground beneath it,
  * which no test in this repo could have caught. Requirement 7.5, first time out. */
 .ag-shell { min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); }
+/* 🔴 THE ROOM THE FLOATING NAV GAVE UP. The pill is `position: fixed` so the
+   page can be seen passing underneath it - see nav.js - which means it no longer
+   occupies any space of its own. This gives that space back.
+   🔴 IT IS NOT DECORATION AND IT IS NOT A GUESS: without it the last card on
+   every screen sits under the bar permanently, with no scroll left to clear it.
+   An element may overlay content; it may never make content unreachable. */
 .ag-main  { flex: 1 1 auto; width: 100%; max-width: 560px; margin-inline: auto; padding: 12px;
-            padding-bottom: 20px; }
+            padding-bottom: var(--nav-space); }
 
 /* 393px IS THE DESIGN WIDTH. Everything is measured here first, in a real browser. */
-@media (max-width: 560px) { .ag-main { padding: 10px; } }
+@media (max-width: 560px) { .ag-main { padding: 10px; padding-bottom: var(--nav-space); } }
 
 @media (min-width: 900px) {
   /* The nav is the SECOND child in source order because a phone puts it on the
    * floor. On a real window it moves to the side, so the grid names the columns
    * and puts it first - one source order, two layouts. */
   .ag-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100dvh; }
+  /* The rail is in the flow on a real window, so the reservation comes off. */
+  .ag-shell { --nav-space: 20px; }
   .ag-main  { max-width: 640px; padding: 20px; margin-inline: 0; grid-column: 2; grid-row: 1; }
   .ag-shell > .ag-nav { grid-column: 1; grid-row: 1; }
 }

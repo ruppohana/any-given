@@ -23,3 +23,5 @@ dist/
 
 .poll-done-*
 poll.log
+.poll.log
+.poll.err

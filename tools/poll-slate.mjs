@@ -89,6 +89,78 @@ async function recordFor(teamId) {
   return RECORDS[teamId];
 }
 
+/* 🔴 FORM AND THE LAST MEETING, AND WHY THERE IS NO ALL-TIME RECORD HERE.
+ * Jason, 2026-09-09: "Do we know the ultimate record head to head to add to the
+ * card?"
+ *
+ * 🔴 THE FEED DOES NOT CARRY ONE. Checked, not assumed: an NFL competition has
+ * no `series` object (a college one does not either), and the site summary ships
+ * `lastFiveGames`, `againstTheSpread`, `predictor` and `standings` and nothing
+ * historical. There is no field anywhere on either league that says "Patriots
+ * lead the series 10-9".
+ *
+ * It could be DERIVED - walk both teams' season schedules back year by year and
+ * intersect them - and that is exactly where it would stop being true. ESPN's
+ * event data is solid to about 2002 and thin before it, so the honest label on
+ * a derived number is "since 2002", which is not what anybody means by all-time.
+ * 🔴 A NUMBER THAT IS PRESENTED AS ALL-TIME AND IS NOT IS AN INVENTED FACT, and
+ * the rule about those is the one this project has paid for most often.
+ *
+ * So this captures the two things the feed does know, both of them facts rather
+ * than derivations:
+ *
+ *   form         the last five results per team, newest first. Football form,
+ *                which is the argument for or against a number
+ *   lastMeeting  the previous game between THESE TWO, when it falls inside
+ *                those five. That is what somebody asking about head-to-head
+ *                actually wants - not a lifetime tally, the last time out
+ *
+ * 🔴 AND IT IS ABSENT RATHER THAN GUESSED. Two teams who have not met in five
+ * games get no lastMeeting, not a zero and not a hedge.
+ *
+ * 🔴 THIS IS site.api, WHICH ONLY ANSWERS FROM THE HOST. It 403s from Cloudflare
+ * - that is why the whole file is on the core API. The poller runs here, so it
+ * can have it; the Worker never can, which means this is captured weekly and
+ * published, never fetched at request time. */
+const SITE = `https://site.api.espn.com/apis/site/v2/sports/football/${sport}/summary?event=`;
+
+async function formAndMeeting(eventId, homeId, awayId) {
+  let sum;
+  try {
+    const r = await fetch(SITE + eventId, { headers: { 'user-agent': UA } });
+    if (!r.ok) return {};
+    sum = await r.json();
+  } catch { return {}; }
+
+  const byTeam = {};
+  let meeting = null;
+  for (const t of sum.lastFiveGames || []) {
+    const tid = String(t.team?.id || '');
+    const evs = (t.events || [])
+      .filter((e) => e.gameResult && e.gameDate)
+      .sort((a, b) => Date.parse(b.gameDate) - Date.parse(a.gameDate));
+    if (evs.length) byTeam[tid] = evs.map((e) => e.gameResult).slice(0, 5).join('');
+    /* The last time these two played. Read off the HOME team's five so it is
+     * found once rather than twice with two spellings of the same game. */
+    if (tid === String(homeId)) {
+      const m = evs.find((e) => String(e.opponent?.id || '') === String(awayId));
+      if (m) {
+        const hs = Number(m.homeTeamScore), as = Number(m.awayTeamScore);
+        const winnerId = hs === as ? null
+          : String(hs > as ? m.homeTeamId : m.awayTeamId);
+        meeting = {
+          dateUtc: Date.parse(m.gameDate),
+          winnerId,
+          /* Always high-low, so the score reads the same way round whoever won
+             and the winner is named by id rather than by position. */
+          score: (hs > as ? hs + '-' + as : as + '-' + hs)
+        };
+      }
+    }
+  }
+  return { form: byTeam, lastMeeting: meeting };
+}
+
 const list = await get(`${CORE}/seasons/${season}/types/2/weeks/${week}/events?limit=400`);
 const ids = (list.items || []).map((x) => x.$ref.split('/events/')[1].split('?')[0]);
 console.log(`${sport} season ${season} week ${week}: ${ids.length} events`);
@@ -148,6 +220,11 @@ for (const id of ids) {
       const first = (b?.items || [])[0];
       broadcast = first?.media?.shortName || (first?.names || [])[0] || null;
     } catch { /* not televised, or not yet announced */ }
+
+    /* One extra request per event, on a weekly capture. Failure here costs the
+     * two extra facts and nothing else - the game still publishes. */
+    const extra = await formAndMeeting(id, home.id, away.id);
+
     games.push({
       id, sport, season, week,
       kickoffUtc: Date.parse(ev.date),
@@ -167,7 +244,10 @@ for (const id of ids) {
        * were inline was the mistake, and the shape was one console.log away. */
       venue: venue,
       broadcast: broadcast,
-      teams: [home, away].map(({ homeAway, score, ...t }) => t)
+      lastMeeting: extra.lastMeeting || null,
+      teams: [home, away].map(({ homeAway, score, ...t }) => ({
+        ...t, form: (extra.form || {})[t.id] || null
+      }))
     });
     process.stdout.write('.');
   } catch (e) { process.stdout.write('x'); if (!globalThis.__firstErr) { globalThis.__firstErr = 1; console.error(' FIRST ERROR:', e && e.stack ? e.stack.split(String.fromCharCode(10)).slice(0,3).join(' | ') : e); } }
@@ -198,10 +278,32 @@ const key = `slate:${sport}:${season}:${week}`;
  * It compares against what is ALREADY PUBLISHED rather than against a local
  * memory, so a restarted poller does not write once for free, and two pollers
  * cannot take turns rewriting the same document. */
+/* 🔴 BUMP THIS WHENEVER A FIELD IS ADDED TO A GAME. Found 2026-09-09, adding
+ * form and lastMeeting: the run captured both, compared clean, and published
+ * nothing.
+ *
+ * The signature below is deliberately narrow - id, status, scores, spread,
+ * kickoff - and that narrowness is not an oversight, it is the fix for the KV
+ * write quota that would otherwise have frozen the board mid-game. But a
+ * signature that ignores metadata also ignores metadata that has just been
+ * ADDED, so a schema change is invisible to it: the poller says "unchanged", the
+ * old shape stays in KV for ever, and the new field appears to have been
+ * captured while never reaching a single screen.
+ *
+ * 🔴 THIS IS THE SAME SHAPE AS THE OTHER DEDUPE BUGS IN THIS PROJECT and it
+ * fails in the more dangerous direction. Keying on the game clock meant nothing
+ * deduped; keying on scores alone means nothing NEW ever ships. Both look like
+ * a working poller from the outside.
+ *
+ * One line, bumped by hand, republishes once and then dedupes as before. */
+const SCHEMA = 2;
+
 const same = await (async () => {
   try {
     const cur = await (await fetch(`${base}/api/state/${key}`)).json();
     if (!cur || !Array.isArray(cur.games) || cur.games.length !== games.length) return false;
+    /* A shape change always republishes, exactly once. */
+    if (cur.schema !== SCHEMA) return false;
     const sig = (list) => list.map((g) => [g.id, g.status, g.homeScore, g.awayScore,
                                            g.spread, g.kickoffUtc].join(',')).join('|');
     return sig(cur.games) === sig(games);
@@ -217,7 +319,7 @@ unchanged - ${games.length} games already published, not rewriting`);
 const res = await fetch(base + '/api/push', {
   method: 'POST',
   headers: { 'content-type': 'application/json', 'x-push-token': token },
-  body: JSON.stringify({ key, state: { sport, season, week, games, fetchedAt: Date.now() } })
+  body: JSON.stringify({ key, state: { sport, season, week, schema: SCHEMA, games, fetchedAt: Date.now() } })
 });
 console.log(`\n${games.length} real games, ${games.filter((g) => g.spread != null).length} with a posted line`);
 console.log(res.ok ? `pushed -> ${base}/api/state/${key}` : `push failed ${res.status}`);

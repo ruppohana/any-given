@@ -74,12 +74,50 @@
    * The hairline is kept and quietened rather than deleted - dark mode has no
    * tone difference to fall back on, and a card with neither a line nor a
    * contrast is not a card there. */
-  --bg:     #eff0ee;   /* neutral grey ground - cards are white ON something */
+  /* 🔴 THE GREYS ARE THE REFERENCE'S OWN. Jason: "Use the white/grey from the
+   * image." Read off the Deuce shots rather than invented: a light neutral
+   * ground a touch warmer than mine, and pure white cards. The ground was
+   * #eff0ee, which was close but slightly green - against a white card that
+   * reads as a tint rather than as a neutral, and it showed up most on the
+   * nested day card where three surfaces are visible at once. */
+  /* 🔴 THE ELEVATION RAMP, GIVEN BY JASON 2026-09-09: "BG is ebebeb. Larger card
+   * is f5f5f5. Smaller cards are f9f9f9."
+   *
+   * Four surfaces, each one LIGHTER than the one it sits on:
+   *
+   *   --surface-0  #ebebeb   the page          nothing is behind it
+   *   --surface-1  #f5f5f5   the day card      "the larger card"
+   *   --surface-2  #f9f9f9   the game card     "the smaller cards"
+   *   --surface-3  #ffffff   the pick target   the only pure white left
+   *
+   * 🔴 WHY THIS ORDER AND NOT THE ONE I SHIPPED AN HOUR AGO. I had inverted it -
+   * grey day card, WHITE game cards, grey targets - reasoning that white belongs
+   * on the thing you decide about. That put the lightest surface in the MIDDLE
+   * of the stack, so the layer above it had to go back down again, and a ramp
+   * that reverses direction is not a ramp. Depth reads because it is monotonic:
+   * every step up is lighter, without exception, and the eye can then order four
+   * surfaces it has never seen before without being told.
+   *
+   * 🔴 AND IT IS WHAT FINALLY MAKES THE GAP A GAP. Jason asked three times for
+   * space between the cards. The gap was always there and always filled with a
+   * surface LIGHTER than the cards either side of it, which reads as a seam
+   * rather than as space. Here the space between two #f9f9f9 cards is the day
+   * card's #f5f5f5 - darker than both - so it recedes, which is the only thing
+   * that makes a gap look like a gap.
+   *
+   * 🔴 NEUTRAL, NOT BLUE. The old ramp was #f2f3f5 / #e9ebee / #e6e8eb - each a
+   * degree or two blue. One blue-grey next to white is invisible; four of them
+   * stacked is a cast. His numbers are pure neutral and the line and track are
+   * corrected to match, or they would be the only tinted things left. */
+  --bg:        #ebebeb;   /* = --surface-0. The ground. */
+  --surface-1: #f5f5f5;   /* the day card */
+  --surface-2: #f9f9f9;   /* the game card */
+  --surface-3: #ffffff;
   --card:   #ffffff;   /* the only pure white in the system */
   --fg:     #1a1c1a;
   --dim:    #6b706c;
-  --line:   #e4e6e3;   /* quieter now: tone separates, the line only confirms */
-  --track:  #e4e6e3;
+  --line:   #e0e0e0;   /* quieter now: tone separates, the line only confirms */
+  --track:  #e3e3e3;
   --grass:  #d8e2d6;   /* the drive chart ground. The one literal color */
 
   /* FIXED SCALES. Never team color, in either theme. */
@@ -110,6 +148,83 @@
   --radius-button: 12px;
   --radius-card:  16px;
   --radius-pill:  999px;
+
+  /* 🔴 NESTED CORNERS. Jason, 2026-09-09, on a zoomed corner of the slate: "Can
+   * these offsets and radius' line up?"
+   *
+   * They could not, because all three levels were using --radius-card and were
+   * inset from each other by 8px. Two rounded rectangles one inside the other
+   * are only CONCENTRIC - the gap between the curves staying constant all the
+   * way round - when
+   *
+   *     inner radius = outer radius − the inset between them
+   *
+   * Give them the same radius instead and the gap is right down the straight
+   * edges and wrong through the corner, where the outer curve turns too late
+   * and the two arcs pinch together. At 16px and 8px apart that is a visible
+   * defect on a phone, and it is exactly what his screenshot is zoomed in on.
+   *
+   * 🔴 SO THE ARITHMETIC IS THE CODE, NOT THREE CHOSEN NUMBERS. Every level's
+   * radius is derived from the one above it by subtracting one shared inset, so
+   * retuning the stack is one value and it cannot drift out of true. The inset
+   * is also the padding each level uses, which is what makes the subtraction the
+   * right one - a padding change that did not move the radius would break it.
+   *
+   * 🔴 AND THE STEP IS THE PADDING PLUS THE BORDER, not the padding. Every level
+   * here carries a 1px hairline, and the outer curve is measured from OUTSIDE
+   * that line while the inner one starts inside it. Subtracting only the padding
+   * leaves each level a pixel too round - which is a sixth of the gap at this
+   * size, and visible at exactly the magnification he sent.
+   *
+   *   --nest-inset  6px   the padding at every level
+   *   --nest-step   7px   = inset + the 1px hairline. The real distance
+   *   --radius-l1  22px   the day card
+   *   --radius-l2  15px   the game card    = l1 − step
+   *   --radius-l3   8px   the pick target  = l2 − step
+   *
+   * Three levels is the depth this app uses; l1 is 22px rather than 16 so that
+   * l3 lands at 8 and still reads as a button rather than a square. */
+  /* 🔴 THE ROOM THE FLOATING NAV GAVE UP. The pill is fixed so the page can be
+   * seen passing under it, which means it occupies no space of its own; this is
+   * what gives that space back as padding at the foot of every screen.
+   *
+   * 4px pad + a 44px tap target + 2px of border + 8px margin is ~58, and the
+   * rest is air so the last card clears the bar rather than touching it.
+   *
+   * 🔴 AN ELEMENT MAY OVERLAY CONTENT. IT MAY NEVER MAKE CONTENT UNREACHABLE.
+   * Without this the final game of the week sits under the bar permanently, with
+   * no scroll left to clear it - the ad doctrine's rule, broken by the
+   * navigation itself. */
+  /* 🔴 HOW FAR THE PILL FLOATS ABOVE THE BOTTOM EDGE. Jason moved it up 15 and
+   * then asked to move it back down, so it is ONE number rather than two places
+   * that have to agree.
+   *
+   * 🔴 AND THE CLEARANCE BELOW IS DERIVED FROM IT, which is the actual point.
+   * --nav-space is the padding every screen puts at its foot so the last card is
+   * not stranded under the bar; when the bar moves and that number does not, the
+   * app silently loses or gains dead space at the bottom of every screen. The
+   * height of the pill is 54 (4 + a 44px tap target + 4 + hairlines) and the
+   * rest is air between the last card and the bar. */
+  --nav-lift: 12px;
+  --nav-space: calc(54px + var(--nav-lift) + 16px + env(safe-area-inset-bottom, 0px));
+
+  /* 🔴 --float WAS USED BY THE NAV AND DEFINED NOWHERE. Second undefined token
+   * in one session, and the same silent failure: `box-shadow: var(--float)`
+   * computed to `none`, so the one element in the app that is genuinely floating
+   * over the page had no lift at all. Jason saw it as the bottom corners not
+   * reading - correctly, because a white capsule on #ebebeb with no shadow has
+   * nothing separating its lower edge from the ground.
+   *
+   * Stronger than --lift on purpose. --lift is for a card resting on the page;
+   * this is for the one thing that is genuinely above it, with content passing
+   * underneath. */
+  --float: 0 2px 6px rgba(16, 20, 16, 0.06), 0 8px 24px rgba(16, 20, 16, 0.08);
+
+  --nest-inset: 6px;
+  --nest-step: calc(var(--nest-inset) + 1px);
+  --radius-l1: 22px;
+  --radius-l2: calc(var(--radius-l1) - var(--nest-step));
+  --radius-l3: calc(var(--radius-l2) - var(--nest-step));
 
   /* 🔴 ONE SHADOW, AND IT IS A REVERSAL WORTH NAMING. DESIGN.md says "There are
    * no drop shadows in this interface and none are to be added", and that was
@@ -153,13 +268,20 @@
      * against shadows and it is still exactly right here. Dark keeps the
      * hairline as its only separator, which is why the hairline was quietened in
      * light rather than deleted. */
-    --bg:    #14161a;
+    --bg:        #14161a;
+    /* The same ramp and the same direction - each step up is LIGHTER. Dark
+       needs it more than light does: with no shadow to separate layers, tone is
+       the only thing left doing the work. */
+    --surface-1: #1a1d22;
+    --surface-2: #20242a;
+    --surface-3: #272c33;
     --card:  #1d2025;
     --fg:    #eef1ee;
     --dim:   #9aa19b;
     --line:  #2b2f34;
     --track: #2b2f34;
     --lift:  none;
+    --float: none;
     --grass: #14361f;
     /* 🔴 NO SWAP ANY MORE. The token used to become gold here because maroon
      * disappeared on a dark ground. One signature color that measures the same
@@ -181,13 +303,17 @@
 :root[data-theme="dark"] {
   /* Same values as the media query above - a toggle and a system preference must
    * not produce two different dark modes. */
-  --bg:    #14161a;
+  --bg:        #14161a;
+  --surface-1: #1a1d22;
+  --surface-2: #20242a;
+  --surface-3: #272c33;
   --card:  #1d2025;
   --fg:    #eef1ee;
   --dim:   #9aa19b;
   --line:  #2b2f34;
   --track: #2b2f34;
   --lift:  none;
+  --float: none;
   --grass: #14361f;
   --accent: var(--signature);
   --up:   #3fcf7a;

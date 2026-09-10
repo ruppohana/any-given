@@ -134,6 +134,17 @@ export function navBar(active, opts) {
     a.dataset.dest = d.id;
     a.href = opts.hrefFor ? opts.hrefFor(d) : '#' + d.id;
     a.appendChild(navIcon(d.id));
+    /* 🔴 THE LABEL BECOMES THE ACCESSIBLE NAME, NOT VISIBLE TEXT. Jason,
+     * 2026-09-09: "remove the words under the icons."
+     *
+     * The word is still on the element - it has to be, because an icon-only
+     * control with no accessible name is a button that reads out as "link" to a
+     * screen reader, and the navigation is the last place in an app where that
+     * is acceptable. So the span stays in the DOM and CSS hides it on the pill,
+     * where four 10px words were the least legible thing on the screen, and
+     * shows it again on the desktop rail, where a sidebar with room for words
+     * should use them. */
+    a.setAttribute('aria-label', d.label);
     a.appendChild(document.createElement('span')).textContent = d.label;
     if (d.id === active) a.setAttribute('aria-current', 'page');
     /* Unavailable, never hidden. A tab that vanishes reads as a broken build. */
@@ -160,14 +171,92 @@ export const NAV_CSS = [
      a hairline under a whisper. A filled shape is legible at a glance in a dark
      room at arm's length, which is the actual design case for this bar.
 
-     🔴 IT STILL RESERVES ITS OWN SPACE. `position: sticky` keeps it in the flow,
-     so content scrolls to a natural end above it rather than under it - the ad
-     doctrine's rule about a slot that overlays content, applied to the nav. */
-  '.ag-nav { position: sticky; bottom: 0; z-index: 10; display: grid;',
+     🔴 IT FLOATS OVER THE PAGE, AND IT STILL RESERVES ITS SPACE. Jason,
+     2026-09-09: "Can the bottom nav bar look like it floats over the bottom of
+     the page beneath."
+
+     It was `position: sticky`, which keeps the pill in the document flow - so
+     the page ENDED at the top of the bar and nothing ever passed behind it. A
+     pill with a shadow sitting on a hard edge does not read as floating; it
+     reads as welded, which is what his screenshot shows. What makes something
+     look like it is above a page is seeing the page continue underneath it.
+
+     🔴 SO IT GOES FIXED, AND THE SPACE IT USED TO OCCUPY IS GIVEN BACK AS
+     PADDING - see --nav-space in shell.css. That distinction is the whole
+     doctrine: an element may overlay content, but it may never make content
+     unreachable. Fixed alone would leave the last card of the week sitting
+     permanently under the bar with no way to scroll it clear, which is the ad
+     rule broken by the navigation itself.
+
+     The scrim below does the rest: content dissolves into the ground as it
+     passes under the pill instead of being cut by its edge. */
+  '.ag-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;',
   '  grid-template-columns: repeat(4, 1fr); gap: 2px;',
   '  background: var(--card); border: 1px solid var(--line);',
-  '  border-radius: var(--radius-pill); box-shadow: var(--lift);',
-  '  margin: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px)); padding: 4px; }',
+  /* 🔴 A LIGHT RING AS WELL AS THE LIFT. Jason: "Add an outline. Light."
+     The 1px hairline is there and it is not enough on its own: a white capsule
+     on #ebebeb differs from its ground by 20 values, and a 0.67px device pixel
+     of #e0e0e0 between them disappears. A 1px spread shadow draws the whole
+     capsule edge - corners included, at the exact radius, with no rounding
+     mismatch a border can have - and being a shadow it stays LIGHT: it is 5%
+     black over the ground rather than a drawn line competing with the icons. */
+  '  border-radius: var(--radius-pill);',
+  '  box-shadow: 0 0 0 1px rgba(16, 20, 16, .05), var(--float);',
+  '  width: min(560px, calc(100% - 20px)); margin-inline: auto;',
+  /* 🔴 15px HIGHER. Jason: "Move the tool bar up 15 pix." It sat 8px off the
+     bottom edge, which on a phone with a home indicator put it right on top of
+     the indicator's own strip - two floating things competing for the same band.
+     23px clears it and lets the scrim do its work underneath. */
+  /* 🔴 ONE TOKEN, AND THE FADE IS INDEPENDENT OF IT. Jason: "Can I move the nav
+     bar down without losing the transparency?" Yes - the scrim is its own fixed
+     element (see body::after below), anchored to the bottom of the VIEWPORT
+     rather than to the pill, so the bar can sit anywhere in that band and the
+     gradient behind it does not move or change. Back when the scrim was a
+     ::before on the nav those two were welded together and this question would
+     have had a different answer. */
+  '  margin-bottom: calc(var(--nav-lift) + env(safe-area-inset-bottom, 0px)); padding: 4px; }',
+  /* Icons only on the pill. They grow, because they are now carrying the whole
+     meaning of the control rather than sharing it with a word. */
+  '.ag-nav-item > span { position: absolute; width: 1px; height: 1px; padding: 0;',
+  '  margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }',
+  /* 🔴 A 2px OPTICAL NUDGE, NOT A LAYOUT FIX. Jason: "Center the icons
+     vertically in the nav bar. They look 3-5 pix higher."
+     Measured, the box is centred exactly - 10px above the icon, 10px below, in a
+     44px item. So this is not a centring bug and moving the BOX would break the
+     tap target. What is off is the ink: these glyphs are drawn on a 24 grid whose
+     strokes sit high in it (the house peaks at y=4, the bars end at y=20), so
+     their optical centre is above their geometric one. Type has the same problem
+     and the same answer - trust the eye over the box, and move the mark, not the
+     frame. */
+  '.ag-nav-ico { width: 24px; height: 24px; transform: translateY(2px); }',
+  /* The active pill keeps its own centring - the nudge is on the mark inside. */
+  '.ag-nav-item { position: relative; }',
+  /* THE SCRIM. Not a bar and not a border - a short fade of the page's own
+     ground behind the pill, so what scrolls under it goes out on a gradient. An
+     edge says "cut off"; a fade says "there is more, and it is behind this".
+     `pointer-events: none` because it must never eat a tap meant for a card.
+
+     🔴 IT IS A SIBLING OF THE NAV, NOT A ::before ON IT, AND THAT IS THE WHOLE
+     BUG JASON PHOTOGRAPHED. It was `.ag-nav::before { z-index: -1 }`, which
+     reads as "put it behind the nav" and does not do that. A negative z-index
+     child is painted behind its parent's CONTENT but IN FRONT OF its parent's
+     BACKGROUND, and it cannot escape the parent at all once the parent
+     establishes a stacking context - which `position: fixed; z-index: 30` does.
+     So the gradient was drawn straight over the pill's white background: the
+     bar lost its surface entirely and the icons were left floating on the page.
+
+     🔴 "BEHIND" IS NOT A PROPERTY AN ELEMENT HAS OVER ITS OWN PARENT. To sit
+     under the pill and over the page, the scrim has to be a separate fixed
+     element one z-index below it. */
+  'body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0;',
+  /* 🔴 SHORTER. Jason: "Reduce the bleed outside of the nav bar. Not so far."
+     At 132px the fade started most of a card above the pill, so a game card was
+     washing out while it was still the thing you were reading. The scrim only
+     has to cover the pill and a little above it - just enough that content goes
+     out on a gradient instead of a cut. Past that it stops being a scrim and
+     becomes a haze over the bottom of the page. */
+  '  height: 92px; z-index: 29; pointer-events: none;',
+  '  background: linear-gradient(to bottom, transparent, var(--bg) 72%); }',
   '.ag-nav-item { display: flex; flex-direction: column; align-items: center;',
   '  justify-content: center; gap: 2px; min-height: var(--tap-min);',
   '  font-size: 10px; font-weight: 700; border-radius: var(--radius-pill);',
@@ -183,9 +272,14 @@ export const NAV_CSS = [
   '@media (min-width: 900px) {',
   '  .ag-nav { position: static; grid-template-columns: 1fr; align-content: start;',
   '    border: 0; border-right: 1px solid var(--line); border-radius: 0;',
-  '    box-shadow: none; margin: 0; height: 100%; padding: 12px 0; }',
+  '    box-shadow: none; margin: 0; width: auto; height: 100%; padding: 12px 0; }',
+  /* No scrim on the side rail - nothing scrolls under a column. */
+  '  body::after { display: none; }',
   '  .ag-nav-item { flex-direction: row; justify-content: flex-start; gap: 10px;',
   '    padding: 0 16px; font-size: var(--t-body); }',
+  /* The rail has room for words, so it uses them. */
+  '  .ag-nav-item > span { position: static; width: auto; height: auto; margin: 0;',
+  '    overflow: visible; clip-path: none; }',
   '  .ag-nav-item[aria-current="page"] { background: none; color: var(--accent);',
   '    border-radius: 0; border-left: 2px solid var(--accent); }',
   '}'

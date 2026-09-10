@@ -205,9 +205,25 @@ test('🔴 the stale rule fires on a dead poller and not on the pre-kickoff back
    * score, a board and a delay bar over a game that had stopped. A blank screen
    * sends somebody to find out why; a stale one does not.
    *
-   * The threshold is derived rather than picked: live pushes are every 10s, so
-   * 45s is three missed pushes. Pre-kickoff the poller deliberately drops to a
-   * five-minute cycle, so the same rule there would cry wolf all evening. */
+   * 🔴 REWRITTEN 2026-09-09, LIVE IN THE FIRST QUARTER OF THE OPENER, because
+   * this test was passing while the banner fired on a healthy feed.
+   *
+   * It used to assert that 60 seconds without a push is stale, on the stated
+   * reasoning that "live pushes are every 10s, so 45s is three missed pushes".
+   * The poller does not push every 10s. It POLLS every 12s and DEDUPES, so its
+   * only promise is a heartbeat write - and that heartbeat was four minutes.
+   * Every official timeout, review, injury and change of possession is a quiet
+   * stretch longer than 45 seconds, and each one told the user the product was
+   * broken while it was working.
+   *
+   * 🔴 THE TEST WAS THE PROBLEM AS MUCH AS THE CODE. It encoded the same wrong
+   * belief about the poller that the screen did, so the two agreed with each
+   * other and neither agreed with the system. A test written from the same
+   * assumption as the code cannot catch that assumption being wrong - it can
+   * only make it look checked.
+   *
+   * The threshold is now derived from the heartbeat the poller PUBLISHES with
+   * the state, so it cannot drift from the promise it is measuring. */
   const src = await import('node:fs').then((fs) =>
     fs.readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8'));
 
@@ -219,13 +235,24 @@ test('🔴 the stale rule fires on a dead poller and not on the pre-kickoff back
     .replace(/^\(/, 'function ('))();
 
   const NOW = 1_700_000_000_000;
-  const live = (ageMs) => fn({ status: 'live', pushedAt: NOW - ageMs }, NOW);
+  /* 20s is what poll.mjs promises live, and it now travels with the state. */
+  const live = (ageMs, beat = 20_000) =>
+    fn({ status: 'live', heartbeatMs: beat, pushedAt: NOW - ageMs }, NOW);
   const pre = (ageMs) => fn({ status: 'pre', pushedAt: NOW - ageMs }, NOW);
 
-  assert.equal(live(10_000), null, 'one poll interval is not stale');
-  assert.equal(live(40_000), null, 'three intervals minus a network hiccup is not stale');
-  assert.ok(live(60_000), 'a minute with no push during a live game IS stale');
+  assert.equal(live(10_000), null, 'one heartbeat is not stale');
+  assert.equal(live(40_000), null, 'two heartbeats is the quiet the dedupe is FOR');
+  assert.equal(live(50_000), null, 'an official timeout is not a dead feed');
+  assert.ok(live(60_000), 'two heartbeats plus slack gone by IS stale');
   assert.ok(live(36 * 60_000), 'the actual failure - 36 minutes and gone');
+
+  /* 🔴 A STATE FROM A POLLER TOO OLD TO PUBLISH ITS HEARTBEAT IS ON THE OLD
+   * CADENCE, and must be judged against that. Assuming the new 20s here would
+   * recreate the false alarm from the other side - the screen calling a
+   * four-minute poller dead every minute. */
+  const legacy = (ageMs) => fn({ status: 'live', pushedAt: NOW - ageMs }, NOW);
+  assert.equal(legacy(60_000), null, 'a four-minute poller is not dead after one minute');
+  assert.ok(legacy(10 * 60_000), 'but ten minutes is dead on any cadence');
 
   assert.equal(pre(60_000), null, 'the pre-kickoff backoff is five minutes, not a fault');
   assert.equal(pre(9 * 60_000), null, 'still inside two slow cycles');
