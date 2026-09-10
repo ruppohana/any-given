@@ -246,14 +246,26 @@ export const NAV_CSS = [
   '.ag-nav-ico { width: 24px; height: 24px; transform: translateY(2px); }',
   /* The active pill keeps its own centring - the nudge is on the mark inside. */
   '.ag-nav-item { position: relative; }',
-  /* 70% is the number: enough that a card sliding under the bar is legibly
-     there, not so much that a white icon on it loses its ground. The active
-     tab stays FULLY OPAQUE - a selection that is see-through is a selection
-     you have to squint at, and it is the one element here carrying state. */
+  /* 🔴 BLUR 10, NOT 18. Jason, 2026-09-10: "I don't see the transparency's.
+     Change the blur to 10 pix."
+     18px was smearing everything behind the bar into one flat tone, which is
+     the failure mode of a heavy blur: it is doing a great deal of work to
+     produce something indistinguishable from opaque paint. 10px still hides
+     text but leaves a logo's shape and colour readable as a shape, which is
+     the only thing that says "there is a page under here".
+
+     🔴 AND THE OPACITY CAME DOWN WITH IT, because the blur was never the
+     reason he could not see it. 70% of --card is 70% WHITE, and in his
+     screenshot the thing behind the bar is a white game card - no opacity
+     makes white over white visible. The effect only ever exists where
+     something that is NOT the card colour passes under the bar: a mark, a
+     score, the grey ground between cards. 62% is as far as this can go before
+     a grey icon starts to lose its footing on a dark team colour sliding
+     underneath it. */
   '@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {',
-  '  .ag-nav { background: color-mix(in srgb, var(--card) 70%, transparent);',
-  '    -webkit-backdrop-filter: blur(18px) saturate(1.6);',
-  '    backdrop-filter: blur(18px) saturate(1.6); }',
+  '  .ag-nav { background: color-mix(in srgb, var(--card) 62%, transparent);',
+  '    -webkit-backdrop-filter: blur(10px) saturate(1.6);',
+  '    backdrop-filter: blur(10px) saturate(1.6); }',
   '}',
   /* THE SCRIM. Not a bar and not a border - a short fade of the page's own
      ground behind the pill, so what scrolls under it goes out on a gradient. An
