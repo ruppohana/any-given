@@ -80,8 +80,45 @@ const TIE_WIDTH = 2.6;
  * floor is a genuine near-certainty being sold honestly cheap. */
 export const MIN_PRICE = 1.1;
 
-/** The single-call ceiling. Unchanged, and imported nowhere else from here. */
+/** The two-way ceiling. Doctrine, unchanged. */
 export const MAX_PRICE = 6;
+
+/* 🔴 A THREE-WAY MARKET GETS 20x, AND 6x IS A TWO-WAY NUMBER. Jason settled it
+ * 2026-09-10 after asking the right question - "how does everyone else do it?"
+ *
+ * Researched rather than argued, and the answer is that nobody does it our
+ * way at all. The pick'em products do not price: CBS shows spreads and never
+ * a number, Office Pool has no combined payoff. Sportsbooks price everything
+ * live and cap in DOLLARS, not multiples, so no book anywhere has a 6x. There
+ * is no bar for this and it is stated rather than invented.
+ *
+ * Two real data points argue the same way:
+ *
+ *   Armchair Quarterback - the only app on disk shipping a live call layer -
+ *   pays a fixed ladder by NUMBER OF OPTIONS: 50 points for the two-way
+ *   run/pass call, 220 for the six-way grid. More outcomes, longer price, and
+ *   4.4x between them.
+ *
+ *   A real book prices a full-game NFL tie around +4000, which is 41x.
+ *
+ * 6x was strangling every three-way market in the app: a half-time tie is
+ * genuinely 8-16x and was being sold at 6, and the band was dropping both
+ * half-winner markets outright rather than print it.
+ *
+ * 🔴 THE BAND SCALES WITH THE CAP - twice it, always. A true price further out
+ * than double the ceiling cannot be sold honestly at the ceiling, whatever the
+ * ceiling is. That is what keeps `neither` on first-to-score - a 0-0 final,
+ * about 1 game in 2000 - off the board at 20x exactly as it was at 6x, rather
+ * than the band being a second number to remember. */
+export const MAX_PRICE_3WAY = 20;
+
+/** The ceiling for this market: 6x on a two-way, 20x once there is a third
+ *  outcome. Read off the choices rather than a list of market ids, so a market
+ *  added later gets the right one without anybody updating a table. */
+export function capFor(market: { choices?: { id: string }[] }): number {
+  const n = market && Array.isArray(market.choices) ? market.choices.length : 2;
+  return n >= 3 ? MAX_PRICE_3WAY : MAX_PRICE;
+}
 
 /* 🔴 THE MIRROR OF THE FLOOR, AND IT EXISTS BECAUSE THE CAP CANNOT SAY NO.
  *
@@ -95,7 +132,7 @@ export const MAX_PRICE = 6;
  * So above this, the market is not offered. 12x is two full doublings past the
  * cap: anything whose true price is further out than that cannot be sold
  * honestly at 6, and the right answer is not to sell it. */
-export const MAX_TRUE_PRICE = 12;
+export const trueCeiling = (cap: number) => cap * 2;
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -231,11 +268,11 @@ export function firstToScoreProbs(spread: number, sport: string) {
  * Returns null BELOW THE FLOOR, which is how a market says "do not offer this"
  * rather than printing a number nobody should take.
  */
-export function priceFromP(p: number): number | null {
+export function priceFromP(p: number, cap: number = MAX_PRICE): number | null {
   if (!isNum(p) || p <= 0) return null;
   const raw = Math.round((1 / p) * 100) / 100;
   if (raw < MIN_PRICE) return null;
-  return Math.min(MAX_PRICE, raw);
+  return Math.min(cap, raw);
 }
 
 /**
@@ -301,6 +338,8 @@ export function priceMarket(
     probs = winnerProbs(spread, share, sport) as unknown as Record<string, number>;
   }
 
+  const cap = capFor(market);
+  const ceiling = trueCeiling(cap);
   const prices: Record<string, number> = {};
   for (const c of market.choices) {
     const p = probs[c.id];
@@ -310,8 +349,8 @@ export function priceMarket(
        an outcome is not the same market, and the remaining tiles would be
        priced against a set that no longer sums to one. */
     const truePrice = 1 / p;
-    if (truePrice < MIN_PRICE || truePrice > MAX_TRUE_PRICE) return none;
-    const price = priceFromP(p);
+    if (truePrice < MIN_PRICE || truePrice > ceiling) return none;
+    const price = priceFromP(p, cap);
     if (price === null) return none;
     prices[c.id] = price;
   }
