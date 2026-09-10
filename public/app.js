@@ -33,7 +33,13 @@ const ROUTES = [
    * on every game of the week. Reached at #/allgames from the front door. */
   { id: 'allgames',  dest: 'slate',     screen: 'p6-allgames',     state: 'ready',       label: 'All games' },
   { id: 'picks',     dest: 'picks',     screen: 'p4-picks',        state: 'ready',       label: 'My picks' },
-  { id: 'parlay',    dest: 'picks',      screen: 'p3-parlay',       state: 'valid',       label: 'The parlay' },
+  { id: 'parlay',    dest: 'picks',      screen: 'p3-parlay',       state: 'valid',       label: 'The parlay (pool, points)' },
+  /* 🔴 TWO PARLAYS, TWO ROUTES, AND THEY ARE NOT THE SAME PRODUCT. p3 is the
+   * POOL's - points, whole-game sides, a fixed 3/6/12/20 ladder, nothing
+   * staked. p7 is the ALL GAMES one - Marbles across any market in the
+   * catalogue, paying the product of the legs. They never sum, so they never
+   * share a screen or a route. */
+  { id: 'buildparlay', dest: 'slate',    screen: 'p7-parlay',       state: 'ready',       label: 'Build a parlay (marbles)' },
   { id: 'standings', dest: 'standings', screen: 'p5-standings',    state: 'ready',       label: 'Standings' },
   { id: 'invite',    dest: 'slate',     screen: 'p1-invite',       state: 'ready',       label: 'Invite landing' },
   { id: 'create',    dest: 'slate',     screen: 'p6-create',       state: 'create',      label: 'Create a pool' },

@@ -55,7 +55,7 @@ import { pageHeader } from '/components/header.js';
  * about settlement living in the presentation layer, which is how two halves of
  * one app come to disagree about whether you won. */
 import { GAME_MARKETS, settleMarket } from '/src/markets.js';
-import { priceMarket, marketIsOpen } from '/src/lib/price-model.js';
+import { priceMarket, marketIsOpen, MIN_PRICE, trueCeiling, MAX_PRICE } from '/src/lib/price-model.js';
 
 export const id = 'p6-allgames';
 export const title = 'All games';
@@ -126,11 +126,32 @@ export function marketsFor(game, list, now = Date.now(), sport = chosenSport()) 
     if (!marketIsOpen(game, m, now)) return false;
     /* 🔴 AND ONE THE MODEL WILL NOT PRICE IS NOT DRAWN. A market whose
        outcomes fall outside the price band is a formality rather than a
-       proposition - see priceMarket. `winner` is exempt because it is priced
-       from the moneyline here, not by the model. */
-    if (m.id === 'winner' || m.needsLine) return true;
+       proposition - see priceMarket. */
+    if (m.needsLine) return true;
+    /* 🔴 THE MONEYLINE OBEYS THE SAME BAND, and this was a hole. The floor
+       lived in the model, so it guarded the halves and the quarters and let
+       the WINNER market through - the one market priced from a real book.
+       Caught by building an actual parlay and finding NC State at 1.02x on
+       the slip: not a bet, a rounding error with a tap target, sitting inside
+       a six-leg parlay contributing nothing but a way to lose it. A tile is
+       either worth taking or it is not drawn, and where its number came from
+       does not change that. */
+    if (m.id === 'winner') return winnerInBand(game);
     return priceMarket(game, m, sport).offerable;
   });
+}
+
+/** Both sides of the moneyline inside the same band every other market obeys.
+ *  No moneyline at all is fine - the market then prices at 2.00x both ways
+ *  and says so honestly, which is a different thing from a 1.02x tile. */
+export function winnerInBand(game) {
+  const ceiling = trueCeiling(MAX_PRICE);
+  for (const ml of [game && game.moneylineHome, game && game.moneylineAway]) {
+    const d = americanToDecimal(ml);
+    if (d == null) continue;
+    if (d < MIN_PRICE || d > ceiling) return false;
+  }
+  return true;
 }
 
 /**
@@ -433,7 +454,7 @@ function saveStore(sport, week, store) {
  * set in the same type as captured ones, with nothing on the card able to tell
  * them apart. When the feed has nothing, this screen says so.
  */
-async function fetchSlate(sport, week, byId) {
+export async function fetchSlate(sport, week, byId) {
   /* 🔴 ASK WHICH WEEK IS ON RATHER THAN ASSUMING. The stored preference wins
    * where there is one; otherwise the cron's pointer, which is written every
    * ten minutes from ESPN's own answer. Defaulting to week 1 was right for the
@@ -461,6 +482,13 @@ async function fetchSlate(sport, week, byId) {
       shortName: g.shortName || null,
       kickoffUtc: g.kickoffUtc,
       status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
+      /* 🔴 THE PERIOD TRAVELS OR THE CLOSE RULE CANNOT WORK. marketIsOpen gates
+         a Q4 market on whether the game has reached Q4, and this mapper was
+         dropping the field the capture had just started writing - so every
+         in-play market read as shut on a live game. The two changes were made
+         an hour apart and only the first one was visible. */
+      period: num(g.period) ? g.period : null,
+      clock: g.clock || null,
       home: byId[g.homeTeamId] || null,
       away: byId[g.awayTeamId] || null,
       homeTeamId: g.homeTeamId, awayTeamId: g.awayTeamId,

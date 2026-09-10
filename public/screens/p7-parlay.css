@@ -1,0 +1,102 @@
+/* P7 — the staked parlay. Tokens only; nothing here invents a colour or a
+   radius. The house radius is 10 and every block on this screen uses it. */
+
+.scr-p7-parlay { display: grid; gap: 12px; }
+
+/* ── the slip ─────────────────────────────────────────────────────────
+   🔴 IT IS STICKY, AND THAT IS NOT THE DRAWER THE POOL PARLAY REFUSED. P3
+   refuses a slip that follows you across the app; this one never leaves its
+   own screen. What it must not do is scroll away while you are picking the
+   thing it is totalling — a running price you have to scroll up to read is a
+   price you stop reading. */
+.p7-slip { position: sticky; top: 6px; z-index: 5;
+  display: grid; gap: 8px; padding: 12px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-card); box-shadow: var(--lift); }
+
+.p7-slip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.p7-slip-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--dim); }
+/* The price is the largest thing on the screen. It is the differentiator. */
+.p7-slip-x { font-size: 30px; font-weight: 800; line-height: 1; color: var(--accent); }
+
+.p7-empty { margin: 0; font-size: var(--t-body); color: var(--dim); }
+
+.p7-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.p7-leg { display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; border-radius: var(--radius-chip); background: var(--surface-1); }
+.p7-leg-t { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.p7-leg-g { font-size: var(--t-micro); font-weight: 700; color: var(--fg); }
+.p7-leg-m { font-size: var(--t-micro); color: var(--dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p7-leg-x { font-size: var(--t-body); font-weight: 700; color: var(--fg); }
+.p7-leg-rm { flex: 0 0 auto; width: 28px; height: 28px; font: inherit; font-size: 18px;
+  line-height: 1; border: 0; border-radius: var(--radius-chip);
+  background: transparent; color: var(--dim); }
+.p7-leg-rm:active { background: var(--track); }
+
+/* Why it is not valid yet — one line per broken rule, never one lumped "no". */
+.p7-why { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.p7-why li { font-size: var(--t-micro); color: var(--down); font-weight: 600; }
+
+.p7-stake { display: flex; align-items: center; gap: 6px; }
+.p7-stake-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--dim); }
+.p7-stake-b { font: inherit; font-weight: 700; min-height: 34px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg); }
+.p7-stake-b[data-on="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.p7-stake-b:disabled { opacity: .5; }
+
+.p7-ret { margin: 0; font-size: var(--t-body); color: var(--dim); }
+.p7-ret strong { color: var(--fg); font-size: var(--t-emph); }
+.p7-lock { margin: 0; font-size: var(--t-micro); color: var(--dim); }
+.p7-placed { margin: 0; font-size: var(--t-micro); font-weight: 700; color: var(--up); }
+
+.p7-place { font: inherit; font-weight: 800; min-height: var(--tap-min);
+  border: 0; border-radius: var(--radius-button);
+  background: var(--accent); color: var(--on-accent); }
+.p7-place:disabled { background: var(--track); color: var(--dim); }
+
+/* ── the picker ───────────────────────────────────────────────────── */
+
+.p7-group { display: grid; gap: 8px; }
+.p7-group-h { margin: 6px 2px 0; font-size: var(--t-micro); font-weight: 800;
+  letter-spacing: .06em; color: var(--dim); text-transform: uppercase; }
+
+.p7-game { background: var(--surface-1); border-radius: var(--radius-card); overflow: hidden; }
+/* A game already carrying a leg is marked on the closed row, so you can see
+   what you have used without opening sixty of them. */
+.p7-game[data-used="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.p7-game-h { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; min-height: var(--tap-min); cursor: pointer; list-style: none; }
+.p7-game-h::-webkit-details-marker { display: none; }
+.p7-game-w { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.p7-at { font-size: var(--t-micro); color: var(--dim); }
+.p7-game-n { font-size: var(--t-body); font-weight: 700; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p7-game-t { font-size: var(--t-micro); color: var(--dim); flex: 0 0 auto; }
+
+.p7-mkt { padding: 0 12px 10px; display: grid; gap: 6px; }
+.p7-mkt-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em;
+  color: var(--dim); text-transform: uppercase; }
+/* 🔴 A ROW THAT WRAPS, NOT A GRID OF FIXED COLUMNS. Markets here carry two,
+   three or four choices — a three-column grid puts a lone fourth tile on its
+   own row looking like a different kind of thing. */
+.p7-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.p7-choice { flex: 1 1 30%; min-width: 96px; min-height: var(--tap-min);
+  display: grid; gap: 1px; justify-items: center; align-content: center;
+  padding: 8px 6px; font: inherit;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--surface-3); color: var(--fg); }
+.p7-choice-l { font-size: var(--t-micro); font-weight: 700; }
+.p7-choice-x { font-size: var(--t-body); font-weight: 800; color: var(--accent); }
+.p7-choice-w { font-size: 9px; font-weight: 800; letter-spacing: .06em; color: var(--dim); }
+.p7-choice[data-on="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.p7-choice[data-on="true"] .p7-choice-x,
+.p7-choice[data-on="true"] .p7-choice-w { color: var(--on-accent); }
+.p7-choice:disabled { opacity: .45; }
+
+.p7-note { margin: 4px 2px 0; font-size: var(--t-micro); color: var(--dim); }
+
+@media (min-width: 900px) {
+  .p7-slip { position: static; }
+}

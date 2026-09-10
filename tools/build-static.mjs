@@ -33,9 +33,23 @@ async function walk(dir) {
 }
 
 /* A screen says `import ... from '/src/lib/pool.ts'`. On disk that becomes
- * pool.js, so the specifier has to move with it. Only OUR paths are touched -
- * a bare specifier would be an npm package and there are none. */
-const retarget = (src) => src.replace(/(from\s+['"])(\/[^'"]+)\.ts(['"])/g, '$1$2.js$3');
+ * pool.js, so the specifier has to move with it.
+ *
+ * 🔴 RELATIVE SPECIFIERS TOO, AND THEY WERE THE HOLE. This used to match only
+ * paths starting with `/`, on the reasoning that "only OUR paths are touched -
+ * a bare specifier would be an npm package and there are none". A relative
+ * specifier is neither: `./pool.ts` has no leading slash and is not a package,
+ * so it fell straight through and shipped unrewritten.
+ *
+ * Nothing caught it for months because no browser-facing TS module imported
+ * another one. src/markets.ts and src/lib/winprob.ts have no relative imports,
+ * and src/lib/price-model.ts has none either - which is exactly why it loaded
+ * fine and looked like proof the build worked. The first module to import a
+ * sibling was parlay-stake.ts, and the whole parlay screen died on
+ * "Failed to fetch dynamically imported module" with every file present and
+ * every one of them 200. */
+const retarget = (src) => src.replace(
+  /(from\s+['"])(\.{1,2}\/[^'"]+|\/[^'"]+)\.ts(['"])/g, '$1$2.js$3');
 
 await rm(DIST, { recursive: true, force: true });
 await mkdir(DIST, { recursive: true });
@@ -69,6 +83,24 @@ await cp(join(ROOT, 'fixtures'), join(DIST, 'fixtures'), { recursive: true });
 
 /* 4 - the entry. index.html is the app; a bare / must reach it. */
 if (!existsSync(join(DIST, 'index.html'))) throw new Error('no index.html in the build');
+
+/* 🔴 THE GATE THAT WOULD HAVE CAUGHT IT. A `.ts` specifier surviving into
+ * dist is a module the browser will ask the server for and not get - and the
+ * failure surfaces as a blank screen at runtime, on one route, with every
+ * file returning 200. That is expensive to diagnose and free to prevent, so
+ * the build refuses rather than warns. */
+{
+  const bad = [];
+  for (const f of await walk(DIST)) {
+    if (!['.js', '.html'].includes(extname(f))) continue;
+    const text = await readFile(f, 'utf8');
+    const hit = text.match(/from\s+['"][^'"]+\.ts['"]/g);
+    if (hit) bad.push(relative(DIST, f) + ' -> ' + hit.join(', '));
+  }
+  if (bad.length) {
+    throw new Error('unrewritten .ts import specifiers in the build:\n  ' + bad.join('\n  '));
+  }
+}
 
 const files = await walk(DIST);
 const bytes = (await Promise.all(files.map(async (f) => (await readFile(f)).length)))
