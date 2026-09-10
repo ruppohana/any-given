@@ -105,6 +105,27 @@ export async function captureSlate(env: any, sport: string, season: number) {
   try { confMap = JSON.parse((await env.LIVE.get(confKey)) || '{}') || {}; } catch { confMap = {}; }
   let confNew = 0;
 
+  /* 🔴 THE SEASON RECORD, CACHED PER WEEK - and the week is the whole trick.
+   *
+   * Jason asked for the head-to-head. It is not available: the all-time
+   * series only ever came from the site.api summary, which Cloudflare cannot
+   * reach, and shipping it would mean reviving the host poller he had removed.
+   * The season record IS on the core API, and on a row it answers the same
+   * question better - "are these two any good" rather than "what happened in
+   * 2019".
+   *
+   * It costs one request per competitor, and this capture runs every ten
+   * minutes, so caching matters as much as it does for conference. But a
+   * record is not a constant: it changes when the team plays. Keying the
+   * cache BY WEEK is exactly right, because in football a team plays once a
+   * week - so their record is fixed for the life of the key and a new key
+   * appears precisely when it can have changed. Zero requests on every run
+   * after the first of each week, and never a stale number. */
+  let recMap: Record<string, string> = {};
+  const recKey = `teams:${sport}:record:${season}:${week}`;
+  try { recMap = JSON.parse((await env.LIVE.get(recKey)) || '{}') || {}; } catch { recMap = {}; }
+  let recNew = 0;
+
   const teamCache = new Map<string, any>();
   const games: any[] = [];
   const live: string[] = [];
@@ -173,8 +194,18 @@ export async function captureSlate(env: any, sport: string, season: number) {
           } catch { /* leave it unknown; the next run tries again */ }
         }
 
+        if (recMap[tid] === undefined && c.record?.$ref) {
+          try {
+            const rr = await get(String(c.record.$ref));
+            const tot = (rr?.items || []).find((i: any) => i?.type === 'total');
+            recMap[tid] = String(tot?.displayValue || tot?.summary || '');
+            recNew++;
+          } catch { /* leave it unknown; the next run tries again */ }
+        }
+
         sides.push({
           periods, rank, conference: confMap[tid] || null,
+          record: recMap[tid] || null,
           id: tid, abbrev: t.abbreviation || '', name: t.displayName || '',
           short: t.shortDisplayName || t.name || '',
           primary: col(t.color), secondary: col(t.alternateColor),
@@ -284,6 +315,13 @@ export async function captureSlate(env: any, sport: string, season: number) {
      run for nothing. */
   if (confNew) {
     try { await env.LIVE.put(confKey, JSON.stringify(confMap)); } catch { /* next run */ }
+  }
+  /* Three weeks is long enough that a late correction still lands and short
+     enough that we are not paying to remember last season. */
+  if (recNew) {
+    try {
+      await env.LIVE.put(recKey, JSON.stringify(recMap), { expirationTtl: 60 * 60 * 24 * 21 });
+    } catch { /* next run */ }
   }
 
   games.sort((a, b) => a.kickoffUtc - b.kickoffUtc);

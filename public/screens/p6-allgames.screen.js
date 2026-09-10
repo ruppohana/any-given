@@ -654,8 +654,34 @@ function teamBlock(ctx, game, side) {
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
   b.appendChild(el('span', 'p6a-tname', (team && (team.short || team.name)) || '\u2014'));
+  /* 🔴 THE RANK READS AS AN ANNOTATION ON THE NAME. Nobody says "Miami,
+     seventh" - they say "number seven Miami" - but putting the mark first
+     would ragged the left edge of the one thing the eye scans down a list of
+     86 rows. So it sits after the name and annotates it. */
+  const rank = side === 'home' ? game.rankHome : game.rankAway;
+  if (num(rank)) b.appendChild(el('span', 'p6a-trank num', '#' + rank));
+
+  /* 🔴 THE RECORD, NOT THE HEAD-TO-HEAD. Jason asked for the all-time series
+     and it is not available: it only ever came from the site.api summary,
+     which Cloudflare cannot reach, so shipping it would mean reviving the
+     host poller he had removed. The season record is on the core API, and on
+     a row it answers the better question - "are these two any good" rather
+     than "what happened in 2019". */
+  const rec = team && team.record;
+  if (rec) b.appendChild(el('span', 'p6a-trec', rec));
+
+  /* 🔴 A GAME THAT HAS NOT KICKED HAS NO SCORE, AND 0 IS NOT THE SAME AS
+     NONE. `num(sc)` is true for 0, so every scheduled game was rendering a
+     "0" beside each team - a real-looking figure for something that has not
+     happened, on 62 of this week's 86 rows. It went unnoticed while the row
+     was tall and roomy; adding the rank and the record made it the thing
+     squeezing the team NAMES into "Florida A..." and "Louisv...".
+     Fifth truthiness-vs-validity bug in this repo, and the tell is the same
+     every time: a falsy value that is also a legitimate one. */
   const sc = side === 'home' ? game.homeScore : game.awayScore;
-  if (num(sc)) b.appendChild(el('span', 'p6a-tsc num', String(sc)));
+  if (num(sc) && game.status !== 'scheduled') {
+    b.appendChild(el('span', 'p6a-tsc num', String(sc)));
+  }
   return b;
 }
 

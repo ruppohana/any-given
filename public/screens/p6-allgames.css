@@ -385,3 +385,14 @@
   background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }
 .scr-p6-allgames .p6a-filter[data-on="true"] .p6a-filter-n { color: var(--on-accent); opacity: .8; }
+
+/* Rank and record: annotations on the name, never competing with it. The
+   rank is accent because it is the scarce thing on the board - 24 of 86
+   games have one - and the record is --dim because every row has one and a
+   column of equally loud numbers is a column nobody reads. */
+.scr-p6-allgames .p6a-trank {
+  font-size: 10px; font-weight: 800; color: var(--accent); flex: 0 0 auto;
+}
+.scr-p6-allgames .p6a-trec {
+  font-size: 10px; color: var(--dim); flex: 0 0 auto; white-space: nowrap;
+}
