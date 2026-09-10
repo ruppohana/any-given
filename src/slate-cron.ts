@@ -46,6 +46,44 @@ export async function currentWeek(sport: string, season: number): Promise<number
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
+/**
+ * THE CONFERENCE A TEAM IS IN - walking up until ESPN says it is one.
+ *
+ * 🔴 A TEAM'S `groups` IS ITS DIVISION, NOT ALWAYS ITS CONFERENCE, and the
+ * difference showed up the moment the NFL slate was captured: the board grew
+ * NINE chips - AFC East, NFC West, AFC South and so on - for a sixteen-game
+ * week that is two screens long. Useless as a filter and wrong as a label,
+ * because in the NFL a conference is the AFC or the NFC and those were not on
+ * offer at all.
+ *
+ * College mostly lands on a conference first go: "Big Ten Conference" comes
+ * back with isConference true and shortName "Big Ten".
+ *
+ * 🔴 IT WALKS THE FIELD RATHER THAN PARSING THE NAME. "AFC East" starts with
+ * the answer, and taking the first word would work today and be the fifth
+ * filename-as-truth bug in this repo. ESPN states the fact outright -
+ * `isConference: false` on the division, `true` on the parent - so the loop
+ * reads that and stops when it is true.
+ *
+ * The cap of four is not defensive dressing: a `parent` chain that loops
+ * would otherwise hang the whole capture, and no sport nests groups deeper
+ * than league > conference > division.
+ */
+async function conferenceOf(ref: string): Promise<string> {
+  let url: string | null = ref;
+  for (let hop = 0; hop < 4 && url; hop++) {
+    const g: any = await get(url);
+    if (g?.isConference) {
+      /* shortName where there is one - "Big Ten" reads on a chip and
+         "Big Ten Conference" does not. The NFL has no shortName and does
+         have an abbreviation, which is exactly the NFC/AFC we want. */
+      return String(g.shortName || g.abbreviation || g.name || '');
+    }
+    url = g?.parent?.$ref ? String(g.parent.$ref) : null;
+  }
+  return '';
+}
+
 export async function captureSlate(env: any, sport: string, season: number) {
   const base = `https://sports.core.api.espn.com/v2/sports/football/leagues/${sport}`;
   const week = await currentWeek(sport, season);
@@ -188,8 +226,7 @@ export async function captureSlate(env: any, sport: string, season: number) {
 
         if (confMap[tid] === undefined && t.groups?.$ref) {
           try {
-            const grp = await get(String(t.groups.$ref));
-            confMap[tid] = String(grp?.shortName || grp?.name || '');
+            confMap[tid] = await conferenceOf(String(t.groups.$ref));
             confNew++;
           } catch { /* leave it unknown; the next run tries again */ }
         }

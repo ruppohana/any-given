@@ -368,6 +368,14 @@
   position: sticky; top: 0; z-index: 4;
   display: flex; gap: 6px; padding: 8px 2px;
   background: var(--bg);
+  /* 🔴 IT KEEPS OUT OF THE MENU'S LANE. The kebab is `position: fixed` at the
+     top-right corner of the VIEWPORT, so a sticky row pinned to top: 0 runs
+     straight underneath it - and a chip that stops mid-scroll under a 44px
+     button is a chip you cannot read or tap. Ending the scroller short of
+     that corner means no chip can ever be there, which is a stronger fix
+     than padding: padding leaves a gap at the end of the scroll and content
+     still travels through it on the way. */
+  margin-right: 46px;
 }
 .scr-p6-allgames .p6a-filter {
   flex: 0 0 auto; display: flex; align-items: center; gap: 5px;

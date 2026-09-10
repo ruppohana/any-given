@@ -104,10 +104,23 @@
      the top of the live screen, where a delay slider had been living
      permanently. It floats over the shell so it is reachable from every screen
      without any of them having to draw it. */
+  /* 🔴 IT CARRIES ITS OWN GROUND. Jason: "The ellipsis get lost."
+     It was `background: transparent`, which is fine over the page ground and
+     invisible the moment anything scrolls under it - and something always
+     does, because it is FIXED over a scrolling document. The All games filter
+     row made it obvious: a white chip slides beneath a grey glyph on no
+     background and the control disappears into the word SEC.
+     A persistent floating control cannot be transparent. Same argument as the
+     nav pill, which has had a ground and a ring since the day it started
+     floating. */
   .ag-gear { position: fixed; top: 6px; right: 6px; z-index: 40;
     width: 44px; height: 44px; display: grid; place-items: center;
-    border: 0; border-radius: 12px;
-    background: transparent; color: var(--dim); }
+    border: 0; border-radius: var(--radius-nav, 10px);
+    background: color-mix(in srgb, var(--card) 82%, transparent);
+    -webkit-backdrop-filter: blur(10px) saturate(1.6);
+    backdrop-filter: blur(10px) saturate(1.6);
+    box-shadow: 0 0 0 1px rgba(16, 20, 16, .06);
+    color: var(--fg); }
   .ag-gear:active { background: var(--card); }
   .ag-sheet { border: 0; padding: 0; background: transparent; color: var(--fg);
     width: min(420px, 94vw); margin: auto; }
