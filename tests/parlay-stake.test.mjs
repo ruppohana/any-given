@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import {
   PARLAY_MAX_PAYOUT, PARLAY_MIN_LEGS, PARLAY_MAX_LEGS,
   parlayPrice, parlayReturns, validateStakeParlay, settleStakeParlay,
+  parlayLocksAt, parlayIsComposable, legIsAddable,
 } from '../src/lib/parlay-stake.ts';
 
 const leg = (gameId, marketId = 'winner', choiceId = 'home', price = 2) =>
@@ -240,4 +241,81 @@ test('a leg naming a market that no longer exists voids rather than hanging', ()
     10);
   assert.deepEqual(r.voidedLegs, ['4']);
   assert.equal(r.state, 'won', 'not live - it must be able to settle');
+});
+
+/* ------------------------------------------------- the line, and the gate */
+
+/* 🔴 THE BUG JASON'S QUESTION FOUND. "Does the spread change during the game
+ * or all gate at kick?" It changes - slate-cron re-reads odds for every event
+ * every ten minutes, finals included - so a leg must settle against the line
+ * it was TAKEN at, never the one currently on the game. */
+test('a spread leg settles against the line it was taken at, not the live one', () => {
+  const legAt3 = {
+    gameId: '1', marketId: 'spread', choiceId: 'home', price: 2,
+    lines: { spread: -3 },
+  };
+  /* Home won by 5. Against the taken line of -3 that COVERS. The game object
+   * now carries -7, moved after the bet, against which it would not. */
+  const game = { ...finished('1', 25, 20), spread: -7 };
+  const r = settleStakeParlay(
+    [legAt3, { ...leg('2'), lines: null }, { ...leg('3'), lines: null }],
+    gamesOf(game, finished('2', 30, 3), finished('3', 17, 14)),
+    playsOf(['1', platesFor(25, 20)], ['2', platesFor(30, 3)], ['3', platesFor(17, 14)]),
+    10);
+  assert.equal(r.legs[0].result, 'won', 'settled at -3, the line on the tile');
+  assert.equal(r.state, 'won');
+});
+
+test('the live line cannot rescue a leg either - it moves both ways', () => {
+  const legAt7 = {
+    gameId: '1', marketId: 'spread', choiceId: 'home', price: 2,
+    lines: { spread: -7 },
+  };
+  const game = { ...finished('1', 25, 20), spread: -3 };  // moved in our favour
+  const r = settleStakeParlay([legAt7], gamesOf(game),
+    playsOf(['1', platesFor(25, 20)]), 10);
+  assert.equal(r.legs[0].result, 'lost', 'won by 5, needed 7');
+});
+
+/* A leg written by a build that did not record its line. We do not know what
+ * it was taken at, so it did not happen - never a silent fall back to live. */
+test('a spread leg with no stored line voids rather than using the current one', () => {
+  const r = settleStakeParlay(
+    [{ gameId: '1', marketId: 'spread', choiceId: 'home', price: 2 },
+      leg('2'), leg('3'), leg('4')],
+    gamesOf({ ...finished('1', 25, 20), spread: -3 }, finished('2', 30, 3),
+      finished('3', 17, 14), finished('4', 21, 7)),
+    playsOf(['1', platesFor(25, 20)], ['2', platesFor(30, 3)],
+      ['3', platesFor(17, 14)], ['4', platesFor(21, 7)]),
+    10);
+  assert.deepEqual(r.voidedLegs, ['1']);
+  assert.equal(r.state, 'won');
+});
+
+/* 🔴 THE GATE. Legs resolve independently; the COMPOSITION locks at the first
+ * kickoff, or you could build the rest of a parlay around a result you have. */
+test('the parlay locks at the first leg to kick, not at each leg', () => {
+  const games = gamesOf(
+    { id: '1', kickoffUtc: 1000, status: 'scheduled' },
+    { id: '2', kickoffUtc: 5000, status: 'scheduled' },
+    { id: '3', kickoffUtc: 9000, status: 'scheduled' });
+  const legs = [leg('1'), leg('2'), leg('3')];
+  assert.equal(parlayLocksAt(legs, games), 1000);
+  assert.equal(parlayIsComposable(legs, games, 999), true);
+  assert.equal(parlayIsComposable(legs, games, 1000), false, 'shut at the first kick');
+  assert.equal(parlayIsComposable(legs, games, 6000), false,
+    'still shut while legs 2 and 3 are yet to play');
+});
+
+test('an empty parlay has no lock time and stays composable', () => {
+  assert.equal(parlayLocksAt([], new Map()), null);
+  assert.equal(parlayIsComposable([], new Map(), Date.now()), true);
+});
+
+test('a game that has kicked, is running or is final cannot be joined', () => {
+  assert.equal(legIsAddable({ kickoffUtc: 100, status: 'scheduled' }, 99), true);
+  assert.equal(legIsAddable({ kickoffUtc: 100, status: 'scheduled' }, 100), false);
+  assert.equal(legIsAddable({ kickoffUtc: 1e12, status: 'in_progress' }, 0), false);
+  assert.equal(legIsAddable({ kickoffUtc: 1e12, status: 'final' }, 0), false);
+  assert.equal(legIsAddable(null, 0), false);
 });

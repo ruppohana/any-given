@@ -71,6 +71,25 @@ export type StakeLeg = {
   choiceId: string;
   /** What the tile said this leg paid, at the moment it was added. */
   price: number;
+  /* 🔴 THE LINE AS IT STOOD WHEN THE LEG WAS TAKEN, AND IT IS NOT OPTIONAL
+   * DECORATION. Jason, 2026-09-10: "Does the spread change during the game or
+   * all gate at kick?"
+   *
+   * It changes. src/slate-cron.ts re-reads the odds endpoint for EVERY event
+   * every ten minutes, live and final ones included, and overwrites `spread`
+   * and `total` on the captured game. So the game object a leg settles
+   * against at 4pm is not the one it was priced against at noon.
+   *
+   * Without this field a spread leg had a FROZEN PRICE and a FLOATING LINE -
+   * the worst of both. Somebody takes SEA -3 at 2.00x, the book moves to
+   * SEA -7 by kickoff, and the leg quietly settles against -7 while the tile
+   * still says what it said. That is the one thing this product promises does
+   * not happen: nothing may move under the user after the tap.
+   *
+   * Stored as a pair rather than one number because the team-total markets
+   * read both, and a leg that carries half of what it needs is a leg that
+   * settles against a stale half. */
+  lines?: { spread?: number | null; total?: number | null } | null;
 };
 
 export type LegResult = StakeLeg & {
@@ -207,6 +226,79 @@ export function validateStakeParlay(
  * two other legs were later cancelled would hand back a stake that was already
  * gone.
  */
+/**
+ * THE GAME AS THIS LEG SAW IT. A shallow copy with the leg's own stored line
+ * put back, so settlement reads the number that was on the tile.
+ *
+ * 🔴 A LEG WITH NO STORED LINE ON A MARKET THAT NEEDS ONE IS NOT SETTLED
+ * AGAINST THE CURRENT LINE - it is left with nothing, so settleMarket reports
+ * 'no posted line' and the leg leaves by the void path. That is the honest
+ * answer for a leg written by an older build that did not record its line:
+ * we do not know what it was taken at, so it did not happen. Falling back to
+ * the live line would be silently doing the exact thing this field exists to
+ * prevent, and it would never error.
+ */
+function atTakenLine(game: any, leg: StakeLeg): any {
+  const l = leg.lines;
+  if (!l) return { ...game, spread: undefined, total: undefined };
+  return {
+    ...game,
+    spread: isNum(l.spread) ? l.spread : undefined,
+    total: isNum(l.total) ? l.total : undefined,
+  };
+}
+
+/**
+ * WHEN THE PARLAY STOPS BEING COMPOSABLE - the FIRST leg's kickoff, not each
+ * leg's own.
+ *
+ * 🔴 THIS IS THE POOL'S RULE AND IT IS DELIBERATELY THE SAME ONE. Jason:
+ * "Parts of the parlay gate at kick, yes?" - the LEGS resolve independently,
+ * so a parlay is routinely half-decided while the rest is still to play. What
+ * does NOT stay open is the composition: once any leg has kicked, no leg may
+ * be added, dropped or switched.
+ *
+ * The alternative - letting each leg lock on its own clock - reads as more
+ * flexible and is unplayable. It lets somebody watch the Thursday leg win and
+ * then build the rest of the parlay around a result they already have, at
+ * prices set before it. The price of a parlay is a claim about six unknown
+ * outcomes; the moment one is known, that claim is false.
+ */
+export function parlayLocksAt(
+  legs: readonly StakeLeg[],
+  games: ReadonlyMap<string, any>,
+): number | null {
+  let first: number | null = null;
+  for (const leg of (Array.isArray(legs) ? legs : [])) {
+    const g = games.get(leg.gameId);
+    if (!g || !isNum(g.kickoffUtc)) continue;
+    if (first === null || g.kickoffUtc < first) first = g.kickoffUtc;
+  }
+  return first;
+}
+
+/** Whether legs may still be added, dropped or switched. */
+export function parlayIsComposable(
+  legs: readonly StakeLeg[],
+  games: ReadonlyMap<string, any>,
+  now: number,
+): boolean {
+  const at = parlayLocksAt(legs, games);
+  return at === null || now < at;
+}
+
+/**
+ * MAY THIS LEG BE ADDED RIGHT NOW? A game that has kicked, is running or is
+ * final cannot be joined to a parlay - the same gate the All games board uses
+ * on a single call, restated here so the module and not the view is the thing
+ * that enforces it.
+ */
+export function legIsAddable(game: any, now: number): boolean {
+  if (!game) return false;
+  if (game.status === 'in_progress' || game.status === 'final') return false;
+  return isNum(game.kickoffUtc) && isNum(now) && now < game.kickoffUtc;
+}
+
 export function settleStakeParlay(
   legs: readonly StakeLeg[],
   games: ReadonlyMap<string, any>,
@@ -228,7 +320,7 @@ export function settleStakeParlay(
       continue;
     }
     const plays = playsByGame.get(leg.gameId) || [];
-    const v: any = settleMarket(leg.marketId, leg.choiceId, game, plays);
+    const v: any = settleMarket(leg.marketId, leg.choiceId, atTakenLine(game, leg), plays);
     if (v.landed === true) {
       out.push({ ...leg, result: 'won' });
       survivorPrices.push(leg.price);
