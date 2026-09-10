@@ -157,6 +157,28 @@
   --radius-card:  10px;
   --radius-pill:  999px;
 
+  /* 🔴 THE NAV IS NO LONGER A CAPSULE. Jason, 2026-09-10: "can the change the
+   * radius on the nav bar?"
+   *
+   * It was --radius-pill, which was right when the bar was picked - a capsule
+   * is the most recognisable thing about the system it came from. It is the
+   * only capsule left on the page now that everything else settled at 10, and
+   * a lone 999px shape beside a screen of 10px cards does not read as a
+   * deliberate exception. It reads as a component from somewhere else.
+   *
+   * 🔴 TWO RADII, ONE DIAL, AND THEY STAY CONCENTRIC. The active tab is a
+   * filled shape INSIDE the bar with 4px of padding between them, so it obeys
+   * the same rule the slate does:
+   *
+   *     inner radius = outer radius - the inset between them
+   *
+   * 14 outside, 10 inside. The inner one lands on --radius-card exactly, which
+   * is what makes the tab look like the same family of shape as every card it
+   * sits under rather than a smaller copy of the bar. Move --radius-nav and
+   * the tab follows; there is no second number to remember. */
+  --radius-nav:  14px;
+  --radius-nav-item: calc(var(--radius-nav) - 4px);
+
   /* 🔴 NESTED CORNERS. Jason, 2026-09-09, on a zoomed corner of the slate: "Can
    * these offsets and radius' line up?"
    *

@@ -200,7 +200,7 @@ export const NAV_CSS = [
      capsule edge - corners included, at the exact radius, with no rounding
      mismatch a border can have - and being a shadow it stays LIGHT: it is 5%
      black over the ground rather than a drawn line competing with the icons. */
-  '  border-radius: var(--radius-pill);',
+  '  border-radius: var(--radius-nav);',
   '  box-shadow: 0 0 0 1px rgba(16, 20, 16, .05), var(--float);',
   '  width: min(560px, calc(100% - 20px)); margin-inline: auto;',
   /* 🔴 15px HIGHER. Jason: "Move the tool bar up 15 pix." It sat 8px off the
@@ -259,7 +259,7 @@ export const NAV_CSS = [
   '  background: linear-gradient(to bottom, transparent, var(--bg) 72%); }',
   '.ag-nav-item { display: flex; flex-direction: column; align-items: center;',
   '  justify-content: center; gap: 2px; min-height: var(--tap-min);',
-  '  font-size: 10px; font-weight: 700; border-radius: var(--radius-pill);',
+  '  font-size: 10px; font-weight: 700; border-radius: var(--radius-nav-item);',
   '  text-decoration: none; color: var(--dim); }',
   '.ag-nav-ico { display: block; }',
   /* The filled pill. Accent ground, page color on top - never accent-on-white,

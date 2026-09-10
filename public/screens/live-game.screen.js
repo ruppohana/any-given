@@ -3070,8 +3070,8 @@ function modeCard(wrap, compact) {
     c.appendChild(el('p', 'lg-sport-b',
       'Three ways in. Two of them stake marbles at a price you see before you tap - '
       + 'one snap by snap while you watch, one across the whole week. The third is '
-      + 'your group, scored in points, with nothing staked. The scores never add together.'
-      + 'and never add together.'));
+      + 'your group, scored in points, with nothing staked. The scores never add'
+      + ' together.'));
   }
 
   /* 🔴 TWO ON THE FIRST CARD, AND THE SEAM IS WHAT IS AT STAKE. Jason,
