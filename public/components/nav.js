@@ -248,7 +248,39 @@ export const NAV_CSS = [
      🔴 "BEHIND" IS NOT A PROPERTY AN ELEMENT HAS OVER ITS OWN PARENT. To sit
      under the pill and over the page, the scrim has to be a separate fixed
      element one z-index below it. */
-  'body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0;',
+  /* 🔴 IT STOPS AT THE BOTTOM OF THE PILL, NOT AT THE BOTTOM OF THE SCREEN.
+     Jason, 2026-09-10: "What is the grey below the bottom of the nav bar?"
+
+     Measured on the deployed app at 375x812 before answering, because the
+     candidates - this, the 1px ring, and --float's 24px shadow - are
+     indistinguishable by eye and only one of them was it:
+
+       scrim        y 720 -> 812      (92px, bottom: 0)
+       fully --bg   y 786             (the 72% stop)
+       pill         y 747 -> 800
+       VISIBLE      y 800 -> 812      12px of flat #ebebeb, full width
+
+     So the fade finished 14px ABOVE the bottom of the pill and everything
+     below it was a flat slab of page-ground painted over whatever card was
+     scrolling underneath. Invisible on Home, where the ground is already
+     #ebebeb; obvious on the slate, where a white game card runs full-bleed
+     under the bar. That is what he photographed.
+
+     🔴 AND IT WAS THE ONE THING MOST AT ODDS WITH THE POINT OF THE BAR. The
+     scrim's job is that content going under the pill leaves on a gradient
+     rather than on a cut - but content EXITS AT THE PILL'S TOP EDGE. Below the
+     pill there is nothing to fade out, only 12px of lift, and an opaque plinth
+     under a floating bar is precisely the thing that stops it floating. The
+     pill was welded to a grey step.
+
+     Anchoring it to the pill's own bottom edge - the same expression the pill
+     uses for its margin, so the two cannot drift apart - puts the whole flat
+     section of the gradient BEHIND the pill where it was always meant to be,
+     and lets the card show through underneath. The gutters either side stay
+     covered, because this is still full width; only the vertical extent
+     changed. */
+  'body::after { content: ""; position: fixed; left: 0; right: 0;',
+  '  bottom: calc(var(--nav-lift) + env(safe-area-inset-bottom, 0px));',
   /* 🔴 SHORTER. Jason: "Reduce the bleed outside of the nav bar. Not so far."
      At 132px the fade started most of a card above the pill, so a game card was
      washing out while it was still the thing you were reading. The scrim only
