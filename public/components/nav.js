@@ -263,9 +263,48 @@ export const NAV_CSS = [
      a grey icon starts to lose its footing on a dark team colour sliding
      underneath it. */
   '@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {',
-  '  .ag-nav { background: color-mix(in srgb, var(--card) 62%, transparent);',
+  /* 🔴 45%, NOT 62%. Jason, once the scrim came off: "Worked, make it more
+     transparent." 62% was chosen while the bar was still looking at a wall,
+     so it was never a judgement about how much page to show - it was the
+     largest number that made no difference. With a real backdrop behind it,
+     45% is where a mark under the bar reads as that mark rather than as a
+     smudge, and the icons still hold: they are drawn on --dim over a 45%
+     wash of --card, which stays above 3:1 against every team colour in the
+     file because the wash never fully clears. */
+  '  .ag-nav { background: color-mix(in srgb, var(--card) 45%, transparent);',
   '    -webkit-backdrop-filter: blur(10px) saturate(1.6);',
   '    backdrop-filter: blur(10px) saturate(1.6); }',
+  /* 🔴 AND THE SCRIM COMES OFF, BECAUSE IT WAS THE THING BEING SEEN THROUGH.
+     Jason, twice: "I don't see the transparency's", then "You tell me."
+
+     Three values were rendered on the deployed slate - 62%, 45%, 30% - and
+     they were indistinguishable. The computed style was correct at every one
+     of them (background `color(srgb 1 1 1 / 0.3)`, backdrop-filter
+     `blur(10px) saturate(1.6)`), which ruled out the CSS not applying and left
+     only the question of what was behind the glass. Measured:
+
+       scrim        y 708 -> 800
+       fully --bg   y 774
+       pill         y 747 -> 800
+
+     The scrim is a fixed sibling at z-index 29 and the pill is 30, so the
+     pill's backdrop samples THE SCRIM, not the page - and the lower half of
+     the pill sits over the part of the scrim that has already reached flat
+     #ebebeb. The bar was a window onto a wall. Lowering its opacity revealed
+     more wall, which is why 30% looked like 62%.
+
+     🔴 THE BLUR IS THE SCRIM NOW, AND IT IS THE BETTER ONE. Both exist to stop
+     content being cut by the bar's edge. A gradient does it by painting the
+     page ground over the content BEFORE it reaches the bar; a backdrop blur
+     does it at the bar itself, and leaves the shape and colour of what is
+     under there legible instead of erasing it. Keeping both means the gradient
+     wins and the blur has nothing left to blur.
+
+     It costs nothing in the gutters, which was the thing to check before
+     deleting it: the pill is `min(560px, 100% - 20px)` centred and .ag-main
+     pads by 10px, so the strips either side of the pill are exactly the page
+     padding. There is no card content out there to leave unfaded. */
+  '  body::after { display: none; }',
   '}',
   /* THE SCRIM. Not a bar and not a border - a short fade of the page's own
      ground behind the pill, so what scrolls under it goes out on a gradient. An
