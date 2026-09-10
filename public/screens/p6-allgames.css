@@ -292,3 +292,15 @@
   .scr-p6-allgames .p6a-time { font-size: var(--t-body); }
   .scr-p6-allgames .p6a-c-l { font-size: var(--t-emph); }
 }
+
+
+/* ── the way through to the parlay ────────────────────────────────────
+   A card, not a button: it is a destination on the same footing as the
+   games under it, and a full-width accent button here would outrank every
+   market on the board. */
+.p6-toparlay { display: grid; gap: 2px; padding: 11px 12px; text-decoration: none;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-card); }
+.p6-toparlay-h { font-size: var(--t-body); font-weight: 800; color: var(--accent); }
+.p6-toparlay-b { font-size: var(--t-micro); color: var(--dim); }
+.p6-toparlay:active { background: var(--surface-1); }

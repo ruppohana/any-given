@@ -55,7 +55,14 @@ import { pageHeader } from '/components/header.js';
  * about settlement living in the presentation layer, which is how two halves of
  * one app come to disagree about whether you won. */
 import { GAME_MARKETS, settleMarket } from '/src/markets.js';
-import { priceMarket, marketIsOpen, MIN_PRICE, trueCeiling, MAX_PRICE } from '/src/lib/price-model.js';
+import { priceMarket, marketIsOpen, MIN_PRICE, trueCeiling, MAX_PRICE,
+  gameWinnerProbs, priceFromP } from '/src/lib/price-model.js';
+/* 🔴 IMPORTED, NOT TYPED. The first version of the line below said "Up to
+   250x" as a literal, under a comment claiming it was read from the engine -
+   which is the worst of both, because the comment tells the next reader the
+   number is safe to leave alone while the number is free to drift away from
+   the resolver that actually pays it. */
+import { PARLAY_MAX_PAYOUT as PARLAY_CEILING } from '/src/lib/parlay-stake.js';
 
 export const id = 'p6-allgames';
 export const title = 'All games';
@@ -146,9 +153,22 @@ export function marketsFor(game, list, now = Date.now(), sport = chosenSport()) 
  *  and says so honestly, which is a different thing from a 1.02x tile. */
 export function winnerInBand(game) {
   const ceiling = trueCeiling(MAX_PRICE);
-  for (const ml of [game && game.moneylineHome, game && game.moneylineAway]) {
-    const d = americanToDecimal(ml);
-    if (d == null) continue;
+  const both = [game && game.moneylineHome, game && game.moneylineAway]
+    .map(americanToDecimal);
+  /* 🔴 NO MONEYLINE IS NOT EVEN MONEY. 18 of this week's 86 college games have
+     none - books do not price a 59-point mismatch two ways - and the market
+     was falling through to 2.00x a side, which says Miami and Florida A&M are
+     equally likely. The spread is still there, so the model answers instead. */
+  if (both.some((d) => d == null)) {
+    if (!num(game && game.spread)) return true;      // no opinion at all: 2.00x is honest
+    const p = gameWinnerProbs(game.spread, chosenSport());
+    for (const v of [p.home, p.away]) {
+      const t = 1 / v;
+      if (t < MIN_PRICE || t > ceiling) return false;
+    }
+    return true;
+  }
+  for (const d of both) {
     if (d < MIN_PRICE || d > ceiling) return false;
   }
   return true;
@@ -245,7 +265,14 @@ export function priceFor(game, market, choice, ids, sport = chosenSport()) {
   if (!side) return 2;
   const ml = side === 'home' ? (game && game.moneylineHome) : (game && game.moneylineAway);
   const d = americanToDecimal(ml);
-  if (d == null) return 2;
+  /* Rule 2a: no posted moneyline, but a posted spread. The model prices it
+     rather than the board calling a 59-point mismatch a coin flip. */
+  if (d == null) {
+    if (!num(game && game.spread)) return 2;
+    const p = gameWinnerProbs(game.spread, sport);
+    const v = priceFromP(side === 'home' ? p.home : p.away, MAX_PAYOUT);
+    return num(v) ? v : 2;
+  }
   return Math.min(MAX_PAYOUT, Math.round(d * 100) / 100);
 }
 
@@ -613,13 +640,54 @@ function teamBlock(ctx, game, side) {
  * must not do is assert a half-time number we were never given. Same gate as
  * the price, for the same reason, and the two now agree.
  */
+/**
+ * THE LINE THIS MARKET IS ACTUALLY SETTLED AGAINST.
+ *
+ * 🔴 IT WAS PRINTING THE GAME TOTAL ON EVERY TOTALS MARKET, AND THREE OF THEM
+ * DO NOT USE IT. Found on the deployed board: Florida A&M at Miami showed
+ * `HOME TEAM TOTAL 65.5` and `AWAY TEAM TOTAL 65.5`, the same number twice,
+ * and 65.5 is the whole game. markets.ts settles a team total against
+ * `total/2 -/+ spread/2` - so the real lines were Miami 62.5 and Florida A&M
+ * 3.0, and the card was telling you neither.
+ *
+ * That is worse than a missing line. The half totals had the same fault: the
+ * card said 65.5 where settlement uses 32.75. A tile that names the wrong
+ * number is a tile that settles you against something you never saw, which is
+ * the one promise this product makes - the price AND the line are on the tile
+ * before the tap, not just the price.
+ *
+ * 🔴 THE DERIVATIONS ARE markets.ts's, RESTATED NOWHERE. Each branch below
+ * mirrors one settlement case, and the comment names it, so a change there
+ * that is not made here is visible as a disagreement rather than silent.
+ */
 export function lineNote(game, market) {
-  if (!market || market.scope !== 'game') return null;
+  if (!market || !market.needsLine) return null;
   if (market.needsLine === 'spread') {
+    if (market.scope !== 'game') return null;
     const h = (game.home && game.home.abbrev) || 'HOME';
     return h + ' ' + spreadText(game.spread, 'home');
   }
-  if (market.needsLine === 'total') return String(game.total);
+  if (!num(game.total)) return null;
+
+  /* case 'team_total_home' / 'team_total_away': the posted total split by the
+     posted spread. NOT rounded - halving a .5 total gives a .25 line, which is
+     a real line and cannot push. */
+  if (market.id === 'team_total_home' || market.id === 'team_total_away') {
+    if (!num(game.spread)) return null;
+    const home = market.id === 'team_total_home';
+    const side = home ? game.home : game.away;
+    const line = home ? game.total / 2 - game.spread / 2 : game.total / 2 + game.spread / 2;
+    return ((side && side.abbrev) || (home ? 'HOME' : 'AWAY')) + ' ' + line;
+  }
+
+  /* case 'h1_total' / 'h2_total': the posted total halved and rounded to the
+     nearest 0.5. A derived line, and the settlement text says so every time -
+     so this says so too rather than presenting it as posted. */
+  if (market.scope === 'half') {
+    return String(Math.round((game.total / 2) * 2) / 2) + ' (half of ' + game.total + ')';
+  }
+
+  if (market.scope === 'game') return String(game.total);
   return null;
 }
 
@@ -870,7 +938,24 @@ function head(root, data) {
      * the bank. No top-up, because there is nothing here to buy. */
     sub: 'Week ' + week + ' · every market priced before you tap'
   }));
+  /* 🔴 THE DOOR TO THE PARLAY, AND IT WAS MISSING ENTIRELY. p7 shipped
+   * built, tested and DEAD - the only thing in the app that mentioned
+   * `#/buildparlay` was the route table that defines it. A screen nobody can
+   * reach is not built, and the way that happens is exactly this: the screen
+   * gets the attention, the one line that points at it does not.
+   *
+   * It belongs here rather than on Home. Home already promises "the whole
+   * week - winner, spread, total, halves, quarters and parlays" and then
+   * hands you this board; the parlay is one more thing you can do with the
+   * same games, so it sits at the top of them. */
+  const go = el('a', 'p6-toparlay');
+  go.href = '#/buildparlay';
+  go.appendChild(el('span', 'p6-toparlay-h', 'Build a parlay'));
+  go.appendChild(el('span', 'p6-toparlay-b',
+    'Three to six of these, all have to land. Up to ' + PARLAY_CEILING + '×.'));
+  root.appendChild(go);
 }
+
 
 export function render(root, data, state) {
   root.classList.add('scr-p6-allgames');

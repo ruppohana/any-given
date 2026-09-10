@@ -510,3 +510,30 @@ export function playsFromPeriods(game: any): any[] {
   }
   return out;
 }
+
+/**
+ * P(home) / P(away) FOR THE WHOLE GAME, WITH NO TIE.
+ *
+ * 🔴 THE `winner` MARKET HAS TWO CHOICES, NOT THREE - markets.ts sends a drawn
+ * game down the void path instead of offering a Tie tile. So its two prices
+ * must be normalised across each other ALONE. Handing it winnerProbs directly
+ * would quietly shade both sides down by the tie mass, for an outcome nobody
+ * on that market is exposed to.
+ *
+ * 🔴 WHY THIS EXISTS AT ALL, when the winner market is supposed to be priced
+ * from the moneyline: 18 of the 86 college games this week have no moneyline
+ * posted. Books do not price a 59-point mismatch two ways. With the moneyline
+ * absent the market fell through to the flat 2.00x default, so Miami -59.5
+ * and Florida A&M were BOTH offered at even money - which is the same
+ * 150%-probability incoherence Jason screenshotted, arriving from missing data
+ * rather than from a missing model.
+ *
+ * The spread is still there when the moneyline is not, and it is the better
+ * answer. Where a real book has published a two-way price we use it; where it
+ * has declined to, we do not invent even money.
+ */
+export function gameWinnerProbs(spread: number, sport: string) {
+  const w = winnerProbs(spread, 1, sport);
+  const s = w.home + w.away || 1;
+  return { home: w.home / s, away: w.away / s };
+}
