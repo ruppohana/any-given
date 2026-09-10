@@ -331,3 +331,25 @@ test('every period market on the real game settles from the slate alone', async 
   check('h1_total', 'over', false);
   check('h2_total', 'over', true);
 });
+
+/* ------------------------------------------------ the slate mapper's shape */
+
+/* 🔴 THE GUARD FOR A BUG THAT HAPPENED THREE TIMES IN ONE DAY.
+ *
+ * p6-allgames' fetchSlate used to rebuild each game key by key, so every
+ * field the capture started writing was invisible to the screen until
+ * somebody added a line to the mapper - `period` (every in-play market read
+ * as shut), `rankHome` (no Top 25 chip), `conferences` (one "All" chip). None
+ * of them errored; the feature just quietly did nothing.
+ *
+ * It spreads the raw game now. This asserts the PROPERTY - an unknown field
+ * survives - rather than listing today's fields, because a list would have to
+ * be updated by exactly the person who forgets to update the mapper. */
+test('the slate mapper passes through a field it has never heard of', async () => {
+  const src = await import('node:fs').then((fs) =>
+    fs.readFileSync('public/screens/p6-allgames.screen.js', 'utf8'));
+  const body = src.slice(src.indexOf('export async function fetchSlate'));
+  const ret = body.slice(body.indexOf('return {'), body.indexOf('}).filter('));
+  assert.ok(/\.\.\.g,/.test(ret),
+    'fetchSlate must spread the raw game, not allow-list its keys');
+});

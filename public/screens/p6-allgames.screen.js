@@ -528,43 +528,55 @@ export async function fetchSlate(sport, week, byId) {
     for (const t of g.teams || []) {
       if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t, league: sport };
     }
+    /* 🔴 SPREAD FIRST, THEN NORMALISE - NEVER AN ALLOW-LIST.
+     *
+     * This rebuilt a game key by key, and it swallowed a newly captured field
+     * THREE TIMES IN ONE DAY. Each time the capture shipped the data, the
+     * deploy was green, the KV held it, and the screen behaved as though the
+     * work had never happened:
+     *
+     *   `period`      every in-play market read as shut on a live game
+     *   `rankHome`    the Top 25 filter chip did not exist
+     *   `conferences` the filter row rendered with a single "All" chip
+     *
+     * None of them errored. An allow-list mapper is precisely the place where
+     * "I shipped the data" and "the screen has the data" become different
+     * facts, and the gap between them is invisible from both ends - the
+     * capture proves the field is in KV, the screen proves the feature is
+     * broken, and nothing points at the twenty lines in between.
+     *
+     * So the raw game goes through whole and only the fields that need
+     * COERCING are named. A new field arriving from the capture now reaches
+     * every consumer with no edit here at all, which is the property that was
+     * missing. The named entries below are not a whitelist; each one is doing
+     * a job - a null that must not be NaN, an unknown status that must not be
+     * trusted, a team id that must become a team.
+     *
+     * There is a test asserting an unknown field survives, because the next
+     * person to add a key to the capture will not read this comment. */
     return {
+      ...g,
       id: String(g.id),
       shortName: g.shortName || null,
-      kickoffUtc: g.kickoffUtc,
+      /* Anything we do not recognise is `scheduled` - absent beats guessed,
+         and a status we cannot read must never open a market. */
       status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
-      /* 🔴 THE PERIOD TRAVELS OR THE CLOSE RULE CANNOT WORK. marketIsOpen gates
-         a Q4 market on whether the game has reached Q4, and this mapper was
-         dropping the field the capture had just started writing - so every
-         in-play market read as shut on a live game. The two changes were made
-         an hour apart and only the first one was visible. */
+      /* Numbers: absent stays absent rather than becoming 0, which is a real
+         spread, a real total and a real score. */
       period: num(g.period) ? g.period : null,
-      clock: g.clock || null,
-      /* 🔴 THIRD TIME THIS MAPPER HAS SWALLOWED A NEW FIELD. It rebuilds a
-         game key by key, so anything the capture starts writing is invisible
-         here until somebody adds a line - and the symptom is never an error,
-         it is a feature that quietly does nothing. `period` did it this
-         afternoon (every in-play market read as shut); rank and conference
-         did it again (the filter row rendered with one chip). Worth naming
-         rather than fixing silently: an allow-list mapper is a place where
-         "I shipped the data" and "the screen has the data" are different
-         facts. */
-      rankHome: num(g.rankHome) ? g.rankHome : null,
-      rankAway: num(g.rankAway) ? g.rankAway : null,
-      conferences: Array.isArray(g.conferences) ? g.conferences : [],
-      periodsHome: Array.isArray(g.periodsHome) ? g.periodsHome : null,
-      periodsAway: Array.isArray(g.periodsAway) ? g.periodsAway : null,
-      home: byId[g.homeTeamId] || null,
-      away: byId[g.awayTeamId] || null,
-      homeTeamId: g.homeTeamId, awayTeamId: g.awayTeamId,
       homeScore: num(g.homeScore) ? g.homeScore : null,
       awayScore: num(g.awayScore) ? g.awayScore : null,
       spread: num(g.spread) ? g.spread : null,
       total: num(g.total) ? g.total : null,
       moneylineHome: num(g.moneylineHome) ? g.moneylineHome : null,
       moneylineAway: num(g.moneylineAway) ? g.moneylineAway : null,
-      broadcast: g.broadcast || null,
-      venue: g.venue || null
+      rankHome: num(g.rankHome) ? g.rankHome : null,
+      rankAway: num(g.rankAway) ? g.rankAway : null,
+      conferences: Array.isArray(g.conferences) ? g.conferences : [],
+      /* The two fields this screen ADDS: the team objects, resolved against
+         the identity map built above. */
+      home: byId[g.homeTeamId] || null,
+      away: byId[g.awayTeamId] || null
     };
   }).filter((g) => g.home && g.away && num(g.kickoffUtc));
 }
