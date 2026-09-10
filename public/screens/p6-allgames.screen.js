@@ -454,20 +454,37 @@ function saveStore(sport, week, store) {
  * set in the same type as captured ones, with nothing on the card able to tell
  * them apart. When the feed has nothing, this screen says so.
  */
-export async function fetchSlate(sport, week, byId) {
-  /* 🔴 ASK WHICH WEEK IS ON RATHER THAN ASSUMING. The stored preference wins
-   * where there is one; otherwise the cron's pointer, which is written every
-   * ten minutes from ESPN's own answer. Defaulting to week 1 was right for the
-   * NFL and wrong for college - already on week 2 - so this screen showed a
-   * flawless empty state for a week nobody is playing. */
-  let wk = week;
+/**
+ * WHICH WEEK IS ACTUALLY ON. The cron writes this pointer every ten minutes
+ * from ESPN's own answer; the passed fallback stands only if it cannot be
+ * read.
+ *
+ * 🔴 IT IS EXPORTED BECAUSE THE ANSWER HAS TO REACH THE STORAGE KEY, and it
+ * did not. This resolution used to live inside fetchSlate and never leave it:
+ * the fetch quietly corrected week 1 to week 2 and returned the right games,
+ * while every caller went on using chosenWeek() - still 1 - to build its
+ * localStorage key.
+ *
+ * So the All games board was showing week 2 and filing its stakes under
+ * week 1, and the parlay slip did the same. Nothing looked wrong, because
+ * one wrong key is indistinguishable from an empty one: your stakes simply
+ * are not there, and the screen draws a perfectly good empty state. Caught by
+ * placing a real parlay and finding it saved to `ag.parlay.college-football.1`
+ * against a week-2 board.
+ */
+export async function resolveWeek(sport, fallback) {
   try {
     const cur = await fetch(`/api/state/slate:${sport}:current`);
     if (cur.ok) {
       const n = Number(await cur.text());
-      if (Number.isInteger(n) && n >= 1 && n <= 22) wk = n;
+      if (Number.isInteger(n) && n >= 1 && n <= 22) return n;
     }
   } catch { /* the stored or default week stands */ }
+  return fallback;
+}
+
+export async function fetchSlate(sport, week, byId) {
+  const wk = await resolveWeek(sport, week);
   const res = await fetch(`/api/state/slate:${sport}:${SEASON}:${wk}`);
   if (!res.ok) throw new Error('slate ' + res.status);
   const d = await res.json();
@@ -506,7 +523,7 @@ export async function fetchSlate(sport, week, byId) {
 
 export async function previewData(fixtures, state) {
   const sport = chosenSport();
-  const week = chosenWeek();
+  const week = await resolveWeek(chosenSport(), chosenWeek());
   const store = loadStore(sport, week);
 
   /* The four non-ready routes draw a state block over a header. Fetching for

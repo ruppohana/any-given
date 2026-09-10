@@ -100,3 +100,21 @@
 @media (min-width: 900px) {
   .p7-slip { position: static; }
 }
+
+/* ── the settled view ─────────────────────────────────────────────── */
+/* 🔴 NOT STICKY ONCE IT IS PLACED, and the builder's rule does not carry
+   over. Sticky earns its keep while you are scrolling a picker underneath it;
+   a settled parlay has no picker, so the card was pinning itself to the top
+   of a viewport-tall grid track and leaving a screen of empty ground above
+   it. Same element, two jobs, and only one of them wants to stick. */
+.p7-slip[data-state] { position: static; }
+.p7-slip[data-state="won"] .p7-slip-x { color: var(--up); }
+.p7-slip[data-state="lost"] .p7-slip-x { color: var(--down); }
+.p7-slip[data-state="void"] .p7-slip-x { color: var(--dim); }
+.p7-sub { margin: 0; font-size: var(--t-body); color: var(--dim); }
+/* Shape and word, never colour alone - a red dot and a green dot are one dot
+   to a lot of people, and this is the screen that tells you if you won. */
+.p7-leg-r { font-size: var(--t-micro); font-weight: 700; color: var(--dim); flex: 0 0 auto; }
+.p7-leg[data-result="won"] .p7-leg-r { color: var(--up); }
+.p7-leg[data-result="lost"] .p7-leg-r { color: var(--down); }
+.p7-leg[data-result="lost"] .p7-leg-t { opacity: .6; }

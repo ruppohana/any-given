@@ -32,12 +32,13 @@ import { pageHeader } from '/components/header.js';
 import { GAME_MARKETS } from '/src/markets.js';
 import {
   PARLAY_MIN_LEGS, PARLAY_MAX_LEGS, PARLAY_MAX_PAYOUT,
-  parlayPrice, parlayReturns, validateStakeParlay,
+  parlayPrice, parlayReturns, validateStakeParlay, settleStakeParlay,
   parlayLocksAt, parlayIsComposable, legIsAddable,
 } from '/src/lib/parlay-stake.js';
+import { playsFromPeriods } from '/src/lib/price-model.js';
 import {
   marketsFor, priceFor, priceLabel, chosenSport, chosenWeek,
-  fetchSlate, groupsOf, groupLabel, timeLabel, spreadText, num, STAKES,
+  fetchSlate, resolveWeek, groupsOf, groupLabel, timeLabel, spreadText, num, STAKES,
 } from '/screens/p6-allgames.screen.js';
 
 export const id = 'p7-parlay';
@@ -129,6 +130,76 @@ export function legPrices(legs) {
 export function slipPrice(legs) {
   return parlayPrice(legPrices(legs));
 }
+
+/**
+ * 🔴 A PLACED PARLAY IS A DIFFERENT SCREEN, NOT THE SAME ONE GREYED OUT.
+ *
+ * Before it is staked the question is "what is this worth"; after, it is
+ * "where does it stand". Those want different things at the top - the price
+ * first, then the state - and a builder with its buttons disabled answers
+ * neither well.
+ *
+ * 🔴 IT SETTLES FROM THE SLATE, WITH NO PLAY LIST ANYWHERE. Every period
+ * market resolves through scoreAfterPeriod, which reads plays, and no client
+ * has plays for 86 games. playsFromPeriods turns the captured quarter scores
+ * into the smallest list that answers the same questions, so this uses the
+ * SAME settleMarket the live screen does rather than a second implementation
+ * that would eventually disagree with it about who won a first half.
+ */
+function settledCard(ctx) {
+  const { slip, games } = ctx;
+  const byId = mapOf(games);
+  const plays = new Map(games.map((g) => [String(g.id), playsFromPeriods(g)]));
+  const res = settleStakeParlay(slip.legs, byId, plays, slip.stake);
+
+  const c = el('section', 'p7-slip');
+  c.dataset.state = res.state;
+
+  const head = el('div', 'p7-slip-head');
+  head.appendChild(el('span', 'p7-slip-l', VERDICT[res.state] || 'IN PLAY'));
+  head.appendChild(el('span', 'p7-slip-x num',
+    res.state === 'lost' ? '0' : String(res.returns)));
+  c.appendChild(head);
+
+  const sub = el('p', 'p7-sub');
+  sub.textContent = res.state === 'won'
+    ? 'All ' + res.legs.filter((l) => l.result === 'won').length + ' legs landed at '
+      + priceLabel(res.price) + '.'
+    : res.state === 'lost' ? 'A leg missed, so the parlay is over.'
+      : res.state === 'void' ? 'Voided.'
+        : res.legs.filter((l) => l.result === null).length + ' still to play, at '
+          + priceLabel(res.price) + '.';
+  c.appendChild(sub);
+  if (res.note) c.appendChild(el('p', 'p7-lock', res.note));
+
+  const list = el('ul', 'p7-legs');
+  for (const leg of res.legs) {
+    const g = byId.get(String(leg.gameId));
+    const li = el('li', 'p7-leg');
+    li.dataset.result = leg.result || 'live';
+    const txt = el('div', 'p7-leg-t');
+    txt.appendChild(el('span', 'p7-leg-g', g ? (g.shortName || '') : leg.gameId));
+    txt.appendChild(el('span', 'p7-leg-m', leg.label || (leg.marketId + ' · ' + leg.choiceId)));
+    li.appendChild(txt);
+    /* 🔴 THE MARK IS SHAPE AND WORD, NOT COLOUR ALONE - the same rule the
+       result components follow, and the reason is that a red dot and a green
+       dot are one dot to a lot of people. */
+    li.appendChild(el('span', 'p7-leg-r', MARK[leg.result || 'live']));
+    li.appendChild(el('span', 'p7-leg-x num', priceLabel(leg.price)));
+    list.appendChild(li);
+  }
+  c.appendChild(list);
+
+  /* 🔴 STAKED IS STAKED. There is no unstake, and there is no clear button
+     while it is live - a parlay you can walk away from mid-run is not a
+     parlay. It clears when the week does, with the key. */
+  c.appendChild(el('p', 'p7-lock',
+    'Staked ' + slip.stake + ' marbles. This slip clears when the week turns.'));
+  return c;
+}
+
+const VERDICT = { won: 'WON', lost: 'MISSED', void: 'VOIDED', live: 'IN PLAY' };
+const MARK = { won: '✓ landed', lost: '✕ missed', void: '— void', live: '· to play' };
 
 function slipCard(ctx) {
   const { slip, games, now } = ctx;
@@ -334,7 +405,10 @@ export function labelFor(game, market, choice) {
 
 export async function previewData() {
   const sport = chosenSport();
-  const week = chosenWeek();
+  /* 🔴 THE RESOLVED WEEK, NOT THE STORED ONE - see resolveWeek. The slip's
+     localStorage key is built from this, and a slip filed under a week the
+     board is not showing is a slip that has silently vanished. */
+  const week = await resolveWeek(sport, chosenWeek());
   const byId = {};
   const games = await fetchSlate(sport, week, byId);
   return { sport, week, games };
@@ -381,6 +455,13 @@ export function render(root, data, state) {
     repaint: () => render(root, data, state),
   };
 
+  /* Placed parlays get the settled view and no picker - there is nothing
+     left to pick, and a live board under a running bet is a different screen
+     that has not been asked for. */
+  if (slip.placed) {
+    root.appendChild(settledCard(ctx));
+    return;
+  }
   root.appendChild(slipCard(ctx));
 
   if (!games.length) {

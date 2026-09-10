@@ -466,3 +466,47 @@ export function marketIsOpen(game: any, market: { scope: string; period?: number
   if (!isNum(game.period)) return false;
   return game.period < marketClosesAtPeriod(market);
 }
+
+/* 🔴 QUARTER SCORES BECOME A PLAY LIST, SO NOTHING ELSE HAS TO CHANGE.
+ *
+ * Every period market in the catalogue settles through `scoreAfterPeriod`,
+ * which reads a chronological PLAY LIST where each play carries the score
+ * after it. That is exactly right for the live screen, which has the plays -
+ * and impossible for the All games board, which has 86 games and no play list
+ * for any of them. So the halves and quarters could be offered, priced and
+ * staked, and then nothing in the app could ever resolve them. A market you
+ * can take and cannot settle is worse than one that does not exist.
+ *
+ * The slate now captures `periodsHome` / `periodsAway` from ESPN's linescores.
+ * This turns those into the smallest play list that answers the same
+ * questions: one synthetic entry per completed quarter, carrying the
+ * CUMULATIVE score at the end of it.
+ *
+ * 🔴 IT REUSES settleMarket RATHER THAN FORKING IT, which is the whole point.
+ * A second settlement path for the same fifteen markets is two things to keep
+ * in agreement, and the live screen and the board would eventually disagree
+ * about who won a first half. Same function, same rules, a different way of
+ * arriving at the input.
+ *
+ * `quarter` is the field name because that is what scoreAfterPeriod reads -
+ * see maxQuarter in markets.ts. Getting that wrong produces an empty list and
+ * a market that says "not final yet" forever.
+ */
+export function playsFromPeriods(game: any): any[] {
+  const h = game && Array.isArray(game.periodsHome) ? game.periodsHome : null;
+  const a = game && Array.isArray(game.periodsAway) ? game.periodsAway : null;
+  if (!h || !a || !h.length) return [];
+  /* Overtime periods exist in the linescore and are kept: markets.ts already
+     decides what to do with them (the second half owns overtime), and
+     truncating here would be this module quietly overruling that. */
+  const n = Math.min(h.length, a.length);
+  const out: any[] = [];
+  let ch = 0, ca = 0;
+  for (let i = 0; i < n; i++) {
+    const ph = Number(h[i]), pa = Number(a[i]);
+    if (!isNum(ph) || !isNum(pa)) break;
+    ch += ph; ca += pa;
+    out.push({ quarter: i + 1, homeScore: ch, awayScore: ca });
+  }
+  return out;
+}

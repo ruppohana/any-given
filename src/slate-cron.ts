@@ -99,6 +99,16 @@ export async function captureSlate(env: any, sport: string, season: number) {
       const comp = (ev.competitions || [])[0];
       if (!comp) continue;
 
+      /* Read once, before the competitors, because the linescore fetch below
+         is gated on it and a per-competitor status lookup would double the
+         requests for a field that belongs to the game. */
+      let statusName = 'STATUS_SCHEDULED';
+      let statusDoc: any = null;
+      try {
+        statusDoc = comp.status?.$ref ? await get(String(comp.status.$ref)) : comp.status;
+        statusName = statusDoc?.type?.name || 'STATUS_SCHEDULED';
+      } catch { /* leave scheduled */ }
+
       const sides: any[] = [];
       for (const c of comp.competitors || []) {
         const tid = idFromRef(c.team);
@@ -108,7 +118,34 @@ export async function captureSlate(env: any, sport: string, season: number) {
         const t = teamCache.get(tid) || {};
         let score: number | null = null;
         if (c.score?.$ref) { try { score = (await get(String(c.score.$ref)))?.value ?? null; } catch { /* not played */ } }
+        /* 🔴 THE QUARTER-BY-QUARTER SCORE, AND IT IS WHAT MAKES A HALF MARKET
+         * SETTLEABLE AT ALL. Every period market in the catalogue settles off
+         * `scoreAfterPeriod`, which reads a PLAY LIST - and no client has one
+         * for 86 games. So the halves and quarters could be offered, priced
+         * and staked, and then nothing in the app could ever resolve them.
+         * A market you can take and cannot settle is worse than one that does
+         * not exist.
+         *
+         * The linescores collection carries `value` inline on each item, so
+         * this is ONE request per competitor rather than one per quarter.
+         *
+         * 🔴 AND ONLY FOR GAMES THAT HAVE STARTED. A scheduled game has no
+         * linescores and asking for them would double the cost of the biggest
+         * capture in the app - 86 college games, twice a game, every ten
+         * minutes - to fetch an empty collection. Most of the week, most of
+         * the slate is scheduled. */
+        let periods: number[] | null = null;
+        if (statusName !== 'STATUS_SCHEDULED' && c.linescores?.$ref) {
+          try {
+            const ls = await get(String(c.linescores.$ref));
+            const vals = (ls?.items || [])
+              .map((x: any) => Number(x?.value))
+              .filter((n: number) => Number.isFinite(n));
+            if (vals.length) periods = vals;
+          } catch { /* absent stays absent */ }
+        }
         sides.push({
+          periods,
           id: tid, abbrev: t.abbreviation || '', name: t.displayName || '',
           short: t.shortDisplayName || t.name || '',
           primary: col(t.color), secondary: col(t.alternateColor),
@@ -133,18 +170,13 @@ export async function captureSlate(env: any, sport: string, season: number) {
        * carries `period` and `displayClock` in the same response. One extra
        * field on the write, no extra request, and a market can now be gated on
        * whether ITS period has started rather than on whether the game has. */
-      let status = 'scheduled';
-      let period: number | null = null;
-      let clock: string | null = null;
-      try {
-        const st = comp.status?.$ref ? await get(String(comp.status.$ref)) : comp.status;
-        const n = st?.type?.name;
-        status = n === 'STATUS_FINAL' ? 'final'
-          : n === 'STATUS_SCHEDULED' ? 'scheduled' : (n ? 'in_progress' : 'scheduled');
-        const pn = Number(st?.period);
-        period = Number.isFinite(pn) && pn > 0 ? pn : null;
-        clock = typeof st?.displayClock === 'string' ? st.displayClock : null;
-      } catch { /* leave scheduled */ }
+      /* One status document, read above and used twice - it decides both the
+         status we publish and whether a linescore fetch is worth making. */
+      const status = statusName === 'STATUS_FINAL' ? 'final'
+        : statusName === 'STATUS_SCHEDULED' ? 'scheduled' : 'in_progress';
+      const pn = Number(statusDoc?.period);
+      const period = Number.isFinite(pn) && pn > 0 ? pn : null;
+      const clock = typeof statusDoc?.displayClock === 'string' ? statusDoc.displayClock : null;
 
       /* 🔴 EVERY MARKET LINE, NOT JUST THE SPREAD. The request was already
          being made to read one field out of it. */
@@ -191,7 +223,12 @@ export async function captureSlate(env: any, sport: string, season: number) {
         lastMeeting: was.lastMeeting ?? null,
         teams: [home, away].map(({ homeAway, score, ...t }) => ({
           ...t, form: (wasTeams.get(String(t.id)) || {}).form ?? null
-        }))
+        })),
+        /* Quarter scores, home and away, in period order. Null until a game
+           starts. This is what lets every half and quarter market settle
+           without a play list. */
+        periodsHome: home.periods || null,
+        periodsAway: away.periods || null
       });
       if (status === 'in_progress') live.push(String(id));
     } catch { /* one bad event must not cost the week */ }

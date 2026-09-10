@@ -270,3 +270,64 @@ test('a totals market is not moved by the score', () => {
   const live = M.priceMarket(atHalf(42, 7), t, 'nfl');
   assert.deepEqual(flat.prices, live.prices);
 });
+
+/* ------------------------------------------- quarter scores as a play list */
+
+/* 🔴 THE REAL GAME, NOT AN INVENTED ONE. Villanova at Miami, event
+ * 401752835, verified against ESPN's own linescores endpoint before this was
+ * written: MIA 52 by quarters 7/14/10/21, VILL 6 by 0/0/0/6. Rule zero — a
+ * fixture is only evidence if it came from the feed. */
+const REAL = {
+  id: '401752835', status: 'final', homeScore: 52, awayScore: 6,
+  spread: -59.5, total: 62.5,
+  periodsHome: [7, 14, 10, 21], periodsAway: [0, 0, 0, 6],
+};
+
+test('quarter scores become a cumulative play list', () => {
+  assert.deepEqual(M.playsFromPeriods(REAL), [
+    { quarter: 1, homeScore: 7, awayScore: 0 },
+    { quarter: 2, homeScore: 21, awayScore: 0 },
+    { quarter: 3, homeScore: 31, awayScore: 0 },
+    { quarter: 4, homeScore: 52, awayScore: 6 },
+  ]);
+});
+
+/* 🔴 `quarter`, NOT `period`. scoreAfterPeriod reads p.quarter — getting the
+ * field name wrong produces an empty list and a market that says "not final
+ * yet" forever, on a game that finished hours ago. */
+test('the field is named the one scoreAfterPeriod actually reads', () => {
+  const [first] = M.playsFromPeriods(REAL);
+  assert.ok('quarter' in first, 'scoreAfterPeriod reads `quarter`');
+});
+
+test('a game that has not started yields no plays rather than 0-0', () => {
+  assert.deepEqual(M.playsFromPeriods({ status: 'scheduled' }), []);
+  assert.deepEqual(M.playsFromPeriods({ periodsHome: [], periodsAway: [] }), []);
+  assert.deepEqual(M.playsFromPeriods(null), []);
+});
+
+test('overtime periods are kept, not truncated at four', () => {
+  const ot = M.playsFromPeriods({ periodsHome: [7, 7, 7, 7, 6], periodsAway: [7, 7, 7, 7, 0] });
+  assert.equal(ot.length, 5);
+  assert.deepEqual(ot[4], { quarter: 5, homeScore: 34, awayScore: 28 });
+});
+
+/* The whole point: every period market settles off the slate, with no play
+   list anywhere, through the SAME settleMarket the live screen uses. */
+test('every period market on the real game settles from the slate alone', async () => {
+  const { settleMarket } = await import('../src/markets.ts');
+  const plays = M.playsFromPeriods(REAL);
+  const check = (id, choice, want) =>
+    assert.equal(settleMarket(id, choice, REAL, plays).landed, want, id + '/' + choice);
+  check('h1_winner', 'home', true);      // 21-0 at the half
+  check('h1_winner', 'away', false);
+  check('h2_winner', 'home', true);      // 31-6 after the half
+  check('h2_winner', 'away', false);
+  check('q1_winner', 'home', true);      // 7-0
+  check('q4_winner', 'home', true);      // 21-6
+  check('margin', '14+', true);          // won by 46
+  check('winner', 'home', true);
+  /* 62.5 halved is 31.25, rounded to 31.5. First half was 21, second was 37. */
+  check('h1_total', 'over', false);
+  check('h2_total', 'over', true);
+});
