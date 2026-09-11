@@ -554,9 +554,9 @@ function buildSettings() {
   const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
   const paintAccount = () => {
     accRow.textContent = '';
-    const token = lsGet('ag.session'), email = lsGet('ag.email');
+    const token = lsGet('ag.session'), email = lsGet('ag.email'), handle = lsGet('ag.handle');
     const who = document.createElement('span');
-    who.textContent = token && email ? email : 'Not signed in';
+    who.textContent = token && email ? (handle ? '@' + handle + ' · ' + email : email) : 'Not signed in';
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = token ? 'Sign out' : 'Sign in with email';

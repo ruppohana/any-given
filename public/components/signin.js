@@ -1,19 +1,22 @@
-/* THE SIGN-IN SHEET - email, a six-digit code, done.
+/* THE SIGN-IN SHEET - email, a six-digit code, a name and a handle.
  *
  * Jason, 2026-09-10: "no, i want their email" / "otherwise i can log in for
- * you and tank your picks." The server decides who needs to sign in
- * (src/auth.ts, REQUIRE_EMAIL); this sheet is only ever the answer to it.
+ * you and tank your picks." Then: "sign in needs to know first name and last
+ * name and handle, and verify if the handle is taken." The server decides who
+ * needs to sign in (src/auth.ts, REQUIRE_EMAIL); this sheet is only ever the
+ * answer to it - or the menu's "Sign in with email".
  *
- * TWO STEPS, NO PASSWORD. Step one asks for the address and the 18-or-older
+ * THREE STEPS, NO PASSWORD. Step one asks for the address and the 18-or-older
  * confirmation - the app is 18+ (settled.md, "18+, taken honestly"; Jason:
- * "i thought we were asking 18+ for apple"). Step two
- * takes the code from the email. Nothing else is asked - no name, no birthday,
- * no password to invent and forget.
+ * "i thought we were asking 18+ for apple"). Step two takes the code from the
+ * email. Step three - only for an account that has no handle yet - asks for
+ * first name, last name and a handle, and says whether the handle is free as
+ * it is typed. A returning account with a profile never sees step three.
  *
  * apiFetch() is how a screen talks to an endpoint that may need a person: it
- * sends the session when there is one, and when the server answers
- * 401 email_required it opens this sheet and, once signed in, retries once.
- * So a screen never has to know whether sign-in is switched on.
+ * sends the session when there is one, and when the server answers 401
+ * email_required or profile_required it opens this sheet and, once done,
+ * retries once. So a screen never has to know whether sign-in is switched on.
  */
 
 const CSS = `
@@ -21,12 +24,20 @@ const CSS = `
   display: grid; align-items: end; justify-items: center; }
 .ag-si { width: min(560px, 100%); box-sizing: border-box; padding: 20px 18px calc(22px + env(safe-area-inset-bottom, 0px));
   background: var(--card); color: var(--fg); border-radius: var(--radius-card) var(--radius-card) 0 0;
-  box-shadow: 0 -8px 30px rgba(0, 0, 0, .3); display: grid; gap: 12px; }
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, .3); display: grid; gap: 12px; max-height: 92vh; overflow: auto; }
 .ag-si-h { margin: 0; font-size: var(--t-section); font-weight: 800; }
 .ag-si-b { margin: 0; font-size: var(--t-body); color: var(--dim); line-height: 1.4; }
-.ag-si-in { font: inherit; font-size: 17px; min-height: var(--tap-min, 44px); padding: 0 12px;
+.ag-si-in { font: inherit; font-size: 17px; min-height: var(--tap-min, 44px); padding: 0 12px; box-sizing: border-box; width: 100%;
   border: 1px solid var(--line); border-radius: var(--radius-button, 10px); background: var(--bg); color: var(--fg); }
 .ag-si-code { letter-spacing: .35em; text-align: center; font-weight: 800; }
+.ag-si-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ag-si-lab { display: grid; gap: 4px; font-size: var(--t-micro); font-weight: 700; color: var(--dim); }
+.ag-si-handle { position: relative; }
+.ag-si-handle .ag-si-in { padding-left: 26px; }
+.ag-si-at { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--dim); font-weight: 700; }
+.ag-si-avail { min-height: 16px; font-size: var(--t-micro); font-weight: 700; color: var(--dim); }
+.ag-si-avail[data-ok="true"] { color: var(--up); }
+.ag-si-avail[data-ok="false"] { color: var(--down); }
 .ag-si-age { display: flex; gap: 10px; align-items: center; font-size: var(--t-body); }
 .ag-si-age input { width: 20px; height: 20px; }
 .ag-si-go { font: inherit; font-weight: 800; min-height: var(--tap-min, 44px); border: 0;
@@ -52,6 +63,7 @@ const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private w
 
 export function sessionToken() { return get('ag.session'); }
 export function signedInEmail() { return get('ag.email'); }
+export function signedInHandle() { return get('ag.handle'); }
 
 function deviceId() {
   let v = get('ag.device');
@@ -73,7 +85,8 @@ export async function apiFetch(url, opts) {
   if (res.status === 401) {
     let body = null;
     try { body = await res.clone().json(); } catch { body = null; }
-    if (body && body.error === 'email_required' && await openSignIn()) {
+    const why = body && body.error;
+    if ((why === 'email_required' || why === 'profile_required') && await openSignIn()) {
       o.headers = authHeaders(opts && opts.headers);
       res = await fetch(url, o);
     }
@@ -81,9 +94,15 @@ export async function apiFetch(url, opts) {
   return res;
 }
 
+/* The handle becomes the name on every board - the live board reads ag.name. */
+function rememberProfile(p) {
+  if (!p) return;
+  if (p.handle) { put('ag.handle', p.handle); put('ag.name', JSON.stringify(p.handle)); }
+}
+
 let OPEN = null;
 
-/** Opens the sheet. Resolves true once signed in, false if dismissed. */
+/** Opens the sheet. Resolves true once signed in with a profile, false if dismissed. */
 export function openSignIn(reason) {
   if (OPEN) return OPEN;
   injectCss();
@@ -155,6 +174,8 @@ export function openSignIn(reason) {
           if (!r.ok || !j.token) { go.disabled = false; go.textContent = 'Verify'; err.textContent = j.error || 'That code didn’t work.'; return; }
           put('ag.session', j.token);
           put('ag.email', j.email || email);
+          if (j.needsProfile) { stepProfile(); return; }
+          rememberProfile(j);
           close(true);
         } catch { go.disabled = false; go.textContent = 'Verify'; err.textContent = 'No connection. Try again in a moment.'; }
       };
@@ -165,7 +186,98 @@ export function openSignIn(reason) {
       setTimeout(() => inp.focus(), 50);
     };
 
-    stepEmail();
+    /* STEP THREE - who you are on the board. The handle is checked as it is
+       typed (debounced), and the button only lights when the name fields are
+       filled and the latest answer for the handle being shown is "free". */
+    const stepProfile = (prefill) => {
+      const pf = prefill || {};
+      box.textContent = '';
+      box.appendChild(el('h2', 'ag-si-h', 'Pick your handle'));
+      box.appendChild(el('p', 'ag-si-b', 'Your handle is what your group sees on the standings.'));
+      const mk = (label, attrs) => {
+        const l = el('label', 'ag-si-lab', label);
+        const i = el('input', 'ag-si-in');
+        Object.assign(i, attrs);
+        l.appendChild(i);
+        return [l, i];
+      };
+      const [fl, first] = mk('First name', { autocomplete: 'given-name', value: pf.first || '' });
+      const [ll, last] = mk('Last name', { autocomplete: 'family-name', value: pf.last || '' });
+      const two = el('div', 'ag-si-two'); two.append(fl, ll);
+      const hl = el('label', 'ag-si-lab', 'Handle');
+      const hw = el('div', 'ag-si-handle');
+      const handle = el('input', 'ag-si-in');
+      handle.autocomplete = 'username'; handle.autocapitalize = 'none'; handle.spellcheck = false;
+      handle.maxLength = 20; handle.placeholder = 'yourname'; handle.value = pf.handle || '';
+      hw.append(el('span', 'ag-si-at', '@'), handle);
+      hl.appendChild(hw);
+      const avail = el('div', 'ag-si-avail', '');
+      const go = el('button', 'ag-si-go', 'Save'); go.type = 'button'; go.disabled = true;
+      const err = el('p', 'ag-si-err', '');
+
+      let asked = '', free = false, timer = null;
+      const refresh = () => {
+        go.disabled = !(first.value.trim() && last.value.trim() && free && asked === handle.value.trim());
+      };
+      const check = async () => {
+        const h = handle.value.trim();
+        asked = h; free = false; refresh();
+        if (!h) { avail.textContent = ''; delete avail.dataset.ok; return; }
+        avail.textContent = 'Checking…'; delete avail.dataset.ok;
+        try {
+          const r = await fetch('/api/auth/handle?h=' + encodeURIComponent(h), { headers: authHeaders() });
+          const j = await r.json().catch(() => ({}));
+          if (asked !== h) return;                 /* a newer keystroke owns the answer */
+          free = !!j.available;
+          avail.dataset.ok = free ? 'true' : 'false';
+          avail.textContent = free ? '@' + h + ' is available' : (j.reason || 'That handle is taken.');
+        } catch { avail.textContent = 'Couldn’t check. Try again.'; }
+        refresh();
+      };
+      handle.addEventListener('input', () => {
+        handle.value = handle.value.replace(/[^A-Za-z0-9_]/g, '');
+        free = false; refresh();
+        clearTimeout(timer); timer = setTimeout(check, 350);
+      });
+      first.addEventListener('input', refresh);
+      last.addEventListener('input', refresh);
+
+      go.onclick = async () => {
+        go.disabled = true; go.textContent = 'Saving…'; err.textContent = '';
+        try {
+          const r = await fetch('/api/auth/profile', { method: 'POST',
+            headers: authHeaders({ 'content-type': 'application/json' }),
+            body: JSON.stringify({ first: first.value, last: last.value, handle: handle.value.trim() }) });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            go.textContent = 'Save'; err.textContent = j.error || 'That didn’t save. Try again.';
+            if (j.field === 'handle') { free = false; avail.dataset.ok = 'false'; avail.textContent = j.error || ''; }
+            refresh();
+            return;
+          }
+          rememberProfile(j);
+          close(true);
+        } catch { go.textContent = 'Save'; err.textContent = 'No connection. Try again in a moment.'; refresh(); }
+      };
+      box.append(two, hl, avail, go, err);
+      if (handle.value) check();
+      setTimeout(() => first.focus(), 50);
+    };
+
+    /* Already signed in? Then the only thing left can be the profile. */
+    const token = sessionToken();
+    if (token) {
+      fetch('/api/auth/me', { headers: authHeaders() })
+        .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (ok && j.needsProfile) stepProfile(j);
+          else if (ok) { rememberProfile(j); close(true); }
+          else { try { localStorage.removeItem('ag.session'); } catch { /* fine */ } stepEmail(); }
+        })
+        .catch(() => stepEmail());
+    } else {
+      stepEmail();
+    }
     document.body.appendChild(scrim);
   });
   return OPEN;
