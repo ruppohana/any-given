@@ -240,3 +240,20 @@
 .scr-p5-standings .p5-inv-go { font: inherit; font-size: var(--t-micro); font-weight: 800;
   min-height: var(--tap-min); padding: 0 14px; white-space: nowrap; color: var(--accent);
   background: var(--card); border: 1px solid var(--accent); border-radius: var(--radius-chip); }
+
+/* ---------------------------------------------------------------- group state
+ * #/gstandings. The same table and pin; the switcher sits where the main
+ * board's scope select does, and the name cell takes a second line for the
+ * record the API gives - wins and losses of final games, and picks made. Two
+ * lines inside the measured 42px row, so twenty members still read in two
+ * screens. */
+.scr-p5-standings .p5-gsw { margin: 0 0 10px; min-height: var(--tap-min);
+  display: flex; align-items: center; }
+.scr-p5-standings .p5-gsw > * { flex: 1 1 auto; min-width: 0; }
+.scr-p5-standings .p5-namecell--g { flex-direction: column; align-items: flex-start;
+  justify-content: center; gap: 1px; padding-block: 4px; }
+.scr-p5-standings .p5-nametop { display: flex; align-items: center; gap: 6px;
+  min-width: 0; max-width: 100%; }
+.scr-p5-standings .p5-rec { font-size: 10px; color: var(--dim); font-weight: 400;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scr-p5-standings .p5-tag--commish { color: var(--accent); }

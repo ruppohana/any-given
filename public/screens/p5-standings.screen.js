@@ -59,6 +59,9 @@ import { pageHeader } from '/components/header.js';
  * person's row does not carry a team's two colors. */
 import { badgePin, BADGE_CSS } from '/components/badge.js';
 import { dash, signed, signClass } from '/components/fmt.js';
+/* The current group is ONE value, read and written only by group.js
+ * (CONTRACT-GROUPS.md §1). This screen never touches the key itself. */
+import { myGroups, pickCurrent, groupSwitcher, GROUP_CSS } from '/components/group.js';
 
 export const id = 'p5-standings';
 export const title = 'Standings - beat your office';
@@ -69,7 +72,11 @@ export const bar = 'reference/sofascore-teardown/screens/IMG_5226.PNG';
  *  screen and a screen that is only ever drawn at eight rows proves nothing. */
 export const states = [
   'ready', 'settling', 'final', 'ties', 'midseason', 'crowded',
-  'empty', 'loading', 'offline', 'error'
+  'empty', 'loading', 'offline', 'error',
+  /* #/gstandings - the Standings tab of Group pools. Its sub-states (signed out,
+   * no group, empty, offline, error) are decided in previewData from what the
+   * API answered, because they are facts about the person, not design routes. */
+  'group'
 ];
 
 /* ------------------------------------------------------------------ *
@@ -223,6 +230,10 @@ function chosenSport() {
 }
 
 export async function previewData(fixtures, state) {
+  /* The group board shares nothing with the preview office below - no fixture,
+   * no invented member, no tiebreak game - so it leaves before any of it loads. */
+  if (state === 'group') return loadGroupBoard();
+
   const all = Object.values(fixtures.teams.teams);
   const byAbbrev = {};
   for (const t of all) byAbbrev[t.abbrev] = t;
@@ -406,6 +417,157 @@ export async function previewData(fixtures, state) {
   }
   base.sport = sport;
   return base;
+}
+
+/* ------------------------------------------------------------------ *
+ * THE GROUP STATE - #/gstandings, the Standings tab of Group pools.
+ *
+ * Jason, 2026-09-11: "under group pools we also need a seperate standings
+ * page." Same table, same pin, same week/season toggle as the main board; what
+ * changes is WHICH board. It is the current group from components/group.js -
+ * never `ag.scope`, which stays the main Standings' world/group selector - and
+ * the rows are that group's own picks, scored by /api/pool/standings.
+ *
+ * 🔴 POINTS ONLY, AND NO PARLAY LADDER. A group scores one point per winner
+ *    picked, straight up, in the query. Nothing here sums with the live board,
+ *    and the main board's parlay footer is not printed: it is not how a group
+ *    is scored.
+ *
+ * 🔴 MEMBERS ARE HANDLES. The API row's `name` is the handle the member joined
+ *    with. Anything shaped like an address is drawn as "Someone" - the group
+ *    section never prints one, whatever arrives.
+ * ------------------------------------------------------------------ */
+
+/** The week a group plays when it is not a one-week group. The same numbers as
+ *  the main board's `ready` state above and p2-slate's WEEK: picks are written
+ *  under the slate's week, so a board on any other week would read none. */
+const GROUP_WEEK = { nfl: 1, 'college-football': 2 };
+
+function safeName(n) {
+  const s = String(n == null ? '' : n).trim();
+  if (!s || /\S+@\S+\.\S+/.test(s)) return 'Someone';
+  return s;
+}
+
+/** API rows -> the two pre-ranked tables the renderer draws.
+ *  The API returns rows ordered wins desc, picks desc and carries no rank, so the
+ *  rank is derived here and it is competition ranking on wins: level members
+ *  share a rank and the next one skips. Before any game in that basis has gone
+ *  final nobody has a rank at all, and the table is alphabetical - an order
+ *  would imply a standing that does not exist yet. */
+function shapeGroupRows(weekApi, seasonApi, youName, commishName) {
+  const you = String(youName || '').toLowerCase();
+  const boss = String(commishName || '').toLowerCase();
+  const index = (list) => { const m = {}; for (const r of list || []) m[r.id] = r; return m; };
+  const wkBy = index(weekApi);
+  const ssBy = index(seasonApi);
+  const rec = (r) => ({
+    wins: Number(r && r.wins) || 0,
+    played: Number(r && r.played) || 0,
+    picks: Number(r && r.picks) || 0
+  });
+  const build = (list, key) => {
+    const rows = (list || []).map((r) => {
+      const w = rec(wkBy[r.id]);
+      const s = rec(ssBy[r.id]);
+      const name = safeName(r.name);
+      return {
+        userId: String(r.id),
+        displayName: name,
+        /* A dash, not a zero, until one of your picks has a final result. */
+        weekPoints: w.played ? w.wins : null,
+        seasonPoints: s.played ? s.wins : null,
+        weekRec: w,
+        seasonRec: s,
+        parlayPoints: 0,
+        movement: 0,
+        rank: 0,
+        isSelf: !!you && name.toLowerCase() === you,
+        isCommish: !!boss && name.toLowerCase() === boss
+      };
+    });
+    if (!rows.some((r) => r[key].played > 0)) {
+      return rows.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }
+    for (const r of rows) r.rank = 1 + rows.filter((o) => o[key].wins > r[key].wins).length;
+    return rows.sort((a, b) => a.rank - b.rank);
+  };
+  return { weekRows: build(weekApi, 'weekRec'), seasonRows: build(seasonApi, 'seasonRec') };
+}
+
+/** Everything the group state draws, from the API. Never throws: every failure
+ *  is a `groupPhase` the renderer has words for. Called by previewData, and by
+ *  the screen's own switch / retry / sign-in handlers before they re-render. */
+async function loadGroupBoard(opts) {
+  const out = {
+    group: true,
+    /* Nothing on this board is invented, so the sample-data banner stays off. */
+    fromFeed: true,
+    groupPhase: 'ready',
+    groups: [],
+    current: null,
+    sport: null,
+    message: '',
+    pool: { name: 'Group pools', week: 0, memberCount: 0, scope: 'All games' },
+    weekRows: [],
+    seasonRows: [],
+    weekPicks: 0,
+    joinedWeek: {},
+    badges: {},
+    phase: 'live',
+    tiebreak: { label: null, actual: null, decided: false, myPrediction: null }
+  };
+  const mine = await myGroups(opts);
+  out.groups = mine.groups || [];
+  if (!mine.signedIn) return Object.assign(out, { groupPhase: 'signed-out' });
+  if (mine.error === 'offline') return Object.assign(out, { groupPhase: 'offline' });
+  if (mine.error) return Object.assign(out, { groupPhase: 'error' });
+
+  const g = pickCurrent(out.groups);
+  if (!g) return Object.assign(out, { groupPhase: 'no-group' });
+
+  const sport = g.sport === 'nfl' ? 'nfl' : 'college-football';
+  const week = Number.isInteger(g.week) && g.week > 0 ? g.week : GROUP_WEEK[sport];
+  out.current = g;
+  out.sport = sport;
+  out.pool = { name: g.name, week, memberCount: Number(g.members) || 0, scope: 'All games' };
+
+  const q = '/api/pool/standings?sport=' + sport + '&pool=' + encodeURIComponent(g.id);
+  let wk, ss, detail = null;
+  try {
+    const [a, b, c] = await Promise.all([
+      fetch(q + '&week=' + week),
+      /* week=0 is the API's whole season: every week of this sport in this group. */
+      fetch(q + '&week=0'),
+      (window.agApiFetch || fetch)('/api/group/detail?id=' + encodeURIComponent(g.id)).catch(() => null)
+    ]);
+    if (!a.ok || !b.ok) {
+      let msg = '';
+      try { msg = (await (a.ok ? b : a).json()).message || ''; } catch { /* not JSON */ }
+      return Object.assign(out, { groupPhase: 'error', message: msg });
+    }
+    wk = await a.json();
+    ss = await b.json();
+    if (c && c.ok) { try { detail = await c.json(); } catch { detail = null; } }
+  } catch (e) {
+    return Object.assign(out, { groupPhase: 'offline' });
+  }
+
+  let handle = '';
+  try { handle = localStorage.getItem('ag.handle') || ''; } catch { /* private mode */ }
+  const youRow = detail && Array.isArray(detail.members) ? detail.members.find((m) => m.you) : null;
+  const youName = (youRow && youRow.name) || handle;
+  const commish = detail && detail.commissioner ? detail.commissioner
+    : (g.role === 'commissioner' ? youName : null);
+
+  const shaped = shapeGroupRows(wk.rows || [], ss.rows || [], youName, commish);
+  out.weekRows = shaped.weekRows;
+  out.seasonRows = shaped.seasonRows;
+  out.weekPicks = (wk.rows || []).reduce((n, r) => n + (Number(r.picks) || 0), 0);
+  /* The server forces a one-week group onto its own week; say the week it used. */
+  out.pool.week = Number(wk.week) || week;
+  out.pool.memberCount = shaped.weekRows.length || out.pool.memberCount;
+  return out;
 }
 
 /* The scope control. A select rather than a segmented row, because the group
@@ -606,7 +768,7 @@ function el(tag, cls, text) {
 export function render(root, data, state) {
   root.innerHTML = '';
   const style = document.createElement('style');
-  style.textContent = [STATES_CSS, BADGE_CSS].join('\n');
+  style.textContent = [STATES_CSS, BADGE_CSS].concat(state === 'group' ? [GROUP_CSS] : []).join('\n');
   root.appendChild(style);
 
   const host = el('div', 'scr-p5-standings');
@@ -619,6 +781,9 @@ export function render(root, data, state) {
 
   function draw() {
     host.innerHTML = '';
+    /* #/gstandings has its own top and its own ways in; the table, the pin and
+     * the toggle below are shared with the main board unchanged. */
+    if (state === 'group') { drawGroup(); return; }
     const pool = (data && data.pool) || { name: 'Pool', week: 0, memberCount: 0 };
 
     /* THE SHARED HEADER. "1 members" is fixed here as well - the option list
@@ -701,6 +866,106 @@ export function render(root, data, state) {
     host.appendChild(selfCard(rows, pool));
     host.appendChild(table(rows));
     host.appendChild(footer(rows, pool));
+  }
+
+  /* ---------------------------------------------------------------- group
+   * The Standings tab of Group pools. Every state here is decided by
+   * loadGroupBoard from what the API answered; this only draws it. */
+  function groupSub(d) {
+    if (!d || !d.current) return 'Group pools';
+    const p = d.pool;
+    return (d.sport === 'nfl' ? 'NFL' : 'College football') + ' · Week ' + p.week + ' · '
+      + p.memberCount + (p.memberCount === 1 ? ' member' : ' members');
+  }
+
+  /* Switch, retry and sign-in all land here: say it is loading, read the board
+   * again, and draw it fresh. The toggle goes back to the week. */
+  async function reloadGroup(opts) {
+    host.innerHTML = '';
+    host.appendChild(pageHeader({ title: 'Standings', noTitle: true, sub: groupSub(data) }));
+    host.appendChild(stateBlock('loading', { rows: 5, body: 'Loading the group standings…' }));
+    const next = await loadGroupBoard(opts);
+    render(root, next, state);
+  }
+
+  function groupSignIn() {
+    const c = el('div', 'card p5-start');
+    c.appendChild(el('div', 'p5-start-h', 'Sign in to see your group'));
+    c.appendChild(el('p', 'p5-start-b',
+      'Group standings are for the people in the group. Sign in and your groups are here.'));
+    const b = el('button', 'p5-start-go', 'Sign in');
+    b.type = 'button';
+    b.onclick = async () => {
+      if (typeof window.agOpenSignIn !== 'function') return;
+      if (await window.agOpenSignIn()) reloadGroup({ force: true });
+    };
+    c.appendChild(b);
+    return c;
+  }
+
+  /* Not in a group is not an empty table - it is the step before one. */
+  function groupStart() {
+    const c = el('div', 'card p5-start');
+    c.appendChild(el('div', 'p5-start-h', 'You are not in a group yet'));
+    c.appendChild(el('p', 'p5-start-b',
+      'A group is people you know, picking winners each week and scored against each '
+      + 'other in points. Start one and invite them, or join with the code from an invite.'));
+    const b = el('button', 'p5-start-go', 'Start or join a group');
+    b.type = 'button';
+    b.onclick = () => { location.hash = '#/g'; };
+    c.appendChild(b);
+    return c;
+  }
+
+  function drawGroup() {
+    const d = data || {};
+    const pool = d.pool || { name: 'Group pools', week: 0, memberCount: 0 };
+    host.appendChild(pageHeader({ title: 'Standings', noTitle: true, sub: groupSub(d) }));
+
+    if (d.groupPhase === 'signed-out') { host.appendChild(groupSignIn()); return; }
+    if (d.groupPhase === 'offline') {
+      host.appendChild(stateBlock('offline', {
+        title: 'You are offline',
+        body: 'The group standings did not load. Your picks are safe — nothing here writes anything.',
+        action: { label: 'Try again', onClick: () => reloadGroup({ force: true }) }
+      }));
+      return;
+    }
+    if (d.groupPhase === 'error') {
+      host.appendChild(stateBlock('error', {
+        /* The API's own message, verbatim, when it sent one. */
+        body: d.message || 'The group standings did not load. Your picks are safe — nothing here writes anything.',
+        action: { label: 'Reload', onClick: () => reloadGroup({ force: true }) }
+      }));
+      return;
+    }
+    if (d.groupPhase === 'no-group' || !d.current) { host.appendChild(groupStart()); return; }
+
+    const sw = el('div', 'p5-gsw');
+    sw.appendChild(groupSwitcher(d.groups, d.current.id, () => reloadGroup()));
+    host.appendChild(sw);
+    host.appendChild(toggle(pool));
+
+    if (!d.weekPicks) {
+      host.appendChild(stateBlock('empty', {
+        title: 'No picks in yet for week ' + pool.week,
+        body: 'Nobody in ' + d.current.name + ' has picked this week. The table fills as the picks come in.',
+        action: { label: 'Make your picks', onClick: () => { location.hash = '#/gpicks'; } }
+      }));
+    }
+
+    const rows = (basis === 'week' ? d.weekRows : d.seasonRows) || [];
+    const key = basis === 'week' ? 'weekRec' : 'seasonRec';
+    if (!rows.some((r) => r[key] && r[key].played > 0)) {
+      host.appendChild(note((basis === 'week' ? 'No game this week' : 'No game this season')
+        + ' has gone final yet. Nobody has scored — a dash is not a zero.'));
+    }
+    host.appendChild(selfCard(rows, pool));
+    host.appendChild(table(rows));
+    const foot = el('div', 'p5-foot');
+    foot.appendChild(el('p', 'p5-footline',
+      'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
+    host.appendChild(foot);
   }
 
   function toggle(pool) {
@@ -795,7 +1060,9 @@ export function render(root, data, state) {
   function rowEl(r, rows) {
     const li = el('li', 'p5-li');
     const a = el('a', 'p5-row' + (r.isSelf ? ' p5-row--self' : ''));
-    a.href = '#member-' + r.userId;
+    /* Not on the group board: a group row's id is an account id, it belongs in
+     * no URL, and there is no member page for the hash to open. */
+    if (!data.group) a.href = '#member-' + r.userId;
 
     const tied = rows.filter((x) => x.rank === r.rank).length > 1 && r.rank > 0;
     const rank = el('span', 'p5-rank num');
@@ -842,7 +1109,21 @@ export function render(root, data, state) {
      * and the case is where a collection belongs. */
 
     const nameCell = el('span', 'p5-namecell');
-    nameCell.appendChild(el('span', 'p5-name', r.displayName));
+    if (data.group) {
+      /* The group row: the handle, the commissioner marked, and under it the
+       * record the API gives for the basis on show. */
+      nameCell.classList.add('p5-namecell--g');
+      const top = el('span', 'p5-nametop');
+      top.appendChild(el('span', 'p5-name', r.displayName));
+      if (r.isCommish) {
+        const c = el('span', 'p5-tag p5-tag--commish', 'commish');
+        c.title = r.displayName + ' is the commissioner';
+        top.appendChild(c);
+      }
+      nameCell.append(top, el('span', 'p5-rec num', recordText(basis === 'week' ? r.weekRec : r.seasonRec)));
+    } else {
+      nameCell.appendChild(el('span', 'p5-name', r.displayName));
+    }
 
     const joined = data.joinedWeek ? data.joinedWeek[r.userId] : null;
     if (joined) {
@@ -864,7 +1145,7 @@ export function render(root, data, state) {
 
     a.setAttribute('aria-label',
       (r.rank ? (tied ? 'Tied ' : '') + 'Rank ' + r.rank + ', ' : 'Unranked, ') + r.displayName +
-      (r.isSelf ? ' (you)' : '') + ', ' + dash(r.weekPoints) + ' points this week, ' +
+      (r.isSelf ? ' (you)' : '') + (r.isCommish ? ', commissioner' : '') + ', ' + dash(r.weekPoints) + ' points this week, ' +
       dash(r.seasonPoints) + ' this season');
 
     a.append(rank, mv, chipSlot, nameCell, w, s);
@@ -920,4 +1201,13 @@ function ordinal(n) {
 function movementText(m) {
   if (!m) return 'no change';
   return (m > 0 ? 'up ' : 'down ') + Math.abs(m);
+}
+
+/** A group row's second line: wins and losses of FINAL games, then picks made.
+ *  "2–1 · 5 picks". Nothing final yet says so rather than printing 0–0. */
+function recordText(rec) {
+  if (!rec || !rec.picks) return 'No picks yet';
+  const picks = rec.picks + (rec.picks === 1 ? ' pick' : ' picks');
+  if (!rec.played) return picks + ' · none final';
+  return rec.wins + '–' + (rec.played - rec.wins) + ' · ' + picks;
 }

@@ -361,3 +361,143 @@ test('the screen declares every state the dispatch named, and each is a route', 
   }
   console.log('    states:', states.join(' '));
 });
+
+/* ------------------------------------------------------------------ *
+ * 4. The group state - #/gstandings, the Standings tab of Group pools
+ *
+ * The close for this state is the browser run against the local Worker. What
+ * is pinned here is what the screen PROMISES: which board it asks for, that the
+ * current group comes from group.js, the doors, the words, and the shaping of
+ * the API's rows. The rows fed to the shaper below are in the API's own shape
+ * ({id, name, picks, wins, played}) and are test inputs, not a fixture.
+ * ------------------------------------------------------------------ */
+
+/** Pull one top-level function out of the screen source by brace matching. */
+function fnSource(name) {
+  const m = new RegExp('(?:async\\s+)?function\\s+' + name + '\\s*\\(').exec(SCREEN_SRC);
+  assert.ok(m, `screen no longer declares ${name}`);
+  const open = SCREEN_SRC.indexOf('{', SCREEN_SRC.indexOf(')', m.index));
+  let depth = 0, end = -1;
+  for (let i = open; i < SCREEN_SRC.length; i++) {
+    const ch = SCREEN_SRC[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  assert.ok(end > open, `could not find the end of ${name}`);
+  return SCREEN_SRC.slice(m.index, end + 1);
+}
+
+const G = new Function(fnSource('safeName') + '\n' + fnSource('shapeGroupRows') + '\n'
+  + fnSource('recordText') + '\nreturn { safeName, shapeGroupRows, recordText };')();
+
+test('group state: it is a declared state and it asks for THIS group\'s board', () => {
+  const m = SCREEN_SRC.match(/export const states = \[([\s\S]*?)\];/);
+  assert.ok(/'group'/.test(m[1]), 'the group state is not declared');
+  const load = fnSource('loadGroupBoard');
+  assert.ok(load.includes("'/api/pool/standings?sport=' + sport + '&pool=' + encodeURIComponent(g.id)"),
+    'the group board must query pool=<group id>');
+  assert.ok(load.includes("q + '&week=' + week"), 'the week board');
+  assert.ok(load.includes("q + '&week=0'"), 'the season board - week=0 is the API\'s whole season');
+  assert.ok(load.includes("'/api/group/detail?id='"), 'the commissioner comes from detail');
+  assert.ok(/state === 'group'\) return loadGroupBoard\(\)/.test(SCREEN_SRC), 'previewData routes the group state');
+});
+
+test('group state: the current group comes from group.js, never from ag.scope or ag.group', () => {
+  assert.ok(/import \{[^}]*myGroups[^}]*pickCurrent[^}]*groupSwitcher[^}]*\} from '\/components\/group\.js'/.test(SCREEN_SRC),
+    'myGroups, pickCurrent and groupSwitcher come from the shared component');
+  const js = stripComments(SCREEN_SRC);
+  assert.ok(!js.includes('ag.group'), 'the group key is read and written only by group.js');
+  const load = fnSource('loadGroupBoard');
+  assert.ok(load.includes('pickCurrent(') && load.includes('myGroups('));
+  assert.ok(!load.includes('ag.scope'), 'the group board must not read the main board\'s scope');
+  const draw = fnSource('drawGroup');
+  assert.ok(!draw.includes('scopePicker') && !draw.includes('inviteRow'),
+    'the main board\'s world/group selector does not appear on #/gstandings');
+  assert.ok(draw.includes('groupSwitcher('), 'the switcher is at the top of the group board');
+});
+
+test('group state: the doors - no group to #/g, empty to #/gpicks, signed out to the sheet', () => {
+  const js = stripComments(SCREEN_SRC);
+  assert.ok(js.includes("location.hash = '#/g';"), 'the no-group card must open #/g');
+  assert.ok(js.includes("location.hash = '#/gpicks';"), 'the empty state must open #/gpicks');
+  assert.ok(js.includes("'Make your picks'"), 'the empty door is labeled "Make your picks"');
+  assert.ok(js.includes('window.agOpenSignIn()'), 'signed out opens the sign-in sheet');
+  const draw = fnSource('drawGroup');
+  for (const ph of ["'signed-out'", "'offline'", "'error'", "'no-group'"]) {
+    assert.ok(draw.includes(ph), `drawGroup does not handle ${ph}`);
+  }
+  assert.ok(fnSource('reloadGroup').includes("stateBlock('loading'"), 'switching shows a loading state');
+});
+
+test('group state: no betting words anywhere in what ships', () => {
+  const js = stripComments(SCREEN_SRC);
+  const css = stripComments(CSS_SRC);
+  const bad = /\b(marbles?|stakes?|staked|staking|odds|prices?|priced|bets?|betting|wager\w*)\b/i;
+  assert.ok(!bad.test(js), `screen ships "${(js.match(bad) || [])[0]}"`);
+  assert.ok(!bad.test(css), `stylesheet ships "${(css.match(bad) || [])[0]}"`);
+  const draw = fnSource('drawGroup');
+  assert.ok(!/Parlay|live board/i.test(draw), 'the group board prints no parlay ladder and never mentions the live board');
+});
+
+test('group state: no email address is ever drawn', () => {
+  const js = stripComments(SCREEN_SRC);
+  assert.ok(!/\.email\b/.test(js), 'the screen reads an email field');
+  assert.ok(!/[a-z0-9._-]+@[a-z0-9-]+\.[a-z]{2,}/i.test(js), 'the screen carries an address literal');
+  assert.equal(G.safeName('e1'), 'e1');
+  assert.equal(G.safeName('someone@example.com'), 'Someone');
+  assert.equal(G.safeName(''), 'Someone');
+  assert.equal(G.safeName(null), 'Someone');
+  const { weekRows } = G.shapeGroupRows(
+    [{ id: 'a', name: 'x@y.org', picks: 1, wins: 0, played: 0 }],
+    [{ id: 'a', name: 'x@y.org', picks: 1, wins: 0, played: 0 }], '', '');
+  assert.equal(weekRows[0].displayName, 'Someone');
+});
+
+test('group state: nobody final yet - no rank, alphabetical, a dash not a zero', () => {
+  const api = [
+    { id: 't-e3', name: 'e3', picks: 3, wins: 0, played: 0 },
+    { id: 't-e1', name: 'e1', picks: 5, wins: 0, played: 0 },
+    { id: 't-e2', name: 'e2', picks: 0, wins: 0, played: 0 }
+  ];
+  const { weekRows } = G.shapeGroupRows(api, api, 'e1', 'e1');
+  assert.deepEqual(weekRows.map((r) => r.displayName), ['e1', 'e2', 'e3']);
+  assert.deepEqual(weekRows.map((r) => r.rank), [0, 0, 0]);
+  assert.ok(weekRows.every((r) => r.weekPoints === null), 'no final game is a dash, never 0');
+  assert.equal(weekRows.find((r) => r.isSelf).displayName, 'e1');
+  assert.equal(weekRows.find((r) => r.isCommish).displayName, 'e1');
+  assert.equal(weekRows.filter((r) => r.isSelf).length, 1);
+});
+
+test('group state: competition ranking on wins, week and season kept apart', () => {
+  /* The API's order: wins desc, picks desc. */
+  const week = [
+    { id: 'b', name: 'bo', picks: 4, wins: 2, played: 3 },
+    { id: 'a', name: 'al', picks: 4, wins: 2, played: 2 },
+    { id: 'c', name: 'cy', picks: 2, wins: 0, played: 2 },
+    { id: 'd', name: 'di', picks: 1, wins: 0, played: 0 }
+  ];
+  const season = [
+    { id: 'a', name: 'al', picks: 9, wins: 6, played: 7 },
+    { id: 'c', name: 'cy', picks: 8, wins: 4, played: 6 },
+    { id: 'b', name: 'bo', picks: 8, wins: 4, played: 7 },
+    { id: 'd', name: 'di', picks: 1, wins: 0, played: 0 }
+  ];
+  const { weekRows, seasonRows } = G.shapeGroupRows(week, season, 'cy', 'al');
+  assert.deepEqual(weekRows.map((r) => r.userId), ['b', 'a', 'c', 'd'], 'the server order holds inside a tie');
+  assert.deepEqual(weekRows.map((r) => r.rank), [1, 1, 3, 3], 'level share a rank, the next one skips');
+  assert.deepEqual(seasonRows.map((r) => r.rank), [1, 2, 2, 4]);
+  const cy = weekRows.find((r) => r.userId === 'c');
+  assert.equal(cy.weekPoints, 0, 'two final games and no winners is a zero');
+  assert.equal(cy.seasonPoints, 4);
+  assert.equal(cy.isSelf, true);
+  assert.equal(weekRows.find((r) => r.userId === 'd').weekPoints, null);
+  assert.equal(seasonRows.find((r) => r.userId === 'a').isCommish, true);
+  console.log('    week ranks:', weekRows.map((r) => r.displayName + ' ' + r.rank).join(', '));
+});
+
+test('group state: the record line reads the API\'s wins, played and picks', () => {
+  assert.equal(G.recordText({ wins: 0, played: 0, picks: 0 }), 'No picks yet');
+  assert.equal(G.recordText({ wins: 0, played: 0, picks: 1 }), '1 pick · none final');
+  assert.equal(G.recordText({ wins: 0, played: 0, picks: 5 }), '5 picks · none final');
+  assert.equal(G.recordText({ wins: 2, played: 3, picks: 5 }), '2–1 · 5 picks');
+});
