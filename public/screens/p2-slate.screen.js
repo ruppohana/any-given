@@ -1922,9 +1922,12 @@ function head(root, data, _) {
    *
    * The title is now what the screen IS, and the league is a mark rather than
    * the word "College" in a pill. */
+  /* 🔴 NO LEAGUE MARK AND NO h1 ON THE SLATE. Jason, 2026-09-10: "remove the
+   * ncaa logo off this page" / "as well as the slate below the ncaa logo".
+   * The top bar names the screen; the page keeps only its one sub line. */
   root.appendChild(pageHeader({
     title: (data && data.mode) === 'week' ? "The week's card" : 'The slate',
-    league: sp === 'nfl' ? 'nfl' : 'ncaa',
+    noTitle: true,
     sub: (data && data.mode) === 'week'
       ? 'Week ' + wk + ' · against the spread · every pick pays 2.00×'
       : 'Week ' + wk + ' · your group · scored in points'

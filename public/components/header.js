@@ -98,10 +98,17 @@ export function pageHeader(opts) {
     l.appendChild(badge);
   }
 
-  const t = document.createElement('h1');
-  t.className = 'ag-hd-t';
-  t.textContent = o.title || '';
-  l.appendChild(t);
+  /* opts.noTitle: the top bar already names the screen, so the page does not
+   * say it twice. With no .ag-hd-t on the page, wireTopbarTitle keeps the bar's
+   * title showing - which also ends the flash of the bar's title appearing and
+   * then vanishing as the page's own h1 rendered underneath it (Jason, the
+   * slate, 2026-09-10). */
+  if (!o.noTitle) {
+    const t = document.createElement('h1');
+    t.className = 'ag-hd-t';
+    t.textContent = o.title || '';
+    l.appendChild(t);
+  }
 
   if (o.sub) {
     const s = document.createElement('p');
