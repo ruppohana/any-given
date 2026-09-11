@@ -161,3 +161,29 @@ test('the /nuggets route pattern is the one the Worker actually runs, and it mat
   for (const bad of ['/nuggets/ncaa/2305xjson', '/nuggets/mlb/1.json', '/nuggets/ncaa/../x.json', '/xnuggets/ncaa/1.json'])
     assert.equal(re.test(bad), false, bad + ' must not match');
 });
+
+test('a named date is recognized by the pattern the seed actually runs', () => {
+  // The date check once arrived as /^d{4}-d{2}-d{2}$/ - valid, silent, never
+  // matching - so a test run aimed at Sunday would have fallen back to tomorrow.
+  const src = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf8');
+  const m = src.match(/const named = (\/.*?\/)\.test\(/);
+  assert.ok(m, 'the date check is a regex literal');
+  const re = new Function('return ' + m[1])();
+  assert.equal(re.test('2026-09-13'), true);
+  for (const bad of ['2026-9-13', 'tomorrow', '2026-09-13x', 'd{4}-d{2}-d{2}']) assert.equal(re.test(bad), false, bad);
+});
+
+test('NUGGET_TEST runs once, by configuration, with its done-record written first', () => {
+  const src = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf8');
+  const m = src.match(/const nt = String\(env\.NUGGET_TEST \|\| ''\)\.match\((\/.*?\/)\);/);
+  assert.ok(m, 'the trigger pattern is a regex literal');
+  const re = new Function('return ' + m[1])();
+  assert.deepEqual([...('2026-09-13:2'.match(re) || [])].slice(1), ['2026-09-13', '2']);
+  for (const bad of ['2026-09-13', '2026-09-13:', '2026-09-13:200', 'x:2']) assert.equal(re.test(bad), false, bad);
+  const at = src.indexOf('const nt = String(env.NUGGET_TEST');
+  const body = src.slice(at, at + 900);
+  const guard = body.indexOf('if (await env.LIVE.get(doneKey)) return;');
+  const mark = body.indexOf('await env.LIVE.put(doneKey');
+  const seed = body.indexOf('await seedNuggets(env, { date: nt[1]');
+  assert.ok(guard > 0 && mark > guard && seed > mark, 'checked, then marked, then seeded - never twice');
+});
