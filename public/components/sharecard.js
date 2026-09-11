@@ -20,7 +20,7 @@
  */
 
 const W = 1200, H = 630;
-const BG = '#120a0e', INK = '#f4eff0', DIM = '#b6a8ac', GOLD = '#E0A93B', LINE = '#3a2c31';
+const BG = '#120a0e', INK = '#f4eff0', DIM = '#b6a8ac', GOLD = '#E0A93B';
 const FONT = '-apple-system, "Segoe UI", system-ui, sans-serif';
 
 function load(src) {
@@ -34,119 +34,33 @@ function load(src) {
   });
 }
 
-function roundRect(c, x, y, w, h, r) {
-  c.beginPath();
-  c.moveTo(x + r, y);
-  c.arcTo(x + w, y, x + w, y + h, r);
-  c.arcTo(x + w, y + h, x, y + h, r);
-  c.arcTo(x, y + h, x, y, r);
-  c.arcTo(x, y, x + w, y, r);
-  c.closePath();
-}
-
-/**
- * @param state the held live state
- * @param call  a settled call: { label, stake, pays, delta, landed }
- * @returns a PNG Blob, or null if the browser cannot produce one
- */
-export async function shareCardBlob(state, call) {
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  const c = cv.getContext('2d');
-  if (!c) return null;
-
-  c.fillStyle = BG; c.fillRect(0, 0, W, H);
-
-  /* --- the mark, completing --- */
-  c.font = `800 30px ${FONT}`;
-  c.fillStyle = DIM;
-  c.fillText('ANY GIVEN ', 72, 96);
-  const stem = c.measureText('ANY GIVEN ').width;
-  c.fillStyle = GOLD;
-  c.fillText('SNAP', 72 + stem, 96);
-
-  /* --- the crests and the matchup --- */
-  const league = (state.sport === 'nfl' || String(state.gameId || '').length === 0) ? 'nfl' : 'ncaa';
-  const away = state.teams?.[state.awayTeamId], home = state.teams?.[state.homeTeamId];
-  const [ai, hi] = await Promise.all([
-    load(`/logos/${league}/500-dark/${state.awayTeamId}.png`),
-    load(`/logos/${league}/500-dark/${state.homeTeamId}.png`)
-  ]);
-  let x = 72;
-  if (ai) { c.drawImage(ai, x, 150, 84, 84); x += 104; }
-  c.font = `600 30px ${FONT}`; c.fillStyle = DIM;
-  c.fillText(`${state.awayScore} – ${state.homeScore}`, x, 205); x += c.measureText(`${state.awayScore} – ${state.homeScore}`).width + 24;
-  if (hi) { c.drawImage(hi, x, 150, 84, 84); }
-
-  c.font = `600 26px ${FONT}`; c.fillStyle = DIM;
-  const match = away && home ? `${away.short} at ${home.short}` : 'the game';
-  c.fillText(match, 72, 285);
-
-  /* --- 🔴 THE RESULT, WHICH IS THE ONLY REASON ANYBODY POSTS THIS --- */
-  const won = call && call.landed === true;
-  c.font = `800 76px ${FONT}`;
-  c.fillStyle = INK;
-  const verb = won ? 'Called it.' : 'Called it wrong.';
-  c.fillText(verb, 72, 380);
-
-  if (call) {
-    /* The tile, drawn as the tile — the thing they tapped, at the price it
-     * showed BEFORE the tap. That is the product's whole claim and it belongs on
-     * the picture. */
-    const tw = 470, th = 116, ty = 420;
-    roundRect(c, 72, ty, tw, th, 16);
-    c.fillStyle = won ? 'rgba(224,169,59,.14)' : 'rgba(255,107,94,.12)';
-    c.fill();
-    c.lineWidth = 3; c.strokeStyle = won ? GOLD : '#ff6b5e'; c.stroke();
-
-    c.font = `800 34px ${FONT}`; c.fillStyle = INK;
-    c.fillText(call.label, 100, ty + 48);
-    c.font = `600 24px ${FONT}`; c.fillStyle = won ? GOLD : '#ff6b5e';
-    const sign = (call.delta > 0 ? '+' : '') + call.delta;
-    c.fillText(`${sign} Marbles · ${call.pays}×`, 100, ty + 88);
+/* 🔴 TEXT WRAPS; IT IS NEVER CUT. Jason, 2026-09-11: "if there is a second line
+ * or third line of text we cannot just show. …" So a line is broken on words to
+ * fit, and when it still runs past `most` lines the type steps down a size
+ * rather than ending in an ellipsis. Only a sentence too long for the smallest
+ * size is cut, and a cleaned play line never is. */
+function wrapLines(c, text, max) {
+  const out = [];
+  let cur = '';
+  for (const w of String(text).split(/\s+/)) {
+    const t = cur ? cur + ' ' + w : w;
+    if (cur && c.measureText(t).width > max) { out.push(cur); cur = w; } else cur = t;
   }
-
-  /* --- the foot --- */
-  c.font = `700 24px ${FONT}`; c.fillStyle = INK;
-  c.fillText('anygiven.app', 72, H - 52);
-  c.font = `400 24px ${FONT}`; c.fillStyle = DIM;
-  c.fillText('call the play before the snap', 72 + c.measureText('anygiven.app ').width + 14, H - 52);
-
-  c.strokeStyle = LINE; c.lineWidth = 1;
-  c.beginPath(); c.moveTo(72, H - 92); c.lineTo(W - 72, H - 92); c.stroke();
-
-  return new Promise((res) => cv.toBlob((b) => res(b), 'image/png'));
+  if (cur) out.push(cur);
+  return out;
 }
-
-/**
- * Share it as a FILE where the browser can, and fall back rather than fail.
- *
- * 🔴 THE CAPABILITY CHECK IS canShare({files}), NOT `navigator.share`. Plenty of
- * browsers expose share and refuse files, and the difference only appears as a
- * rejected promise at the moment somebody taps — which is the worst possible
- * time to discover it.
- */
-export async function shareResult(state, call, text) {
-  const blob = await shareCardBlob(state, call).catch(() => null);
-  if (!blob) return 'unsupported';
-
-  const file = new File([blob], 'any-given-snap.png', { type: 'image/png' });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], text }); return 'shared'; }
-    catch { return 'cancelled'; }      // they closed the sheet; not a failure
+function fitLines(c, text, weight, sizes, most, max) {
+  let lines = [], size = sizes[0];
+  for (size of sizes) {
+    c.font = `${weight} ${size}px ${FONT}`;
+    lines = wrapLines(c, text, max);
+    if (lines.length <= most) return { lines, size };
   }
-
-  /* No file sharing: hand them the picture instead of nothing. */
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'any-given-snap.png';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-  return 'downloaded';
+  return { lines: lines.slice(0, most), size };
 }
 
 /* ------------------------------------------------------------------ *
- * REACTION CARDS
+ * THE CARD
  * ------------------------------------------------------------------ */
 
 /**
@@ -179,8 +93,8 @@ export const MOMENTS = {
   fun_fact:     { word: 'DID YOU KNOW', tint: '#5b8def' }
 };
 
-export async function reactionBlob(state, momentKey, line) {
-  const m = MOMENTS[momentKey] || MOMENTS.called_it;
+/** One layout for every card: the word, the line under it, the score, the bug. */
+async function drawCard(state, m, line, isFact) {
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const c = cv.getContext('2d');
@@ -188,8 +102,8 @@ export async function reactionBlob(state, momentKey, line) {
 
   c.fillStyle = BG; c.fillRect(0, 0, W, H);
 
-  /* A band of the moment's own colour down the left edge — enough to make the
-   * card recognisable in a feed at thumbnail size, which is the only size that
+  /* A band of the moment's own color down the left edge — enough to make the
+   * card recognizable in a feed at thumbnail size, which is the only size that
    * matters for something people scroll past. */
   c.fillStyle = m.tint; c.fillRect(0, 0, 18, H);
 
@@ -200,21 +114,15 @@ export async function reactionBlob(state, momentKey, line) {
     load(`/logos/${league}/500-dark/${state.homeTeamId}.png`)
   ]);
 
-  /* 🔴 A FACT CARD WRAPS. A fun or odd fact is a sentence of up to 140
-   * characters, so it wraps rather than being trimmed to one line - the fact is
-   * the picture here, and the crests and matchup sit under it, small. */
-  if (momentKey === 'fun_fact' && line) {
+  if (isFact && line) {
+    /* 🔴 A FACT CARD IS THE FACT. A fun or odd fact is a sentence of up to 140
+     * characters, so it gets the big type, and the crests and matchup sit under
+     * it, small. */
     c.font = `800 64px ${FONT}`; c.fillStyle = m.tint;
     c.fillText(m.word, 72, 150);
-    c.font = `700 44px ${FONT}`; c.fillStyle = INK;
-    const lines = [];
-    let cur = '';
-    for (const w of String(line).split(/\s+/)) {
-      const t = cur ? cur + ' ' + w : w;
-      if (cur && c.measureText(t).width > W - 160) { lines.push(cur); cur = w; } else cur = t;
-    }
-    if (cur) lines.push(cur);
-    lines.slice(0, 5).forEach((t, i) => c.fillText(t, 72, 226 + i * 58));
+    const f = fitLines(c, line, 700, [44, 38, 32], 5, W - 160);
+    c.fillStyle = INK;
+    f.lines.forEach((t, i) => c.fillText(t, 72, 226 + i * (f.size + 14)));
     let fx = 72;
     const fy = 488;
     if (ai) { c.drawImage(ai, fx, fy, 64, 64); fx += 76; }
@@ -224,37 +132,38 @@ export async function reactionBlob(state, momentKey, line) {
       c.fillText(`${away.short} at ${home.short}`, fx, fy + 44);
     }
   } else {
-  /* 🔴 THE WORD IS THE PICTURE. It is sized to fill, because a reaction card
-   * read at thumbnail size has room for exactly one thing. */
-  let size = 132;
-  c.font = `800 ${size}px ${FONT}`;
-  while (c.measureText(m.word).width > W - 200 && size > 56) {
-    size -= 6; c.font = `800 ${size}px ${FONT}`;
-  }
-  c.fillStyle = m.tint;
-  c.fillText(m.word, 72, 250);
+    /* The line under the word wraps to three, and the WORD moves up to make
+     * room - the score band below stays where it is, so every card in a feed
+     * has its score in the same place. */
+    const f = line ? fitLines(c, line, 600, [34, 30, 26], 3, W - 160) : { lines: [], size: 34 };
+    const lh = f.size + 10;
+    const wordY = 250 - lh * Math.max(0, f.lines.length - 1);
 
-  if (line) {
-    c.font = `600 34px ${FONT}`; c.fillStyle = INK;
-    /* One line, trimmed rather than wrapped: a play description that runs to two
-     * lines is a paragraph, and this is a reaction. */
-    let t = line;
-    while (c.measureText(t).width > W - 160 && t.length > 12) t = t.slice(0, -2);
-    c.fillText(t + (t.length < line.length ? '…' : ''), 72, 316);
-  }
+    /* 🔴 THE WORD IS THE PICTURE. It is sized to fill, because a card read at
+     * thumbnail size has room for exactly one thing. */
+    let size = 132;
+    c.font = `800 ${size}px ${FONT}`;
+    while (c.measureText(m.word).width > W - 200 && size > 56) {
+      size -= 6; c.font = `800 ${size}px ${FONT}`;
+    }
+    c.fillStyle = m.tint;
+    c.fillText(m.word, 72, wordY);
 
-  /* The score, big, with the crests either side. */
-  let x = 72;
-  if (ai) { c.drawImage(ai, x, 384, 92, 92); x += 112; }
-  c.font = `800 88px ${FONT}`; c.fillStyle = INK;
-  const sc = `${state.awayScore} – ${state.homeScore}`;
-  c.fillText(sc, x, 458); x += c.measureText(sc).width + 28;
-  if (hi) { c.drawImage(hi, x, 384, 92, 92); }
+    c.font = `600 ${f.size}px ${FONT}`; c.fillStyle = INK;
+    f.lines.forEach((t, i) => c.fillText(t, 72, wordY + 66 + i * lh));
 
-  if (away && home) {
-    c.font = `600 26px ${FONT}`; c.fillStyle = DIM;
-    c.fillText(`${away.short} at ${home.short}`, 72, 520);
-  }
+    /* The score, big, with the crests either side. */
+    let x = 72;
+    if (ai) { c.drawImage(ai, x, 384, 92, 92); x += 112; }
+    c.font = `800 88px ${FONT}`; c.fillStyle = INK;
+    const sc = `${state.awayScore} – ${state.homeScore}`;
+    c.fillText(sc, x, 458); x += c.measureText(sc).width + 28;
+    if (hi) { c.drawImage(hi, x, 384, 92, 92); }
+
+    if (away && home) {
+      c.font = `600 26px ${FONT}`; c.fillStyle = DIM;
+      c.fillText(`${away.short} at ${home.short}`, 72, 520);
+    }
   }
 
   /* The bug, bottom right, where a broadcaster puts one. */
@@ -270,18 +179,61 @@ export async function reactionBlob(state, momentKey, line) {
   return new Promise((res) => cv.toBlob((b) => res(b), 'image/png'));
 }
 
-export async function shareReaction(state, momentKey, line, text) {
-  const blob = await reactionBlob(state, momentKey, line).catch(() => null);
+export function reactionBlob(state, momentKey, line) {
+  return drawCard(state, MOMENTS[momentKey] || MOMENTS.called_it, line, momentKey === 'fun_fact');
+}
+
+/**
+ * The brag: a call that landed.
+ *
+ * 🔴 THE CALL IS THE WORD. Jason, 2026-09-11: "Called it and called it wrong
+ * seem stupid." The old card led with "Called it." and put the call in a small
+ * box underneath. Now it is the same card as TOUCHDOWN, with the thing they
+ * called as the word - PASS, FIRST DOWN - and the product's whole claim as the
+ * line: the price it showed BEFORE the snap, and what it paid. There is no
+ * losing version: the brag is only offered for a call that landed, and nobody
+ * posts the one they lost.
+ *
+ * @param call a settled call: { label, stake, pays, delta, landed }
+ */
+export function shareCardBlob(state, call) {
+  if (!call) return reactionBlob(state, 'called_it', '');
+  const sign = (call.delta > 0 ? '+' : '') + call.delta;
+  const line = call.landed === true
+    ? `Before the snap, at ${call.pays}×. ${sign} Marbles.`
+    : `Before the snap, at ${call.pays}×.`;
+  return drawCard(state, { word: String(call.label || '').toUpperCase(), tint: GOLD }, line, false);
+}
+
+/**
+ * Share it as a FILE where the browser can, and fall back rather than fail.
+ *
+ * 🔴 THE CAPABILITY CHECK IS canShare({files}), NOT `navigator.share`. Plenty of
+ * browsers expose share and refuse files, and the difference only appears as a
+ * rejected promise at the moment somebody taps — which is the worst possible
+ * time to discover it.
+ */
+async function shareBlob(blob, text) {
   if (!blob) return 'unsupported';
   const file = new File([blob], 'any-given-snap.png', { type: 'image/png' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], text }); return 'shared'; }
-    catch { return 'cancelled'; }
+    catch { return 'cancelled'; }      // they closed the sheet; not a failure
   }
+
+  /* No file sharing: hand them the picture instead of nothing. */
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'any-given-snap.png';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   return 'downloaded';
+}
+
+export async function shareResult(state, call, text) {
+  return shareBlob(await shareCardBlob(state, call).catch(() => null), text);
+}
+
+export async function shareReaction(state, momentKey, line, text) {
+  return shareBlob(await reactionBlob(state, momentKey, line).catch(() => null), text);
 }

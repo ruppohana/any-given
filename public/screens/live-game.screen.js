@@ -4855,6 +4855,7 @@ function reactions(state, wrap) {
   const shareLine = (t) => playText(String(t || '')
     .replace(/^\(\d{1,2}:\d{2}\)\s*/, '')
     .replace(/,?\s*clock \d{1,2}:\d{2}.*$/i, '')
+    .replace(/,?\s*end of play\.?$/i, '')
     .replace(/^(no huddle-)?shotgun\s*/i, '')
     .replace(/#\d+\s+/g, '')
     .replace(/\s*\([^)]*\)/g, '')
