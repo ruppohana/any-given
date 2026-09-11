@@ -3862,6 +3862,7 @@ function inviteButton(state) {
     b.querySelector('.lg-invite-b').textContent = url;
   };
   wrapEl.appendChild(b);
+  wrapEl.appendChild(textIt(state, url));
   wrapEl.appendChild(postToX(state, url));
   return wrapEl;
 }
@@ -3905,6 +3906,31 @@ function postToX(state, url) {
 }
 
 /**
+ * 🔴 A TEXT, THE SAME WAY AS X. Jason, 2026-09-10: "Can we do texts like we do
+ * 'x'?" The X button is worth having because it opens a compose window with
+ * the words already in it; the invite button's native sheet offers Messages
+ * but hands over a bare line of copy. This is the X treatment for Messages:
+ * an `sms:` link that opens a new text with the brag and the game link filled
+ * in, and the person picks who and presses send. Nothing is sent by the app.
+ *
+ * `sms:?&body=` is the one form both platforms read - iOS wants `&body`,
+ * Android wants `?body`, and each ignores the other's half. No recipient: who
+ * gets it is theirs to choose.
+ */
+function textIt(state, url) {
+  const a = el('a', 'lg-x lg-sms');
+  a.href = 'sms:?&body=' + encodeURIComponent(xText(state, false) + '\n' + url);
+  a.setAttribute('aria-label', 'Text it to a friend');
+  const mark = el('span', 'lg-x-mark');
+  mark.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+    + '<path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.4 1.3 4.5 3.4 6'
+    + 'L4.5 21l4.3-2.2c1 .3 2.1.4 3.2.4 5.5 0 10-3.6 10-8S17.5 3 12 3z"/></svg>';
+  a.appendChild(mark);
+  a.appendChild(el('span', 'lg-x-l', 'Text it'));
+  return a;
+}
+
+/**
  * 🔴 HASHTAGS FROM THE TEAMS ACTUALLY PLAYING. Jason: "Can we regenerate X
  * hashtags for the teams playing?" They come off the same abbreviations already
  * in the state — no table to maintain, and nothing to go stale when a team is
@@ -3926,10 +3952,13 @@ function hashtags(state) {
   return a && h ? `#${a}vs${h} #AnyGivenSnap` : '#AnyGivenSnap';
 }
 
-function xText(state) {
+function xText(state, withTags = true) {
   const away = state && state.teams ? state.teams[state.awayTeamId] : null;
   const home = state && state.teams ? state.teams[state.homeTeamId] : null;
   const game = away && home ? `${away.short} at ${home.short}` : 'this game';
+  /* A text goes to one friend, not into a feed - hashtags there read as a
+     forwarded advert. Same brag, same moment, no tags. */
+  if (!withTags) return xText(state, true).replace(/\s*\n\n#[^\n]*$/, '');
 
   /* The best settled call so far, if there is one — the thing worth posting. */
   let best = null;
@@ -4125,7 +4154,7 @@ const CSS = `
 
    An empty grid track is invisible; its gap is not. That is the whole bug, and
    it is why removing a child from a grid means checking the template. */
-.lg-invite-wrap { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; }
+.lg-invite-wrap { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: stretch; }
 .lg-x { display: grid; place-content: center; gap: 2px; text-decoration: none;
   padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-card);
   background: var(--card); color: var(--fg); }
