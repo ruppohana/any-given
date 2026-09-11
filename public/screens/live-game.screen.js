@@ -3765,28 +3765,65 @@ function modeCard(wrap, compact) {
  * index lives on S so a repaint of the front door (a step change, a timer)
  * does not snap it back to the first stadium. Decoration only: aria-hidden,
  * empty alts, and the three doors below say everything the page says. */
+/* 🔴 RANDOM, NEVER THE SAME ONE TWICE IN A ROW, AND AS MANY AS THERE ARE.
+ * Jason, 2026-09-11: "i will make more stadiums, but they should be random and
+ * never the same 1 two times in a row." The list comes from /hero/list.json,
+ * which tools/hero-crop.mjs writes from art/hero/ - so a new stadium is a render
+ * dropped in that folder and one command, never a code change. HERO_IMAGES is
+ * the fallback until the list arrives (or if it cannot). Only the stadium on
+ * screen and the one after it are loaded; the rest wait their turn, so ten
+ * renders do not all download on the front door. */
 const HERO_IMAGES = ['/hero/hero-1.webp', '/hero/hero-2.webp', '/hero/hero-3.webp'];
+function heroList() {
+  if (!S.heroListAsked) {
+    S.heroListAsked = true;
+    fetch('/hero/list.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((l) => { if (Array.isArray(l) && l.length) S.heroList = l; })
+      .catch(() => {});
+  }
+  return S.heroList || HERO_IMAGES;
+}
+function pickOther(n, not) {
+  if (n < 2) return 0;
+  let k;
+  do { k = Math.floor(Math.random() * n); } while (k === not);
+  return k;
+}
 function heroBlock() {
+  const list = heroList();
+  const n = list.length;
   const h = el('div', 'lg-hero');
   h.setAttribute('aria-hidden', 'true');
-  if (!Number.isInteger(S.heroIx)) S.heroIx = Math.floor(Math.random() * HERO_IMAGES.length);
-  HERO_IMAGES.forEach((src, i) => {
+  if (!Number.isInteger(S.heroIx) || S.heroIx >= n) S.heroIx = Math.floor(Math.random() * n);
+  if (!Number.isInteger(S.heroNext) || S.heroNext >= n || S.heroNext === S.heroIx) {
+    S.heroNext = pickOther(n, S.heroIx);
+  }
+  const load = (img) => { if (img && !img.getAttribute('src')) img.src = img.dataset.src; };
+  list.forEach((src, i) => {
     const img = el('img', 'lg-hero-img' + (i === S.heroIx ? ' is-on' : ''));
-    img.src = src; img.alt = ''; img.decoding = 'async';
+    img.dataset.src = src;
+    img.dataset.kb = 'abc'[i % 3];     /* three drift lines, however many stadiums */
+    img.alt = ''; img.decoding = 'async';
+    if (i === S.heroIx || i === S.heroNext) load(img);
     h.appendChild(img);
   });
   const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!still) {
+  if (!still && n > 1) {
     const t = setInterval(() => {
       if (!h.isConnected) { clearInterval(t); return; }
       const imgs = h.children;
       /* The one leaving holds its end frame (.is-off) while it fades; the one
-       * arriving drops that and starts its drift from scale 1 (.is-on). */
+       * arriving drops that and starts its drift from scale 1 (.is-on). The one
+       * after it is chosen now - never the one just shown - and starts loading. */
       imgs[S.heroIx].classList.remove('is-on');
       imgs[S.heroIx].classList.add('is-off');
-      S.heroIx = (S.heroIx + 1) % imgs.length;
+      S.heroIx = S.heroNext;
+      load(imgs[S.heroIx]);
       imgs[S.heroIx].classList.remove('is-off');
       imgs[S.heroIx].classList.add('is-on');
+      S.heroNext = pickOther(imgs.length, S.heroIx);
+      load(imgs[S.heroNext]);
     }, 6000);
   }
   return h;
@@ -5046,11 +5083,13 @@ const CSS = `
    we are now", which is this. The image leaving holds its end frame (.is-off)
    while it fades, so nothing snaps back to scale 1. */
 .lg-hero-img.is-on { opacity: 1; animation: lg-kb-a 6.5s ease-out forwards; }
-.lg-hero-img:nth-child(2).is-on { animation-name: lg-kb-b; }
-.lg-hero-img:nth-child(3).is-on { animation-name: lg-kb-c; }
+/* The line is chosen by data-kb (a, b, c cycling by index), not :nth-child, so
+   it holds however many stadiums the list grows to. */
+.lg-hero-img[data-kb="b"].is-on { animation-name: lg-kb-b; }
+.lg-hero-img[data-kb="c"].is-on { animation-name: lg-kb-c; }
 .lg-hero-img.is-off { transform: scale(1.09) translate(-2.5%, 1%); }
-.lg-hero-img:nth-child(2).is-off { transform: scale(1.09) translate(2.5%, 1%); }
-.lg-hero-img:nth-child(3).is-off { transform: scale(1.08) translate(0, 2%); }
+.lg-hero-img[data-kb="b"].is-off { transform: scale(1.09) translate(2.5%, 1%); }
+.lg-hero-img[data-kb="c"].is-off { transform: scale(1.08) translate(0, 2%); }
 @keyframes lg-kb-a { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.09) translate(-2.5%, 1%); } }
 @keyframes lg-kb-b { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.09) translate(2.5%, 1%); } }
 @keyframes lg-kb-c { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.08) translate(0, 2%); } }
