@@ -413,13 +413,14 @@ export const NAV_CSS = [
      highlighted portion around the icon be a little smaller". The fill was the
      item's own background, so it was as big as a fifth of the bar. It is drawn
      on ::before now - the item stays the full-size tap target, the paint is a
-     64x40 pill centered on the icon. z-index -1 puts it under the icon and over
+     64x34 pill centered on the icon (40 tall at first; "can you make them a
+     little smaller top to bottom as well?", same night). z-index -1 puts it under the icon and over
      the bar's background, because the item makes no stacking context and the
      fixed nav does (the behavior the scrim note below learned the hard way). */
   '.ag-nav-item[aria-current="page"] { color: var(--on-accent);',
   '  box-shadow: none; border-top: 0; margin-top: 0; }',
   '.ag-nav-item[aria-current="page"]::before { content: ""; position: absolute;',
-  '  left: 50%; top: 50%; width: 64px; height: 40px; transform: translate(-50%, -50%);',
+  '  left: 50%; top: 50%; width: 64px; height: 34px; transform: translate(-50%, -50%);',
   '  border-radius: var(--radius-nav-item); background: var(--accent); z-index: -1; }',
   '.ag-nav-item[data-unavailable="true"] { color: var(--dim); opacity: .45; pointer-events: none; }',
   /* S5: on a real window the bar moves to the side. Desktop is a SECOND LAYOUT,
