@@ -120,7 +120,12 @@ export const CALL_TYPES: CallType[] = [
      * touchback is the 25, so it is a long shot that pays the cap. NFL: 50 of 68
      * past under the 2025 kickoff, where teams return nearly everything. The old
      * 0.31 counted kicks RETURNED, not returned past the 25, and the NFL count was
-     * zero until the settler could read "K.Turpin to DAL 31 for 23 yards". */
+     * zero until the settler could read "K.Turpin to DAL 31 for 23 yards".
+     *
+     * College at 91/9 is under this file's own "90% one way is not a question"
+     * line. KEPT AS A LONG SHOT on purpose - Jason, 2026-09-11: "Yes" - and
+     * revisited against the weekend's captured college games; a different line
+     * needs a count, not a guess. */
     baseRate: 0.088,
     rates: { past: 0.088, short: 0.912 },
     ratesNfl: { past: 0.735, short: 0.265 }
