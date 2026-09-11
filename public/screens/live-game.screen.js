@@ -4942,6 +4942,12 @@ const CSS = `
 /* The quiet connector the share card uses. It separates two crests; it is not a
    thing to read, so it gets the smallest size and the dim color. */
 .lg-at { font-size: var(--t-body); font-weight: 700; color: var(--dim); }
+/* 🔴 THE UPCOMING CARD'S CRESTS SIT SIDE BY SIDE. Jason, 2026-09-10, circling
+   Villanova at Louisville: .lg-head is a one-column grid (the scoreboard puts
+   its own three-column row inside it), so this card stacked crest, "at",
+   crest down the top half of the card. Away left, "at" in the middle, home
+   right - the scoreboard's 1fr auto 1fr, scoped to this card only. */
+.lg-hgame .lg-head { grid-template-columns: 1fr auto 1fr; align-items: center; }
 .lg-hgame-b { font-size: var(--t-body); color: var(--dim); }
 .lg-hgame-go { font-size: var(--t-emph); font-weight: 800; color: var(--accent); margin-top: 4px; }
 .lg-mark { display: flex; align-items: baseline; gap: 0; }
