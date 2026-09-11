@@ -70,7 +70,12 @@ export class NuggetDesk {
     /* status */
     const queue: TeamJob[] = (await st.get('queue')) || [];
     const done: any[] = (await st.get('done')) || [];
+    /* The SHAPE of the stored key - set or not, its length, the sk-ant- prefix -
+     * never any of its value. The first key arrived as one character from a
+     * failed paste (2026-09-11) and nothing said so until a research call. */
+    const k = String(this.env.ANTHROPIC_API_KEY || '');
     return j({
+      key: { set: k.length > 0, len: k.length, sk_ant: k.startsWith('sk-ant-') },
       run: (await st.get('run')) || null,
       queued: queue.length,
       next: queue.slice(0, 4).map((q) => q.league + ':' + q.teamId + ' ' + q.team),
