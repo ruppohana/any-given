@@ -1396,6 +1396,32 @@ function downLine(state) {
   return line;
 }
 
+/* 🔴 A KICKOFF OUT OF BOUNDS IS SPOTTED BY RULE, NOT WHERE IT LANDED. Jason,
+ * FAMU at Miami, 2026-09-10: "Miami 06?" ESPN wrote the play as
+ *
+ *     "kickoff 59 yards to the MIAMI06, out of bounds at MIAMI06"
+ *     endSpotText "1st & 10 at MIA 6", endYardsToEndzone 94
+ *
+ * which is where the ball went out, and the field drew Miami backed up on its
+ * own 6. Nobody snaps it there: a kickoff out of bounds gives the receiving
+ * team the ball at its 35 in college and its 40 in the NFL. The feed corrects
+ * itself on the next snap; until then this says what is actually true.
+ *
+ * Only an UNRETURNED kick. "... return 20 yards to the MIA20, out of bounds"
+ * is a returner stepping out, and that spot is real. */
+function kickOutOfBounds(play) {
+  if (!play) return false;
+  const t = (play.typeText || '') + ' ' + (play.text || '');
+  return /kickoff/i.test(t) && /out of bounds/i.test(t) && !/return|penalty|fumble/i.test(t);
+}
+const OOB_SPOT = { nfl: 40, 'college-football': 35 };
+
+/* ESPN's college grammar runs a team into its yard line - "MIAMI06",
+   "FAMU45". A space and no leading zero, so it reads as a place. */
+function playText(t) {
+  return String(t || '').replace(/\b([A-Z][A-Z&]+)(\d{2})\b/g, (m, a, n) => a + ' ' + Number(n));
+}
+
 function held(raw, delayMs, now) {
   if (!raw) return null;
   /* 🔴 THE DELAY IS MEASURED FROM WHEN THE PLAY HAPPENED. Jason, live in the
@@ -1484,6 +1510,9 @@ function held(raw, delayMs, now) {
     return { ...raw, plays: visible, holding };
   }
   const last = visible[visible.length - 1];
+  const oobYard = OOB_SPOT[leagueOf(raw)] || 35;
+  const oob = kickOutOfBounds(last);
+  const oobTeam = oob && raw.teams ? raw.teams[last.endTeamId || last.offenseTeamId] : null;
   return {
     ...raw,
     plays: visible,
@@ -1497,7 +1526,9 @@ function held(raw, delayMs, now) {
       distance: last.endDistance != null ? last.endDistance : raw.situation.distance,
       /* The feed's own sentence for where the ball is, after the last play you
          have been shown - never the live one. */
-      downDistanceText: last.endSpotText || raw.situation.downDistanceText,
+      downDistanceText: oob
+        ? `1st & 10 at ${(oobTeam && oobTeam.abbrev) || 'own'} ${oobYard}`
+        : (last.endSpotText || raw.situation.downDistanceText),
       /* 🔴 THE LAST VISIBLE PLAY THAT ACTUALLY HAS A SPOT, walking backwards.
        * From the last visible play alone, the field DISAPPEARED after every
        * kickoff: ESPN posts no `end.yardsToEndzone` on one, so the value went
@@ -1509,6 +1540,7 @@ function held(raw, delayMs, now) {
        * skips the rows that have nothing to say. */
       yardsToGoal: (() => {
         for (let i = visible.length - 1; i >= 0; i--) {
+          if (kickOutOfBounds(visible[i])) return 100 - oobYard;
           if (visible[i].endYardsToEndzone != null) return visible[i].endYardsToEndzone;
         }
         return raw.situation.yardsToGoal;
@@ -2817,7 +2849,7 @@ function paint(wrap) {
         bar.appendChild(el('span', 'lg-lastbar-k', st.label));
         bar.appendChild(el('span', 'lg-lastbar-t', st.note));
       } else {
-        bar.appendChild(el('span', 'lg-lastbar-t', (lp.text || '').trim()));
+        bar.appendChild(el('span', 'lg-lastbar-t', playText(lp.text).trim()));
       }
       stack.appendChild(bar);
     }
@@ -4065,7 +4097,7 @@ function commentary(state) {
       r ? r.headline : [dd, t && t.abbrev].filter(Boolean).join(' — ') || 'Play'));
     row.appendChild(head);
 
-    row.appendChild(el('div', 'lg-say-detail', p.text || ''));
+    row.appendChild(el('div', 'lg-say-detail', playText(p.text)));
     if (p.star && p.star.name) {
       const who = (p.star.jersey ? '#' + p.star.jersey + ' ' : '') + p.star.name;
       const side = p.star.teamId && state.teams[p.star.teamId];
