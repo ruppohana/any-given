@@ -570,14 +570,18 @@
 .scr-p2-slate .p2-filters:not(.is-scrollable) {
   -webkit-mask-image: none; mask-image: none;
 }
+/* 🔴 SAME PILL AS THE DAY CHIPS. Jason, 2026-09-10: "can these pills be the same
+   size(ish), height" - the filters were 34px with 11px type under 44px day chips
+   with 13px type. They meet at the day chip, not the filter: 44px (--tap-min) is
+   the floor for anything a thumb hits (test §5), so the filters come UP to it. */
 .scr-p2-slate .p2-filter {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
-  font: inherit; min-height: 34px; padding: 0 11px;
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  font: inherit; min-height: var(--tap-min); padding: 0 12px;
   border: 1px solid var(--line); border-radius: var(--radius-pill);
   background: var(--card); color: var(--fg); white-space: nowrap;
 }
-.scr-p2-slate .p2-filter-l { font-size: var(--t-micro); font-weight: 700; }
-.scr-p2-slate .p2-filter-n { font-size: 10px; font-weight: 800; color: var(--dim); }
+.scr-p2-slate .p2-filter-l { font-size: var(--t-body); font-weight: 600; }
+.scr-p2-slate .p2-filter-n { font-size: var(--t-micro); font-weight: 500; color: var(--dim); }
 .scr-p2-slate .p2-filter[data-on="true"] {
   background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }

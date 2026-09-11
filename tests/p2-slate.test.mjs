@@ -319,6 +319,9 @@ test('§5 - tap targets. Nothing a thumb hits is under 44px', () => {
   assert.ok(zoneH && Number(zoneH) >= 44,
     `the pick target is ${zoneH}px - one-handed, at night, the floor is 44`);
   assert.ok(/\.p2-daychip\b[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
+  // The filter pills match the day chips (Jason, 2026-09-10: "can these pills be
+  // the same size(ish), height") - at the 44px floor, not below it.
+  assert.ok(/\.p2-filter \{[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE), 'filter pills sit at --tap-min');
   assert.ok(/\.p2-tb-in[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
 });
 
