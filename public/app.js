@@ -400,6 +400,35 @@ async function boot() {
     });
   }
 
+  /* 🔴 A GROUP INVITE OPENS THE GROUP'S SLATE. Found 2026-09-10: the standings
+   * screen's "Copy invite" has been sending `/?pool=CODE` since 2026-09-09 and
+   * nothing anywhere read it - a friend who tapped it got the front door and
+   * no sign of the group they were invited to.
+   *
+   * Doctrine: nothing sits in front of the slate, and an invite link opens the
+   * ACTUAL slate. So the code is looked up, remembered as the group being
+   * joined, the league switched to the group's, and the person lands on the
+   * games with a line saying whose group this is. Their first pick joins them
+   * (see p2-slate). Used once and taken out of the address, for the same
+   * reason as ?game= - a query string outlives every navigation after it. */
+  const poolCode = new URLSearchParams(location.search).get('pool');
+  if (poolCode) {
+    try {
+      const r = await fetch('/api/pool/info?code=' + encodeURIComponent(poolCode));
+      if (r.ok) {
+        const info = await r.json();
+        localStorage.setItem('ag.pendingPool', JSON.stringify(info));
+        localStorage.setItem('ag.sport', JSON.stringify(info.sport));
+      }
+    } catch { /* a dead or offline invite still opens the slate */ }
+    try {
+      const q = new URLSearchParams(location.search);
+      q.delete('pool');
+      const qs = q.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + '#/slate');
+    } catch { location.hash = '#/slate'; }
+  }
+
   /* 🔴 NO HASH MEANS THE GAME, not the first entry in a list. */
   if (!location.hash || location.hash === '#/' || location.hash === '#') {
     /* An invite carries a game, so it goes straight to it; anything else lands

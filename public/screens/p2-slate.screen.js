@@ -481,7 +481,38 @@ function deviceId() {
  * already saved locally, so a dropped request costs a place on the world board
  * and never the pick. When there is a pool worth being wrong about, this needs a
  * retry queue - and that is a real gap, not a decision. */
+/* 🔴 THE FIRST PICK JOINS THE GROUP YOU WERE INVITED TO. An invite link
+ * (app.js) remembers the group as `ag.pendingPool` and lands on this slate;
+ * nothing is asked before the first tap, and that tap is the join. Doctrine:
+ * "An explicit join step in front of a pick is the account wall wearing a
+ * different hat" - the same line the pick endpoint already lives by.
+ *
+ * The pending group is cleared before the request and put back if it fails,
+ * so a dropped connection retries on the next pick instead of forgetting the
+ * invite. On success the standings screen opens on that group. */
+function joinPendingPool() {
+  let pend = null;
+  try { pend = JSON.parse(localStorage.getItem('ag.pendingPool') || 'null'); } catch { pend = null; }
+  if (!pend || !pend.id) return;
+  try { localStorage.removeItem('ag.pendingPool'); } catch { /* private window */ }
+  const restore = () => { try { localStorage.setItem('ag.pendingPool', JSON.stringify(pend)); } catch { /* gone */ } };
+  try {
+    fetch('/api/pool/join', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ deviceId: deviceId(), code: pend.id,
+        name: (localStorage.getItem('ag.name') || '').replace(/^"|"$/g, '') })
+    }).then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j && j.poolId) { try { localStorage.setItem('ag.scope', j.poolId); } catch { /* fine */ } }
+        else restore();
+      })
+      .catch(restore);
+  } catch { restore(); }
+}
+
 function postPick(sport, week, game, side) {
+  joinPendingPool();
   try {
     fetch('/api/pool/pick', {
       method: 'POST',
@@ -1576,6 +1607,25 @@ export function render(root, data, state) {
   };
 
   head(root, data, null);
+
+  /* 🔴 WHOSE GROUP THIS IS, AND THAT A PICK IS ALL IT TAKES. Only while an
+   * invite is pending (set by app.js from ?pool=, cleared by the first pick).
+   * The three facts p1-invite argues a stranger needs before anything else -
+   * the group's name, who started it, how many are in - and no button: the
+   * slate underneath IS the action. */
+  try {
+    const pend = JSON.parse(localStorage.getItem('ag.pendingPool') || 'null');
+    if (pend && pend.name) {
+      const j = el('div', 'p2-joining');
+      j.appendChild(el('div', 'p2-joining-h', 'You’re invited to ' + pend.name));
+      const who = [pend.commissioner ? 'Started by ' + pend.commissioner : null,
+        pend.members ? pend.members + (pend.members === 1 ? ' person' : ' people') + ' in' : null]
+        .filter(Boolean).join(' · ');
+      j.appendChild(el('div', 'p2-joining-b',
+        (who ? who + '. ' : '') + 'Pick any game below and you’re in. No sign-up.'));
+      root.appendChild(j);
+    }
+  } catch { /* no storage: no invite line, the slate still works */ }
 
   /* 🔴 THE SAME FILTERS AS ALL GAMES. This screen is 86 rows and 22 screens
    * of scroll, and it is the one an INVITE LINK OPENS - the first thing

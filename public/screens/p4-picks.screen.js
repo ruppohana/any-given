@@ -1444,7 +1444,7 @@ export function render(root, data, state) {
      * will believe precisely because it sounds careful. */
     box.appendChild(el('p', 'p4-footline p4-real num', data.fromFeed
       ? data.captured + ' real games off the feed — real kickoffs, real lines with the book named. '
-        + 'Your picks are stored on this device only; there is no pool server yet, so nobody else can see them.'
+        + 'Your picks count on the world board and in every group you are in. Each one locks at its own kickoff.'
       : data.captured + ' of these games are real captures with their real final scores and their real lines. '
         + 'The pool, the members, the picks, the crowd splits and the parlay are synthetic — no pool has ever been played.'));
     return box;

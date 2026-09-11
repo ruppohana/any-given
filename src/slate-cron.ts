@@ -366,6 +366,46 @@ export async function captureSlate(env: any, sport: string, season: number) {
     sport, season, week, schema: 3, games, fetchedAt: Date.now(), by: 'cron'
   }), { expirationTtl: 60 * 60 * 24 * 14 });
 
+  /* 🔴 AND THE RESULTS TABLE, WHICH NOTHING HAD WRITTEN SINCE THE LAPTOP WENT.
+   * Found 2026-09-10 building the pool server: D1's `game` table held 40 games
+   * and ONE final, on a night FAMU at Miami and SF at LAR both finished. The
+   * only writer was /api/pool/games, fed by the host poller Jason had retired
+   * the day before - so the standings query, which scores ONLY from `game`,
+   * could never mark a single pick won or lost.
+   *
+   * The cron already holds the whole week every ten minutes; writing it to D1
+   * here is the same SQL the endpoint runs, from the one place that has the
+   * data. `void` is still never touched: a game ruled void stays void (one
+   * void path, decided once). Best-effort - a D1 hiccup must not cost the
+   * slate, which is what every screen reads. */
+  try {
+    if (env.DB) {
+      const stmt = env.DB.prepare(
+        `INSERT INTO game (id, season, week, kickoff_utc, home_team_id, away_team_id,
+                           spread, status, home_score, away_score, void, sport)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           kickoff_utc = excluded.kickoff_utc,
+           spread      = excluded.spread,
+           status      = excluded.status,
+           home_score  = excluded.home_score,
+           away_score  = excluded.away_score,
+           week        = excluded.week`
+      );
+      const num = (v: any) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+      const started = (s: string) => s === 'in_progress' || s === 'final';
+      await env.DB.batch(games.slice(0, 200).map((g: any) => stmt.bind(
+        String(g.id), season, week, Number(g.kickoffUtc) || 0,
+        String(g.homeTeamId || ''), String(g.awayTeamId || ''),
+        typeof g.spread === 'number' ? g.spread : null,
+        String(g.status || 'scheduled'),
+        started(String(g.status)) ? num(g.homeScore) : null,
+        started(String(g.status)) ? num(g.awayScore) : null,
+        sport
+      )));
+    }
+  } catch { /* the slate is written; the results table catches up next run */ }
+
   /* 🔴 A POINTER TO THE WEEK THAT IS ON. Every screen that wants "this week"
    * was working it out for itself, and defaulting to 1 when it could not -
    * which is correct for the NFL today and wrong for college, already on

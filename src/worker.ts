@@ -631,6 +631,27 @@ export default {
         return json({ ok: true, poolId: pool.id, name: pool.name, sport: pool.sport });
       }
 
+      /* 🔴 WHAT AN INVITE LINK SHOWS BEFORE ANYTHING IS ASKED. The landing names
+       * the group, who started it and how many are in - the three things that
+       * make a stranger's link feel like an invitation rather than a sign-up
+       * form (p1-invite's whole argument). The commissioner is returned by
+       * DISPLAY NAME only; their device id is the one thing here that could be
+       * used to write picks as them, so it never leaves the database. */
+      if (p === '/api/pool/info') {
+        const code = String(url.searchParams.get('code') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!code) return json({ error: 'code required' }, 400);
+        const pool = await env.DB.prepare(
+          `SELECT p.id, p.name, p.sport, p.week,
+                  (SELECT COUNT(*) FROM member m WHERE m.pool_id = p.id) AS members,
+                  (SELECT display_name FROM member m
+                    WHERE m.pool_id = p.id AND m.role = 'commissioner' LIMIT 1) AS commissioner
+             FROM pool p WHERE p.id = ? AND p.id NOT LIKE 'world-%'`
+        ).bind(code).first() as any;
+        if (!pool) return json({ error: 'no group with that code' }, 404);
+        return json({ id: pool.id, name: pool.name, sport: pool.sport, week: pool.week,
+                      members: pool.members, commissioner: pool.commissioner || null });
+      }
+
       /* Which pools is this device in? Drives the standings scope selector, and
        * it is the question "am I in a pool" - which the screen must be able to
        * answer before it can offer to start one. */
@@ -718,6 +739,17 @@ export default {
          * was never entered in, which is a scoring bug wearing a query
          * parameter. Same rule as the final score: if it decides a result, it
          * is decided here. */
+        /* 🔴 A GROUP SCORES ITS MEMBERS' PICKS - THE ONES THEY MADE ON THE SLATE.
+         * Found 2026-09-10 building the pool server: the slate posts every pick
+         * without a pool id, so every pick lands in the world pool, and this
+         * query joined picks on the GROUP's id - which held none. Two groups
+         * existed with members and every one of them would have shown 0 picks.
+         *
+         * One pick per person per game, counted in every board that person is
+         * on. That is also the right product: you pick Saturday once, and your
+         * office group and your family group both score it. A second set of
+         * picks per group would be a second slate to fill in. */
+        const worldId = sport === 'nfl' ? 'world-nfl' : 'world-cfb';
         try {
           const meta = await env.DB.prepare('SELECT week FROM pool WHERE id = ?')
             .bind(poolId).first() as any;
@@ -740,14 +772,14 @@ export default {
                        THEN 1 ELSE 0 END) AS played
              FROM member m
              LEFT JOIN pick p
-               ON p.pool_id = m.pool_id AND p.user_id = m.user_id
+               ON p.pool_id = ? AND p.user_id = m.user_id
               AND p.sport = ? AND (? = 0 OR p.week = ?)
              LEFT JOIN game g ON g.id = p.game_id
             WHERE m.pool_id = ?
             GROUP BY m.user_id, m.display_name
             ORDER BY wins DESC, picks DESC
             LIMIT 200`
-        ).bind(sport, week, week, poolId).all();
+        ).bind(worldId, sport, week, week, poolId).all();
 
         return json({ pool: poolId, sport, week, rows: rows.results || [],
                       fetchedAt: Date.now() });

@@ -599,3 +599,13 @@
    literal keeps it on the scale if the scale ever moves. */
 .scr-p2-slate .p2-score .p2-sc { font-size: var(--t-section); font-weight: 800; }
 .scr-p2-slate .p2-score .p2-sc[data-loser="true"] { color: var(--dim); }
+
+/* 🔴 THE INVITE, ON THE SLATE IT OPENED. A friend who tapped a group link lands
+   here with nothing asked; this line says whose group it is and that a pick is
+   all it takes. Accent-tinted so it reads as the reason they are here, not as
+   chrome. Gone once they have joined. */
+.scr-p2-slate .p2-joining { margin: 4px 0 10px; padding: 12px 14px;
+  border: 1px solid var(--accent); border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card)); display: grid; gap: 3px; }
+.scr-p2-slate .p2-joining-h { font-weight: 800; color: var(--fg); }
+.scr-p2-slate .p2-joining-b { font-size: var(--t-micro); color: var(--dim); }
