@@ -1022,7 +1022,7 @@ function drawField(wrap, state, ball, cam) {
   /* The first-down line in the color every broadcast has used for thirty
      years, and the line of scrimmage in white. */
   const fdYard = si.down && typeof si.distance === 'number' ? ball + dir * si.distance : null;
-  if (fdYard != null && fdYard > lo && fdYard < hi && fdYard >= 0 && fdYard <= 100) {
+  if (!scored && fdYard != null && fdYard > lo && fdYard < hi && fdYard >= 0 && fdYard <= 100) {
     svg.appendChild(line(fdYard, 'lg-f-fd', 2.4));
   }
   /* 🔴 NO LINE OF SCRIMMAGE IN THE END ZONE. Jason: "what happened here?" -
@@ -1032,7 +1032,14 @@ function drawField(wrap, state, ball, cam) {
    * drawing a scrimmage line through it because it draws one every frame.
    * A marking that means "the ball is snapped here" has to be absent when
    * nothing is being snapped. */
-  if (ball <= 100) svg.appendChild(line(ball, 'lg-f-los', 2.2));
+  /* 🔴 BOTH END ZONES, AND NEVER ON A SCORE. The guard above was `ball <= 100`,
+   * which only knows about a touchdown going RIGHT. Jason, 2026-09-10, on
+   * FAMU at Miami, a 52-yard run into the LEFT end zone: "We don't need the
+   * line of scrimmage in the end zone on a touchdown." The ball was drawn at
+   * about -4 and the line went straight through it. `scored` is the play
+   * saying so, which is the real condition; the yard range is the backstop
+   * for any spot past either goal line. */
+  if (!scored && ball >= 0 && ball <= 100) svg.appendChild(line(ball, 'lg-f-los', 2.2));
 
   /* The ball, sat on the near hash where a spot actually is. */
   /* 🔴 BETWEEN THE HASH ROWS, NOT ON ONE. Jason: "move the ball up 10ish pixels
