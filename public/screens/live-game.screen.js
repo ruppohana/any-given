@@ -37,7 +37,7 @@ import { shareResult, shareReaction, MOMENTS } from '/components/sharecard.js';
    again here - the bug and the slate have to agree about when two teams clash,
    or the same fixture is legible in one place and not the other. */
 import { pageHeader } from '/components/header.js';
-import { teamChip, applyTeamVars, tooClose, normalizeColor } from '/components/team-chip.js';
+import { teamChip, applyTeamVars, tooClose, normalizeColor, marksOn, logoUrl } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { adSlot } from '/components/ad.js';
 import { signed, signClass, clock } from '/components/fmt.js';
@@ -530,6 +530,10 @@ const ORDINAL = { 1: '1ST', 2: '2ND', 3: '3RD', 4: '4TH', 5: 'OT', 6: '2OT' };
 const FIELD_PAN_MS = 700;
 let FIELD_CAM = null;   /* where the camera is now, in yards */
 let FIELD_RAF = null;
+
+/* The midfield crest, decoded once and held for the life of the page - see
+   drawField. Keyed by URL, so switching games does not refetch the first. */
+const MIDFIELD_KEEP = {};
 
 function panField(node, target, draw) {
   if (FIELD_CAM == null) { FIELD_CAM = target; draw(node, FIELD_CAM); return; }
@@ -1217,6 +1221,37 @@ function drawField(wrap, state, ball, cam) {
   };
   if (hi >= 110) svg.appendChild(posts(110));
   if (lo <= -10) svg.appendChild(posts(-10));
+
+  /* 🔴 THE HOME CREST AT MIDFIELD. Jason, 2026-09-10: "Can you put the home
+   * team logo in the middle of the field at the 50?" It is what the real
+   * field has painted there, and it tells you whose stadium you are looking
+   * at without reading anything.
+   *
+   * SIZED BY THE FIELD, NOT IN PIXELS: ten yards wide and the middle 40% of
+   * the depth, both measured through the same projection as everything else,
+   * so it lies flat on the turf in perspective and scales with the camera.
+   * Drawn after the yard lines and before the lines of play and the ball -
+   * paint on the grass, under the game.
+   *
+   * Only when marks are on, the same switch as the scorebug crests. Marks off
+   * is still the no-logos product and this adds nothing there. The image is
+   * held once in memory: drawField runs every animation frame of a pan and on
+   * every five-second repaint, and a crest that re-fetched would blink. */
+  if (marksOn() && lo < 50 && hi > 50 && state.homeTeamId) {
+    const href = logoUrl({ id: state.homeTeamId }, leagueOf(state), '500');
+    if (href) {
+      if (!MIDFIELD_KEEP[href]) { const im = new Image(); im.src = href; MIDFIELD_KEEP[href] = im; }
+      const xa = P(45, 0.5)[0], xb = P(55, 0.5)[0];
+      const w = Math.abs(xb - xa);
+      const top = P(50, 0.3)[1], bot = P(50, 0.7)[1];
+      const cx = P(50, 0.5)[0];
+      svg.appendChild(mk('image', {
+        href, x: (cx - w / 2).toFixed(2), y: top.toFixed(2),
+        width: w.toFixed(2), height: (bot - top).toFixed(2),
+        preserveAspectRatio: 'xMidYMid meet', opacity: 0.9, class: 'lg-f-logo'
+      }));
+    }
+  }
 
   /* The first-down line in the color every broadcast has used for thirty
      years, and the line of scrimmage in white. */
