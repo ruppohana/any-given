@@ -90,8 +90,6 @@ NUGGET_MODEL = "claude-sonnet-5"
 # game inside 48 hours has a team without current nuggets. His own address - the
 # one /privacy.html already publishes.
 ALERT_EMAIL = "ruppohana@gmail.com"
-# One test email, once, on the next ten-minute tick. Remove after it arrives.
-NUGGET_ALERT_TEST = "first"
 
 # ------------------------------------------------------------------
 # NOT DECLARED YET, AND ON PURPOSE

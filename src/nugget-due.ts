@@ -121,6 +121,9 @@ export async function nuggetAlertTick(env: any, now = Date.now()) {
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
     body: JSON.stringify({ from: 'Any Given <alerts@anygiven.app>', to: [env.ALERT_EMAIL], subject, text })
   });
-  if (r.ok) await env.LIVE.put(wantTest ? testKey : dayKey, JSON.stringify({ at: now, urgent: d.urgent.length }), { expirationTtl: 30 * DAY });
+  /* 🔴 expirationTtl is SECONDS. It was 30 * DAY - milliseconds, 2.6 billion, past
+   * KV's int32 limit - so the put threw AFTER the send, the mark was never written,
+   * and the test email went out on every ten-minute tick (2026-09-11, 08:30-09:00). */
+  if (r.ok) await env.LIVE.put(wantTest ? testKey : dayKey, JSON.stringify({ at: now, urgent: d.urgent.length }), { expirationTtl: 30 * 24 * 60 * 60 });
   return { sent: r.ok, status: r.status, test: wantTest, urgent: d.urgent.length, due: d.due.length };
 }

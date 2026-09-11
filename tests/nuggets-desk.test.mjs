@@ -251,7 +251,17 @@ function fakeEnv({ rows, kv = {}, files = {}, extra = {} }) {
   return {
     SEASON: '2026', RESEND_API_KEY: 'test', ALERT_EMAIL: 'owner@example.com', ...extra,
     DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: rows }) }) }) },
-    LIVE: { get: async (k) => (k in store ? store[k] : null), put: async (k, v) => { store[k] = v; }, _store: store },
+    /* Like real KV: expirationTtl is seconds, at least 60, and an int32. The first
+       version of the alert passed 30 days in MILLISECONDS; the lenient fake let it
+       through and the real one threw after every send (2026-09-11). */
+    LIVE: { get: async (k) => (k in store ? store[k] : null), _store: store,
+      put: async (k, v, o) => {
+        const ttl = o && o.expirationTtl;
+        if (ttl !== undefined && !(Number.isInteger(ttl) && ttl >= 60 && ttl <= 2147483647)) {
+          throw new Error('Value out of range. Must be between -2147483648 and 2147483647 (inclusive).');
+        }
+        store[k] = v;
+      } },
     ASSETS: { fetch: async (req) => {
       const p = new URL(req.url).pathname;
       return p in files ? new Response(JSON.stringify(files[p]), { status: 200 }) : new Response('no', { status: 404 });
