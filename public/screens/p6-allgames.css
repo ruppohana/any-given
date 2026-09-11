@@ -595,3 +595,24 @@
 }
 .scr-p6-allgames .p6a-less:active { background: var(--surface-1); }
 .scr-p6-allgames .p6a-less-c { font-size: 11px; line-height: 1; display: inline-block; }
+
+/* 🔴 THE SCORE GETS A COLUMN BESIDE THE TEAM, ON THE NAME LINE.
+   The team block became a two-row grid (name over rank/record) this
+   afternoon, with no slot for a score - so on the first live game, FAMU at
+   Miami, the score auto-placed onto a THIRD row and both numbers clustered
+   under the @, reading as "0 7" floating in the middle of the card. On a
+   live row the score is the subject, so it gets a third column on the
+   INNER edge of each block - beside the @, where a scoreboard puts it - and
+   spans both rows so it sits level with the name. */
+.scr-p6-allgames .p6a-team { grid-template-columns: auto minmax(0, 1fr) auto; }
+.scr-p6-allgames .p6a-team[data-side="home"] { grid-template-columns: auto minmax(0, 1fr) auto; }
+.scr-p6-allgames .p6a-team > .p6a-tsc {
+  grid-column: 3; grid-row: 1 / span 2; align-self: center; justify-self: end;
+  padding-left: 8px; font-size: 20px; font-weight: 800;
+}
+.scr-p6-allgames .p6a-team[data-side="home"] > .tchip { grid-column: 3; }
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tname,
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tmeta { grid-column: 2; }
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc {
+  grid-column: 1; justify-self: start; padding-left: 0; padding-right: 8px;
+}
