@@ -11,9 +11,12 @@
     https://support.google.com/chrome/answer/9658361?hl=en&co=GENIE.Platform%3DAndroid
   Google Chrome Help, Android, "Change the address bar's position":
     https://support.google.com/chrome/answer/14181646?hl=en&co=GENIE.Platform%3DAndroid
-  CHECKED ON A REAL PHONE, 2026-09-11 (Jason's iPhone, iOS 26): Apple's "More" button is THREE LINES,
-  just LEFT of the address inside the address pill - not "..." on the right, which this page first
-  guessed. Still unchecked on a phone: that Add sits at the TOP RIGHT of the Add to Home Screen card.
+  CHECKED ON A REAL PHONE, 2026-09-11 (Jason's iPhone, iOS 26, five screenshots of the whole flow):
+  the menu is THREE LINES just LEFT of the address, inside the address pill (not "..." on the right,
+  which this page first guessed); Share is the first item in it; the share sheet's action row ends in
+  View More, which opens a list whose LAST item is Add to Home Screen; the card has Add at the TOP
+  RIGHT and Open as Web App already ON. The screenshots are not used as images: the share sheet
+  shows Jason's contacts' names and photos.
   Pictures are schematic inline SVGs; each carries a SCREENSHOT SLOT comment.
   Self-contained: no external requests. The only images are this site's own icon. -->
 <html lang="en">
@@ -117,8 +120,14 @@
           <rect x="27" y="52" width="150" height="200" fill="url(#apps)"/>
           <rect x="16" y="322" width="168" height="54" rx="20" fill="#fff" fill-opacity=".16"/>
           <g fill="#fff" fill-opacity=".3"><rect x="27" y="334" width="30" height="30" rx="8"/><rect x="67" y="334" width="30" height="30" rx="8"/><rect x="147" y="334" width="30" height="30" rx="8"/></g>
-          <rect x="107" y="334" width="30" height="30" rx="8" fill="#2f7cf6"/>
-          <g fill="none" stroke="#fff" stroke-width="1.4"><circle cx="122" cy="349" r="9"/><ellipse cx="122" cy="349" rx="4" ry="9"/><path d="M113 349h18"/></g>
+          <!-- Safari as people know it (Jason: "use a closer resemblance of the safari app icon"): a white
+               tile, a blue compass face with a ring of ticks, a red and white needle pointing up-right. -->
+          <defs><linearGradient id="sf-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#26c6ff"/><stop offset="1" stop-color="#1a5ef0"/></linearGradient></defs>
+          <rect x="107" y="334" width="30" height="30" rx="8" fill="#fff"/>
+          <circle cx="122" cy="349" r="12" fill="url(#sf-blue)"/>
+          <circle cx="122" cy="349" r="10.3" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.6" stroke-dasharray=".5 1.66"/>
+          <polygon points="128.5,342.5 123.56,350.56 120.44,347.44" fill="#ff3b30"/>
+          <polygon points="115.5,355.5 120.44,347.44 123.56,350.56" fill="#fff"/>
           <text x="122" y="312" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Safari</text>
           <rect class="halo" x="100" y="327" width="44" height="44" rx="13"/><rect class="ring" x="100" y="327" width="44" height="44" rx="13"/>
         </svg>
@@ -159,7 +168,7 @@
     <li class="step">
       <div>
         <p class="do"><span class="n" aria-hidden="true">4</span>Tap Share.</p>
-        <p>In the menu, find the word <strong>Share</strong> and tap it.</p>
+        <p>In the menu, find the word <strong>Share</strong> and tap it. It is the first one.</p>
         <p class="see"><b>You will see:</b> a list of choices slides up from the bottom of the screen.</p>
       </div>
       <figure class="shot">
@@ -177,10 +186,10 @@
 
     <li class="step">
       <div>
-        <p class="do"><span class="n" aria-hidden="true">5</span>Tap Add to Home Screen.</p>
-        <p>Slide the list up with your finger to see more choices. Tap <strong>Add to Home Screen</strong>.</p>
-        <p class="see"><b>You will see:</b> a card with the Any Given icon and the name Any Given.</p>
-        <p class="alt">Not in the list? Go all the way to the bottom of the list and tap <strong>Edit Actions</strong>. Then tap <strong>Add to Home Screen</strong>.</p>
+        <p class="do"><span class="n" aria-hidden="true">5</span>Tap View More, then Add to Home Screen.</p>
+        <p>A list slides up. In the row of round buttons, tap <strong>View More</strong> (the one on the far right). More choices open underneath. Tap <strong>Add to Home Screen</strong>. It is the last one.</p>
+        <p class="see"><b>You will see:</b> a card called Add to Home Screen, with the Any Given icon and the name Any Given.</p>
+        <p class="alt">No View More button? Slide the list up with your finger instead. Still not there? Go to the very bottom and tap <strong>Edit Actions</strong>, then <strong>Add to Home Screen</strong>.</p>
       </div>
       <figure class="shot">
         <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of the iPhone share list with Add to Home Screen circled -->
@@ -202,8 +211,8 @@
 
     <li class="step">
       <div>
-        <p class="do"><span class="n" aria-hidden="true">6</span>Turn on Open as Web App.</p>
-        <p>Find the switch next to <strong>Open as Web App</strong>. If it is gray, tap it. If it is already green, leave it. Leave the name as Any Given.</p>
+        <p class="do"><span class="n" aria-hidden="true">6</span>Check that Open as Web App is on.</p>
+        <p>Find the switch next to <strong>Open as Web App</strong>. It is usually already green, which means on. If it is gray, tap it. Leave the name as Any Given.</p>
         <p class="see"><b>You will see:</b> the switch is green.</p>
       </div>
       <figure class="shot">
