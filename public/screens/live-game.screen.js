@@ -3780,8 +3780,12 @@ function heroBlock() {
     const t = setInterval(() => {
       if (!h.isConnected) { clearInterval(t); return; }
       const imgs = h.children;
+      /* The one leaving holds its end frame (.is-off) while it fades; the one
+       * arriving drops that and starts its drift from scale 1 (.is-on). */
       imgs[S.heroIx].classList.remove('is-on');
+      imgs[S.heroIx].classList.add('is-off');
       S.heroIx = (S.heroIx + 1) % imgs.length;
+      imgs[S.heroIx].classList.remove('is-off');
       imgs[S.heroIx].classList.add('is-on');
     }, 6000);
   }
@@ -4005,6 +4009,37 @@ function alsoFor(wrap, now) {
   return cached && cached.sport === sport ? cached : null;
 }
 
+/* 🔴 THE ALERT BELL - A CALENDAR EVENT, FOR NOW. Jason, 2026-09-11: "can you
+ * add an alert bell?", then "yes, calendar for now". The app cannot push to a
+ * phone yet - no service worker, no subscription, no sender - so the bell hands
+ * the alert to the calendar: /api/ics answers with a one-game event carrying a
+ * 15-minute alarm (src/lib/ics.ts). iPhone Safari offers Add to Calendar for it;
+ * Android downloads it and the calendar opens it. A real push can replace the
+ * href later without touching the cards. Outline, 1.9 stroke, the nav's family;
+ * the path is Lucide's "bell" (ISC). */
+const BELL_PATH = 'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0';
+function bellLink(title, startMs, key, venue) {
+  const a = el('a', 'lg-bell');
+  const q = new URLSearchParams({ t: title, s: String(startMs), g: String(key || '') });
+  if (venue) q.set('l', venue);
+  a.href = '/api/ics?' + q.toString();
+  a.setAttribute('aria-label', 'Add ' + title + ' to your calendar');
+  a.title = 'Remind me';
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+  svg.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('d', BELL_PATH);
+  p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor');
+  p.setAttribute('stroke-width', '1.9');
+  p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(p);
+  a.appendChild(svg);
+  return a;
+}
+
 /* 🔴 NEXT - EVERY OTHER GAME LEFT THIS WEEK, AS SMALL CARDS. Jason, 2026-09-11:
  * "i think i like to see removing the top strip. change also on sunday to be
  * next in the list. have all the rest of the week. be small cards with the team
@@ -4052,10 +4087,17 @@ function nextList(wrap, state, now) {
     for (const t of (g.teams || [])) if (t && t.id) teams[String(t.id)] = t;
     const a = teams[String(g.awayTeamId)], hm = teams[String(g.homeTeamId)];
 
-    const card = el('a', 'lg-next-c' + (live ? ' is-live' : ''));
+    /* A card is a box with ONE link stretched across it and the bell sitting
+     * above that link - a link inside a link is not allowed, and the bell has
+     * to be its own tap. */
+    const card = el('div', 'lg-next-c' + (live ? ' is-live' : ''));
+    const title = ((a && (a.short || a.name)) || '?') + ' at ' + ((hm && (hm.short || hm.name)) || '?');
+    const go = el('a', 'lg-next-go');
     /* A real query string, not one inside the hash - mount() reads
      * location.search. Same shape the invite link builds. */
-    card.href = '/?game=' + encodeURIComponent(sport + ':' + g.id).replace(/%3A/g, ':');
+    go.href = '/?game=' + encodeURIComponent(sport + ':' + g.id).replace(/%3A/g, ':');
+    go.setAttribute('aria-label', title + (live ? ', live now' : ', ' + dayOf(g.kickoffUtc)));
+    card.appendChild(go);
     const side = (id, t) => {
       const s = el('span', 'lg-next-side');
       if (t) s.appendChild(teamChip({ id, ...t }, { size: 28, league: sport }));
@@ -4063,9 +4105,13 @@ function nextList(wrap, state, now) {
       return s;
     };
     card.appendChild(side(g.awayTeamId, a));
-    card.appendChild(el('span', 'lg-next-mid num', live
+    const mid = el('span', 'lg-next-mid');
+    mid.appendChild(el('span', 'lg-next-when num', live
       ? (g.awayScore ?? 0) + '–' + (g.homeScore ?? 0)
       : new Date(g.kickoffUtc).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })));
+    /* No bell on a game already under way - nothing is left to be reminded of. */
+    if (!live) mid.appendChild(bellLink(title, g.kickoffUtc, sport + ':' + g.id, g.venue));
+    card.appendChild(mid);
     card.appendChild(side(g.homeTeamId, hm));
     box.appendChild(card);
   }
@@ -4092,7 +4138,10 @@ function pregame(state, now, wrap) {
      * stays - it is the reason to come back - as part of that line rather than
      * as the headline. */
     const c = el('div', 'card lg-hgame lg-pre');
-    c.appendChild(el('div', 'lg-hgame-k', 'Upcoming'));
+    /* The kicker shares its row with the bell (drawn once the teams are known). */
+    const top = el('div', 'lg-hgame-top');
+    top.appendChild(el('div', 'lg-hgame-k', 'Upcoming'));
+    c.appendChild(top);
 
     /* Each school's name sits under its own crest, away left and home right, with
      * no "at" between them. Jason, 2026-09-11: "center villanova under their logo,
@@ -4108,6 +4157,10 @@ function pregame(state, now, wrap) {
       gh.appendChild(side);
     }
     c.appendChild(gh);
+    if (aw && hm) {
+      top.appendChild(bellLink((aw.short || aw.name) + ' at ' + (hm.short || hm.name),
+        state.kickoffUtc, S.key, state.venue));
+    }
 
     const toKick = state.kickoffUtc - now;
     const counting = toKick < 24 * 60 * 60 * 1000;
@@ -4923,9 +4976,19 @@ const CSS = `
 .lg-next-side { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
 .lg-next-name { max-width: 100%; font-size: var(--t-body); font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lg-next-mid { font-size: var(--t-micro); color: var(--dim); white-space: nowrap; }
+.lg-next-c { position: relative; }
+/* The one link, stretched over the whole card; the bell sits above it. */
+.lg-next-go { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.lg-next-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lg-next-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.lg-next-when { font-size: var(--t-micro); color: var(--dim); white-space: nowrap; }
 .lg-next-c.is-live { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
-.lg-next-c.is-live .lg-next-mid { font-size: var(--t-body); font-weight: 800; color: var(--accent); }
+.lg-next-c.is-live .lg-next-when { font-size: var(--t-body); font-weight: 800; color: var(--accent); }
+/* The bell: a 32px round target above the card's link, quiet until touched. */
+.lg-bell { position: relative; z-index: 2; display: inline-flex; align-items: center;
+  justify-content: center; width: 32px; height: 32px; border-radius: 50%; color: var(--dim); }
+.lg-bell:hover, .lg-bell:focus-visible { color: var(--accent); background: var(--track); }
+.lg-hgame-top { display: flex; align-items: center; justify-content: space-between; }
 /* The wordmark, at Section like every other page title. It was Score size,
    which made the app's own name compete with the game it is about. */
 .lg-home-mark { display: flex; align-items: baseline; gap: 0;
@@ -4966,21 +5029,32 @@ const CSS = `
    so there is white above the stadium ("can you lower them so there is white
    above the stadium", 2026-09-11), and the hero's own wider box trims the bottom. */
 .lg-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  object-position: 50% 0%; opacity: 0; transform-origin: 50% 35%;
-  transition: opacity 1.2s ease, transform 8s linear; }
-/* THE KEN BURNS DRIFT. Jason, 2026-09-11: "what is it called when you pan across
-   the image and/or zoom in/out?" / "i was thinking about doing it subtely on the
-   hero images". A transition, not a keyframe: the image showing eases in and
-   across over 8s (it is swapped at 6, so it never stops moving), and the one
-   leaving eases back the same way while it fades - an animation would snap
-   back to scale 1 the instant its class came off. A different drift per image. */
-.lg-hero-img.is-on { opacity: 1; transform: scale(1.06) translate(-1%, .6%); }
-.lg-hero-img:nth-child(2).is-on { transform: scale(1.06) translate(1%, .6%); }
-.lg-hero-img:nth-child(3).is-on { transform: scale(1.05) translate(0, 1%); }
+  object-position: 50% 0%; opacity: 0; transform-origin: 50% 40%;
+  transition: opacity 1.2s ease; }
+/* 🔴 THE KEN BURNS DRIFT, AS AN ANIMATION. Jason, 2026-09-11: "what is it called
+   when you pan across the image and/or zoom in/out?" / "i was thinking about
+   doing it subtely on the hero images" - then, twice, "i dont see the ken burns".
+   The first version was a TRANSITION, and a transition never runs on an
+   element's first style: every stadium was drawn already zoomed and sat still,
+   and a repaint of Home redrew it that way again. An animation runs from the
+   moment the class lands, first paint included. 1.00 -> 1.18 and a 4-5% pan
+   over 6.5s, a different line per image ("the zoom, pan is pretty small" /
+   "increase it" - it was 1.10 and 2%); the image leaving holds its end frame
+   (.is-off) while it fades, so nothing snaps back to scale 1. */
+.lg-hero-img.is-on { opacity: 1; animation: lg-kb-a 6.5s ease-out forwards; }
+.lg-hero-img:nth-child(2).is-on { animation-name: lg-kb-b; }
+.lg-hero-img:nth-child(3).is-on { animation-name: lg-kb-c; }
+.lg-hero-img.is-off { transform: scale(1.18) translate(-5%, 2%); }
+.lg-hero-img:nth-child(2).is-off { transform: scale(1.18) translate(5%, 2%); }
+.lg-hero-img:nth-child(3).is-off { transform: scale(1.16) translate(0, 4%); }
+@keyframes lg-kb-a { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.18) translate(-5%, 2%); } }
+@keyframes lg-kb-b { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.18) translate(5%, 2%); } }
+@keyframes lg-kb-c { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.16) translate(0, 4%); } }
 .lg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(to bottom, transparent 72%, var(--bg) 100%); }
 .lg-hero + * { position: relative; z-index: 1; }
-@media (prefers-reduced-motion: reduce) { .lg-hero-img, .lg-hero-img.is-on { transition: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lg-hero-img { transition: none; }
+  .lg-hero-img.is-on, .lg-hero-img.is-off { animation: none; transform: none; } }
 .lg-sportrow { margin-top: 2px; }
 .lg-sportpick { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .lg-sportpick-logo { display: block; object-fit: contain; }

@@ -20,6 +20,7 @@ export { LivePoller } from './poller-do.ts';
 import { readLive, settleAgainst, type LiveState } from './live.ts';
 import { parseSlate, type Sport } from './feed/espn.ts';
 import { handleAuth, requireIdentity, sessionAccount } from './auth.ts';
+import { icsFromQuery } from './lib/ics.ts';
 
 export interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
@@ -185,6 +186,23 @@ export default {
       /* ---- email sign-in: /api/auth/start, /verify, /me, /logout ---- */
       const authRes = await handleAuth(req, env, p, json);
       if (authRes) return authRes;
+
+      /* ---- the alert bell: one game as a calendar event ----
+       * Jason, 2026-09-11: "yes, calendar for now". Stateless - the bell's link
+       * carries the title, kickoff and game key, src/lib/ics.ts bounds all of
+       * them and builds the link back itself. `inline` so iPhone Safari offers
+       * Add to Calendar rather than a download prompt. */
+      if (p === '/api/ics' && req.method === 'GET') {
+        const ev = icsFromQuery(url.searchParams, Date.now());
+        if (!ev) return new Response('not a game', { status: 400, headers: { 'content-type': 'text/plain' } });
+        return new Response(ev.body, {
+          headers: {
+            'content-type': 'text/calendar; charset=utf-8',
+            'content-disposition': `inline; filename="${ev.filename}"`,
+            'cache-control': 'no-store'
+          }
+        });
+      }
 
       if (p === '/api/push' && req.method === 'POST') {
         const token = req.headers.get('x-push-token') || '';
