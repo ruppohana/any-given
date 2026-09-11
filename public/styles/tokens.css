@@ -269,9 +269,13 @@
    * - the property Jason asked for with "can these offsets and radius' line
    * up?" - with the innermost corners square rather than broken. (It was 18,
    * and the note here said 16 → 9 → 2: stale by one edit.) */
+  /* 🔴 AND THE GAME CARD IS 10 TOO. Jason, same night, circling the corner of a
+   * NEXT UP card inside its day: "these radius at 10px as well", and then "i
+   * want all 3 at 10px". So every level is 10 - his call over the concentric
+   * rule above, which stays written down so the trade is visible. */
   --radius-l1: 10px;
-  --radius-l2: max(0px, calc(var(--radius-l1) - var(--nest-step)));
-  --radius-l3: max(0px, calc(var(--radius-l2) - var(--nest-step)));
+  --radius-l2: 10px;
+  --radius-l3: 10px;
 
   /* 🔴 ONE SHADOW, AND IT IS A REVERSAL WORTH NAMING. DESIGN.md says "There are
    * no drop shadows in this interface and none are to be added", and that was
