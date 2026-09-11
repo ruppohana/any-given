@@ -4099,8 +4099,12 @@ function alsoOn(wrap, state, now) {
   const dayKey = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
   const thisDay = dayKey(state.kickoffUtc || now);
 
+  /* 🔴 AT OR AFTER, NOT STRICTLY AFTER. Jason, 2026-09-11: the strip at the top
+   * showed NORF @ UVA and RICH @ NCSU at 4:00 PM beside VILL @ LOU, and this
+   * card said "2 more games" - the two games kicking off at the SAME minute as
+   * this one were filtered out by a `>`. This game itself is excluded by id. */
   const upcoming = (cached.games || [])
-    .filter((g) => g && g.status !== 'final' && g.kickoffUtc > (state.kickoffUtc || now)
+    .filter((g) => g && g.status !== 'final' && g.kickoffUtc >= (state.kickoffUtc || now)
                    && String(g.id) !== String((key || '').split(':')[1]))
     .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
   if (!upcoming.length) return;
