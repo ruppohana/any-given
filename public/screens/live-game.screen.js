@@ -743,8 +743,17 @@ function gameStrip(wrap) {
       ((away && away.abbrev) || '?') + ' @ ' + ((home && home.abbrev) || '?')));
     /* Live games show the score, upcoming ones the time. The same slot, and
        it is always the thing you would ask about that game right now. */
+    /* 🔴 THE GAME ON SCREEN TAKES ITS SCORE FROM THE BOARD, NOT THE SLATE.
+     * The slate is a ten-minute cron capture, so on SF at LAR the chip read
+     * 0-0 directly above a scoreboard reading 3-0. The held state is the one
+     * the scoreboard draws - same delay, so the chip cannot spoil a score the
+     * board has not shown yet. Other games have only the slate to go on. */
+    let sc = g;
+    if (key === nowKey && S.raw) {
+      try { sc = held(S.raw, S.delayMs, Date.now()) || g; } catch { sc = g; }
+    }
     b.appendChild(el('span', 'lg-gamechip-s num', g.status === 'in_progress'
-      ? ((g.awayScore ?? 0) + '–' + (g.homeScore ?? 0))
+      ? ((sc.awayScore ?? 0) + '–' + (sc.homeScore ?? 0))
       : new Date(g.kickoffUtc).toLocaleTimeString(undefined,
           { hour: 'numeric', minute: '2-digit' })));
 
@@ -1909,15 +1918,13 @@ function paint(wrap) {
    * "Call it live" as the title and not as the call to action above the
    * question - a title says where you ARE, a prompt says what to DO, and they
    * should not be the same words on one screen. */
+  /* 🔴 AND THEN TAKEN OUT AGAIN, 2026-09-10, ON JASON'S INSTRUCTION: "Remove
+   * the nfl logo and the call it live underneath." The sticky top bar now says
+   * "Call it live" and never scrolls away, so a second copy of the title under
+   * it - plus a league mark that the crests on the scoreboard already make
+   * obvious - was 170px of phone between the menu and the game. The game strip
+   * is now the first thing under the bar. */
   if (!S.isHome) {
-    wrap.appendChild(pageHeader({
-      title: 'Call it live',
-      /* The same bug as the crests, in the header: this read S.sport - a
-         stored PREFERENCE - rather than the league of the game on screen. An
-         NFL game under an NCAA mark, which is the one place a wrong league is
-         unmissable. leagueOf reads the payload and falls back to the key. */
-      league: leagueOf(S.raw) === 'nfl' ? 'nfl' : 'ncaa'
-    }));
     const gs = gameStrip(wrap);
     if (gs) wrap.appendChild(gs);
   }
