@@ -5067,8 +5067,11 @@ const CSS = `
    front door's first line sits on the bottom of the picture, Deuce's overlap,
    and the text there is on near-solid ground, not on a white roof. */
 .lg-hero { position: relative; height: 220px; margin: -10px -10px -28px; overflow: hidden; }
+/* Pinned to the TOP of the picture: the crops start at the top of Jason's renders
+   so there is white above the stadium ("can you lower them so there is white
+   above the stadium", 2026-09-11), and the hero's own wider box trims the bottom. */
 .lg-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  opacity: 0; transition: opacity 1.2s ease; }
+  object-position: 50% 0%; opacity: 0; transition: opacity 1.2s ease; }
 .lg-hero-img.is-on { opacity: 1; }
 .lg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(to bottom, transparent 45%, var(--bg) 100%); }
