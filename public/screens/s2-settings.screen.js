@@ -251,7 +251,9 @@ function identitySection(data, state) {
   /* The absence, said out loud. This is the Armchair screen answered. */
   const none = el('p', 's2-none');
   none.append(
-    document.createTextNode('No email. No password. '),
+    /* "No email" was true until 2026-09-10, when Jason made email sign-in
+     * required ("no, i want their email"). Still no password, still no DOB. */
+    document.createTextNode('No password. '),
     el('b', null, 'No date of birth.'),
     document.createTextNode(' Nothing here can be bought.')
   );
@@ -586,7 +588,7 @@ export function render(root, data, state) {
   root.appendChild(el('p', 's2-sub',
     state === 'first-run'
       ? 'All of it optional. None of it an account.'
-      : 'No account. This is your device.'));
+      : 'Your picks are tied to your email, so nobody else can make them.'));
 
   if (state === 'loading') {
     root.appendChild(stateBlock('loading', { rows: 5, body: 'Reading your settings…' }));

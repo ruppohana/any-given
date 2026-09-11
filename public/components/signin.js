@@ -105,8 +105,13 @@ function rememberProfile(p) {
 
 let OPEN = null;
 
-/** Opens the sheet. Resolves true once signed in with a profile, false if dismissed. */
-export function openSignIn(reason) {
+/** Opens the profile step for a signed-in account - the settings menu's
+ *  "Change handle". Same sheet, same live availability check. */
+export function openProfileEdit() { return openSignIn(null, { edit: true }); }
+
+/** Opens the sheet. Resolves true once signed in with a profile, false if dismissed.
+ *  opts.edit: already signed in, go straight to the profile step anyway. */
+export function openSignIn(reason, opts = {}) {
   if (OPEN) return OPEN;
   injectCss();
   OPEN = new Promise((resolve) => {
@@ -277,7 +282,7 @@ export function openSignIn(reason) {
       fetch('/api/auth/me', { headers: authHeaders() })
         .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
-          if (ok && j.needsProfile) stepProfile(j);
+          if (ok && (j.needsProfile || opts.edit)) stepProfile(j);
           else if (ok) { rememberProfile(j); close(true); }
           else { try { localStorage.removeItem('ag.session'); } catch { /* fine */ } stepEmail(); }
         })

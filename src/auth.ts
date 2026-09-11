@@ -284,6 +284,38 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
              : json({ error: 'not signed in', required: env.REQUIRE_EMAIL === '1' }, 401);
   }
 
+  /* 🔴 DELETE THE ACCOUNT - from the app, not by email. Apple requires in-app
+   * deletion for any app that creates accounts (App Review 5.1.1(v)), and the
+   * privacy page promises it. Everything tied to the person goes: picks,
+   * parlays, tiebreaks, scores, marbles, memberships, sessions, device links,
+   * the account. A group they run is handed to its longest-standing other
+   * member; a group with nobody else in it goes with them. `confirm: true` in
+   * the body, so a stray POST cannot do it. */
+  if (p === '/api/auth/delete' && req.method === 'POST') {
+    const s = await sessionAccount(req, env);
+    if (!s) return json({ error: 'Sign in first.' }, 401);
+    const b = await req.json().catch(() => ({})) as any;
+    if (b.confirm !== true) return json({ error: 'confirm required' }, 400);
+    const id = s.accountId;
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE pool SET commissioner_id = COALESCE((SELECT m.user_id FROM member m
+           WHERE m.pool_id = pool.id AND m.user_id != ? ORDER BY m.joined_week, m.rowid LIMIT 1), commissioner_id)
+         WHERE commissioner_id = ?`).bind(id, id),
+      env.DB.prepare(
+        `UPDATE member SET role = 'commissioner' WHERE role != 'commissioner'
+           AND EXISTS (SELECT 1 FROM pool p WHERE p.id = member.pool_id AND p.commissioner_id = member.user_id)`),
+      env.DB.prepare('DELETE FROM pool WHERE commissioner_id = ?').bind(id),
+      ...['pick', 'parlay_leg', 'tiebreak', 'week_score', 'marble_ledger', 'member']
+        .map((t) => env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(id)),
+      env.DB.prepare('DELETE FROM session WHERE account_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM device_account WHERE account_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM verify_code WHERE email = ?').bind(s.email),
+      env.DB.prepare('DELETE FROM account WHERE id = ?').bind(id)
+    ]);
+    return json({ ok: true, deleted: true });
+  }
+
   if (p === '/api/auth/logout' && req.method === 'POST') {
     const m = (req.headers.get('authorization') || '').match(/^Bearer\s+([a-f0-9]{64})$/i);
     if (m) await env.DB.prepare('DELETE FROM session WHERE token_hash = ?').bind(await sha256(m[1].toLowerCase())).run();

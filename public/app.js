@@ -22,7 +22,7 @@ import { STATES_CSS } from '/components/states.js';
 import { TEAM_CHIP_CSS } from '/components/team-chip.js';
 import { adSlot, AD_CSS } from '/components/ad.js';
 import { HEADER_CSS } from '/components/header.js';
-import { apiFetch, openSignIn } from '/components/signin.js';
+import { apiFetch, openSignIn, openProfileEdit } from '/components/signin.js';
 
 /* 🔴 SIGN-IN, EXPOSED ONCE FOR EVERY SCREEN. Screens call
  * `(window.agApiFetch || fetch)(...)` rather than importing it, because the
@@ -595,19 +595,80 @@ function buildSettings() {
       if (await openSignIn()) paintAccount();
     };
     accRow.append(who, b);
-  };
-  paintAccount();
-  acc.append(accL, accRow);
-  box.appendChild(acc);
 
-  /* --- who you are --- */
+    /* Signed in: change the handle, or delete the account. Jason, 2026-09-10:
+     * "we also need a change handle option, a sign out option an privacy sub
+     * page". Delete is Apple's requirement for any app that creates accounts
+     * (App Review 5.1.1(v)) - and the privacy page promises it. */
+    accMore.textContent = '';
+    if (token) {
+      const ch = mkBtn('Change handle');
+      /* Same top-layer rule as sign-in: close the menu, then open the sheet. */
+      ch.onclick = async () => { dlg.close(); if (await openProfileEdit()) paintAccount(); };
+      const del = mkBtn('Delete account');
+      del.style.color = 'var(--down, #c0392b)';
+      del.onclick = () => confirmDelete(token);
+      accMore.append(ch, del);
+    }
+    /* The handle IS the name on every board once signed in. */
+    n.hidden = !!token;
+  };
+  const accMore = document.createElement('div');
+  accMore.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px';
+  const mkBtn = (text) => {
+    const x = document.createElement('button');
+    x.type = 'button'; x.textContent = text;
+    x.style.cssText = 'font:inherit;font-weight:700;min-height:36px;padding:0 12px;'
+      + 'border:1px solid var(--line);border-radius:var(--radius-button,10px);background:var(--card);color:var(--fg)';
+    return x;
+  };
+  /* Two taps, the second one red and spelled out. Nothing is deleted on the first. */
+  const confirmDelete = (token) => {
+    accMore.textContent = '';
+    const warn = document.createElement('p'); warn.className = 'ag-faq';
+    warn.textContent = 'This deletes your account, your picks and your group memberships. It can’t be undone.';
+    const no = mkBtn('Cancel'); no.onclick = paintAccount;
+    const yes = mkBtn('Delete for good');
+    yes.style.background = 'var(--down, #c0392b)'; yes.style.color = '#fff'; yes.style.borderColor = 'transparent';
+    yes.onclick = async () => {
+      yes.disabled = true; yes.textContent = 'Deleting…';
+      try {
+        const r = await fetch('/api/auth/delete', { method: 'POST',
+          headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+          body: JSON.stringify({ confirm: true }) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        for (const k of ['ag.session', 'ag.email', 'ag.handle']) { try { localStorage.removeItem(k); } catch { /* private */ } }
+        paintAccount();
+      } catch {
+        yes.disabled = false; yes.textContent = 'Delete for good';
+        warn.textContent = 'That didn’t go through. Try again in a moment.';
+      }
+    };
+    accMore.append(warn, no, yes);
+  };
+
+  /* --- who you are - only until there is a handle --- */
   const n = document.createElement('div'); n.className = 'ag-set';
   const nl = document.createElement('div'); nl.className = 'ag-set-l'; nl.textContent = 'YOUR NAME ON THE BOARD';
   const ni = document.createElement('input'); ni.type = 'text'; ni.maxLength = 24;
   ni.placeholder = 'Someone'; ni.value = get('name', '') || '';
   ni.oninput = () => set('name', ni.value.trim().slice(0, 24));
   n.append(nl, ni);
+
+  paintAccount();
+  acc.append(accL, accRow, accMore);
+  box.appendChild(acc);
   box.appendChild(n);
+
+  /* --- privacy: the page the sign-in sheet links to, reachable from here too --- */
+  const pv = document.createElement('div'); pv.className = 'ag-set';
+  const pvL = document.createElement('div'); pvL.className = 'ag-set-l'; pvL.textContent = 'PRIVACY';
+  const pvA = document.createElement('a');
+  pvA.href = '/privacy.html'; pvA.target = '_blank'; pvA.rel = 'noopener';
+  pvA.textContent = 'Privacy policy — what we keep and how to delete it';
+  pvA.style.cssText = 'color:var(--fg);font-weight:700';
+  pv.append(pvL, pvA);
+  box.appendChild(pv);
 
   /* --- the FAQ, short, and the one line that is not optional --- */
   const f = document.createElement('div'); f.className = 'ag-set';
@@ -616,7 +677,7 @@ function buildSettings() {
   fp.textContent = 'You are shown the game a few seconds behind on purpose, so when it asks what '
     + 'happens next the snap genuinely has not been taken. Marbles cannot be bought, sold or cashed '
     + 'out, everybody starts each game on the same number, and it resets at the next kickoff — so '
-    + 'nobody is ever out. No account: this is your device.';
+    + 'nobody is ever out. You sign in with your email, so nobody else can make your picks.';
   f.append(fl, fp);
   box.appendChild(f);
 

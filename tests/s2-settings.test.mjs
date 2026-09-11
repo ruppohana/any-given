@@ -65,7 +65,11 @@ test('18+ is a rating, never a wall - there is no date-of-birth field', () => {
   assert.equal(/\bbday\b|birthdat|birthday/i.test(JS.replace(/No date of birth/g, '')), false);
   // The absence is stated on screen. That sentence is the whole counter-position.
   assert.ok(JS.includes('No date of birth.'));
-  assert.ok(JS.includes('No email. No password.'));
+  // "No email." came off 2026-09-10: email sign-in is required now (Jason,
+  // decisions/email-is-required-2026-09-10.md). It is asked at the first pick,
+  // never on this screen - the test below still holds that line.
+  assert.ok(JS.includes('No password.'));
+  assert.equal(JS.includes('No email.'), false, 'the screen must not claim there is no email');
 });
 
 test('no account wall - nothing asks for an email, a password or a sign-in', () => {

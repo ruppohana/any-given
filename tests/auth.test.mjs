@@ -38,3 +38,14 @@ test('every client reader of ag.device reads it raw and unwraps a quoted value',
     assert.ok(!/store\.get\('device'/.test(body), f + ' must not JSON-decode the device id');
   }
 });
+
+test('an account can be deleted from the app, and only on purpose', () => {
+  const src = readFileSync(new URL('../src/auth.ts', import.meta.url), 'utf8');
+  assert.ok(src.includes("p === '/api/auth/delete'"), 'delete route exists');
+  assert.ok(src.includes('b.confirm !== true'), 'a stray POST cannot delete');
+  for (const t of ["'pick'", "'member'", "'marble_ledger'", 'DELETE FROM session', 'DELETE FROM device_account', 'DELETE FROM account WHERE id'])
+    assert.ok(src.includes(t), 'delete removes ' + t);
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.ok(app.includes("'/api/auth/delete'") && app.includes('Delete for good'), 'settings has a two-step delete');
+  assert.ok(app.includes('openProfileEdit') && app.includes("'/privacy.html'"), 'settings has change handle and privacy');
+});
