@@ -37,6 +37,19 @@ test('the Live tab opens the game picker, not the last game', () => {
   assert.equal(/lastLive|__agGoLast|lastKey/.test(SRC + APP), false, 'the return to the last game is gone');
 });
 
+test('a game link mounts once, on the game it names', () => {
+  // Jason, 2026-09-11: "Selecting Norfolk Virginia takes me to Villanova still."
+  // The no-hash redirect used location.replace, whose hashchange arrived after
+  // the first mount had consumed ?game= - so a second mount opened the first
+  // live game instead. The redirect must not fire hashchange.
+  const APP = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const at = APP.indexOf("if (!location.hash || location.hash === '#/' || location.hash === '#') {");
+  assert.ok(at > 0, 'the no-hash redirect is still there');
+  const block = APP.slice(at, APP.indexOf('buildSettings();', at));
+  assert.ok(block.includes('history.replaceState('), 'it sets the hash without an event');
+  assert.equal(/location\.replace\(/.test(block), false, 'location.replace fires a late hashchange');
+});
+
 test('the board settles a drive call as a drive call, by the phone\'s own rule', () => {
   // 2026-09-11: the list said a red-zone call lost; the board said void. The
   // server keeps no scope or driveId, so the board fills both the way makeCall

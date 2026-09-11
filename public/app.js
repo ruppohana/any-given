@@ -570,8 +570,16 @@ async function boot() {
   /* 🔴 NO HASH MEANS THE GAME, not the first entry in a list. */
   if (!location.hash || location.hash === '#/' || location.hash === '#') {
     /* An invite carries a game, so it goes straight to it; anything else lands
-     * on Home. */
-    location.replace(location.pathname + location.search
+     * on Home.
+     *
+     * 🔴 replaceState, NOT location.replace. Jason, 2026-09-11: "Selecting
+     * Norfolk Virginia takes me to Villanova still." location.replace with only
+     * the hash changed fires a hashchange - AFTER the first mount below has run.
+     * That mount opened the game named in ?game= and took ?game= out of the
+     * address; the late hashchange then mounted a second time with no game named,
+     * and the screen fell back to the first live game. replaceState fires no
+     * event, so the app mounts once, on the game the link named. */
+    history.replaceState(null, '', location.pathname + location.search
       + (new URLSearchParams(location.search).get('game') ? '#/live' : '#/home'));
   }
 
