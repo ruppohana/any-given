@@ -3228,7 +3228,6 @@ function paint(wrap) {
    * the first of the record - what you have, then what happened. The delta
    * beside it is the join between the two. */
   if (bank) wrap.appendChild(bank);
-  if (said) wrap.appendChild(said);
 
   /* ---- and a picture of it, if it was worth one ---- */
   const react = reactions(state, wrap);
@@ -3270,6 +3269,11 @@ function paint(wrap) {
   if (!S.name && Object.keys(S.calls).length) wrap.appendChild(nameCard(wrap));
 
   /* ---- the board: everybody on this game, ranked on what they have made ---- */
+  /* ---- what happened, in words - just above the board. Jason, 2026-09-11:
+   * "Move play by play down to just above on this game." The call, your
+   * balance, the share and your picks come first; the record reads after. ---- */
+  if (said) wrap.appendChild(said);
+
   const board = boardRows(state);
   if (board.length) {
     const me = deviceId();
