@@ -951,7 +951,8 @@ function choiceButton(ctx, game, market, choice) {
   if (mine) b.dataset.staked = 'on';
   b.setAttribute('aria-pressed', String(mine));
 
-  const locked = isLocked(game, ctx.now);
+  /* Per MARKET, not per game - a Q4 winner is takeable while the game is on. */
+  const locked = !marketIsOpen(game, market, ctx.now);
   b.disabled = locked;
   b.setAttribute('aria-label',
     name + ' at ' + priceLabel(price)
@@ -1223,6 +1224,10 @@ function gameCard(ctx, game) {
   card.dataset.status = game.status;
   const locked = isLocked(game, ctx.now);
   if (locked) card.dataset.locked = 'true';
+  /* Markets still takeable on this game right now - in-game ones stay open
+     past kickoff until their own period starts. Computed once, up here,
+     because the pill below needs it before the market list is built. */
+  const openHere = marketsFor(game, ctx.markets, ctx.now, ctx.sport);
 
   /* 🔴 A GAME YOU HAVE STAKED ON OPENS ITSELF, and only that. It is the one
      card whose contents you have already asked to see, and re-finding your
@@ -1237,7 +1242,9 @@ function gameCard(ctx, game) {
    * - an open card is what a card without one IS. */
   const word = game.status === 'final' ? PILL.final
     : game.status === 'in_progress' ? PILL.in_progress
-      : locked ? PILL.locked : null;
+      /* 🔴 "Closed" only when nothing is left to take. SF at LAR past its
+         kickoff read Closed while its second half and Q2-Q4 were open. */
+      : locked && !openHere.length ? PILL.locked : null;
   if (word) {
     const p = el('span', 'p6a-pill', word);
     p.dataset.state = game.status === 'scheduled' ? 'locked' : game.status;
@@ -1360,9 +1367,25 @@ function gameCard(ctx, game) {
   const staked = ctx.store[game.id] || {};
 
   if (locked) {
-    const mine = offered.filter((m) => staked[m.id]);
+    /* 🔴 IN-GAME MARKETS ARE STILL OPEN ON A LIVE CARD. This branch showed
+     * ONLY markets already staked, so the moment a game kicked off every
+     * card read "No stake on this game." and hid the second half and Q2-Q4
+     * - the markets the close-on-its-own-clock rule exists to keep open.
+     * In-game betting on this board had never actually worked; FAMU at Miami
+     * could not show it (a 59-point mismatch has no derived markets), SF at
+     * LAR did, at 5:36 PM.
+     *
+     * It was also quietly worse since tonight's close-rule change: `offered`
+     * now holds only OPEN markets, so filtering it for stakes dropped every
+     * staked full-game market from a live card, verdict and all.
+     *
+     * So: markets you have staked (any, open or shut - you are owed the
+     * verdict) plus markets still open (you can still take them). */
+    const stakedMkts = (ctx.markets || []).filter((m) => staked[m.id] && hasLine(game, m.needsLine));
+    const openNow = offered.filter((m) => !staked[m.id]);
+    const mine = stakedMkts.concat(openNow);
     if (!mine.length) {
-      card.appendChild(el('p', 'p6a-quiet', 'No stake on this game.'));
+      card.appendChild(el('p', 'p6a-quiet', 'Every market on this game has closed.'));
       return card;
     }
     const list = el('div', 'p6a-mkts');
