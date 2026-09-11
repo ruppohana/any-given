@@ -3612,7 +3612,10 @@ function sportCard(wrap) {
     img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
     img.alt = ''; img.width = 44; img.height = 44;
     b.appendChild(img);
-    b.appendChild(el('span', 'lg-sport-name', SPORT_LABEL[id]));
+    /* The mark alone - Jason, 2026-09-11: "remove the word NFL and College". The
+     * shield IS the word. The name stays as the button's accessible label, so a
+     * screen reader still says which league it is. */
+    b.setAttribute('aria-label', SPORT_LABEL[id]);
     b.onclick = () => {
       S.sport = id; store.set('sport', id);
       S.key = GAME_FOR[id];
@@ -3769,9 +3772,11 @@ function modeCard(wrap, compact) {
       const img = document.createElement('img');
       img.className = 'lg-sportpick-logo';
       img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
-      img.alt = ''; img.width = 22; img.height = 22;
+      /* Mark only, here as on the sport card - "remove the word NFL and College"
+       * (2026-09-11). 28px, up from 22, now that the shield carries it alone. */
+      img.alt = ''; img.width = 28; img.height = 28;
       b.appendChild(img);
-      b.appendChild(el('span', 'lg-mode-h', SPORT_LABEL[id]));
+      b.setAttribute('aria-label', SPORT_LABEL[id]);
       b.onclick = () => {
         /* 🔴 ON HOME THE SPORT BUTTON IS A DOOR, NOT A TOGGLE, AND THE EARLY
          * RETURN BELOW WAS A DEAD END. Jason, 2026-09-09, live at kickoff: "I
@@ -5087,7 +5092,7 @@ const CSS = `
 .lg-mode.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
 .lg-mode.is-on .lg-mode-h { color: var(--accent); }
 .lg-mode-b { font-size: var(--t-micro); color: var(--dim); line-height: 1.45; }
-.lg-sport-logo { display: block; margin: 0 auto 6px; object-fit: contain; }
+.lg-sport-logo { display: block; margin: 0 auto; object-fit: contain; }
 .lg-sport-name { display: block; font-size: var(--t-body); }
 .lg-sport-pick { font: inherit; font-size: var(--t-emph); font-weight: 800; min-height: 52px;
   border: 1px solid var(--line); border-radius: var(--radius-card);
