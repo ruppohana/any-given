@@ -458,3 +458,89 @@ test('🔴 a tackler called Kneeland does not turn a rush into a kneel-down', as
   assert.doesNotMatch(r.because, /not a run-or-pass snap/,
     'a surname must never put a play on the kneel/punt/kickoff path');
 });
+
+/* 🔴 SIX QUESTIONS PAID 2x ON BOTH TILES (fixed 2026-09-11). fourth_down,
+ * kickoff_return, third_down, explosive, field_goal and first_down carried no
+ * `rates`, so the prior was one-each: "Go for it" at 50% when coaches go 24% of
+ * the time. Jason: "Yes." to pricing them from the real games.
+ *
+ * Counting them found two settlers that could not read the feed: every college
+ * field goal graded a miss ("...from 33 yards GOOD" has no "is good"), and every
+ * NFL kickoff graded short (the NFL never writes "return"). So the priors are
+ * recounted here WITH THE REAL SETTLER, on the moments the router offers each
+ * question - a prior counted by a settler that cannot read the feed is the bug
+ * priced in. */
+test('the six snap-question priors are counted from the captured games', async () => {
+  const { readdirSync } = await import('node:fs');
+  const fx = new URL('../fixtures/', import.meta.url);
+  const rows = (url) => {
+    const j = JSON.parse(readFileSync(url, 'utf8'));
+    const ds = [...(j.drives?.previous || []), ...(j.drives?.current ? [j.drives.current] : [])];
+    const seen = new Set(), out = [];
+    for (const d of ds) {
+      if (d.id && seen.has(d.id)) continue;
+      seen.add(d.id);
+      for (const p of d.plays || []) out.push({
+        text: p.text || '', typeText: p.type?.text || '', statYardage: p.statYardage,
+        startDown: p.start?.down ?? null, distance: p.start?.distance ?? null,
+        endDown: p.end?.down ?? null, endYardsToEndzone: p.end?.yardsToEndzone ?? null,
+        startTeamId: p.start?.team?.id ?? null, endTeamId: p.end?.team?.id ?? null
+      });
+    }
+    return out;
+  };
+  const snap = (p) => /^(rush|pass|sack)/i.test(p.typeText) && (p.startDown === 1 || p.startDown === 2);
+  const offered = {
+    fourth_down: (p) => p.startDown === 4,
+    third_down: (p) => p.startDown === 3,
+    explosive: snap,
+    first_down: snap,
+    kickoff_return: () => true,
+    field_goal: () => true
+  };
+  const leagues = [
+    ['college-football', GAMES.map((g) => new URL(`${g}-260905-final.json`, fx)), 'rates'],
+    ['nfl', readdirSync(new URL('nfl/', fx)).map((f) => new URL('nfl/' + f, fx)), 'ratesNfl']
+  ];
+  for (const [sport, files, key] of leagues) {
+    const plays = files.flatMap(rows);
+    for (const [id, when] of Object.entries(offered)) {
+      const t = byId(id);
+      const n = {};
+      let total = 0;
+      for (const p of plays) {
+        if (!when(p)) continue;
+        const w = t.choices.find((c) =>
+          settle(id, c.id, p, { down: p.startDown, distance: p.distance, sport }).landed === true);
+        if (w) { n[w.id] = (n[w.id] || 0) + 1; total++; }
+      }
+      assert.ok(total >= 10, `${sport} ${id}: only ${total} settled`);
+      assert.ok(t[key], `${id} has no ${key}`);
+      for (const c of t.choices) {
+        const got = (n[c.id] || 0) / total;
+        assert.ok(Math.abs(t[key][c.id] - got) < 0.02,
+          `${sport} ${id} ${c.id}: prior ${t[key][c.id]}, counted ${got.toFixed(3)} of ${total}`);
+      }
+    }
+  }
+});
+
+test('🔴 a college GOOD and an NFL return with no "return" in it both settle', () => {
+  /* Verbatim fixture rows, one per grammar. */
+  const fg = '#29 T.Sandell field goal attempt from 33 yards GOOD (H: #87 J.Ulrich, LS: #50 B.Anderson), clock 05:00';
+  assert.equal(settle('field_goal', 'good', { text: fg, typeText: 'Field Goal Good' }).landed, true);
+  assert.equal(settle('field_goal', 'good', { text: fg, typeText: '' }).landed, true, 'the sentence fallback');
+  const miss = '(03:30) #91 C.Arreola field goal attempt from 33 yards NO GOOD (H: #47 B.Braun, LS: #46 C.Loeb), clock 03:30';
+  assert.equal(settle('field_goal', 'good', { text: miss, typeText: '' }).landed, false);
+
+  /* No end spot - the live feed often posts none on a kickoff - so the sentence
+   * has to say where the return ended. */
+  const ko = 'C.Dicker kicks 65 yards from LAC 35 to KC 0. N.Remigio to KC 34 for 34 yards (D.Phillips; B.St-Juste).';
+  assert.equal(settle('kickoff_return', 'past', { text: ko, typeText: 'Kickoff' }).landed, true);
+  const college = '(15:00) #91 C.Arreola kickoff 65 yards to the OU00 #1 I.Sategna III return 24 yards to the OU24 (#10 J.Wilson)';
+  assert.equal(settle('kickoff_return', 'short', { text: college, typeText: 'Kickoff' }).landed, true);
+  /* An NFL touchback is at the 35 now, and it is still the "Touchback or short"
+   * tile - the question asks whether they brought it out. */
+  const tb = 'C.Dicker kicks 65 yards from LAC 35 to end zone, Touchback to the KC 35.';
+  assert.equal(settle('kickoff_return', 'short', { text: tb, typeText: 'Kickoff', endYardsToEndzone: 65 }).landed, true);
+});

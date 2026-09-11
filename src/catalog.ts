@@ -100,7 +100,14 @@ export const CALL_TYPES: CallType[] = [
     perGame: 19,
     reads: 'coach',
     scope: 'play',
-    baseRate: 0.24          // 12 went for it / 50 resolved fourth downs
+    /* 🔴 PRICED FROM THE COUNT, 2026-09-11. The six types from here to
+     * `first_down` carried no rates, so every one of their tiles paid 2x - "Go
+     * for it" at even money when coaches go 24% of the time. Each is now counted
+     * WITH THE REAL SETTLER over the moments the router offers it, and
+     * tests/catalog-market recounts them on every run. Jason: "Yes." */
+    baseRate: 0.24,         // 12 went for it / 50 resolved fourth downs
+    rates: { go: 0.24, kick: 0.76 },
+    ratesNfl: { go: 0.224, kick: 0.776 }       // 24 of 107 NFL fourth downs
   },
   {
     id: 'kickoff_return',
@@ -109,7 +116,14 @@ export const CALL_TYPES: CallType[] = [
     perGame: 12,
     reads: 'personnel',
     scope: 'play',
-    baseRate: 0.31          // 11 returned / 36 kickoffs
+    /* 🔴 THE TWO LEAGUES ARE OPPOSITE QUESTIONS. College: 3 of 34 past - a
+     * touchback is the 25, so it is a long shot that pays the cap. NFL: 50 of 68
+     * past under the 2025 kickoff, where teams return nearly everything. The old
+     * 0.31 counted kicks RETURNED, not returned past the 25, and the NFL count was
+     * zero until the settler could read "K.Turpin to DAL 31 for 23 yards". */
+    baseRate: 0.088,
+    rates: { past: 0.088, short: 0.912 },
+    ratesNfl: { past: 0.735, short: 0.265 }
   },
   {
     id: 'third_down',
@@ -117,7 +131,10 @@ export const CALL_TYPES: CallType[] = [
     choices: [{ id: 'convert', label: 'They get it' }, { id: 'stop', label: 'They are stopped' }],
     perGame: 26,
     reads: 'matchup',
-    scope: 'play'
+    scope: 'play',
+    baseRate: 0.312,        // 24 of 77 college third downs
+    rates: { convert: 0.312, stop: 0.688 },
+    ratesNfl: { convert: 0.468, stop: 0.532 }  // 101 of 216 NFL third downs
   },
   {
     id: 'explosive',
@@ -125,7 +142,10 @@ export const CALL_TYPES: CallType[] = [
     choices: [{ id: 'yes', label: '10+' }, { id: 'no', label: 'Less' }],
     perGame: 120,
     reads: 'matchup',
-    scope: 'play'
+    scope: 'play',
+    baseRate: 0.202,        // 58 of 287 first- and second-down snaps
+    rates: { yes: 0.202, no: 0.798 },
+    ratesNfl: { yes: 0.187, no: 0.813 }        // 138 of 737
   },
   {
     id: 'field_goal',
@@ -133,7 +153,12 @@ export const CALL_TYPES: CallType[] = [
     choices: [{ id: 'good', label: 'Good' }, { id: 'miss', label: 'No good' }],
     perGame: 4,
     reads: 'personnel',
-    scope: 'play'
+    scope: 'play',
+    /* 8 of 11 college kicks - which the settler graded 0 of 11 until it read
+     * "...from 33 yards GOOD". 29 of 36 NFL. */
+    baseRate: 0.727,
+    rates: { good: 0.727, miss: 0.273 },
+    ratesNfl: { good: 0.806, miss: 0.194 }
   },
   {
     id: 'drive_end',
@@ -221,7 +246,11 @@ export const CALL_TYPES: CallType[] = [
     perGame: 123,
     reads: 'matchup',
     scope: 'play',
-    baseRate: 0.26          // 97 of 369 real snaps
+    /* Counted on first and second downs, where the router asks it - third and
+     * fourth down ask their own questions. The old 0.26 was every snap. */
+    baseRate: 0.275,        // 79 of 287
+    rates: { yes: 0.275, no: 0.725 },
+    ratesNfl: { yes: 0.237, no: 0.763 }        // 175 of 737
   },
   {
     id: 'redzone_outcome',
@@ -495,10 +524,49 @@ function runOrPass(
   return { side: null, because: 'neither a run nor a pass' };
 }
 
+/**
+ * Where a kick return ended, as the receiving team's own yard line.
+ *
+ * 🔴 THE FEED'S SPOT FIRST, THEN THE SENTENCE IN EITHER GRAMMAR. `end.yardsToEndzone`
+ * is structured and knows which side of midfield it is on - but the live feed
+ * often posts none on a kickoff (the field strip walks backwards for the same
+ * reason), so the sentence has to be readable too:
+ *
+ *   college  "kickoff 65 yards to the OU00 ... return 24 yards to the OU24"
+ *   NFL      "kicks 57 yards from PHI 35 to DAL 8. K.Turpin to DAL 31 for 23 yards"
+ *
+ * The NFL one has no "return" in it at all, which is how every NFL return used to
+ * grade short. A spot named after the KICKING team is on the far side of midfield.
+ *
+ * A FUMBLE skips the feed's spot: after a lost one it is measured from the team
+ * that recovered, so a return to the NYJ 20 read as the kicking team's 80. The
+ * sentence still says where the return got to, and that is what was asked.
+ */
+function returnSpot(play: { endYardsToEndzone?: number | null }, s: string): number | null {
+  const y = play.endYardsToEndzone;
+  if (typeof y === 'number' && y > 0 && y < 100 && !/fumble/.test(s)) return 100 - y;
+  /* A college fair catch, "fair catch by #6 D.Hill Jr at ORE03" - where he caught it. */
+  const fc = /fair catch by .*? at (?:the )?([a-z]*?)\s?(\d+)/.exec(s);
+  if (fc) return Number(fc[2]);
+  const college = /return -?\d+ yards? to the ([a-z]*?)\s?(\d+)/.exec(s);
+  if (college) {
+    const recv = /kickoff -?\d+ yards? to the ([a-z]+?)\s?\d+/.exec(s);
+    const n = Number(college[2]);
+    return recv && college[1] && college[1] !== recv[1] ? 100 - n : n;
+  }
+  const nfl = /(?:to|at) ([a-z]{2,4}) (\d+) for -?\d+ yards?/.exec(s);
+  if (nfl) {
+    const kicker = /kicks -?\d+ yards? from ([a-z]{2,4}) \d+/.exec(s);
+    const n = Number(nfl[2]);
+    return kicker && nfl[1] === kicker[1] ? 100 - n : n;
+  }
+  return null;
+}
+
 export function settle(
   typeId: string,
   choice: string,
-  play: { text: string; typeText?: string; statYardage?: number | null },
+  play: { text: string; typeText?: string; statYardage?: number | null; endYardsToEndzone?: number | null },
   ctx?: { down?: number | null; distance?: number | null; sport?: SettleSport | null }
 ): Settled {
   const t = (play.typeText || '').toLowerCase();
@@ -555,12 +623,21 @@ export function settle(
        * question about a ten-yard squib, and a penalty on a kick voids it too. */
       if (has(s, /onside/)) return { landed: null, because: 'onside kick' };
       if (has(both, /penalty/)) return { landed: null, because: 'a penalty on the kick' };
-      /* A touchback is the 25 by rule, so it is never PAST it. A return is past
-       * the 25 only if the sentence says where it ended. */
+      /* A kick out of bounds IS a foul on the kick - the ball goes to the 35 or
+       * the 40 by rule and nobody brought anything out. The same test as the
+       * field strip's kickOutOfBounds: only an UNRETURNED kick. */
+      if (has(s, /out of bounds/) && !has(s, /return|fumble/)) {
+        return { landed: null, because: 'kicked out of bounds' };
+      }
+      /* A touchback is the "Touchback or short" tile by its own label - in the
+       * NFL too, where it is now spotted at the 35. The question asks whether
+       * they BROUGHT IT OUT past the 25. */
       if (has(s, /touchback/)) return { landed: choice === 'short', because: 'touchback' };
-      const m = /return \d+ yards to the [a-z]+\s?(\d+)/.exec(s);
-      const to = m ? Number(m[1]) : null;
-      if (to === null) return { landed: choice === 'short', because: 'no return past the 25' };
+      if (has(s, /touchdown/)) return { landed: choice === 'past', because: 'returned for a touchdown' };
+      const to = returnSpot(play, s);
+      /* 🔴 NOT KNOWN IS A VOID, NOT A SHORT. This defaulted to "short", which is
+       * how every NFL return graded short: the NFL never writes "return". */
+      if (to === null) return { landed: null, because: 'the feed did not say where the return ended' };
       return { landed: (to > 25 ? 'past' : 'short') === choice, because: `returned to the ${to}` };
     }
 
@@ -596,7 +673,16 @@ export function settle(
 
     case 'field_goal': {
       if (!has(both, /field goal/)) return { landed: null, because: 'not a field goal' };
-      const good = has(s, /is good|field goal good/) && !has(s, /no good/);
+      /* 🔴 EVERY COLLEGE KICK WAS GRADED A MISS. Found 2026-09-11 counting the
+       * priors: this read /is good/, and the college grammar says "field goal
+       * attempt from 33 yards GOOD" - 8 made kicks of 11, all scored as misses.
+       * ESPN's typeText ("Field Goal Good" / "Field Goal Missed" / "Blocked Field
+       * Goal") is the controlled vocabulary, so it is asked first; the sentence is
+       * the fallback, word-bounded so "no good" and a kicker called Goodwin
+       * cannot pass for a make. */
+      const good = t.includes('good') ? true
+        : /miss|block/.test(t) ? false
+        : has(s, /\bgood\b/) && !has(s, /no good/);
       return { landed: (good ? 'good' : 'miss') === choice, because: good ? 'it was good' : 'it missed' };
     }
 
