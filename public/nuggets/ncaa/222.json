@@ -1,0 +1,58 @@
+{
+  "league": "ncaa",
+  "teamId": "222",
+  "team": "Villanova Wildcats",
+  "asOf": "2026-09-10",
+  "nuggets": [
+    {
+      "text": "The Wildcats' home, Villanova Stadium, is in its 100th year of hosting games after being dedicated on Oct. 8, 1927.",
+      "kind": "fun",
+      "source": "https://villanova.com/sports/2026/8/28/villanova-football-gameday-notes.aspx"
+    },
+    {
+      "text": "Wildcats coach Mark Ferrante is in his 10th season as head coach and his 40th year with the Villanova program.",
+      "kind": "fun",
+      "source": "https://villanova.com/sports/2026/8/28/villanova-football-gameday-notes.aspx"
+    },
+    {
+      "text": "The Wildcats and Bucknell first met in 1900 and played to a scoreless tie; Villanova has now won 10 straight in the series.",
+      "kind": "odd",
+      "source": "https://villanova.com/news/2026/9/5/football-wildcats-outlast-bucknell-kick-go-ahead-field-goal-in-fourth-quarter-in-17-16-road-victory.aspx"
+    },
+    {
+      "text": "The Wildcats edged Bucknell 17-16 last week after Bucknell missed a 29-yard field goal.",
+      "kind": "fun",
+      "source": "https://villanova.com/news/2026/9/5/football-wildcats-outlast-bucknell-kick-go-ahead-field-goal-in-fourth-quarter-in-17-16-road-victory.aspx"
+    },
+    {
+      "text": "Wildcats linebacker Omari Bursey leads the nation with 29 tackles through two games.",
+      "kind": "fun",
+      "source": "https://phlsportsnow.com/villanova-football-preview-ranked-on-the-road-against-louisville/"
+    },
+    {
+      "text": "The Wildcats bring a six-game road winning streak dating back to last season into Louisville.",
+      "kind": "fun",
+      "source": "https://villanova.com/news/2026/9/5/football-wildcats-outlast-bucknell-kick-go-ahead-field-goal-in-fourth-quarter-in-17-16-road-victory.aspx"
+    },
+    {
+      "text": "The Wildcats' last win over an FBS team was a 19-18 thriller over crosstown rival Temple in 2018.",
+      "kind": "fun",
+      "source": "https://www.thesportsleader.com/2026/09/08/no-24-louisville-in-tricky-spot-with-short-week-against-tough-villanova-team/"
+    },
+    {
+      "text": "Wildcats alum Matt Szczur starred on the 2009 title team, then won a World Series with the 2016 Chicago Cubs.",
+      "kind": "odd",
+      "source": "https://en.wikipedia.org/wiki/Villanova_Wildcats_football"
+    },
+    {
+      "text": "The Wildcats' arrival made the Patriot League a 10-team football league for the first time in its 41-year history.",
+      "kind": "fact",
+      "source": "https://villanova.com/sports/2026/8/28/villanova-football-gameday-notes.aspx"
+    },
+    {
+      "text": "The Wildcats won the 2009 FCS national title, edging Montana 23-21 in Chattanooga.",
+      "kind": "fact",
+      "source": "https://en.wikipedia.org/wiki/Villanova_Wildcats_football"
+    }
+  ]
+}
