@@ -351,7 +351,22 @@ export default {
 
       if (p.startsWith('/api/state/')) {
         const key = p.slice('/api/state/'.length);
-        const raw = await env.LIVE.get(key);
+        /* 🔴 A GAME KEY ASKS ITS POLLER FIRST. KV reads trail writes by up to a
+         * minute at the edge (measured 57s on SF at LAR, 2026-09-10), and the
+         * product lives inside a 45-second delay. The Durable Object holds the
+         * write itself in memory - see LivePoller.last. KV is the fallback for
+         * an evicted or never-started poller, and still the only source for
+         * slates and boards. */
+        let raw: string | null = null;
+        let source = 'kv';
+        if (/^[a-z-]+:\d+$/.test(key)) {
+          try {
+            const res = await env.POLLER.get(env.POLLER.idFromName(key))
+              .fetch(new Request('https://do/state'));
+            if (res.ok) { raw = await res.text(); source = 'do'; }
+          } catch { /* KV below */ }
+        }
+        if (!raw) raw = await env.LIVE.get(key);
         if (!raw) return json({ error: 'nothing pushed for that game yet', key }, 404);
         /* 🔴 no-store, EXPLICITLY - and the comment that used to be here was the
          * bug. It read "No cache header: KV is already the shared copy, and a
@@ -373,7 +388,8 @@ export default {
           headers: {
             'content-type': 'application/json; charset=utf-8',
             'cache-control': 'no-store',
-            'access-control-allow-origin': '*'
+            'access-control-allow-origin': '*',
+            'x-state-source': source
           }
         });
       }

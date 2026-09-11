@@ -30,6 +30,20 @@ const STOP_AFTER_FINAL_MS = 10 * 60_000;
 export class LivePoller {
   state: any;
   env: any;
+  /* 🔴 THE LAST PUSH, HELD IN MEMORY AND SERVED DIRECT - BECAUSE KV IS UP TO A
+   * MINUTE BEHIND ITSELF. Measured on SF at LAR, 2026-09-10: the poller wrote
+   * every 20s at most and /api/state still read pushedAt 57 seconds old. KV
+   * caches reads at the edge for ~60s, so a reader sees a write up to a minute
+   * after it lands. That is longer than the whole 45-second delay the product
+   * lives inside, and it tripped the "feed has stopped" banner on a healthy
+   * feed.
+   *
+   * A Durable Object is one instance in one place, so what it hands back is the
+   * write itself. Memory, not storage: a long college game's payload can pass
+   * storage's 128 KiB value cap, and a throw there would stop the loop. If the
+   * instance was evicted or redeployed, `last` is null and the Worker falls
+   * back to KV - no worse than before. */
+  last: string | null = null;
   constructor(state: any, env: any) { this.state = state; this.env = env; }
 
   async fetch(req: Request): Promise<Response> {
@@ -50,6 +64,10 @@ export class LivePoller {
       });
       await this.state.storage.setAlarm(Date.now() + 500);
       return j({ ok: true, gameId, sport });
+    }
+    if (url.pathname.endsWith('/state')) {
+      if (!this.last) return j({ error: 'nothing in memory' }, 404);
+      return new Response(this.last, { headers: { 'content-type': 'application/json' } });
     }
     if (url.pathname.endsWith('/stop')) {
       await this.state.storage.put('running', false);
@@ -93,7 +111,14 @@ export class LivePoller {
         if (warm && p.wallclockMs) lags.push(arrivedAt - p.wallclockMs);
       }
       seen = [...seenSet].slice(-400);
-      lags = lags.slice(-12);
+      /* 🔴 A NEGATIVE LAG IS IMPOSSIBLE, SO IT IS DROPPED - AND DROPPED FROM
+       * STORAGE TOO. SF at LAR, 2026-09-10: ESPN's NFL feed stamped wallclocks a
+       * day ahead, every sample came in near -86,400s, and the median said the
+       * feed published a day before the snap. live.ts now snaps those back, but
+       * the twelve bad samples were already stored and would have held the
+       * median wrong for twelve more plays. Five minutes of tolerance, the same
+       * as sanitizeWallclock's. */
+      lags = lags.filter((l) => l > -5 * 60 * 1000).slice(-12);
       const sorted = [...lags].sort((a, b) => a - b);
       const publishLagMs = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
 
@@ -106,9 +131,11 @@ export class LivePoller {
       const quiet = Date.now() - Number(st.get('lastWriteAt') || 0);
 
       if (sig !== st.get('lastSig') || quiet >= HEARTBEAT_MS) {
-        await this.env.LIVE.put(`${sport}:${gameId}`, JSON.stringify({
+        const body = JSON.stringify({
           ...live, heartbeatMs: HEARTBEAT_MS, publishLagMs, pushedAt: Date.now(), by: 'do'
-        }), { expirationTtl: 60 * 60 * 6 });
+        });
+        this.last = body;
+        await this.env.LIVE.put(`${sport}:${gameId}`, body, { expirationTtl: 60 * 60 * 6 });
         writes++;
         await this.state.storage.put({ lastSig: sig, lastWriteAt: Date.now() });
       }

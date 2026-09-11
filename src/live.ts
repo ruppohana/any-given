@@ -368,7 +368,7 @@ export function readPlays(summary: any): LivePlay[] {
          * clock, the number on screen is the truth no matter how slow the
          * pipeline is - and the pipeline can be improved without changing what
          * the app promises. */
-        wallclockMs: Date.parse(p.wallclock || '') || null,
+        wallclockMs: sanitizeWallclock(Date.parse(p.wallclock || '') || null, Date.now()),
         star: starOf(p.text || '', p.type?.text || '', team)
       });
       seen.add(String(p.id));
@@ -378,6 +378,42 @@ export function readPlays(summary: any): LivePlay[] {
 }
 
 /** The state a client renders, from one summary payload. */
+/**
+ * 🔴 A PLAY CANNOT HAVE HAPPENED IN THE FUTURE - SO A WALLCLOCK THAT SAYS IT
+ * DID IS WRONG, AND ONLY ITS DATE IS.
+ *
+ * Found live on SF at LAR, 2026-09-10, six minutes in: the live screen showed
+ * the scorebug and NOTHING else - no field, no call offer, no plays - and said
+ * "holding 5 plays behind your 45s delay". ESPN's NFL core feed was stamping
+ * every play a DAY ahead:
+ *
+ *     wallclock "2026-09-12T00:40:00Z"   modified "2026-09-11T00:40Z"
+ *
+ * Same time of day, date +1. College wallclocks on the same night were
+ * correct. So held() saw six plays that had not happened yet and showed none,
+ * and the poller measured a publish lag of -86,358 seconds. Upstream data,
+ * faithfully parsed - which is why it has to be defended here.
+ *
+ * The correction is deliberately narrow. Only a wallclock more than five
+ * minutes AHEAD of now is touched (a feed we are reading cannot report a play
+ * from the future; five minutes absorbs clock skew), and it is moved back by
+ * WHOLE DAYS, so the time of day - the part ESPN gets right, to the second -
+ * survives. A wallclock in the past is never touched: a finished game and a
+ * replay legitimately carry old timestamps.
+ *
+ * `now` is a parameter so the tests can pin it; the parser calls it with
+ * Date.now() because it has no clock of its own to pass.
+ */
+export function sanitizeWallclock(ms: number | null, now: number): number | null {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return ms;
+  if (typeof now !== 'number' || !Number.isFinite(now)) return ms;
+  const DAY = 24 * 60 * 60 * 1000;
+  const ahead = ms - now;
+  if (ahead <= 5 * 60 * 1000) return ms;
+  const days = Math.round(ahead / DAY);
+  return days >= 1 ? ms - days * DAY : ms;
+}
+
 export function readLive(summary: any, gameId: string, sport: Sport, now: number): LiveState {
   const header = summary?.header || {};
   const comp = (header.competitions || [])[0] || {};
