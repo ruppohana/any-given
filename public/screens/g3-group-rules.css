@@ -1,0 +1,131 @@
+/* G3 - the group pools rules. Every rule scoped under .scr-g3-group-rules.
+ *
+ * The same reading-screen constraints as s6-rules, which this page follows:
+ * body at var(--t-body), var(--t-micro) only on eyebrows and end-notes, the
+ * measure capped at 34em, every tap target 44px, every accent var(--accent), and
+ * depth as 1px solid var(--line) with no shadow - which is why the cards here
+ * carry their own border rather than the shared .card class, whose --lift is a
+ * shadow.
+ */
+
+.scr-g3-group-rules { padding-bottom: 24px; }
+
+.scr-g3-group-rules .g3-eyebrow {
+  margin: 0 0 4px; font-size: var(--t-micro); color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+/* ---- the current group: the only data on the page ---- */
+
+.scr-g3-group-rules .g3-group {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-card); padding: 12px; margin-bottom: 16px;
+}
+.scr-g3-group-rules .g3-group .ag-gsw { margin: 2px 0 4px; }
+
+/* ---- signed out / no group: a line and a door, on the page ground ---- */
+
+.scr-g3-group-rules .g3-line {
+  border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 0 0 16px;
+}
+.scr-g3-group-rules .g3-line-t {
+  margin: 0 0 6px; font-size: var(--t-body); color: var(--fg); line-height: 1.45;
+  max-width: 34em;
+}
+.scr-g3-group-rules .g3-line-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; }
+.scr-g3-group-rules .g3-signin {
+  min-height: var(--tap-min); padding: 0 16px; font-weight: 700;
+  background: var(--accent); color: var(--on-accent); border: 1px solid var(--accent);
+  border-radius: var(--radius-button);
+}
+.scr-g3-group-rules .g3-line-door {
+  display: inline-flex; align-items: center; min-height: var(--tap-min);
+  color: var(--accent); font-weight: 600; text-decoration: none; font-size: var(--t-body);
+}
+
+/* ---- the index. Buttons, dressed as the rows s6-rules draws. ---- */
+
+.scr-g3-group-rules .g3-index {
+  border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); padding: 10px 12px 4px; margin-bottom: 16px;
+}
+.scr-g3-group-rules .g3-ix {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: var(--tap-min); padding: 6px 0; margin: 0;
+  background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0;
+  color: var(--fg); font-size: var(--t-body); text-align: left;
+}
+.scr-g3-group-rules .g3-ix:first-of-type { border-top: 0; }
+.scr-g3-group-rules .g3-ix-q { flex: 1 1 auto; min-width: 0; }
+.scr-g3-group-rules .g3-chev { flex: 0 0 auto; color: var(--dim); }
+.scr-g3-group-rules .g3-ix:hover .g3-ix-q { color: var(--accent); }
+.scr-g3-group-rules .g3-ix:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ---- the answers ---- */
+
+.scr-g3-group-rules .g3-sec {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-card); padding: 14px 12px; margin-bottom: 12px;
+}
+.scr-g3-group-rules .g3-h { font-size: var(--t-emph); font-weight: 600; margin: 0 0 8px; }
+.scr-g3-group-rules .g3-sub-h {
+  font-size: var(--t-body); font-weight: 600; margin: 14px 0 4px; color: var(--fg);
+}
+.scr-g3-group-rules .g3-p {
+  margin: 0 0 8px; font-size: var(--t-body); color: var(--dim);
+  line-height: 1.5; max-width: 34em;
+}
+.scr-g3-group-rules .g3-lead {
+  margin: 0 0 10px; font-size: var(--t-body); color: var(--fg);
+  font-weight: 600; line-height: 1.45; max-width: 34em;
+}
+.scr-g3-group-rules .g3-ul {
+  margin: 0 0 8px; padding-left: 18px; color: var(--dim);
+  font-size: var(--t-body); line-height: 1.5; max-width: 34em;
+}
+.scr-g3-group-rules .g3-ul li { margin-bottom: 4px; }
+.scr-g3-group-rules .g3-ul li::marker { color: var(--accent); }
+.scr-g3-group-rules .g3-note {
+  margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line);
+  font-size: var(--t-micro); color: var(--dim); max-width: 34em;
+}
+
+/* The kindness line - the same accent rule down the left that s6-rules gives its
+ * one load-bearing sentence. Quoted, so it reads as the words accepted. */
+.scr-g3-group-rules .g3-pledge {
+  margin: 0 0 12px; padding: 2px 0 2px 10px; border-left: 3px solid var(--accent);
+  font-size: var(--t-body); font-weight: 600; color: var(--fg); line-height: 1.45;
+  max-width: 34em;
+}
+
+/* ---- figure rows. Every limit is tabular. ---- */
+
+.scr-g3-group-rules .g3-kv {
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  margin: 8px 0; overflow: hidden;
+}
+.scr-g3-group-rules .g3-kv-row {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 8px 10px; border-top: 1px solid var(--line); font-size: var(--t-body);
+}
+.scr-g3-group-rules .g3-kv-row:first-child { border-top: 0; }
+.scr-g3-group-rules .g3-kv-k { flex: 1 1 auto; min-width: 0; color: var(--dim); }
+.scr-g3-group-rules .g3-kv-v {
+  flex: 0 0 auto; color: var(--fg); font-weight: 600; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the doors back into the section ---- */
+
+.scr-g3-group-rules .g3-doors {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 0;
+}
+.scr-g3-group-rules .g3-door {
+  display: flex; align-items: center; justify-content: center;
+  min-height: var(--tap-min); padding: 0 12px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-button); color: var(--accent);
+  font-weight: 700; font-size: var(--t-body); text-decoration: none;
+}
+.scr-g3-group-rules .g3-door:focus-visible,
+.scr-g3-group-rules .g3-line-door:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
