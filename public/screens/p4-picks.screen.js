@@ -1255,7 +1255,8 @@ export function render(root, data, state) {
       title: 'My picks',
       noTitle: true,
       sub: 'Week ' + (data.week || '')
-        + ((data.mode === 'week') ? ' · against the spread' : ' · your group, in points')
+        /* Matches the slate's line - Jason, 2026-09-10: "match my picks too". */
+        + ((data.mode === 'week') ? ' · against the spread' : ' · pick the winners · scored in points')
     }));
     /* 🔴 THE OLD META LINE IS DELETED, NOT KEPT UNDER THE NEW HEADER. It said
      * "Week 2 · No pool yet · Against the spread · 0 members" - the pool name of
