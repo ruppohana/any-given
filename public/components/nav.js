@@ -409,8 +409,18 @@ export const NAV_CSS = [
   '.ag-nav-ico { display: block; }',
   /* The filled pill. Accent ground, page color on top - never accent-on-white,
      which at 11px is the same whisper the underline was. */
-  '.ag-nav-item[aria-current="page"] { color: var(--on-accent); background: var(--accent);',
+  /* 🔴 A PILL AROUND THE ICON, NOT THE WHOLE CELL. Jason, 2026-09-11: "can the
+     highlighted portion around the icon be a little smaller". The fill was the
+     item's own background, so it was as big as a fifth of the bar. It is drawn
+     on ::before now - the item stays the full-size tap target, the paint is a
+     64x40 pill centered on the icon. z-index -1 puts it under the icon and over
+     the bar's background, because the item makes no stacking context and the
+     fixed nav does (the behavior the scrim note below learned the hard way). */
+  '.ag-nav-item[aria-current="page"] { color: var(--on-accent);',
   '  box-shadow: none; border-top: 0; margin-top: 0; }',
+  '.ag-nav-item[aria-current="page"]::before { content: ""; position: absolute;',
+  '  left: 50%; top: 50%; width: 64px; height: 40px; transform: translate(-50%, -50%);',
+  '  border-radius: var(--radius-nav-item); background: var(--accent); z-index: -1; }',
   '.ag-nav-item[data-unavailable="true"] { color: var(--dim); opacity: .45; pointer-events: none; }',
   /* S5: on a real window the bar moves to the side. Desktop is a SECOND LAYOUT,
    * not a variant - see shell.css. */
@@ -427,5 +437,6 @@ export const NAV_CSS = [
   '    overflow: visible; clip-path: none; }',
   '  .ag-nav-item[aria-current="page"] { background: none; color: var(--accent);',
   '    border-radius: 0; border-left: 2px solid var(--accent); }',
+  '  .ag-nav-item[aria-current="page"]::before { display: none; }',
   '}'
 ].join('\n');
