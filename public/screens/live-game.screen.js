@@ -4473,6 +4473,24 @@ function nuggetCard(state, now) {
     try { host = new URL(n.source).hostname.replace(/^www\./, ''); } catch { /* no host, no line */ }
     if (host) card.appendChild(el('div', 'lg-nugget-n', 'via ' + host));
   }
+  /* 🔴 A FUN OR ODD FACT CAN BE SENT. Jason, 2026-09-11: "We want people to post
+   * to x and share texts. Fun facts..." and "the fun facts need to be Fun or Odd
+   * facts. Not just boring facts." So only those two kinds get the button; it
+   * makes the DID YOU KNOW picture and hands it to the share sheet with the
+   * fact, the teams' tags and the game link. */
+  if (n.kind === 'fun' || n.kind === 'odd') {
+    const b = el('button', 'lg-nugget-s', 'Send it');
+    b.type = 'button';
+    b.onclick = async () => {
+      b.textContent = '…';
+      const aw = state.teams && state.teams[state.awayTeamId], hm = state.teams && state.teams[state.homeTeamId];
+      const game = aw && hm ? `${aw.short} at ${hm.short}` : 'the game';
+      const text = `Did you know? ${n.text}\n\nWatching ${game}.\n\n${hashtags(state)}\n${gameLink()}`;
+      const r = await shareReaction(state, 'fun_fact', n.text, text);
+      b.textContent = r === 'shared' ? 'Sent' : r === 'downloaded' ? 'Saved' : 'Send it';
+    };
+    card.appendChild(b);
+  }
   return card;
 }
 
@@ -4637,7 +4655,7 @@ function inviteButton(state) {
    * A colon is legal in a query value under RFC 3986; only the delimiters have
    * to be escaped. Everything else stays encoded, so a key that ever contains a
    * genuine delimiter is still safe. */
-  const url = `${location.origin}/?game=${encodeURIComponent(S.key).replace(/%3A/g, ':')}`;
+  const url = gameLink();
   const wrapEl = el('div', 'lg-invite-wrap');
   const b = el('button', 'lg-invite');
   b.appendChild(el('span', 'lg-invite-h', 'Invite a friend'));
@@ -4739,12 +4757,30 @@ function textIt(state, url) {
  * treated as marketing. The matchup tag puts it in the game's stream; the app
  * tag is how anybody finds the others playing.
  */
+/* 🔴 AMENDED 2026-09-11: THE TEAMS AND THE LEAGUE TOO. Jason: "for x can we
+ * prepopulate hashtags appropriate for the game. Schools, teams and the like." So
+ * the matchup tag, then each side by name (#Villanova, #Louisville - what their
+ * fans follow), then the league (#CFB or #NFL), then ours. Names only, never a
+ * guessed slogan tag: a wrong #GoCards is worse than none. */
 function hashtags(state) {
   const away = state && state.teams ? state.teams[state.awayTeamId] : null;
   const home = state && state.teams ? state.teams[state.homeTeamId] : null;
   const clean = (v) => (v || '').replace(/[^A-Za-z0-9]/g, '');
   const a = clean(away && away.abbrev), h = clean(home && home.abbrev);
-  return a && h ? `#${a}vs${h} #AnyGivenSnap` : '#AnyGivenSnap';
+  const tags = [];
+  if (a && h) tags.push(`#${a}vs${h}`);
+  for (const t of [away, home]) {
+    const n = clean(t && (t.short || t.name));
+    if (n.length >= 3) tags.push('#' + n);
+  }
+  tags.push(state && state.sport === 'nfl' ? '#NFL' : '#CFB');
+  tags.push('#AnyGivenSnap');
+  return [...new Set(tags)].join(' ');
+}
+
+/** The link to this game, colon left readable - the same shape the invite builds. */
+function gameLink() {
+  return `${location.origin}/?game=${encodeURIComponent(S.key).replace(/%3A/g, ':')}`;
 }
 
 function xText(state, withTags = true) {
@@ -4812,6 +4848,15 @@ function reactions(state, wrap) {
 
   const found = [];
   const add = (k, line) => { if (!found.some((f) => f.k === k)) found.push({ k, line }); };
+  /* 🔴 THE FINAL SCORE IS A MOMENT. Jason, 2026-09-11: "Final scores." First in
+   * the row once the game is over - it is the one everybody sends. */
+  if (state.status === 'final') {
+    /* The score is already big on the card, so the line says who won. */
+    const aw = state.teams && state.teams[state.awayTeamId], hm = state.teams && state.teams[state.homeTeamId];
+    const a = Number(state.awayScore), h = Number(state.homeScore);
+    const won = a > h ? aw : h > a ? hm : null;
+    add('final', a === h ? 'All square at the end.' : won ? `${won.short} on top.` : '');
+  }
   for (const p of recent) {
     const t = (p.text || '').toLowerCase();
     if (/touchdown/.test(t)) add('touchdown', p.text);
@@ -4834,7 +4879,9 @@ function reactions(state, wrap) {
     b.onclick = async () => {
       const before = b.querySelector('.lg-react-w').textContent;
       b.querySelector('.lg-react-w').textContent = '…';
-      const r = await shareReaction(state, f.k, f.line, xText(state));
+      /* The link rides in the text: a shared picture carries the wordmark, not
+       * a tappable way back to the game. */
+      const r = await shareReaction(state, f.k, f.line, xText(state) + '\n' + gameLink());
       b.querySelector('.lg-react-w').textContent =
         r === 'shared' ? 'SENT' : r === 'downloaded' ? 'SAVED' : before;
     };
@@ -4854,7 +4901,7 @@ function bragButton(state, rows) {
   b.onclick = async () => {
     const sub = b.querySelector('.lg-brag-b');
     sub.textContent = 'Drawing it…';
-    const r = await shareResult(state, best, xText(state));
+    const r = await shareResult(state, best, xText(state) + '\n' + gameLink());
     sub.textContent = r === 'shared' ? 'Sent.'
       : r === 'downloaded' ? 'Saved to your downloads — attach it to a post.'
       : r === 'cancelled' ? 'Makes a picture with the score and your call on it.'
@@ -5411,6 +5458,9 @@ const CSS = `
   text-transform: uppercase; color: var(--accent); }
 .lg-nugget-b { margin: 0; font-size: var(--t-emph); font-weight: 700; line-height: 1.3; color: var(--fg); }
 .lg-nugget-n { font-size: var(--t-micro); color: var(--dim); }
+.lg-nugget-s { justify-self: start; font: inherit; font-size: var(--t-body); font-weight: 800;
+  color: var(--accent); background: none; border: 1px solid var(--line);
+  border-radius: var(--radius-button); padding: 0 14px; }
 /* 🔴 THE TILE HAD NO RADIUS AT ALL. Jason: "maybe round the corners?" It went
    unnoticed while the tiles were borderless — with nothing drawn at the edge
    there were no corners to see. The moment the taken one got a 2px accent

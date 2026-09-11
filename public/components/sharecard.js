@@ -172,7 +172,11 @@ export const MOMENTS = {
   fourth_down:  { word: 'THEY WENT FOR IT', tint: '#E0A93B' },
   field_goal:   { word: 'IT IS GOOD',  tint: '#E0A93B' },
   big_play:     { word: 'HOUSE CALL',  tint: '#E0A93B' },
-  called_it:    { word: 'CALLED IT',   tint: '#E0A93B' }
+  called_it:    { word: 'CALLED IT',   tint: '#E0A93B' },
+  /* Jason, 2026-09-11: "We want people to post to x and share texts. Fun facts,
+   * scores, turnovers. Final scores." */
+  final:        { word: 'FINAL',       tint: '#E0A93B' },
+  fun_fact:     { word: 'DID YOU KNOW', tint: '#5b8def' }
 };
 
 export async function reactionBlob(state, momentKey, line) {
@@ -196,6 +200,30 @@ export async function reactionBlob(state, momentKey, line) {
     load(`/logos/${league}/500-dark/${state.homeTeamId}.png`)
   ]);
 
+  /* 🔴 A FACT CARD WRAPS. A fun or odd fact is a sentence of up to 140
+   * characters, so it wraps rather than being trimmed to one line - the fact is
+   * the picture here, and the crests and matchup sit under it, small. */
+  if (momentKey === 'fun_fact' && line) {
+    c.font = `800 64px ${FONT}`; c.fillStyle = m.tint;
+    c.fillText(m.word, 72, 150);
+    c.font = `700 44px ${FONT}`; c.fillStyle = INK;
+    const lines = [];
+    let cur = '';
+    for (const w of String(line).split(/\s+/)) {
+      const t = cur ? cur + ' ' + w : w;
+      if (cur && c.measureText(t).width > W - 160) { lines.push(cur); cur = w; } else cur = t;
+    }
+    if (cur) lines.push(cur);
+    lines.slice(0, 5).forEach((t, i) => c.fillText(t, 72, 226 + i * 58));
+    let fx = 72;
+    const fy = 488;
+    if (ai) { c.drawImage(ai, fx, fy, 64, 64); fx += 76; }
+    if (hi) { c.drawImage(hi, fx, fy, 64, 64); fx += 80; }
+    if (away && home) {
+      c.font = `600 28px ${FONT}`; c.fillStyle = DIM;
+      c.fillText(`${away.short} at ${home.short}`, fx, fy + 44);
+    }
+  } else {
   /* 🔴 THE WORD IS THE PICTURE. It is sized to fill, because a reaction card
    * read at thumbnail size has room for exactly one thing. */
   let size = 132;
@@ -226,6 +254,7 @@ export async function reactionBlob(state, momentKey, line) {
   if (away && home) {
     c.font = `600 26px ${FONT}`; c.fillStyle = DIM;
     c.fillText(`${away.short} at ${home.short}`, 72, 520);
+  }
   }
 
   /* The bug, bottom right, where a broadcaster puts one. */
