@@ -363,6 +363,8 @@
   border: 1px solid var(--line); border-radius: var(--radius-l3); }
 .scr-p2-slate .p2-name { overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; max-width: 100%; }
+/* The AP rank in front of the name - smaller and dim, so the name still leads. */
+.scr-p2-slate .p2-rank { font-size: .8em; font-weight: 800; color: var(--dim); }
 .scr-p2-slate .p2-spread, .scr-p2-slate .p2-price { white-space: nowrap; }
 .scr-p2-slate .p2-zone:disabled { cursor: default; }
 .scr-p2-slate .p2-l1, .scr-p2-slate .p2-l2 { display: flex; align-items: center;

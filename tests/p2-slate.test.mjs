@@ -821,11 +821,15 @@ test('the info card shows only what the row does not', () => {
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const zone = strip(SRC.slice(SRC.indexOf('function zone('), SRC.indexOf('function center(')));
   const card = strip(SRC.slice(SRC.indexOf('function openInfo('), SRC.indexOf('function statusPill(')));
-  for (const fact of ['lastMeeting', 'form', 'lastRecord', 'rank']) {
+  for (const fact of ['lastMeeting', 'form', 'lastRecord']) {
     assert.ok(card.includes(fact), `the info card does not show ${fact} - it has nothing the row lacks`);
     assert.ok(!zone.includes(fact),
       `${fact} is on the ROW as well as in the info card - that is what killed the first one`);
   }
+  /* 🔴 THE RANK MOVED TO THE ROW. Jason, 2026-09-11: "I thought we had the ranking
+   * on cards like this." So the row draws it and the card, by the same rule, does not. */
+  assert.ok(zone.includes('rank'), 'the row shows the AP rank');
+  assert.ok(!card.includes("'AP rank'"), 'the AP rank is on the row, so the card does not repeat it');
 });
 
 /* 🔴 A NUMBER PRESENTED AS ALL-TIME MUST BE ALL-TIME. Jason asked for the

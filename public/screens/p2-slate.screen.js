@@ -1184,7 +1184,16 @@ function zone(ctx, game, side) {
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
 
-  b.appendChild(el('div', 'p2-name', team.short || team.name));
+  /* 🔴 THE RANK RIDES IN FRONT OF THE NAME. Jason, 2026-09-11: "I thought we had
+   * the ranking on cards like this." It left the row with the context line on
+   * 09-09 ("Put that in the info card") - but a rank is not background, it is who
+   * the team is this week: "#10 Texas A&M", the way every college scoreboard
+   * prints it. In the name line, so the two stacks keep the same shape. */
+  const rank = side === 'home' ? game.rankHome : game.rankAway;
+  const nm = el('div', 'p2-name');
+  if (rank) nm.appendChild(el('span', 'p2-rank num', '#' + rank + ' '));
+  nm.appendChild(el('span', 'p2-name-t', team.short || team.name));
+  b.appendChild(nm);
 
   /* 🔴 EVERY LINE IS ALWAYS DRAWN, EVEN WHEN IT IS EMPTY. Jason, 2026-09-09,
    * with a zoom on one block: "They should align center."
@@ -1516,7 +1525,7 @@ function row(ctx, game) {
  * So this holds exactly what the row does NOT, and nothing else:
  *
  *   records, this season and last     the argument for or against the spread
- *   AP rank                           college only, absent when unranked
+ *   (the AP rank moved to the row, 2026-09-11 - see zone())
  *   where and on what                 venue and channel
  *
  * 🔴 IF IT EVER AGAIN SHOWS SOMETHING THE ROW SHOWS, IT IS DEAD AGAIN. That is
@@ -1560,9 +1569,8 @@ function openInfo(game, ctx) {
   const A = game.away, H = game.home;
   line('Record', A.record, H.record);
   line('Last season', A.lastRecord, H.lastRecord);
-  /* The rank rides on the game as well as the team - the slate carries it there. */
-  const rankA = A.rank || game.rankAway, rankH = H.rank || game.rankHome;
-  line('AP rank', rankA ? '#' + rankA : null, rankH ? '#' + rankH : null);
+  /* The AP rank is on the row since 2026-09-11 ("#10 Texas A&M"), so the card
+   * does not repeat it - the test this card failed the first time. */
   /* 🔴 FORM, NEWEST FIRST, AS FIVE LETTERS. Read left to right it is the last
    * five games in order, which is how every football table in the world prints
    * it. Not a sparkline and not a percentage - W L W W T is the whole fact and
