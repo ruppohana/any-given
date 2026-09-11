@@ -912,7 +912,9 @@ function armCountdown() {
  * nothing left to call, and the record of what you called is on the board.
  */
 function gameStrip(wrap) {
-  const games = (S.also && S.also.games) || [];
+  const also = alsoFor(wrap, Date.now());
+  const games = (also && also.games) || [];
+  const sp = also ? also.sport : S.sport;
   const mine = games
     .filter((g) => g && g.id && g.status !== 'final' && g.status !== 'void')
     .sort((a, b) => {
@@ -927,7 +929,7 @@ function gameStrip(wrap) {
   strip.setAttribute('aria-label', 'Choose a game');
 
   for (const g of mine) {
-    const key = S.sport + ':' + g.id;
+    const key = sp + ':' + g.id;
     const b = el('button', 'lg-gamechip');
     b.type = 'button';
     if (key === nowKey) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
@@ -971,7 +973,7 @@ function gameStrip(wrap) {
          pollers for live games every ten minutes; this closes the gap for
          somebody who picks a game in between. */
       try { fetch('/api/poller/ensure?game=' + encodeURIComponent(g.id)
-        + '&sport=' + encodeURIComponent(S.sport)).catch(() => {}); } catch { /* offline */ }
+        + '&sport=' + encodeURIComponent(sp)).catch(() => {}); } catch { /* offline */ }
       paint(wrap);
       poll(wrap);
     };
@@ -1990,6 +1992,21 @@ export function render(root, _data, screenState) {
   /* An explicit ?game= always wins - that is how a specific game is shared and
    * how the fixtures are replayed. Otherwise the key follows the chosen sport. */
   const forced = new URLSearchParams(location.search).get('game');
+  /* 🔴 AN INVITE LINK IS USED ONCE, THEN TAKEN OUT OF THE ADDRESS. Jason,
+   * 2026-09-10: "Live game, college shows the nfl game." He had arrived on a
+   * `?game=nfl:...` link at some point, and the query string outlives every
+   * hash navigation - so picking College on the front door set the league,
+   * navigated to #/live, and this line read the same stale link again and put
+   * him straight back on the NFL game. An explicit link still wins on the
+   * load it arrives with; after that the person's own choices do. */
+  if (forced) {
+    try {
+      const q = new URLSearchParams(location.search);
+      q.delete('game');
+      const qs = q.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    } catch { /* an address we cannot rewrite still plays the invited game */ }
+  }
   S.isHome = screenState === 'home';
   S.key = forced || (S.sport ? GAME_FOR[S.sport] : null);
   /* Recorded on the state, not just held in this closure: the 5-minute
@@ -3835,6 +3852,37 @@ function untilLabel(ms) {
  * only when there is nothing cached or the cache is ten minutes old. A slate
  * does not change between two heartbeats. */
 const ALSO_TTL = 10 * 60 * 1000;
+
+/* 🔴 ONE CACHE, ONE LEAGUE CHECK, TWO CALLERS. Jason, 2026-09-10, on SF at
+ * LAR: "The future game at the top are gone." The game strip read S.also
+ * directly with no league check and no way to fill it - only this card and
+ * nextGameKey ever fetched it, and on the live board neither runs. So after
+ * watching a college game the strip either had nothing, or worse, had the
+ * COLLEGE list and would have built `nfl:<college id>` keys from it.
+ *
+ * Returns the cached slate only when it is for the league of the game on
+ * screen; kicks off a background fetch when it is missing, stale or for the
+ * other league, and repaints when it lands. */
+function alsoFor(wrap, now) {
+  const sport = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
+  const cached = S.also;
+  if (!cached || cached.sport !== sport || (now - cached.at) > ALSO_TTL) {
+    if (!S.alsoBusy) {
+      S.alsoBusy = true;
+      fetch('/api/state/slate:' + sport + ':2026:' + (SLATE_WEEK[sport] || 1))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d) return;
+          S.also = { sport, at: Date.now(), games: d.games || [] };
+          S.lastSig = null;
+          paint(wrap);
+        })
+        .catch(() => {})
+        .then(() => { S.alsoBusy = false; });
+    }
+  }
+  return cached && cached.sport === sport ? cached : null;
+}
 
 function alsoOn(wrap, state, now) {
   const key = S.key;
