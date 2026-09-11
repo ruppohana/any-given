@@ -644,8 +644,10 @@ function tvAsk(state, wrap) {
   const q = quarterOf(state);
   if (!off || !q) return null;
   const card = el('div', 'card lg-tvask');
-  card.appendChild(el('div', 'lg-tvask-h',
-    `Which way is ${off.abbrev || off.short || 'the offense'} going on your TV?`));
+  /* The nickname, same as the questions: "Which way are the Hurricanes going",
+     not "Which way is MIA going". */
+  const who = off.nick ? 'are the ' + off.nick : 'is ' + (off.short || off.abbrev || 'the offense');
+  card.appendChild(el('div', 'lg-tvask-h', `Which way ${who} going on your TV?`));
   const row = el('div', 'lg-tvask-row');
   /* The answer is where the OFFENSE is heading on their screen. Mirror when
      that disagrees with the way the field draws them. */
