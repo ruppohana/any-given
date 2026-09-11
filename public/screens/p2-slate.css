@@ -483,9 +483,15 @@
 /* THE INFO LINK — under the market switch, in the centre column. Deliberately
    quiet: it is a way to check your reasoning, not a call to action, and the
    decision on this row is which team. */
+/* 🔴 DRAWN SMALL, TAPPED AT 44. Jason, 2026-09-11: "Squeeze the space above and
+   below the 4:00 line." The global button rule made this link 44px tall, and the
+   time strip grew to 45px around a 14px line of text. min-height: 0 lets the strip
+   hug the time; the ::after keeps the 44px reach. */
 .scr-p2-slate .p2-info { font: inherit; font-size: 10px; font-weight: 700;
   letter-spacing: .04em; background: none; border: 0; padding: 4px 6px;
-  margin-top: 1px; color: var(--dim); text-decoration: underline; }
+  margin-top: 1px; color: var(--dim); text-decoration: underline;
+  min-height: 0; position: relative; }
+.scr-p2-slate .p2-info::after { content: ''; position: absolute; inset: -12px -8px; }
 
 /* THE HEAD-TO-HEAD CARD. A modal rather than a route, because the slate is a
    scroll position somebody has worked for and navigating away loses it. */
@@ -560,7 +566,9 @@
 .scr-p2-slate .p2-row[data-when="next"] .p2-when-tag { display: block; }
 .scr-p2-slate .p2-when-tag { display: none;
   font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--accent); margin-bottom: 2px; }
+  /* -5px: the row's 8px gap sat between NEXT UP and the time - Jason, 2026-09-11,
+     "Do the same here between next up/4:00/ the card". */
+  color: var(--accent); margin-bottom: -5px; }
 
 
 /* The rank-or-record line under each team - Deuce's "World #1" slot. Quiet: it
