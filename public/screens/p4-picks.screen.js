@@ -1248,9 +1248,12 @@ export function render(root, data, state) {
 
   function head() {
     /* The shared header, so this screen's top matches every other one. */
+    /* 🔴 NO LEAGUE MARK AND NO h1. Jason, 2026-09-10: "remove the ncaa logo and
+     * the my picks under it and put my picks at the top like the others". The
+     * top bar says "My picks"; this keeps only the sub line. */
     host.appendChild(pageHeader({
       title: 'My picks',
-      league: data.sport === 'nfl' ? 'nfl' : 'ncaa',
+      noTitle: true,
       sub: 'Week ' + (data.week || '')
         + ((data.mode === 'week') ? ' · against the spread' : ' · your group, in points')
     }));

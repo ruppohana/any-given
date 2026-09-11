@@ -167,7 +167,7 @@ function wireTopbarTitle() {
 }
 
 const TITLES = {
-  home: 'Any Given',
+  home: 'Any Given…',
   live: 'Call it live',
   allgames: 'All games',
   buildparlay: 'Build a parlay',
@@ -205,7 +205,7 @@ async function mount() {
    * the route list - a route with no entry keeps "Any Given", which is right
    * for the design-harness routes: they are not places a person navigates to. */
   const tb = document.getElementById('topbar-title');
-  if (tb) tb.textContent = TITLES[route.id] || 'Any Given';
+  if (tb) tb.textContent = TITLES[route.id] || 'Any Given…';
   /* 🔴 THE BAR TITLE ONLY APPEARS ONCE THE PAGE'S OWN TITLE HAS GONE.
    *
    * Adding the bar put the screen's name on screen twice - "Build a parlay"
