@@ -65,6 +65,12 @@ id = "2f4db44e9d21432d8ffb205f965438fa"
 
 [vars]
 SEASON = "2026"
+# 🔴 TEMPORARY - Resend's sandbox sender, 2026-09-10. Until anygiven.app is
+# verified in Resend, a new account may only send FROM onboarding@resend.dev and
+# only TO the account's own address (Jason's). That is enough to prove the
+# sign-in path end to end on his inbox tonight. DELETE THIS LINE the moment the
+# domain shows Verified, and codes go out from codes@anygiven.app (src/auth.ts).
+MAIL_FROM = "Any Given <onboarding@resend.dev>"
 
 # ------------------------------------------------------------------
 # NOT DECLARED YET, AND ON PURPOSE
