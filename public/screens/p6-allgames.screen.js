@@ -530,13 +530,77 @@ export async function resolveWeek(sport, fallback) {
   return fallback;
 }
 
+/**
+ * 🔴 THE LIVE FEED OVERLAID ON THE SLATE - HELD FOR DISPLAY, REAL FOR CLOSING.
+ *
+ * Found at 5:12 PM with FAMU at Miami twelve minutes old: the board showed
+ * it `Closed` with no score while it was 7-0 in the first quarter. The board
+ * read the slate, which the cron refreshes every ten minutes, while the
+ * poller's live state sat one request away, pushed seconds earlier.
+ *
+ * 🔴 BUT THE RAW LIVE SCORE IS AHEAD OF THE PERSON'S TELEVISION. Overlaying it
+ * as-is would spoil the exact play the delay exists to hold back - the one
+ * mechanic this product is built on. So the overlay does two different jobs
+ * with two different clocks:
+ *
+ *   DISPLAY (score, clock)  HELD. The last play at least `delayMs` old - the
+ *                           same cutoff the live screen holds to.
+ *   CLOSING (status, period) REAL. A Q2 market shuts when Q2 actually starts,
+ *                           not when your television shows it; otherwise the
+ *                           delay becomes a way to bet on known results.
+ *
+ * A game the feed calls final is only shown final once the held play IS the
+ * last play - otherwise the pill would say Final while your screen is still
+ * in the fourth quarter.
+ *
+ * Only games inside the poll window are fetched, so a normal board makes a
+ * handful of small KV reads, not 86.
+ */
+export async function overlayLive(games, sport, now = Date.now()) {
+  let delay = 45000;
+  try {
+    const v = JSON.parse(localStorage.getItem('ag.delayMs'));
+    if (typeof v === 'number' && v >= 0) delay = v;
+  } catch { /* default */ }
+  const due = (games || []).filter((g) => g.status !== 'final' && num(g.kickoffUtc)
+    && now >= g.kickoffUtc - 15 * 60 * 1000 && now < g.kickoffUtc + 6 * 60 * 60 * 1000);
+  await Promise.all(due.map(async (g) => {
+    try {
+      const r = await fetch('/api/state/' + sport + ':' + g.id, { cache: 'no-store' });
+      if (!r.ok) return;
+      const st = await r.json();
+      if (!st || !st.status || st.status === 'pre') return;
+      const plays = Array.isArray(st.plays) ? st.plays : [];
+      const cutoff = now - delay;
+      let held = null;
+      for (const p of plays) if (num(p.wallclockMs) && p.wallclockMs <= cutoff) held = p;
+      const last = plays[plays.length - 1] || null;
+      /* CLOSING - real time. */
+      const q = st.situation && st.situation.quarter;
+      if (num(q)) g.period = q;
+      g.status = (st.status === 'final' && held && last && held.id === last.id)
+        ? 'final' : 'in_progress';
+      /* DISPLAY - held. Before the first held play the game has kicked but
+         nothing has reached your screen yet: 0-0, which is true. */
+      g.homeScore = held && num(held.homeScore) ? held.homeScore : 0;
+      g.awayScore = held && num(held.awayScore) ? held.awayScore : 0;
+      g.clock = held ? held.clock : null;
+      g.heldQuarter = held ? held.quarter : 1;
+      g.fromLive = true;
+    } catch { /* the slate's own values stand */ }
+  }));
+  return games;
+}
+
 export async function fetchSlate(sport, week, byId) {
   const wk = await resolveWeek(sport, week);
   const res = await fetch(`/api/state/slate:${sport}:${SEASON}:${wk}`);
+  /* The mapped list is overlaid with the live feed before anybody sees it -
+     see overlayLive for why the score is held and the period is not. */
   if (!res.ok) throw new Error('slate ' + res.status);
   const d = await res.json();
   const games = Array.isArray(d && d.games) ? d.games : [];
-  return games.map((g) => {
+  const mapped = games.map((g) => {
     /* Identity travels WITH the game - the shipped team file is a snapshot and
      * the feed is not. It is the fallback for what the payload omits, never the
      * other way round. */
@@ -599,6 +663,7 @@ export async function fetchSlate(sport, week, byId) {
       away: byId[g.awayTeamId] || null
     };
   }).filter((g) => g.home && g.away && num(g.kickoffUtc));
+  return overlayLive(mapped, sport);
 }
 
 export async function previewData(fixtures, state) {

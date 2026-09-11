@@ -73,3 +73,12 @@
 
 /* Wide content scrolls inside itself. The page body never scrolls sideways. */
 .ag-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* 🔴 NO SCROLLBAR UNDER A CHIP ROW. Desktop Chrome paints a full scrollbar -
+   track, thumb and arrow buttons - beneath every horizontal scroller, and in
+   dark mode it is a grey slab under the filter chips that reads as a broken
+   control. Phones never draw it, which is why it survived every 375px check
+   today. The row is still scrollable by wheel, trackpad and touch; the fade
+   on its right edge is what says there is more. */
+.ag-scroll-x { scrollbar-width: none; -ms-overflow-style: none; }
+.ag-scroll-x::-webkit-scrollbar { display: none; }
