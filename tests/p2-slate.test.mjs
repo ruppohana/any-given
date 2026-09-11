@@ -323,10 +323,11 @@ test('§5 - tap targets. Nothing a thumb hits is under 44px', () => {
   const zoneH = (CSSCODE.match(/\.p2-zone[^}]*min-height:\s*(\d+)px/s) || [])[1];
   assert.ok(zoneH && Number(zoneH) >= 44,
     `the pick target is ${zoneH}px - one-handed, at night, the floor is 44`);
-  // The filter pills sit at the 44px floor (Jason, 2026-09-10: "can these pills be
-  // the same size(ish), height" - asked of them and the day chips, which went on
-  // 2026-09-11).
-  assert.ok(/\.p2-filter \{[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE), 'filter pills sit at --tap-min');
+  // The filter pill is drawn at 34px (Jason, 2026-09-11: "make the pill smaller top
+  // to bottom") and its tap reaches --tap-min through ::after - the rule is the
+  // thumb target, not the drawn height.
+  assert.ok(/\.p2-filter::after \{[^}]*--tap-min/s.test(CSSCODE), 'filter pill tap reaches --tap-min');
+  assert.ok(/\.p2-filter \{[^}]*position:\s*relative/s.test(CSSCODE), 'the ::after hangs off the pill');
   assert.ok(/\.p2-tb-in[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
 });
 
@@ -928,4 +929,195 @@ test('every var() in the stylesheets resolves to a defined token', () => {
   }
   assert.deepEqual([...missing], [],
     `used but never defined - the declaration is silently discarded: ${[...missing].join(', ')}`);
+});
+
+/* ------------------------------------------------------------------ the group state
+ * #/gpicks - the Pool tab of Group pools (CONTRACT-GROUPS.md), added 2026-09-11.
+ *
+ * previewData's group branch calls myGroups / pickCurrent from components/group.js.
+ * With the import lines stripped those names resolve to globals, so the REAL
+ * pickCurrent is installed and myGroups returns the shape CONTRACT-GROUPS §3 names.
+ * The slate stub is the same KV shape the two tests above use; what is asserted is
+ * which key was asked for and whose picks came back, never a value it invented. */
+const GROUPJS = await import(new URL('../public/components/group.js', import.meta.url));
+
+async function withGroupEnv(store, groups, fn) {
+  const saved = { fetch: globalThis.fetch, ls: globalThis.localStorage,
+                  mg: globalThis.myGroups, pc: globalThis.pickCurrent };
+  const asked = [];
+  const games = [{ id: 'g1', kickoffUtc: Date.now() + 864e5, status: 'scheduled',
+    homeTeamId: '26', awayTeamId: '17', spread: -3,
+    teams: [{ id: '26', abbrev: 'SEA', name: 'Seahawks', short: 'Seahawks', primary: '002244' },
+            { id: '17', abbrev: 'NE', name: 'Patriots', short: 'Patriots', primary: '002a5c' }] }];
+  try {
+    globalThis.fetch = async (u) => { asked.push(String(u)); return { ok: true, json: async () => ({ games }) }; };
+    globalThis.localStorage = {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+      removeItem: (k) => { delete store[k]; }
+    };
+    globalThis.myGroups = async () => groups;
+    globalThis.pickCurrent = GROUPJS.pickCurrent;
+    const fixtures = { teams: { teams: {} }, games: [], load: async () => { throw new Error('none'); } };
+    return await fn(fixtures, asked);
+  } finally {
+    globalThis.fetch = saved.fetch;
+    if (saved.ls === undefined) delete globalThis.localStorage; else globalThis.localStorage = saved.ls;
+    if (saved.mg === undefined) delete globalThis.myGroups; else globalThis.myGroups = saved.mg;
+    if (saved.pc === undefined) delete globalThis.pickCurrent; else globalThis.pickCurrent = saved.pc;
+  }
+}
+
+test('group: "group" is a route, and signed out is a sign-in gate that loads no slate', async () => {
+  assert.ok(mod.states.includes('group'), 'the group state is a route');
+  await withGroupEnv({}, { signedIn: false, groups: [], kindness: '' }, async (fx, asked) => {
+    const d = await mod.previewData(fx, 'group');
+    assert.equal(d.groupState, 'signed-out');
+    assert.equal(asked.length, 0, 'a signed-out group state must not fetch a slate');
+    assert.equal(d.noSample, true, 'nothing on a sign-in gate is made up - no sample banner');
+    assert.equal(typeof d.reload, 'function', 'signing in has to be able to reload the state');
+  });
+  /* The gate calls window.agOpenSignIn() and re-renders on success. */
+  assert.match(CODE, /window\.agOpenSignIn\(\)\.then\(\(ok\) => \{ if \(ok\) regroup\(root, data, state\); \}\)/,
+    'the sign-in prompt must re-render on success');
+});
+
+test('group: in no group, the card is a door to #/g - never a dead end', async () => {
+  await withGroupEnv({}, { signedIn: true, groups: [], kindness: 'k' }, async (fx, asked) => {
+    const d = await mod.previewData(fx, 'group');
+    assert.equal(d.groupState, 'no-group');
+    assert.equal(asked.length, 0, 'no group, no slate to load');
+  });
+  assert.equal(mod.GROUP_COPY.noGroup.href, '#/g', 'the no-group card opens #/g');
+  assert.equal(mod.GROUP_COPY.door.href, '#/g', 'the small door on the picks opens #/g');
+  const gate = CODE.slice(CODE.indexOf('function groupGate('));
+  assert.match(gate, /a\.href = GROUP_COPY\.noGroup\.href/, 'the no-group card must link to #/g');
+  /* "How it's scored" goes to the GROUP's rules in the group state, the main rules otherwise. */
+  assert.equal(mod.GROUP_COPY.rules.href, '#/grules');
+  assert.match(CODE, /link: gsub \? GROUP_COPY\.rules : \{ label: 'How it’s scored', href: '#\/rules' \}/);
+});
+
+test("group: the slate is the group's sport and week, and each group's picks are its own", async () => {
+  const store = {
+    'ag.sport': '"college-football"',                                     /* the main app's choice */
+    'ag.group': 'DNFL01',
+    'ag.handle': 'd1',
+    'ag.picks.nfl.1': JSON.stringify({ g1: { side: 'away' } }),             /* the public slate's pick */
+    'ag.picks.g.d1.DNFL01.nfl.1': JSON.stringify({ g1: { side: 'home' } })  /* d1's pick in this group */
+  };
+  const groups = { signedIn: true, kindness: 'k', groups: [
+    { id: 'DNFL01', name: 'D-NFL', sport: 'nfl', week: null, ats: false, members: 2, role: 'commissioner' },
+    { id: 'DCOL01', name: 'D-College', sport: 'college-football', week: null, ats: true, members: 1, role: 'commissioner' }
+  ] };
+  await withGroupEnv(store, groups, async (fx, asked) => {
+    const a = await mod.previewData(fx, 'group');
+    assert.equal(a.groupState, 'ready');
+    assert.equal(a.group.id, 'DNFL01');
+    assert.equal(a.sport, 'nfl', 'the group sport, never ag.sport');
+    assert.equal(a.week, 1);
+    assert.ok(asked.some((u) => u.includes('slate:nfl:2026:1')), 'asked for the NFL week: ' + asked.join(', '));
+    assert.equal(a.picks.g1.side, 'home', "this group's pick, not the public slate's");
+    assert.equal(a.mode, 'pool');
+    assert.equal(a.pool.id, 'DNFL01');
+    assert.equal(a.fromFeed, true);
+
+    /* 🔴 Found at 393px: a second account on the same phone was shown the first
+     * account's group pick. The bucket is the person's as well as the group's. */
+    store['ag.handle'] = 'd2';
+    const other = await mod.previewData(fx, 'group');
+    assert.equal(other.picks.g1.side, null, "another account on this phone must not see d1's group picks");
+    store['ag.handle'] = 'd1';
+
+    store['ag.group'] = 'DCOL01';                                          /* what the dropdown writes */
+    asked.length = 0;
+    const b = await mod.previewData(fx, 'group');
+    assert.equal(b.group.id, 'DCOL01');
+    assert.equal(b.sport, 'college-football');
+    assert.ok(asked.some((u) => u.includes('slate:college-football:2026:2')));
+    assert.equal(b.picks.g1.side, null, "another group's pick and the public pick must not appear here");
+    assert.equal(b.mode, 'ats', 'against the spread is on for this group');
+
+    /* A one-week group plays its own week. */
+    groups.groups[1].week = 3;
+    asked.length = 0;
+    await mod.previewData(fx, 'group');
+    assert.ok(asked.some((u) => u.includes('slate:college-football:2026:3')));
+  });
+  /* The public slate's own key is untouched by all of this. */
+  assert.match(CODE, /'ag\.picks\.' \+ sport \+ '\.' \+ week/);
+});
+
+test('group: a pick posts with poolId = the group id, and a refusal is shown verbatim', () => {
+  const game = { id: 401872925, spread: -3.5, kickoffUtc: 1757700000000 };
+  assert.deepEqual(mod.groupPickBody('DNFL01', game, 'home', 'nfl', 1), {
+    poolId: 'DNFL01', gameId: '401872925', side: 'home', sport: 'nfl', week: 1,
+    spread: -3.5, kickoffUtc: 1757700000000
+  });
+  assert.equal(mod.groupPickBody('X', { id: 'a', spread: null, kickoffUtc: 1 }, 'away', 'nfl', 1).spread, null,
+    'no posted line is sent as no line');
+
+  const post = CODE.slice(CODE.indexOf('async function postGroupPick('), CODE.indexOf('function hydrate('));
+  assert.match(post, /'\/api\/pool\/pick'/);
+  assert.match(post, /groupPickBody\(groupId, game, side, sport, week\)/);
+  assert.doesNotMatch(post, /joinPendingPool/, 'a group is invite-only - a pick never joins one');
+  assert.match(CODE, /if \(g && ctx\.groupId\) \{[\s\S]{0,120}postGroupPick\(gid, g, chosen, ctx\.sport, ctx\.week\)/,
+    'the group state sends its picks through postGroupPick');
+
+  /* The two refusals, read off the real route rather than typed here. */
+  const W = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf8');
+  const m403 = W.match(/json\(\{ error: 'not_a_member', message: '([^']+)' \}, 403\)/);
+  /* The 409 carries a `message` since 2026-09-11 (session), and the message is
+   * what shows - the contract's "show it verbatim". */
+  const m409 = W.match(/json\(\{ error: '([^']+)', message: '([^']+)', locked: true \}, 409\)/);
+  assert.ok(m403 && m409, 'the 403 and 409 are where the contract says');
+  assert.equal(mod.pickRefusal({ error: 'not_a_member', message: m403[1] }, 403), m403[1]);
+  assert.equal(mod.pickRefusal({ error: m409[1], message: m409[2], locked: true }, 409), m409[2]);
+  assert.equal(mod.pickRefusal({ error: m409[1], locked: true }, 409), m409[1], 'no message: the error text');
+  assert.equal(mod.pickRefusal(null, 0), mod.GROUP_COPY.unsent);
+});
+
+test('group: no betting words in anything the group state says', () => {
+  const words = [];
+  const walk = (v) => {
+    if (typeof v === 'string') words.push(v);
+    else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+  };
+  walk(mod.GROUP_COPY);
+  /* and every literal the group-only functions draw */
+  words.push(...(CODE.slice(CODE.indexOf('function regroup(')).match(/'[^']*'/g) || []));
+  const all = words.join(' ');
+  for (const w of ['marble', 'marbles', 'stake', 'stakes', 'staked', 'odds', 'price', 'prices', 'priced',
+                   'bet', 'bets', 'betting', 'wager', 'wagers', 'payout', 'pays', 'credits']) {
+    assert.ok(!new RegExp('\\b' + w + '\\b', 'i').test(all), `"${w}" is in the group state`);
+  }
+  assert.ok(!/@[a-z0-9-]+\.[a-z]/i.test(all), 'no email address in the group state');
+  assert.ok(all.includes('scored in points'), 'the group state says how it is scored');
+});
+
+/* CONTRACT-GROUPS §1, amended 2026-09-11: an invite link opens #/g, and g1-group
+ * owns the pending invite. The slate neither joins anyone on a first pick nor
+ * shows an invite line, so it has no business with the key at all. */
+test('the slate never touches the pending invite - an invite opens #/g now', () => {
+  assert.ok(!/pendingPool/.test(SRC), 'p2-slate.screen.js must not mention ag.pendingPool');
+  assert.ok(!/'\/api\/pool\/join'/.test(CODE), 'a pick on the slate never joins a group');
+});
+
+test('group: an against-the-spread group grades on the cover and is never priced', () => {
+  const now = Date.UTC(2026, 8, 20), kick = Date.UTC(2026, 8, 19);
+  /* Home wins by 3 as a 7-point favorite. */
+  const g = { id: 'g', status: 'final', kickoffUtc: kick, spread: -7, homeScore: 24, awayScore: 21 };
+  assert.equal(mod.pickStateOf(g, { side: 'home' }, now, 'ats'), 'lost');
+  assert.equal(mod.pickStateOf(g, { side: 'away' }, now, 'ats'), 'won');
+  assert.equal(mod.pickStateOf(g, { side: 'home' }, now, 'pool'), 'won', 'a straight-up group is graded on the winner');
+  /* The group modes are 'ats' and 'pool' - never 'week', which is the one that prices. */
+  assert.match(CODE, /mode: group\.ats \? 'ats' : 'pool'/);
+});
+
+test('group state merges your saved picks for the group from the server (session, 2026-09-11)', () => {
+  /* /api/pool/picks returns the caller's own sides in one group. Without it a pick
+   * made on another phone, or copied in by migration 0007, showed as unpicked. */
+  const g = CODE.slice(CODE.indexOf('async function groupData'), CODE.indexOf('export async function previewData'));
+  assert.match(g, /'\/api\/pool\/picks\?pool=' \+ encodeURIComponent\(group\.id\)/);
+  assert.match(g, /savePicks\(sport, week, local, scope\)/);
+  assert.match(g, /picks: hydrate\(local, games\)/);
 });

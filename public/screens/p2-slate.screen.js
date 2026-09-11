@@ -53,6 +53,9 @@ import { progress, crowdLabel } from '/components/fmt.js';
    the other does not - and the counts are printed on the chips, so the
    disagreement would be visible and unexplainable. p6 owns the rule. */
 import { filterOptions, gamePasses, FILTER_ALL, filterKey, overlayLive } from '/screens/p6-allgames.screen.js';
+/* GROUP POOLS - the current group and its switcher. Read and written only through
+   this component (CONTRACT-GROUPS §1, §3). Used in the `group` state alone. */
+import { myGroups, pickCurrent, groupSwitcher, GROUP_CSS } from '/components/group.js';
 
 export const id = 'p2-slate';
 export const title = 'The slate';
@@ -62,7 +65,41 @@ export const bar = 'reference/cbs-pickem-teardown/screens/CBS-picks-week1-15-gam
  * against-the-spread ON - the worst case, because if it holds with spreads it holds
  * without. `ready-short` is the three REAL fixture games with ats off - the 3-row case.
  * A layout that only works at fifteen rows is broken, so both are routes, not a claim. */
-export const states = ['ready', 'ready-short', 'empty', 'loading', 'offline', 'error'];
+export const states = ['ready', 'ready-short', 'empty', 'loading', 'offline', 'error', 'group'];
+
+/* 🔴 THE GROUP STATE - `#/gpicks`, the Pool tab of Group pools (CONTRACT-GROUPS §1).
+ * Jason, 2026-09-11: "if i am part of a group, great then i can pick games. if i am
+ * part of more than one group, then i need a dropdown to enter different selections
+ * for the different groups."
+ *
+ * Everything the group state says is here, in one place, so the test can read every
+ * word of it. Points only: nothing staked, no balance, no book language. Members are
+ * handles. The no-group card is NOT a dead end - Home's "Group pools" door lands on
+ * this screen, so a person in no group is sent to #/g to start or join one. */
+export const GROUP_COPY = {
+  sub: ' · pick the winners · scored in points',
+  subAts: ' · against the spread · scored in points',
+  subNoWeek: 'Pick the winners · scored in points',
+  rules: { label: 'How it’s scored', href: '#/grules' },
+  door: { label: 'Group info ›', href: '#/g' },
+  signedOut: {
+    title: 'Sign in to pick with your group',
+    body: 'Group pools are invite-only, so they go with your account. Sign in and your groups are right here.',
+    cta: 'Sign in'
+  },
+  noGroup: {
+    title: 'You are not in a group yet',
+    body: 'Group pools are invite-only. Start one and invite your friends, or join one with the code from an invite.',
+    cta: 'Start or join a group',
+    href: '#/g'
+  },
+  empty: { title: 'No games on this group’s week yet', body: 'They show up here as soon as the schedule is posted.' },
+  offline: { title: 'You are offline', body: 'Your groups did not load. The picks you already made are safe.', cta: 'Try again' },
+  error: { title: 'Your groups did not load', body: 'The picks you already made are safe. This is the page, not your entry.', cta: 'Try again' },
+  loading: 'Loading your group…',
+  refused: 'That pick did not go through.',
+  unsent: 'That pick did not reach us. Check your connection and tap it again.'
+};
 
 /* ------------------------------------------------------------------ pure helpers
  * Nothing below this line touches the DOM or an imported binding, so tests/p2-slate
@@ -229,7 +266,9 @@ export function pickStateOf(game, pick, now, mode) {
      * taken on the WINNER is graded on who won; the same row taken on the SPREAD
      * is graded on who covered. Reading the pool's mode alone would settle a
      * moneyline pick against a line the person deliberately declined. */
-    if (mode === 'week' && (!pick || pick.market !== 'winner')) {
+    /* 'ats' is a GROUP with against-the-spread on (group.ats): graded on the
+     * cover like the week's card, and - unlike it - never priced. */
+    if ((mode === 'week' || mode === 'ats') && (!pick || pick.market !== 'winner')) {
       const r = coversSpread(game, side);
       /* No posted line means nothing to cover, so it falls back to the winner
        * rather than voiding a game that was really played. */
@@ -483,38 +522,11 @@ function deviceId() {
  * already saved locally, so a dropped request costs a place on the world board
  * and never the pick. When there is a pool worth being wrong about, this needs a
  * retry queue - and that is a real gap, not a decision. */
-/* 🔴 THE FIRST PICK JOINS THE GROUP YOU WERE INVITED TO. An invite link
- * (app.js) remembers the group as `ag.pendingPool` and lands on this slate;
- * nothing is asked before the first tap, and that tap is the join. Doctrine:
- * "An explicit join step in front of a pick is the account wall wearing a
- * different hat" - the same line the pick endpoint already lives by.
- *
- * The pending group is cleared before the request and put back if it fails,
- * so a dropped connection retries on the next pick instead of forgetting the
- * invite. On success the standings screen opens on that group. */
-function joinPendingPool() {
-  let pend = null;
-  try { pend = JSON.parse(localStorage.getItem('ag.pendingPool') || 'null'); } catch { pend = null; }
-  if (!pend || !pend.id) return;
-  try { localStorage.removeItem('ag.pendingPool'); } catch { /* private window */ }
-  const restore = () => { try { localStorage.setItem('ag.pendingPool', JSON.stringify(pend)); } catch { /* gone */ } };
-  try {
-    (window.agApiFetch || fetch)('/api/pool/join', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ deviceId: deviceId(), code: pend.id,
-        name: (localStorage.getItem('ag.name') || '').replace(/^"|"$/g, '') })
-    }).then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        if (j && j.poolId) { try { localStorage.setItem('ag.scope', j.poolId); } catch { /* fine */ } }
-        else restore();
-      })
-      .catch(restore);
-  } catch { restore(); }
-}
-
+/* 🔴 A PICK ON THE PUBLIC SLATE NEVER JOINS A GROUP. CONTRACT-GROUPS §1, amended
+ * 2026-09-11: an invite link now opens #/g, where the group page fills Join with
+ * the code. A group's picks are its own, so a slate pick could never count there -
+ * the first-pick join that lived here is gone, and this screen keeps no invite. */
 function postPick(sport, week, game, side) {
-  joinPendingPool();
   try {
     /* Through the sign-in sheet's fetch: it sends the session when there is
        one, and if the server says an email is required it asks for it and
@@ -533,7 +545,49 @@ function postPick(sport, week, game, side) {
   } catch { /* no storage, no network, no problem - the pick is still on screen */ }
 }
 
-function picksKey(sport, week) { return 'ag.picks.' + sport + '.' + week; }
+/* 🔴 A GROUP'S PICKS ARE ITS OWN BUCKET. A person in two groups picks differently in
+ * each (Jason, 2026-09-11), so the group id is part of the key; the public slate's
+ * key is untouched. Still per-device: the server has no route that returns a
+ * person's picks for one pool, so this is what makes a group pick survive a reload. */
+function picksKey(sport, week, gid) {
+  return gid ? 'ag.picks.g.' + gid + '.' + sport + '.' + week : 'ag.picks.' + sport + '.' + week;
+}
+
+/** The body of a group pick. `poolId` IS the group's id - that is what puts the pick
+ *  in that group and nowhere else. */
+export function groupPickBody(groupId, game, side, sport, week) {
+  return {
+    poolId: String(groupId), gameId: String(game.id), side, sport, week,
+    spread: typeof game.spread === 'number' ? game.spread : null,
+    kickoffUtc: game.kickoffUtc
+  };
+}
+
+/** What a refused pick says: the server's own words, verbatim (CONTRACT-GROUPS §2). */
+export function pickRefusal(body, status) {
+  const said = body && (body.message || body.error);
+  if (said) return String(said);
+  return status ? GROUP_COPY.refused : GROUP_COPY.unsent;
+}
+
+/* A group pick goes to the server and the answer comes back, because a group can
+ * refuse it - 403 not a member, 409 kicked off - and a pick the server refused must
+ * not stay highlighted on the row. */
+async function postGroupPick(groupId, game, side, sport, week) {
+  try {
+    const r = await (window.agApiFetch || fetch)('/api/pool/pick', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(groupPickBody(groupId, game, side, sport, week))
+    });
+    if (r.ok) return { ok: true, status: r.status };
+    let j = null;
+    try { j = await r.json(); } catch { j = null; }
+    return { ok: false, status: r.status, message: pickRefusal(j, r.status) };
+  } catch {
+    return { ok: false, status: 0, message: pickRefusal(null, 0) };
+  }
+}
 
 /* Stored picks carry only a side. Everything else a row needs is rebuilt against
  * the games actually on the card, so a pick for a game that has left the slate
@@ -548,15 +602,15 @@ function hydrate(stored, games) {
   return out;
 }
 
-function loadPicks(sport, week) {
+function loadPicks(sport, week, gid) {
   try {
-    const raw = localStorage.getItem(picksKey(sport, week));
+    const raw = localStorage.getItem(picksKey(sport, week, gid));
     const o = raw ? JSON.parse(raw) : null;
     return (o && typeof o === 'object') ? o : {};
   } catch { return {}; }
 }
 
-function savePicks(sport, week, picks) {
+function savePicks(sport, week, picks, gid) {
   try {
     /* Only the side is persisted. The crowd is derived and the state is computed
      * from the clock, so a stored copy of either could contradict the live one -
@@ -574,7 +628,7 @@ function savePicks(sport, week, picks) {
         if (p.market) out[k].market = p.market;
       }
     }
-    localStorage.setItem(picksKey(sport, week), JSON.stringify(out));
+    localStorage.setItem(picksKey(sport, week, gid), JSON.stringify(out));
   } catch { /* a private window is allowed to forget */ }
 }
 
@@ -629,8 +683,8 @@ export function priceFromSpread(spread, side, sport) {
  * one of them on an empty key. */
 const WEEK = { 'college-football': 2, nfl: 1 };
 
-async function realSlate(byId, sport) {
-  const season = 2026, week = WEEK[sport] || 1;
+async function realSlate(byId, sport, weekArg) {
+  const season = 2026, week = weekArg || WEEK[sport] || 1;
   try {
     const res = await fetch(`/api/state/slate:${sport}:${season}:${week}`);
     if (!res.ok) return null;
@@ -674,7 +728,83 @@ async function realSlate(byId, sport) {
   } catch { return null; }
 }
 
+/* 🔴 THE GROUP STATE'S DATA - the one place this screen asks the API about groups
+ * (CONTRACT-GROUPS §3). The slate is the GROUP's sport and week, never the sport the
+ * main app has selected: an NFL group and a college group are one dropdown apart,
+ * and neither may borrow the other's slate or picks. Never throws. */
+async function groupData(fixtures) {
+  const reload = () => groupData(fixtures);
+  const base = {
+    groupMode: true, noSample: true, reload, mode: 'pool',
+    games: [], picks: {}, groups: [], group: null, now: Date.now(),
+    captured: 0, synthetic: 0, fromFeed: false
+  };
+  let mine = null;
+  try { mine = await myGroups({ force: true }); } catch { mine = null; }
+  if (!mine) return { ...base, groupState: 'error' };
+  if (!mine.signedIn) return { ...base, groupState: 'signed-out' };
+  if (mine.error) return { ...base, groupState: mine.error === 'offline' ? 'offline' : 'error' };
+  const groups = Array.isArray(mine.groups) ? mine.groups : [];
+  const group = pickCurrent(groups);
+  if (!group) return { ...base, groups, groupState: 'no-group' };
+
+  /* 🔴 THE BUCKET IS THE PERSON'S AS WELL AS THE GROUP'S. Found at 393px: d2
+   * signed in on the phone d1 had just used and was shown d1's D-NFL pick as their
+   * own, while the server had d2 at 0 picks. A device is not a person, and the
+   * handle is the only account fact this phone holds. */
+  let who = '';
+  try { who = localStorage.getItem('ag.handle') || ''; } catch { who = ''; }
+  const scope = who + '.' + group.id;
+  const sport = group.sport === 'nfl' ? 'nfl' : 'college-football';
+  /* A one-week group plays its own week; a season group plays the week this screen
+   * already reads for that sport. */
+  const week = Number.isInteger(group.week) && group.week > 0 ? group.week : (WEEK[sport] || 1);
+  const byId = {};
+  const db = (fixtures && fixtures.teams && fixtures.teams.teams) || {};
+  for (const k of Object.keys(db)) byId[db[k].id] = db[k];
+  const games = (await realSlate(byId, sport, week)) || [];
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const tb = games.find((g) => g.status === 'scheduled') || games[games.length - 1];
+  /* 🔴 THE SERVER'S COPY OF YOUR PICKS IN THIS GROUP, MERGED OVER THE PHONE'S.
+   * Session, 2026-09-11: `/api/pool/picks` exists now, so a pick made on another
+   * device, or copied into the group by migration 0007, shows here. The server's
+   * side wins where both exist - it is the one that is scored. A market the phone
+   * chose is kept. Offline or signed out, the phone's copy stands. */
+  const local = loadPicks(sport, week, scope);
+  try {
+    const r = await (window.agApiFetch || fetch)('/api/pool/picks?pool=' + encodeURIComponent(group.id)
+      + '&sport=' + sport + '&week=' + week);
+    if (r && r.ok) {
+      const j = await r.json();
+      for (const p of (j && Array.isArray(j.picks) ? j.picks : [])) {
+        if (!p || !p.gameId || (p.side !== 'home' && p.side !== 'away')) continue;
+        local[String(p.gameId)] = { ...(local[String(p.gameId)] || {}), side: p.side };
+      }
+      savePicks(sport, week, local, scope);
+    }
+  } catch { /* offline or no window: the phone's copy stands */ }
+  return {
+    ...base, groups, group, sport, week,
+    groupState: games.length ? 'ready' : (offline ? 'offline' : 'empty'),
+    /* 'ats' grades on the cover; neither group mode is ever priced. */
+    mode: group.ats ? 'ats' : 'pool',
+    pickScope: scope,
+    games, picks: hydrate(local, games),
+    pool: {
+      id: group.id, name: group.name, commissionerId: null,
+      scope: 'all', scopeArg: null, rankingSource: null,
+      ats: !!group.ats, season: 2026, scopeLockedAt: null,
+      memberCount: group.members || 0
+    },
+    tiebreak: { gameId: tb && tb.id, predictedTotal: null },
+    captured: games.length, synthetic: 0, fromFeed: games.length > 0
+  };
+}
+
 export async function previewData(fixtures, state) {
+  /* Group pools first, and nothing below it: the group state never falls back to
+   * a generated week or to the main app's chosen sport. */
+  if (state === 'group') return groupData(fixtures);
   const db = fixtures.teams.teams;
   const byId = {};
   for (const k of Object.keys(db)) byId[db[k].id] = db[k];
@@ -1493,9 +1623,21 @@ function rules(ctx, game) {
 export function render(root, data, state) {
   root.classList.add('scr-p2-slate');
   root.innerHTML = '';
+  /* Every render counts, so a group reload that lands after the person has moved
+     on - another group, another screen - can tell it is stale and draw nothing. */
+  root.__p2Seq = (root.__p2Seq || 0) + 1;
+  const grp = state === 'group';
   const style = el('style');
-  style.textContent = [TEAM_CHIP_CSS, STATES_CSS].join('\n');
+  style.textContent = [TEAM_CHIP_CSS, STATES_CSS].concat(grp ? [GROUP_CSS] : []).join('\n');
   root.appendChild(style);
+
+  /* Group pools, before any slate: signed out, in no group, loading, offline, an
+   * empty week. Each one has a way forward - see groupGate(). */
+  if (grp && (!data || data.groupState !== 'ready')) {
+    if (window.__agPoolLiveTimer) { clearInterval(window.__agPoolLiveTimer); window.__agPoolLiveTimer = null; }
+    groupGate(root, data || {}, state);
+    return;
+  }
 
   if (state === 'loading') {
     head(root, data, null);
@@ -1558,6 +1700,10 @@ export function render(root, data, state) {
       return up.length ? up[0].id : null;
     })(),
     week: data.week || 1,
+    /* The group this slate is being picked for. Null on every other state. */
+    groupId: grp && data.group ? data.group.id : null,
+    /* Where this person's picks in this group are kept on the phone. */
+    pickScope: grp && data.group ? data.pickScope : null,
     /* 🔴 SWITCHING THE MARKET DOES NOT CLEAR THE PICK. Somebody who took Kansas
      * and then wants Kansas outright has not changed their mind about Kansas -
      * making them tap the team again would be the app forgetting what they just
@@ -1601,21 +1747,42 @@ export function render(root, data, state) {
        * pre-seeded row was the bug, and it only survived this long because the
        * preview data hid it. */
       const p = (ctx.picks[gameId] || (ctx.picks[gameId] = { side: null, crowd: null }));
+      const before = p.side;
       p.side = p.side === side ? null : side;
       /* Written on every tap rather than on some later commit. There is no
        * "save" on this screen and there should not be one - the tap IS the
        * commit, so anything that does not survive it never happened. */
-      savePicks(ctx.sport, ctx.week, ctx.picks);
+      savePicks(ctx.sport, ctx.week, ctx.picks, ctx.pickScope);
       /* Un-picking is a local state today: there is no DELETE, so the server
        * keeps the last side you chose. Named rather than hidden - it is the
        * next thing this endpoint needs. */
       if (p.side) {
         const g = (data.games || []).find((x) => x.id === gameId);
-        if (g) postPick(ctx.sport, ctx.week, g, p.side);
+        /* 🔴 A GROUP PICK WAITS FOR ITS ANSWER. The group can refuse it - 403 not a
+         * member, 409 kicked off - and a refused pick must not stay highlighted. It
+         * goes back to what it was, and the server's own sentence goes on the row. */
+        if (g && ctx.groupId) {
+          const gid = ctx.groupId, chosen = p.side;
+          postGroupPick(gid, g, chosen, ctx.sport, ctx.week).then((res) => {
+            if (res.ok || p.side !== chosen) return;
+            p.side = before;
+            savePicks(ctx.sport, ctx.week, ctx.picks, ctx.pickScope);
+            const cur = root.querySelector('.p2-row[data-game-id="' + cssEsc(gameId) + '"]');
+            if (cur) {
+              const fresh = row(ctx, g);
+              const m = el('p', 'p2-gmsg', res.message);
+              m.setAttribute('role', 'alert');
+              fresh.appendChild(m);
+              cur.replaceWith(fresh);
+            }
+            paintProgress();
+          });
+        } else if (g) postPick(ctx.sport, ctx.week, g, p.side);
       }
       /* The crowd arrives WITH the pick and leaves with it. It is not cached from a
-       * previous tap, because the rule is about what you see before you commit. */
-      p.crowd = p.side ? (p.crowd || seedCrowd(gameId, ctx.pool.memberCount)) : null;
+       * previous tap, because the rule is about what you see before you commit.
+       * Never in a group: a seeded split there would be a crowd that does not exist. */
+      p.crowd = p.side && !ctx.groupId ? (p.crowd || seedCrowd(gameId, ctx.pool.memberCount)) : null;
       const old = root.querySelector('.p2-row[data-game-id="' + cssEsc(gameId) + '"]');
       const game = data.games.find((g) => g.id === gameId);
       if (old && game) old.replaceWith(row(ctx, game));
@@ -1624,25 +1791,11 @@ export function render(root, data, state) {
   };
 
   head(root, data, null);
+  /* The group state: which group, the dropdown, and the door to the group's page. */
+  if (grp) groupBar(root, data, state);
 
-  /* 🔴 WHOSE GROUP THIS IS, AND THAT A PICK IS ALL IT TAKES. Only while an
-   * invite is pending (set by app.js from ?pool=, cleared by the first pick).
-   * The three facts p1-invite argues a stranger needs before anything else -
-   * the group's name, who started it, how many are in - and no button: the
-   * slate underneath IS the action. */
-  try {
-    const pend = JSON.parse(localStorage.getItem('ag.pendingPool') || 'null');
-    if (pend && pend.name) {
-      const j = el('div', 'p2-joining');
-      j.appendChild(el('div', 'p2-joining-h', 'You’re invited to ' + pend.name));
-      const who = [pend.commissioner ? 'Started by ' + pend.commissioner : null,
-        pend.members ? pend.members + (pend.members === 1 ? ' person' : ' people') + ' in' : null]
-        .filter(Boolean).join(' · ');
-      j.appendChild(el('div', 'p2-joining-b',
-        (who ? who + '. ' : '') + 'Pick any game below and you’re in. No sign-up.'));
-      root.appendChild(j);
-    }
-  } catch { /* no storage: no invite line, the slate still works */ }
+  /* The "You're invited" line is gone (CONTRACT-GROUPS §1, amended 2026-09-11):
+   * an invite opens #/g now, and the slate shows no invite. */
 
   /* 🔴 THE SAME FILTERS AS ALL GAMES. This screen is 86 rows and 22 screens
    * of scroll, and it is the one an INVITE LINK OPENS - the first thing
@@ -1895,17 +2048,21 @@ function head(root, data, _) {
   /* 🔴 NO LEAGUE MARK AND NO h1 ON THE SLATE. Jason, 2026-09-10: "remove the
    * ncaa logo off this page" / "as well as the slate below the ncaa logo".
    * The top bar names the screen; the page keeps only its one sub line. */
+  /* Group pools: its own sub line, and "How it's scored" opens the GROUP's rules. */
+  const gsub = data && data.groupMode
+    ? (data.group && wk ? 'Week ' + wk + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub) : GROUP_COPY.subNoWeek)
+    : null;
   root.appendChild(pageHeader({
     title: (data && data.mode) === 'week' ? "The week's card" : 'The slate',
     noTitle: true,
-    sub: (data && data.mode) === 'week'
+    sub: gsub || ((data && data.mode) === 'week'
       ? 'Week ' + wk + ' · against the spread · every pick pays 2.00×'
       /* "your group" read wrong for anybody only in the everyone-in pool, and
        * the line never said what to do. Jason, 2026-09-10: yes to "pick the
        * winners". */
-      : 'Week ' + wk + ' · pick the winners · scored in points',
+      : 'Week ' + wk + ' · pick the winners · scored in points'),
     /* Jason, 2026-09-11: yes to a "How it's scored" line into the rules. */
-    link: { label: 'How it’s scored', href: '#/rules' }
+    link: gsub ? GROUP_COPY.rules : { label: 'How it’s scored', href: '#/rules' }
   }));
   /* 🔴 THE OLD HEADER IS DELETED, NOT HIDDEN BEHIND THE NEW ONE. It was four
    * elements invented on this screen - a kicker in caps, an h1 carrying the
@@ -1924,3 +2081,76 @@ const SCOPE_LABEL = {
   all: 'All games', top25: 'Top 25', conference: 'One conference',
   ranked_v_ranked: 'Ranked vs ranked', handpick: 'The commissioner\u2019s pick'
 };
+
+/* ------------------------------------------------------------------ group state
+ * Drawn only on #/gpicks. Nothing here fetches: the dropdown, sign-in and "Try
+ * again" all go back through data.reload(), which is previewData's own group branch
+ * (CONTRACT-GROUPS \u00a73 - render never fetches). */
+
+/** Reload the group state and draw it - unless the person has moved on meanwhile. */
+function regroup(root, data, state) {
+  if (!data || typeof data.reload !== 'function') return;
+  render(root, { ...data, groupState: 'loading' }, state);
+  const mine = root.__p2Seq;
+  const here = () => root.__p2Seq === mine && root.classList.contains('scr-p2-slate');
+  data.reload()
+    .then((d) => { if (here()) render(root, d, state); })
+    .catch(() => { if (here()) render(root, { ...data, groupState: 'error' }, state); });
+}
+
+/** Which group, and the door to its page. A dropdown with two groups or more, the
+ *  group's name with one. Switching re-draws with that group's sport, week and picks. */
+function groupBar(root, data, state) {
+  const bar = el('div', 'p2-gbar');
+  const groups = data.groups || [];
+  if (groups.length) {
+    bar.appendChild(groupSwitcher(groups, data.group ? data.group.id : '', () => regroup(root, data, state)));
+  }
+  const door = el('a', 'p2-gdoor', GROUP_COPY.door.label);
+  door.href = GROUP_COPY.door.href;
+  bar.appendChild(door);
+  root.appendChild(bar);
+}
+
+/** Every group state that is not a slate. Each one has a way forward. */
+function groupGate(root, data, state) {
+  head(root, data, null);
+  const gs = data.groupState;
+  if (gs === 'loading') {
+    root.appendChild(stateBlock('loading', { rows: 5, body: GROUP_COPY.loading }));
+    return;
+  }
+  if (gs === 'signed-out' || gs === 'no-group') {
+    const c = gs === 'signed-out' ? GROUP_COPY.signedOut : GROUP_COPY.noGroup;
+    const card = el('div', 'p2-gcard');
+    card.dataset.gate = gs;
+    card.appendChild(el('p', 'p2-gcard-h', c.title));
+    card.appendChild(el('p', 'p2-gcard-b', c.body));
+    if (gs === 'signed-out') {
+      const b = el('button', 'p2-gcta', c.cta);
+      b.type = 'button';
+      b.onclick = () => {
+        if (!window.agOpenSignIn) return;
+        window.agOpenSignIn().then((ok) => { if (ok) regroup(root, data, state); });
+      };
+      card.appendChild(b);
+    } else {
+      /* \ud83d\udd34 THE NO-GROUP DOOR. Home's "Group pools" lands here; this is the step. */
+      const a = el('a', 'p2-gcta', c.cta);
+      a.href = GROUP_COPY.noGroup.href;
+      card.appendChild(a);
+    }
+    root.appendChild(card);
+    return;
+  }
+  if (gs === 'empty') {
+    groupBar(root, data, state);
+    root.appendChild(stateBlock('empty', GROUP_COPY.empty));
+    return;
+  }
+  const c = gs === 'offline' ? GROUP_COPY.offline : GROUP_COPY.error;
+  root.appendChild(stateBlock(gs === 'offline' ? 'offline' : 'error', {
+    title: c.title, body: c.body,
+    action: { label: c.cta, onClick: () => regroup(root, data, state) }
+  }));
+}

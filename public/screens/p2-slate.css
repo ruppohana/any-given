@@ -207,10 +207,11 @@
      as everything else in the stack. */
   position: sticky; top: calc(var(--topbar-h) + 38px); z-index: 3; background: var(--surface-1);
   }
-/* The pinned stack, top down: top bar (--topbar-h), filter pills (60px, when
-   present), the picked bar (38px), then the date. */
-.scr-p2-slate:has(.p2-filters) .p2-bar { top: calc(var(--topbar-h) + 60px); }
-.scr-p2-slate:has(.p2-filters) .p2-grp { top: calc(var(--topbar-h) + 98px); }
+/* The pinned stack, top down: top bar (--topbar-h), filter pills (50px, when
+   present - a 34px pill in 8px of padding each side), the picked bar (38px),
+   then the date. */
+.scr-p2-slate:has(.p2-filters) .p2-bar { top: calc(var(--topbar-h) + 50px); }
+.scr-p2-slate:has(.p2-filters) .p2-grp { top: calc(var(--topbar-h) + 88px); }
 .scr-p2-slate .p2-grp::-webkit-details-marker { display: none; }
 .scr-p2-slate .p2-grp:hover { background: var(--track); }
 .scr-p2-slate .p2-grp-r { display: inline-flex; align-items: center; gap: 6px; }
@@ -572,15 +573,21 @@
 .scr-p2-slate .p2-filters:not(.is-scrollable) {
   -webkit-mask-image: none; mask-image: none;
 }
-/* 🔴 SAME PILL AS THE DAY CHIPS. Jason, 2026-09-10: "can these pills be the same
-   size(ish), height" - the filters were 34px with 11px type under 44px day chips
-   with 13px type. They meet at the day chip, not the filter: 44px (--tap-min) is
-   the floor for anything a thumb hits (test §5), so the filters come UP to it. */
+/* 🔴 THE PILL IS 34px TALL AND THE TAP IS 44. Jason, 2026-09-11: "change the
+   radius and make the pill smaller top to bottom" - so the drawn pill drops to
+   34px with his 10px corners (the day chips it was matched to are gone), and the
+   44px floor (--tap-min, test §5) is kept by an invisible ::after that reaches 5px
+   above and below it, inside the row's 8px padding. A thumb still hits 44. */
 .scr-p2-slate .p2-filter {
+  position: relative;
   flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
-  font: inherit; min-height: var(--tap-min); padding: 0 12px;
-  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  font: inherit; min-height: 34px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 10px;
   background: var(--card); color: var(--fg); white-space: nowrap;
+}
+.scr-p2-slate .p2-filter::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  top: calc((var(--tap-min) - 34px) / -2); bottom: calc((var(--tap-min) - 34px) / -2);
 }
 .scr-p2-slate .p2-filter-l { font-size: var(--t-body); font-weight: 600; }
 .scr-p2-slate .p2-filter-n { font-size: var(--t-micro); font-weight: 500; color: var(--dim); }
@@ -606,12 +613,29 @@
 .scr-p2-slate .p2-score .p2-sc { font-size: var(--t-section); font-weight: 800; }
 .scr-p2-slate .p2-score .p2-sc[data-loser="true"] { color: var(--dim); }
 
-/* 🔴 THE INVITE, ON THE SLATE IT OPENED. A friend who tapped a group link lands
-   here with nothing asked; this line says whose group it is and that a pick is
-   all it takes. Accent-tinted so it reads as the reason they are here, not as
-   chrome. Gone once they have joined. */
-.scr-p2-slate .p2-joining { margin: 4px 0 10px; padding: 12px 14px;
-  border: 1px solid var(--accent); border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--accent) 12%, var(--card)); display: grid; gap: 3px; }
-.scr-p2-slate .p2-joining-h { font-weight: 800; color: var(--fg); }
-.scr-p2-slate .p2-joining-b { font-size: var(--t-micro); color: var(--dim); }
+/* The invite line's styles left with the line itself - an invite opens #/g now
+   (CONTRACT-GROUPS §1, amended 2026-09-11). */
+
+/* ── GROUP POOLS - the `group` state (#/gpicks) ─────────────────────────────
+   Which group, a door to its page, and the two gates - signed out, in no group -
+   that must never be a dead end. Points only; nothing about a balance near it.
+   The dropdown itself is components/group.js (GROUP_CSS). */
+.scr-p2-slate .p2-gbar { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin: 0 0 6px; min-width: 0; }
+.scr-p2-slate .p2-gbar > .ag-gsw { flex: 1 1 auto; }
+.scr-p2-slate .p2-gdoor { flex: 0 0 auto; display: inline-flex; align-items: center;
+  min-height: var(--tap-min); padding: 0 12px; font-size: var(--t-body); font-weight: 700;
+  color: var(--accent); text-decoration: none; white-space: nowrap;
+  border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--card); }
+.scr-p2-slate .p2-gcard { margin: 4px 0 12px; padding: 16px; display: grid; gap: 6px;
+  border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); }
+.scr-p2-slate .p2-gcard-h { margin: 0; font-size: var(--t-emph); font-weight: 800; color: var(--fg); }
+.scr-p2-slate .p2-gcard-b { margin: 0 0 6px; font-size: var(--t-body); color: var(--dim); }
+.scr-p2-slate .p2-gcta { display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--tap-min); padding: 0 16px; font: inherit; font-size: var(--t-emph);
+  font-weight: 800; color: var(--on-accent); background: var(--accent);
+  border: 1px solid var(--accent); border-radius: var(--radius-button);
+  text-decoration: none; cursor: pointer; }
+/* A refused pick says why, on the row it happened to - the server's own words. */
+.scr-p2-slate .p2-gmsg { margin: 0; font-size: var(--t-micro); font-weight: 700;
+  color: var(--down); text-align: center; }
