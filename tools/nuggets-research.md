@@ -1,6 +1,6 @@
 # Nuggets — the day-before research run
 
-**Runs every day at 9:00 AM Pacific** from the Claude desktop scheduled task
+**Runs every day at 5:00 AM Pacific** (Jason moved it from 9 AM on 2026-09-10) from the Claude desktop scheduled task
 `anygiven-nuggets-day-before`. It researches every team that plays **tomorrow** (Pacific) and
 ships their nugget files before kickoff. A day with no games tomorrow is a no-op. Friday's run
 covers Saturday's college slate (~160 teams); Saturday's covers Sunday's NFL.
