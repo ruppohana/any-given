@@ -71,10 +71,11 @@ SEASON = "2026"
 #
 # 🔴 THE SWITCH. "1" = a pick, a group or a join needs a signed-in account with
 # a handle; the app opens the sign-in sheet at the first pick (Jason: "first
-# pick is fine"). Held at "0" until the privacy page is published - collecting
-# strangers' emails without a posted policy is the one thing CalOPPA forbids,
-# and the page is drafted (drafts/privacy.html) but still has no contact address.
-REQUIRE_EMAIL = "0"
+# pick is fine"). Switched on 2026-09-10 in the same deploy that published
+# /privacy.html (contact: Jason's address) - it was held at "0" only because
+# collecting strangers' emails before a policy is posted is what CalOPPA forbids.
+# Back to "0" is the whole rollback: device ids work again, nothing is lost.
+REQUIRE_EMAIL = "1"
 
 # ------------------------------------------------------------------
 # NOT DECLARED YET, AND ON PURPOSE
