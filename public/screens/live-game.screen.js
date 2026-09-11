@@ -2125,6 +2125,33 @@ async function refreshKey(wrap, sport) {
   paint(wrap); poll(wrap);
 }
 
+/* 🔴 A GAME NOBODY IS POLLING YET STILL HAS A PRE-GAME. Found 2026-09-10 on the
+ * College path: FAMU at Miami went final, the key moved on to Villanova at
+ * Louisville - tomorrow, 4 PM - and /api/state answered 404, because pollers
+ * only start fifteen minutes before kickoff. The strip highlighted VILL @ LOU
+ * while the board went on drawing FAMU's final underneath it.
+ *
+ * The slate already holds everything the Upcoming card needs - both teams,
+ * the kickoff, the venue, the channel - so a scheduled game with no push is
+ * drawn from that instead. Which is also the only way the countdown Jason
+ * asked for is ever seen more than fifteen minutes out. The first real push
+ * replaces it. */
+function preFromSlate(key) {
+  const [sp, id] = String(key || '').split(':');
+  const also = S.also && S.also.sport === sp ? S.also : null;
+  const g = also && (also.games || []).find((x) => String(x.id) === id);
+  if (!g || g.status === 'final' || g.status === 'in_progress' || !g.kickoffUtc) return null;
+  const teams = {};
+  for (const t of (g.teams || [])) teams[String(t.id)] = { ...t, id: String(t.id), league: sp };
+  return {
+    gameId: id, sport: sp, status: 'pre',
+    homeTeamId: String(g.homeTeamId), awayTeamId: String(g.awayTeamId), teams,
+    homeScore: 0, awayScore: 0, kickoffUtc: g.kickoffUtc,
+    venue: g.venue || null, broadcast: g.broadcast || null,
+    plays: [], drives: [], situation: {}, offers: [], fromSlate: true
+  };
+}
+
 async function poll(wrap) {
   try {
     const [stateRes, boardRes] = await Promise.all([
@@ -2136,7 +2163,17 @@ async function poll(wrap) {
      * that game yet" and this used to ignore it and keep drawing a skeleton, so
      * a sport nobody is polling looked identical to a sport that was one second
      * from loading — forever. */
-    else if (stateRes.status === 404) S.noGame = true;
+    else if (stateRes.status === 404) {
+      const pre = preFromSlate(S.key);
+      if (pre) { S.raw = pre; S.noGame = false; }
+      else {
+        /* Never leave ANOTHER game's board up under this game's key - that is
+           the strip-says-one-thing, board-says-another bug. */
+        const id = String(S.key || '').split(':')[1];
+        if (S.raw && String(S.raw.gameId) !== id) S.raw = null;
+        S.noGame = true;
+      }
+    }
     if (boardRes.ok) S.board = (await boardRes.json()).calls || [];
 
     /* 🔴 A REPAINT THAT CHANGES NOTHING IS THE BLINK. Jason, twice: "The logos
