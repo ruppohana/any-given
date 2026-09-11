@@ -23,3 +23,17 @@ test('the assumption is not stored - Home still asks', () => {
   const line = SRC.slice(at, SRC.indexOf('\n', at));
   assert.equal(line.includes('store.set'), false, 'assumed for this screen only');
 });
+
+test('the Live tab reopens the last game only while it is still being played', () => {
+  // Jason, 2026-09-10: "if you go back to the live page, then you go back to the
+  // last live page you were on. but if that game is over then you should go to
+  // the picker."
+  assert.ok(/lastSeen\.key && !lastSeen\.final/.test(SRC), 'a final already seen is skipped');
+  assert.ok(SRC.includes('S.fromLast = !forced && !!lastKey;'), 'the tab remembers it came from the last game');
+  const at = SRC.indexOf("S.raw.status === 'final' && S.fromLast");
+  assert.ok(at > 0, 'a last game that ended after you left is caught on the first poll');
+  const branch = SRC.slice(at, at + 700);
+  assert.ok(branch.includes('S.forced = false') && branch.includes('refreshKey(wrap, S.sport)'),
+    'and the screen falls back to the picker - the strip and the next game');
+  assert.ok(/final: true/.test(SRC), 'the stored last game is marked final so the next tap skips it');
+});

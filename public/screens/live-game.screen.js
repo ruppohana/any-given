@@ -2045,8 +2045,15 @@ export function render(root, _data, screenState) {
   const goLast = !forced && !S.isHome && window.__agGoLast === true;
   window.__agGoLast = false;
   const lastSeen = goLast ? store.get('lastLive', null) : null;
-  const lastKey = lastSeen && lastSeen.key && (Date.now() - (lastSeen.at || 0)) < 6 * 60 * 60 * 1000
+  /* 🔴 ...AND ONLY WHILE IT IS STILL BEING PLAYED. Jason, 2026-09-10: "if you go
+   * back to the live page, then you go back to the last live page you were on.
+   * but if that game is over then you should go to the picker." A final already
+   * seen is skipped here; one that ended after you left is caught by the first
+   * poll (S.fromLast, below) and sent to the picker from there. */
+  const lastKey = lastSeen && lastSeen.key && !lastSeen.final
+    && (Date.now() - (lastSeen.at || 0)) < 6 * 60 * 60 * 1000
     ? lastSeen.key : null;
+  S.fromLast = !forced && !!lastKey;
   if (lastKey && (!S.raw || String(S.raw.gameId) !== lastKey.split(':')[1])) { S.raw = null; S.board = []; }
   S.key = forced || lastKey || (S.sport ? GAME_FOR[S.sport] : null);
   /* Recorded on the state, not just held in this closure: the 5-minute
@@ -2204,6 +2211,25 @@ async function poll(wrap) {
       /* The game the Live tab goes back to - only ever one that was LIVE on
          this screen, never a pre-game or a final you merely looked at. */
       if (S.raw && S.raw.status === 'live' && S.key) store.set('lastLive', { key: S.key, at: Date.now() });
+      /* 🔴 THE LAST GAME IS OVER - MARK IT, AND IF THE TAB BROUGHT YOU, GO TO THE
+       * PICKER. Jason, 2026-09-10, on FAMU at Miami still filling the Live tab
+       * three hours after it ended: "if that game is over then you should go to
+       * the picker." The stored game is marked final so the next tap skips it
+       * outright; if this visit came from the tab (S.fromLast) the forced key is
+       * dropped and the screen falls back to the strip and the next game. Somebody
+       * who WATCHED it end did not come from the tab, so they stay on the final. */
+      if (S.raw && S.raw.status === 'final' && S.key) {
+        const ls = store.get('lastLive', null);
+        if (ls && ls.key === S.key && !ls.final) store.set('lastLive', { ...ls, final: true });
+      }
+      if (S.raw && S.raw.status === 'final' && S.fromLast) {
+        S.fromLast = false; S.forced = false;
+        if (S.sport) {
+          refreshKey(wrap, S.sport);
+          if (S.keyTimer) clearInterval(S.keyTimer);
+          S.keyTimer = setInterval(() => { if (!S.forced && S.sport) refreshKey(wrap, S.sport); }, 300000);
+        }
+      }
     }
     /* 🔴 404 IS AN ANSWER, NOT A SILENCE. The Worker says "nothing pushed for
      * that game yet" and this used to ignore it and keep drawing a skeleton, so
