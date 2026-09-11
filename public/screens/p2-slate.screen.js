@@ -1753,6 +1753,33 @@ export function render(root, data, state) {
    * `Total Points for LVILLE`, `MISS`, `SMU`, `FSU` - which is a national-contest answer.
    * A conference-scoped pool is about eight picks and four fields would outweigh the
    * slate they break a tie on. */
+  /* 🔴 THE POOL SLATE'S LIVE ROWS KEEP MOVING TOO. All games got a 30-second
+   * live refresh tonight and this screen did not, so a pool slate left open
+   * during a game froze its score at whatever it was when the page drew -
+   * on a live row, a number that looks current and is not.
+   *
+   * Same cadence and same rules as All games: every 30 seconds the games in
+   * the poll window are re-overlaid (held for display, real for closing) and
+   * ONLY their rows are swapped, so an open day card, the filter and the
+   * scroll position are untouched. One timer on window, cleared on every
+   * render and the moment the root stops being this screen. */
+  if (window.__agPoolLiveTimer) { clearInterval(window.__agPoolLiveTimer); window.__agPoolLiveTimer = null; }
+  const inPlay = data.games.filter((g) => g.status !== 'final' && g.status !== 'void'
+    && g.kickoffUtc != null && Date.now() >= g.kickoffUtc - 15 * 60 * 1000
+    && Date.now() < g.kickoffUtc + 6 * 60 * 60 * 1000);
+  if (inPlay.length) {
+    window.__agPoolLiveTimer = setInterval(async () => {
+      if (!document.body.contains(root) || !root.classList.contains('scr-p2-slate')) {
+        clearInterval(window.__agPoolLiveTimer); window.__agPoolLiveTimer = null; return;
+      }
+      try { await overlayLive(inPlay, fsport); } catch { return; }
+      for (const g of inPlay) {
+        const old = root.querySelector('.p2-row[data-game-id="' + String(g.id).replace(/"/g, '') + '"]');
+        if (old) old.replaceWith(row(ctx, g));
+      }
+    }, 30000);
+  }
+
   const tb = data.games.find((g) => g.id === (data.tiebreak && data.tiebreak.gameId)) || data.games[0];
   if (tb) {
     const card = el('div', 'card p2-tb');
