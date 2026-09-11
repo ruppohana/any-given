@@ -202,7 +202,16 @@ test('each quarter closes when its own quarter starts, and not before', () => {
 
 test('everything is open before kickoff and nothing after full time', () => {
   assert.equal(openOn({ status: 'scheduled', kickoffUtc: 2000 }).length, GAME_MARKETS.length);
-  assert.deepEqual(openOn({ status: 'scheduled', kickoffUtc: 500 }), [], 'past kickoff');
+  /* 🔴 CHANGED DELIBERATELY. This asserted that a `scheduled` game past its
+     kickoff has NOTHING open - which was the bug, written down as a rule.
+     The slate is up to ten minutes stale, so a game that has genuinely
+     kicked still reads `scheduled`, and this closed its second half and
+     Q2-Q4 exactly when they should open. Found live on FAMU at Miami.
+     Past kickoff with a stale status now means "in period 1": period-1
+     markets shut, later periods open. See the stale-slate tests below. */
+  const past = openOn({ status: 'scheduled', kickoffUtc: 500 });
+  assert.ok(!past.includes('q1_winner') && !past.includes('winner'), 'period-1 markets shut at kickoff');
+  assert.ok(past.includes('h2_winner') && past.includes('q4_winner'), 'later periods open past kickoff');
   assert.deepEqual(openOn({ status: 'final', period: 4 }), []);
 });
 
@@ -352,4 +361,28 @@ test('the slate mapper passes through a field it has never heard of', async () =
   const ret = body.slice(body.indexOf('return {'), body.indexOf('}).filter('));
   assert.ok(/\.\.\.g,/.test(ret),
     'fetchSlate must spread the raw game, not allow-list its keys');
+});
+
+/* 🔴 THE STALE-SLATE WINDOW. Found live on FAMU at Miami, 5:06 PM, six
+ * minutes after kickoff: the poller was healthy, the slate still said
+ * `scheduled`, and every market - second half and Q2-Q4 included - read as
+ * shut. The in-game board went dark for the first ten minutes of the game. */
+test('a scheduled game past kickoff opens its later periods, not nothing', () => {
+  const kick = 1_000_000_000_000;
+  const g = { status: 'scheduled', kickoffUtc: kick, period: null };
+  const now = kick + 6 * 60 * 1000;
+  const open = GAME_MARKETS.filter((m) => M.marketIsOpen(g, m, now)).map((m) => m.id);
+  for (const id of ['h2_winner', 'h2_total', 'q2_winner', 'q3_winner', 'q4_winner']) {
+    assert.ok(open.includes(id), `${id} must be open six minutes after kickoff`);
+  }
+  for (const id of ['winner', 'spread', 'total', 'h1_winner', 'q1_winner']) {
+    assert.ok(!open.includes(id), `${id} closed at kickoff and must stay closed`);
+  }
+});
+
+test('a record stuck at scheduled does not reopen its markets forever', () => {
+  const kick = 1_000_000_000_000;
+  const g = { status: 'scheduled', kickoffUtc: kick };
+  const open = GAME_MARKETS.filter((m) => M.marketIsOpen(g, m, kick + 7 * 3600e3));
+  assert.deepEqual(open, [], 'a postponed game must not keep its in-game markets open');
 });

@@ -457,8 +457,26 @@ export function marketIsOpen(game: any, market: { scope: string; period?: number
   if (!game || !market) return false;
   if (game.status === 'final') return false;
   if (game.status !== 'in_progress') {
+    if (!isNum(game.kickoffUtc) || !isNum(now)) return false;
     /* Not started: open until the clock reaches kickoff. */
-    return isNum(game.kickoffUtc) && isNum(now) && now < game.kickoffUtc;
+    if (now < game.kickoffUtc) return true;
+    /* 🔴 PAST KICKOFF BUT THE SLATE STILL SAYS `scheduled`. The capture runs
+     * every ten minutes, so for up to ten minutes after the coin toss the
+     * stored status is stale - and this branch used to answer "closed" for
+     * EVERY market, including the second half and Q2-Q4, which are exactly
+     * the ones that should open at kickoff. The in-game board went dark for
+     * the first ten minutes of every game. Found on the live FAMU at Miami
+     * feed at 5:06 PM, six minutes in, with the poller healthy and the slate
+     * still saying scheduled.
+     *
+     * Same trap poll-window.ts already fixed for the poller gate: the STATUS
+     * goes stale, the KICKOFF TIME does not. A game we know has kicked is in
+     * its first period until the feed says otherwise, so later-period
+     * markets stay open and period-1 markets are shut. Capped at the same
+     * six hours poll-window uses, so a record stuck at `scheduled` for a
+     * postponed game does not reopen its markets forever. */
+    if (now >= game.kickoffUtc + 6 * 60 * 60 * 1000) return false;
+    return 1 < marketClosesAtPeriod(market);
   }
   /* Running: open only while the game has not reached this market's period.
      An unknown period on a live game closes everything except full-game
