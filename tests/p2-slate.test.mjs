@@ -296,8 +296,12 @@ test('§5 - the words. Marbles is the balance and none of the dead words appear'
    * header's sub line rather than a kicker this screen no longer owns. The rule
    * is unchanged and is the legal position: the group half never speaks the
    * language of a balance. */
-  const poolCopy = (CODE.match(/'[^']*your group[^']*'/g) || []).join(' ');
-  assert.ok(poolCopy.length > 0, 'the group section must name itself on the screen');
+  /* 2026-09-10: the line is now "Week N · pick the winners · scored in points"
+   * - Jason asked what "your group" meant and said yes to the change, because it
+   * read wrong for anybody only in the everyone-in pool. So this finds the
+   * points line rather than the old name; the legal rule below is unchanged. */
+  const poolCopy = (CODE.match(/'[^']*scored in points[^']*'/g) || []).join(' ');
+  assert.ok(poolCopy.length > 0, 'the points half must say how it is scored on the screen');
   assert.ok(!/Marble/i.test(poolCopy), 'the group copy must not mention a balance it does not have');
   assert.ok(!/stake|payout|bank/i.test(poolCopy), 'a group stakes nothing');
 });

@@ -1930,7 +1930,10 @@ function head(root, data, _) {
     noTitle: true,
     sub: (data && data.mode) === 'week'
       ? 'Week ' + wk + ' · against the spread · every pick pays 2.00×'
-      : 'Week ' + wk + ' · your group · scored in points'
+      /* "your group" read wrong for anybody only in the everyone-in pool, and
+       * the line never said what to do. Jason, 2026-09-10: yes to "pick the
+       * winners". */
+      : 'Week ' + wk + ' · pick the winners · scored in points'
   }));
   /* 🔴 THE OLD HEADER IS DELETED, NOT HIDDEN BEHIND THE NEW ONE. It was four
    * elements invented on this screen - a kicker in caps, an h1 carrying the
