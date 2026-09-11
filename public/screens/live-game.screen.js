@@ -3152,7 +3152,8 @@ function paint(wrap) {
       : priced;
     /* n-2 / n-3 drive the outer-edge text rule; is-fourth carries the figures. */
     const tiles = el('div', 'lg-tiles' + (isScript ? ' is-script' : priced.length > 3 ? ' is-4' : '')
-      + ' n-' + priced.length + (type.id === 'fourth_down' ? ' is-fourth' : ''));
+      + ' n-' + priced.length + (type.id === 'fourth_down' ? ' is-fourth' : '')
+      + (type.id === 'direction' ? ' is-dir' : ''));
     for (const o of shown) {
       const b = el('button', 'lg-tile');
       const win = Math.round(S.stake * o.pays) - S.stake;
@@ -4895,7 +4896,14 @@ function bragButton(state, rows) {
  * there is no file to fetch. Stroke colour is irrelevant: they are used as masks.
  * The script card's diagrams were replaced by Jason's own figures on 2026-09-11;
  * the helper stays for the cards that get play lines. */
-const PLAY_ART = (paths) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 170" fill="none" stroke="#000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`)}")`;
+const PLAY_ART = (paths) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#000" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`)}")`;
+/* Jason: "for right, a banana shaped thick line with an arrow ... mirror for left." */
+const BANANA = '<path d="M24 94 C22 60 34 38 64 30"/><polyline points="50.8,42.8 64,30 46.2,25.4"/>';
+const ART = {
+  dirLeft: PLAY_ART(`<g transform="translate(100 0) scale(-1 1)">${BANANA}</g>`),
+  dirMid: PLAY_ART('<path d="M50 94 L50 34"/><polyline points="38,46 50,32 62,46"/>'),
+  dirRight: PLAY_ART(BANANA)
+};
 
 const CSS = `
 .lg { display: grid; gap: 10px; }
@@ -5329,6 +5337,22 @@ const CSS = `
 .lg-tiles.is-fourth .lg-tile:nth-child(2) { --art: url('/art/fig-kick.png'); }
 .lg-tiles.is-fourth .lg-tile:nth-child(1)::before { -webkit-mask-position: right 0 center; mask-position: right 0 center; }
 .lg-tiles.is-fourth .lg-tile:nth-child(2)::before { -webkit-mask-position: left 0 center; mask-position: left 0 center; }
+/* 🔴 PLAY LINES ON THE DIRECTION CARD. Jason, 2026-09-11: "I liked the playbook
+   lines you did as well. So for right, a banana shaped thick line with an arrow
+   is a good idea, mirror for left." Middle goes straight up. Each line sits on
+   its tile's inner side - Left's on the right, Right's on the left - at 84% of
+   the tile's height, in --fg at .24 like the figures. */
+.lg-tiles.is-dir .lg-tile { position: relative; overflow: hidden; }
+.lg-tiles.is-dir .lg-tile > * { position: relative; }
+.lg-tiles.is-dir .lg-tile::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: var(--fg); opacity: .24; -webkit-mask: var(--art) no-repeat; mask: var(--art) no-repeat;
+  -webkit-mask-size: auto 84%; mask-size: auto 84%; }
+.lg-tiles.is-dir .lg-tile:nth-child(1) { --art: ${ART.dirLeft}; }
+.lg-tiles.is-dir .lg-tile:nth-child(1)::before { -webkit-mask-position: right 2px bottom 4px; mask-position: right 2px bottom 4px; }
+.lg-tiles.is-dir .lg-tile:nth-child(2) { --art: ${ART.dirMid}; }
+.lg-tiles.is-dir .lg-tile:nth-child(2)::before { -webkit-mask-position: center bottom 4px; mask-position: center bottom 4px; }
+.lg-tiles.is-dir .lg-tile:nth-child(3) { --art: ${ART.dirRight}; }
+.lg-tiles.is-dir .lg-tile:nth-child(3)::before { -webkit-mask-position: left 2px bottom 4px; mask-position: left 2px bottom 4px; }
 /* The stoppage nugget - one true thing, while nothing is happening. */
 .lg-nugget { display: grid; gap: 6px; }
 .lg-nugget-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
