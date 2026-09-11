@@ -50,7 +50,15 @@ export async function researchTeam(env: any, job: TeamJob, today: string) {
       },
       body: JSON.stringify({ model, max_tokens: 8000, system: SYSTEM, messages, tools })
     });
-    if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      /* The first test (2026-09-11) failed "anthropic 400: " with nothing after
+       * it - so a failure now carries the headers that say who answered and a
+       * marker when the body really is empty. Never the key. */
+      const body = (await res.text().catch(() => '')).slice(0, 400);
+      const h = (n: string) => res.headers.get(n) || '-';
+      throw new Error(`anthropic ${res.status}: ${body || '(empty body)'} [request-id ${h('request-id')}; `
+        + `server ${h('server')}; content-type ${h('content-type')}; cf-ray ${h('cf-ray')}]`);
+    }
     const m: any = await res.json();
     usage.calls++;
     usage.input += m.usage?.input_tokens || 0;

@@ -117,7 +117,11 @@ export class NuggetDesk {
     } catch (e: any) {
       totals.failed++;
       const failures: any[] = (await st.get('failures')) || [];
-      failures.push({ key, team: job.team, err: String(e?.message || e).slice(0, 300), at: Date.now() });
+      /* The SHAPE of the stored key, never its value: a pasted key that arrived
+       * as one character, or with a space, fails as a bare 400/401. */
+      const k = String(this.env.ANTHROPIC_API_KEY || '');
+      const keyShape = { len: k.length, sk_ant: k.startsWith('sk-ant-'), space: /\s/.test(k) };
+      failures.push({ key, team: job.team, err: String(e?.message || e).slice(0, 700), keyShape, at: Date.now() });
       await st.put({ failures: failures.slice(-100), totals });
     }
 
