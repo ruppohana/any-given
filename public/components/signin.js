@@ -122,9 +122,13 @@ export function openSignIn(reason) {
 
     const stepEmail = (errMsg) => {
       box.textContent = '';
-      box.appendChild(el('h2', 'ag-si-h', 'Play with your email'));
+      /* 🔴 ONE DOOR FOR BOTH. A new player and a returning one take the same
+       * step - the code finds the existing account and skips the handle - but
+       * "Play with your email" read as sign-up only, and Jason asked how to
+       * sign in with an address he already had (2026-09-10). Say it. */
+      box.appendChild(el('h2', 'ag-si-h', 'Sign in or sign up'));
       box.appendChild(el('p', 'ag-si-b', reason
-        || 'We’ll send you a 6-digit code. No password, and your picks can’t be made by anyone else.'));
+        || 'Same step either way: enter your email and we’ll send a 6-digit code. No password, and your picks can’t be made by anyone else.'));
       const inp = el('input', 'ag-si-in');
       inp.type = 'email'; inp.autocomplete = 'email'; inp.inputMode = 'email';
       inp.placeholder = 'you@example.com'; inp.value = email || signedInEmail();

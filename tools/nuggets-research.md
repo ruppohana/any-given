@@ -20,7 +20,9 @@ the "Waiting for the snap…" tile, fun → odd → fact, never repeating in a g
 Work in `C:\Claude\Knowledge\anygiven`. It is its own git repo with a GitHub remote.
 
 1. **List the teams.**
-   `node tools/nugget-teams.mjs > "$TEMP/nugget-teams.json"`
+   `node tools/nugget-teams.mjs` — read its output directly. **Never redirect it to a file**
+   (`> "$TEMP/..."`): a write outside the repo is a permission prompt, and a prompt in an
+   unattended run waits for a human who is asleep — it stalled the first dry run on 2026-09-10.
    It prints `{date, dayBefore, teams:[{league, teamId, team, abbrev, opponent, file, asOf}]}` —
    only teams whose file is missing or older than the day before the game. **If `teams` is empty,
    stop and report "no games tomorrow" (or "all fresh").**
