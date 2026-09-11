@@ -102,13 +102,15 @@ export function normDevice(v: unknown): string {
 }
 
 export async function requireIdentity(req: Request, env: any, deviceId: unknown, json: Json):
-  Promise<{ userId: string } | { error: Response }> {
+  Promise<{ userId: string; handle?: string } | { error: Response }> {
   const s = await sessionAccount(req, env);
   if (s) {
     if (env.REQUIRE_EMAIL === '1' && !s.handle) {
       return { error: json({ error: 'profile_required', message: 'Pick a handle to play.' }, 401) };
     }
-    return { userId: s.accountId };
+    /* The handle travels with the identity so every board names a signed-in
+     * person by it - never by a name the phone typed, which could be anyone's. */
+    return { userId: s.accountId, handle: s.handle || undefined };
   }
   if (env.REQUIRE_EMAIL === '1') {
     return { error: json({ error: 'email_required', message: 'Sign in with your email to play.' }, 401) };

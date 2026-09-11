@@ -49,3 +49,15 @@ test('an account can be deleted from the app, and only on purpose', () => {
   assert.ok(app.includes("'/api/auth/delete'") && app.includes('Delete for good'), 'settings has a two-step delete');
   assert.ok(app.includes('openProfileEdit') && app.includes("'/privacy.html'"), 'settings has change handle and privacy');
 });
+
+test('a signed-in person is named by their handle on every pool board, never by a typed name', () => {
+  // Jason, 2026-09-10: "does it check your name on the board against other handles?"
+  // It did not - pick, create and join stored the phone's free-text name, so a
+  // signed-in player could show up as somebody else's @handle.
+  const src = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf8');
+  const binds = src.split('\n').filter((l) => l.includes("String(b.name || '')"));
+  assert.equal(binds.length, 3, 'pick, create and join each name the member');
+  for (const l of binds) assert.ok(l.includes('who.handle ||'), 'the handle wins: ' + l.trim());
+  const auth = readFileSync(new URL('../src/auth.ts', import.meta.url), 'utf8');
+  assert.ok(auth.includes('handle: s.handle'), 'requireIdentity carries the handle');
+});

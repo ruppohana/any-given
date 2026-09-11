@@ -588,7 +588,7 @@ export default {
            ON CONFLICT(pool_id, user_id) DO UPDATE SET
              display_name = CASE WHEN excluded.display_name <> ''
                                  THEN excluded.display_name ELSE member.display_name END`
-        ).bind(poolId, userId, String(b.name || '').slice(0, 24), week).run();
+        ).bind(poolId, userId, (who.handle || String(b.name || '')).slice(0, 24), week).run();
 
         /* 🔴 ONE PICK PER PERSON PER GAME, ENFORCED BY THE PRIMARY KEY rather
          * than by a check - the same trick one-call-per-snap uses. A second pick
@@ -650,7 +650,7 @@ export default {
         await env.DB.prepare(
           `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
            VALUES (?, ?, ?, 0, 'commissioner')`
-        ).bind(code, userId, String(b.name || '').slice(0, 24)).run();
+        ).bind(code, userId, (who.handle || String(b.name || '')).slice(0, 24)).run();
 
         return json({ ok: true, poolId: code, name: b.poolName || 'Our pool', sport, week });
       }
@@ -673,7 +673,7 @@ export default {
           `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
            VALUES (?, ?, ?, 0, 'player')
            ON CONFLICT(pool_id, user_id) DO NOTHING`
-        ).bind(code, userId, String(b.name || '').slice(0, 24)).run();
+        ).bind(code, userId, (who.handle || String(b.name || '')).slice(0, 24)).run();
 
         return json({ ok: true, poolId: pool.id, name: pool.name, sport: pool.sport });
       }
