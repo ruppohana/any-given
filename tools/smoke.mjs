@@ -126,6 +126,12 @@ for (const sp of ['nfl', 'college-football']) {
       const res = await fetch(`${base}/api/state/${key}`);
       const src = res.headers.get('x-state-source') || '?';
       const j = await res.json();
+      /* 🔴 THE SLATE SAYS LIVE FOR UP TO TEN MINUTES AFTER THE WHISTLE. It is
+       * a cron capture; the game's own state is the truth. A final game's
+       * poller stops writing by design, so its state ages and falls back to
+       * KV - correct, and not a live game to hold to a live game's limits.
+       * Found the night SF at LAR ended mid-smoke. */
+      if (j.status === 'final') { console.log('final'.padEnd(9), key.padEnd(28), '- skipped, the game is over'); break; }
       const age = Date.now() - (j.pushedAt || 0);
       const limit = (j.heartbeatMs || 20000) * 2 + 15000;
       const lag = j.publishLagMs;
