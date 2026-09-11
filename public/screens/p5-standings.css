@@ -117,6 +117,10 @@
   display: grid;
   grid-template-columns: 26px 24px 22px minmax(0, 1fr) 44px 44px;
   gap: 6px; align-items: center;
+  /* The card has no padding of its own, so the rows carry it. Without this the
+     rank sat on the card's left edge and SEA on its right - Jason, 2026-09-11:
+     "we need a little padding to the right of season, shift the text to the left". */
+  padding-inline: 12px;
 }
 
 /* Short caps headers over the numeric columns only - rank and name need none. */
@@ -138,10 +142,10 @@
 }
 .scr-p5-standings .p5-li:last-child .p5-row { border-bottom: 0; }
 
-/* TINT, NOT BORDER, and full bleed to the card edge - the negative margin is what
- * makes it read as a highlighted band rather than an inset box. */
+/* TINT, NOT BORDER, and full bleed to the card edge - the row runs edge to edge
+ * and carries its own padding, which is what makes it read as a highlighted band
+ * rather than an inset box. */
 .scr-p5-standings .p5-row--self {
-  margin-inline: -12px; padding-inline: 12px;
   background: color-mix(in srgb, var(--accent) 10%, var(--card));
   font-weight: 700;
 }
