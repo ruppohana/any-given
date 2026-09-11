@@ -4846,8 +4846,21 @@ function reactions(state, wrap) {
   if (!last) return null;
   const recent = state.plays.slice(-3);
 
+  /* 🔴 THE PICTURE SAYS THE PLAY, NOT THE FEED'S SENTENCE. Found 2026-09-11
+   * rendering mockups for Jason's backgrounds: a college touchdown reached the
+   * card as "(09:16) #9 L.Avant rush middle ... clock 09:16 #29 T.Sandell kick
+   * attempt good (H: #87 ..." - the clock, the jersey numbers, the holder and
+   * the extra point. So the clock, jerseys, parentheses and trailing clock go,
+   * and "UTEP00" reads "UTEP 0" as it does on the board. */
+  const shareLine = (t) => playText(String(t || '')
+    .replace(/^\(\d{1,2}:\d{2}\)\s*/, '')
+    .replace(/,?\s*clock \d{1,2}:\d{2}.*$/i, '')
+    .replace(/^(no huddle-)?shotgun\s*/i, '')
+    .replace(/#\d+\s+/g, '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ').trim());
   const found = [];
-  const add = (k, line) => { if (!found.some((f) => f.k === k)) found.push({ k, line }); };
+  const add = (k, line) => { if (!found.some((f) => f.k === k)) found.push({ k, line: shareLine(line) }); };
   /* 🔴 THE FINAL SCORE IS A MOMENT. Jason, 2026-09-11: "Final scores." First in
    * the row once the game is over - it is the one everybody sends. */
   if (state.status === 'final') {
