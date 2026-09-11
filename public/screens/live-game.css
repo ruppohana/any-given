@@ -560,3 +560,59 @@
 .scr-live-game .lg-gamechip[data-live="true"] .lg-gamechip-t::before {
   content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px;
   border-radius: 50%; background: var(--down); vertical-align: middle; }
+
+/* 🔴 THE MOMENT, WRITTEN ACROSS THE FIELD. Jason, 2026-09-10: "flash
+   touchdown on the field when it happens, same with field goal. Same with the
+   end of the quarter, half and end of the game." The box wraps the field only,
+   so the word covers the turf and never the play bar under it. It ignores
+   taps - the field underneath is still the field. */
+.scr-live-game .lg-fieldbox { position: relative; }
+.scr-live-game .lg-flash { position: absolute; inset: 0; z-index: 3;
+  display: grid; place-items: center; pointer-events: none; }
+.scr-live-game .lg-flash-w { padding: 9px 18px; border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--tc, #23262c) 88%, #000000); color: #ffffff;
+  font-size: 26px; font-weight: 900; letter-spacing: .18em; line-height: 1;
+  white-space: nowrap; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+/* A break is not a celebration and a miss is not a score - neither borrows a
+   team's color. */
+.scr-live-game .lg-flash[data-kind="break"] .lg-flash-w { background: rgba(20, 22, 26, .88); }
+.scr-live-game .lg-flash[data-kind="miss"] .lg-flash-w { background: rgba(20, 22, 26, .88); color: #ffd400; }
+/* Once, on the paint that first shows it: in, overshoot, three beats. */
+.scr-live-game .lg-flash[data-fresh="true"] .lg-flash-w { animation: lg-flash-in 1.9s ease-out both; }
+@keyframes lg-flash-in {
+  0% { transform: scale(.55); opacity: 0; }
+  12% { transform: scale(1.08); opacity: 1; }
+  22% { transform: scale(1); }
+  36%, 64% { opacity: .35; }
+  50%, 78%, 100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scr-live-game .lg-flash[data-fresh="true"] .lg-flash-w { animation: none; }
+}
+/* No field to write across - the word takes the field's place. */
+.scr-live-game .lg-flash-solo { position: static; padding: 22px 0;
+  border-radius: var(--radius-card); background: #1f2a1f; }
+
+/* The countdown: a live clock under the matchup, never the headline. */
+.scr-live-game .lg-countdown { display: flex; align-items: baseline; justify-content: center;
+  gap: 8px; margin-top: 2px; }
+.scr-live-game .lg-countdown-l { font-size: var(--t-micro); font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.scr-live-game .lg-countdown-v { font-size: var(--t-section); font-weight: 800;
+  font-variant-numeric: tabular-nums; color: var(--fg); }
+
+/* 🔴 WHICH WAY IS THE TELEVISION - the question under the field, and the
+   one-tap correction on it. See tvMirrorOf. */
+.scr-live-game .lg-tvflip { position: absolute; top: 6px; right: 6px; z-index: 4;
+  width: 30px; height: 30px; padding: 0; border: 0; border-radius: 999px;
+  background: rgba(20, 22, 26, .55); color: #ffffff; font: inherit; font-size: 16px; line-height: 1; }
+.scr-live-game .lg-tvask { display: grid; gap: 8px; }
+.scr-live-game .lg-tvask-h { font-size: var(--t-emph); font-weight: 800; color: var(--fg); }
+.scr-live-game .lg-tvask-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.scr-live-game .lg-tvask-b { min-height: var(--tap-min, 44px); font: inherit; font-weight: 800;
+  border: 1px solid var(--line); border-radius: var(--radius-button, 10px);
+  background: var(--card); color: var(--fg); }
+.scr-live-game .lg-tvask-b:active { background: var(--accent); color: var(--on-accent); }
+.scr-live-game .lg-tvask-note { margin: 0; font-size: var(--t-micro); color: var(--dim); }
+.scr-live-game .lg-tvask-n { justify-self: center; padding: 4px 8px; border: 0; background: none;
+  font: inherit; font-size: var(--t-micro); color: var(--dim); text-decoration: underline; }

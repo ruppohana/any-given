@@ -64,7 +64,7 @@ export type LiveState = {
   status: 'pre' | 'live' | 'final';
   homeTeamId: string;
   awayTeamId: string;
-  teams: Record<string, { abbrev: string; name: string; short: string; primary: string | null; secondary: string | null }>;
+  teams: Record<string, { abbrev: string; name: string; short: string; nick: string; primary: string | null; secondary: string | null }>;
   homeScore: number;
   awayScore: number;
   /** Newest last, exactly as the feed orders them. */
@@ -431,6 +431,12 @@ export function readLive(summary: any, gameId: string, sport: Sport, now: number
     teams[String(t.id)] = {
       abbrev: t.abbreviation || '', name: t.displayName || '',
       short: t.shortDisplayName || t.name || '',
+      /* The nickname - "Sun Devils", "Hurricanes", "49ers". ESPN's `name`.
+         Jason, 2026-09-10: the question says "Do they..." and should say the
+         team. The nickname is what a person watching actually calls them;
+         it cannot be recovered from displayName minus shortDisplayName, which
+         breaks on "Arizona State Sun Devils" vs "Arizona St". */
+      nick: t.name || '',
       primary: col(t.color), secondary: col(t.alternateColor)
     };
   }

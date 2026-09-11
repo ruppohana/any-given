@@ -589,6 +589,97 @@ function attackDir(state) {
   return String(off) === String(state.awayTeamId) ? 1 : -1;
 }
 
+/* 🔴 WHICH WAY IS THE TELEVISION? Jason, 2026-09-10: "We need to know which
+ * way the teams are playing on the tv. When it is backwards, it is weird to
+ * watch. After the start, ask the person to tell us which way the offense is
+ * playing. Then set the arrow correctly."
+ *
+ * The field is fixed to the stadium - away attacks right - which matches the
+ * broadcast camera half the time and mirrors it the other half. The feed
+ * cannot say which end the camera is on, and the person holding the phone is
+ * looking straight at the answer. So we ask, once.
+ *
+ * ONE ANSWER COVERS A HALF. Teams change ends after the first and third
+ * quarters, so an answer in Q1 fixes Q2 as its mirror, and likewise Q3/Q4.
+ * Across halftime the ends are chosen again, so the question comes back once
+ * in the third quarter; each overtime period asks for itself.
+ *
+ * Kept per game on this device - it is a fact about their television, not
+ * about the game, and nobody else's answer is any use to them. */
+const TV_MEMO = {};
+function tvRead() {
+  const k = S.key || '';
+  if (k in TV_MEMO) return TV_MEMO[k];
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem('ag.tv.' + k) || 'null'); } catch { v = null; }
+  return (TV_MEMO[k] = v);
+}
+function tvWrite(v) {
+  const k = S.key || '';
+  TV_MEMO[k] = v;
+  try { localStorage.setItem('ag.tv.' + k, JSON.stringify(v)); } catch { /* memory only */ }
+}
+function quarterOf(state) {
+  const si = state && state.situation;
+  if (si && si.quarter) return Number(si.quarter);
+  const p = state && state.plays && state.plays[state.plays.length - 1];
+  return p && p.quarter ? Number(p.quarter) : 0;
+}
+const halfOf = (q) => (q >= 5 ? 'ot' + q : q <= 2 ? 'h1' : 'h2');
+/* null = not known for this part of the game; true = draw it mirrored. */
+function tvMirrorOf(state) {
+  const a = tvRead();
+  if (!a) return null;
+  if (a.none) return false;
+  const q = quarterOf(state);
+  if (!q || !a.q || halfOf(a.q) !== halfOf(q)) return null;
+  return q === a.q ? !!a.flip : !a.flip;
+}
+
+function tvAsk(state, wrap) {
+  if (!state || state.status === 'pre' || state.status === 'final') return null;
+  if (tvMirrorOf(state) !== null) return null;
+  const si = state.situation || {};
+  const off = si.offenseTeamId && state.teams ? state.teams[si.offenseTeamId] : null;
+  const q = quarterOf(state);
+  if (!off || !q) return null;
+  const card = el('div', 'card lg-tvask');
+  card.appendChild(el('div', 'lg-tvask-h',
+    `Which way is ${off.abbrev || off.short || 'the offense'} going on your TV?`));
+  const row = el('div', 'lg-tvask-row');
+  /* The answer is where the OFFENSE is heading on their screen. Mirror when
+     that disagrees with the way the field draws them. */
+  const pick = (screen) => () => {
+    tvWrite({ q, flip: attackDir(state) !== screen, at: Date.now() });
+    paint(wrap);
+  };
+  const L = el('button', 'lg-tvask-b', '← Left'); L.type = 'button'; L.onclick = pick(-1);
+  const R = el('button', 'lg-tvask-b', 'Right →'); R.type = 'button'; R.onclick = pick(1);
+  row.append(L, R);
+  card.appendChild(row);
+  card.appendChild(el('p', 'lg-tvask-note', q >= 5
+    ? 'Overtime picks its own end, so we ask again.'
+    : 'We turn the field with them at the end of each quarter, and ask again after halftime.'));
+  const N = el('button', 'lg-tvask-n', 'Not watching on TV');
+  N.type = 'button';
+  N.onclick = () => { tvWrite({ none: true, q }); paint(wrap); };
+  card.appendChild(N);
+  return card;
+}
+
+/* The correction, always one tap away once there is an answer - a wrong tap
+   on the question must not leave the field backwards for a whole half. */
+function tvFlipButton(state, wrap) {
+  if (!state || state.status === 'pre' || state.status === 'final') return null;
+  const m = tvMirrorOf(state);
+  if (m === null) return null;
+  const b = el('button', 'lg-tvflip', '⇄');
+  b.type = 'button';
+  b.setAttribute('aria-label', 'Flip the field to match your TV');
+  b.onclick = () => { tvWrite({ q: quarterOf(state), flip: !m, at: Date.now() }); paint(wrap); };
+  return b;
+}
+
 function spotYard(state) {
   const si = state && state.situation;
   const ytg = si && typeof si.yardsToGoal === 'number' ? si.yardsToGoal : null;
@@ -692,6 +783,106 @@ function bannerFor(play) {
   if (/field goal is good/i.test(t)) return 'FIELD GOAL';
   if (/field goal is no good|field goal.*blocked/i.test(t)) return 'NO GOOD';
   return null;
+}
+
+/* 🔴 THE MOMENT, ON THE FIELD. Jason, 2026-09-10: "Maybe flash touchdown on
+ * the field when it happens, same with field goal. Same with the end of the
+ * quarter, half and end of the game."
+ *
+ * The banner above the scorebug already names a score - small, and above the
+ * thing everybody is actually looking at. The field is the subject of this
+ * screen, so a score or a break is written ACROSS it, big, the way a
+ * broadcast wipes one over the picture.
+ *
+ * TWO LIFETIMES, BECAUSE THEY ARE TWO KINDS OF THING. A score is an EVENT: it
+ * flashes, holds about twelve seconds of held time, and gets out of the way
+ * so you can see the kickoff you are about to be asked about. A break is a
+ * STATE: nothing is happening on the field, so the word stays until the next
+ * snap. Timeouts and commercial breaks are not written across it - they are
+ * pauses, not chapters, and the bar under the field already says them.
+ *
+ * 🔴 IT FLASHES ONCE. paint() rebuilds this screen every five seconds, so a
+ * CSS animation on a fresh node would replay forever. `fresh` is set only on
+ * the first paint that shows a given play; after that the node is drawn still.
+ *
+ * Aged by the HELD clock (now - delay - wallclock), never by when this device
+ * first saw it: a touchdown is new when it becomes visible to you, and opening
+ * the app ten minutes after one must not celebrate it. */
+const FLASH_SCORE_MS = 12000;
+function flashFor(state, now) {
+  const plays = (state && state.plays) || [];
+  const lp = plays[plays.length - 1];
+  S.flashShown = S.flashShown || {};
+  const mark = (id) => {
+    const fresh = !S.flashShown[id];
+    S.flashShown[id] = true;
+    return fresh;
+  };
+  if (state && state.status === 'final') {
+    return { word: 'FINAL', kind: 'break', fresh: mark('final:' + S.key) };
+  }
+  if (!lp) return null;
+  const word = bannerFor(lp);
+  if (word) {
+    const age = lp.wallclockMs ? now - (S.delayMs || 0) - lp.wallclockMs : 0;
+    if (age > FLASH_SCORE_MS) return null;
+    return { word, kind: word === 'NO GOOD' ? 'miss' : 'score',
+             teamId: lp.offenseTeamId, fresh: mark(lp.id) };
+  }
+  const st = stoppageOf(lp);
+  if (!st) return null;
+  let w = null;
+  if (st.label === 'Half time') w = 'HALFTIME';
+  else if (st.label === 'Final') w = 'FINAL';
+  else if (st.label === 'End of the quarter') w = lp.quarter >= 5 ? 'END OF OT' : 'END OF Q' + (lp.quarter || '');
+  if (!w) return null;
+  return { word: w, kind: 'break', fresh: mark(lp.id) };
+}
+
+function flashNode(f, state, solo) {
+  const n = el('div', 'lg-flash' + (solo ? ' lg-flash-solo' : ''));
+  n.dataset.kind = f.kind;
+  if (f.fresh) n.dataset.fresh = 'true';
+  n.setAttribute('role', 'status');
+  /* The scorer's color, same as the banner above - a touchdown in the color
+     of whoever scored it is two facts in one mark. */
+  const c = f.teamId ? teamColor(state, f.teamId) : null;
+  if (c) n.style.setProperty('--tc', c);
+  n.appendChild(el('span', 'lg-flash-w', f.word));
+  return n;
+}
+
+/* 🔴 A COUNTDOWN THAT COUNTS. Jason, 2026-09-10: "if the game has not started
+ * a countdown to the game start." The Upcoming card said "Kicks in 3h 12m",
+ * refreshed every five seconds - a label, not a countdown. Inside 24 hours it
+ * is now a clock that ticks every second.
+ *
+ * It sits UNDER the matchup, not over it. On 2026-09-09 he said the days "seem
+ * like the most important thing here, which it is not", so the fixture stays
+ * the headline and the countdown is its second line, just a live one.
+ *
+ * One ticker for the page, writing into text nodes only - it never calls
+ * paint(), so it cannot fight the five-second rebuild. It stops itself when
+ * nothing on the page is counting. */
+function countdownText(ms) {
+  if (ms <= 0) return 'Now';
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  const p = (v) => String(v).padStart(2, '0');
+  return (h ? h + ':' + p(m) : String(m)) + ':' + p(x);
+}
+function armCountdown() {
+  if (window.__agCountdown) return;
+  window.__agCountdown = setInterval(() => {
+    const vs = document.querySelectorAll('.lg-countdown-v[data-kick]');
+    if (!vs.length) { clearInterval(window.__agCountdown); window.__agCountdown = null; return; }
+    for (const v of vs) {
+      const ms = Number(v.dataset.kick) - Date.now();
+      v.textContent = countdownText(ms);
+      const l = v.parentNode && v.parentNode.querySelector('.lg-countdown-l');
+      if (l) l.textContent = ms <= 0 ? 'Kickoff' : 'Kickoff in';
+    }
+  }, 1000);
 }
 
 /* 🔴 THE GAME SELECTOR. Jason: "after hitting call it live, what will it look
@@ -817,6 +1008,12 @@ function drawField(wrap, state, ball, cam) {
    * same: a value introduced where it was first needed, in a function that
    * needed it earlier too. Declare it where the function starts. */
   const dir = attackDir(state);
+  /* 🔴 THE TELEVISION'S ORIENTATION, applied in ONE place: the yard-to-screen
+     mapping. Everything drawn by yard follows it for free; only the two marks
+     drawn in screen space - the number triangles and the chevrons - read
+     screenDir instead of dir. See tvMirrorOf. */
+  const tvMirror = tvMirrorOf(state) === true;
+  const screenDir = tvMirror ? -dir : dir;
   /* From the SITUATION, never from the drawn ball - the two differ on a score,
      and the caption must say the real distance rather than the one implied by
      where the marker was put. */
@@ -852,7 +1049,7 @@ function drawField(wrap, state, ball, cam) {
     const bx = BL[0] + (BR[0] - BL[0]) * u, by = BL[1] + (BR[1] - BL[1]) * u;
     return [tx + (bx - tx) * e, ty + (by - ty) * e];
   };
-  const U = (yard) => (yard - lo) / (hi - lo);
+  const U = (yard) => { const u = (yard - lo) / (hi - lo); return tvMirror ? 1 - u : u; };
   const P = (yard, v) => pt(U(yard), v);
   const xy = (a) => a[0].toFixed(2) + ',' + a[1].toFixed(2);
   const mk = (tag, attrs, text) => {
@@ -997,7 +1194,7 @@ function drawField(wrap, state, ball, cam) {
        on a real field and it is the one marking that tells you which way is
        which without reading anything. */
     if (a !== 50) {
-      const dir = a < 50 ? -1 : 1;
+      const dir = (a < 50 ? -1 : 1) * (tvMirror ? -1 : 1);
       const tw = 4.5, tx = near[0] + dir * 15, ty = near[1] - 3.5;
       svg.appendChild(mk('polygon', {
         points: [(tx) + ',' + (ty - tw / 2), (tx) + ',' + (ty + tw / 2),
@@ -1124,12 +1321,12 @@ function drawField(wrap, state, ball, cam) {
      so the chevrons read as related to the ball sometimes and as decoration
      the rest of the time. A constant offset keeps that relationship the same
      on every snap, and the clamp only matters in the last few yards. */
-  const chevX = dir === 1
+  const chevX = screenDir === 1
     ? Math.min(W - 44, bp[0] + 22)
     : Math.max(44, bp[0] - 22);
   for (let i = 0; i < 3; i++) {
-    const x = chevX + dir * i * 11, y = chevY;
-    const d = 'M' + x + ' ' + (y - 9) + ' L' + (x + dir * 8) + ' ' + y
+    const x = chevX + screenDir * i * 11, y = chevY;
+    const d = 'M' + x + ' ' + (y - 9) + ' L' + (x + screenDir * 8) + ' ' + y
       + ' L' + x + ' ' + (y + 9);
     chev.appendChild(mk('path', { d, class: 'lg-f-chev-u' }));
     const top = mk('path', { d, class: 'lg-f-chev-t' });
@@ -1340,6 +1537,34 @@ function atHalfTime(state) {
   const t = (last.typeText || '') + ' ' + (last.text || '');
   return /end (of )?(the )?half|halftime/i.test(t)
     || (/end (of )?(the )?(quarter|period)|end quarter/i.test(t) && last.quarter === 2);
+}
+
+/* 🔴 THE TEAM, NOT "THEY". Jason, 2026-09-10: "Do 'they'... change they to
+ * the team name 'Sun Devils'." A pronoun makes you work out who is meant,
+ * mid-snap, with two teams on the screen. The nickname is what the person on
+ * the couch is already calling them.
+ *
+ * WHO "THEY" IS DEPENDS ON THE QUESTION. Almost every one is about the
+ * offense. A kickoff return is about the RECEIVING side, and at the moment it
+ * is asked the offense on record is still the team that just scored - so it
+ * is the other team, and only when the last play really was a score. At the
+ * start of a half we cannot say who receives, so it keeps "they" rather than
+ * guess a name that might be the wrong one. The catalog keeps the pronoun, so
+ * any other screen that lists the questions still reads generically. */
+function askAbout(type, state) {
+  const q = type && type.question ? type.question : '';
+  if (!/\bthey\b/.test(q) || !state) return q;
+  const si = state.situation || {};
+  let id = si.offenseTeamId;
+  if (type.id === 'kickoff_return') {
+    const lp = state.plays && state.plays[state.plays.length - 1];
+    const scorer = lp && lp.scoringPlay ? lp.offenseTeamId : null;
+    id = !scorer ? null
+      : String(scorer) === String(state.homeTeamId) ? state.awayTeamId : state.homeTeamId;
+  }
+  const t = id && state.teams ? state.teams[id] : null;
+  const who = t && (t.nick || t.short);
+  return who ? q.replace(/\bthey\b/, 'the ' + who) : q;
 }
 
 function questionFor(state) {
@@ -2520,6 +2745,10 @@ function paint(wrap) {
   /* Directly under the spot it illustrates - the pill says "3rd & 5 at SEA 31"
      and this is the same sentence in a picture. */
   const fs = fieldStrip(state);
+  const flash = flashFor(state, now);
+  /* No field to write it across - the feed often drops the spot at a break -
+     so the word takes the field's place rather than disappearing with it. */
+  if (!fs && flash) wrap.appendChild(flashNode(flash, state, true));
   if (fs) {
     /* 🔴 ONE GROUP, SO THE GRID GAP CANNOT GET BETWEEN THEM. Jason: "push them
      * together". Setting the margins to zero did nothing, because the spacing
@@ -2532,7 +2761,15 @@ function paint(wrap) {
      * the one above the group - so the whole assembly sits flush under the
      * header bar as well. */
     const stack = el('div', 'lg-fieldstack');
-    stack.appendChild(fs);
+    /* A box around the field ONLY, so the flash covers the turf and not the
+       play bar under it. The field node is persistent and redraws itself every
+       animation frame, so the flash cannot live inside it - it is a sibling. */
+    const fbox = el('div', 'lg-fieldbox');
+    fbox.appendChild(fs);
+    if (flash) fbox.appendChild(flashNode(flash, state, false));
+    const tvb = tvFlipButton(state, wrap);
+    if (tvb) fbox.appendChild(tvb);
+    stack.appendChild(fbox);
     /* 🔴 THE SCORE AGAIN, UNDER THE FIELD. Jason: "can you copy the game score
      * to beneath the field as well, i want to see both."
      *
@@ -2583,6 +2820,9 @@ function paint(wrap) {
       stack.appendChild(bar);
     }
     wrap.appendChild(stack);
+    /* Under the field it is about, never between the score and the field. */
+    const ask = tvAsk(state, wrap);
+    if (ask) wrap.appendChild(ask);
   }
   /* Under the question, where the thumb already is - a timing button you have to
      go and find measures reaction time to the button, not the television. */
@@ -2693,7 +2933,7 @@ function paint(wrap) {
      * one place in the app where the person is actually being asked to make
      * one. */
     card.appendChild(el('div', 'lg-cta', 'You make the call…'));
-    card.appendChild(el('div', 'lg-q', type.question));
+    card.appendChild(el('div', 'lg-q', askAbout(type, state)));
     /* 🔴 SAY WHICH PLAY THIS IS, BECAUSE THE CARD READ AS THOUGH IT WAS ASKING
      * ABOUT THE ONE PRINTED UNDER IT. Jason: "It asked left middle or right
      * after the play and a while after I hit the play."
@@ -3649,7 +3889,18 @@ function pregame(state, now, wrap) {
         (aw.short || aw.name) + ' at ' + (hm.short || hm.name)));
     }
 
-    const bits = ['Kicks in ' + untilLabel(state.kickoffUtc - now)];
+    const toKick = state.kickoffUtc - now;
+    const counting = toKick < 24 * 60 * 60 * 1000;
+    if (counting) {
+      const cd = el('div', 'lg-countdown');
+      cd.appendChild(el('span', 'lg-countdown-l', toKick <= 0 ? 'Kickoff' : 'Kickoff in'));
+      const v = el('span', 'lg-countdown-v num', countdownText(toKick));
+      v.dataset.kick = String(state.kickoffUtc);
+      cd.appendChild(v);
+      c.appendChild(cd);
+      armCountdown();
+    }
+    const bits = counting ? [] : ['Kicks in ' + untilLabel(toKick)];
     if (state.kickoffUtc) bits.push(dayTime(state.kickoffUtc));
     if (state.venue) bits.push(state.venue);
     if (state.broadcast) bits.push('on ' + state.broadcast);
@@ -4360,8 +4611,13 @@ const CSS = `
    the baseline alignment the balance, the unit and the delta all share. */
 /* A strip, not a card - see the note where it is built. */
 .lg-bank { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 0; }
-.lg-stakechip { display: inline-flex; align-items: baseline; gap: 6px; font: inherit;
-  min-height: var(--tap-min); padding: 6px 14px; margin: 2px 0 8px;
+/* 🔴 CENTERED, NOT BASELINE. Jason, 2026-09-10: "There is too much room
+   below the marbles text." align-items: baseline inside a 44px-tall pill
+   puts the line at the TOP of the box and leaves the rest of the height
+   empty underneath. Centering keeps the tap target and sits the words in the
+   middle of it; the two spans still share a line. */
+.lg-stakechip { display: inline-flex; align-items: center; gap: 6px; font: inherit;
+  min-height: var(--tap-min); padding: 4px 14px; margin: 2px 0 6px;
   border: 1px solid var(--line); border-radius: var(--radius-pill);
   background: var(--surface-3); color: var(--fg); }
 .lg-stakechip-n { font-size: var(--t-emph); font-weight: 800; }
@@ -4389,7 +4645,11 @@ const CSS = `
    test can see. Two and three go across; four goes two-by-two.
    And no backticks in this block: it lives inside a template literal, and one
    of them ended the string and took the whole screen down. */
-.lg-tiles { display: grid; grid-auto-flow: column; gap: 8px; }
+/* 🔴 EQUAL COLUMNS. Jason, 2026-09-10: "If there is 2 choices, have them split
+   equally left to right." grid-auto-flow: column sizes each implicit column to
+   its content, so "First down" took more of the row than "No". 1fr columns
+   split it evenly whatever the labels say. */
+.lg-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
 /* 🔴 THE TILE HAD NO RADIUS AT ALL. Jason: "maybe round the corners?" It went
    unnoticed while the tiles were borderless — with nothing drawn at the edge
