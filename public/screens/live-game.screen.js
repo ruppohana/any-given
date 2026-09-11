@@ -4166,18 +4166,20 @@ function pregame(state, now, wrap) {
     const c = el('div', 'card lg-hgame lg-pre');
     c.appendChild(el('div', 'lg-hgame-k', 'Upcoming'));
 
+    /* Each school's name sits under its own crest, away left and home right, with
+     * no "at" between them. Jason, 2026-09-11: "center villanova under their logo,
+     * kill the 'at' and louisville under their logo." */
     const gh = el('div', 'lg-head');
     const aw = state.teams[state.awayTeamId], hm = state.teams[state.homeTeamId];
     const lg = leagueOf(state);
-    if (aw) gh.appendChild(teamChip({ id: state.awayTeamId, ...aw }, { size: 44, league: lg }));
-    gh.appendChild(el('span', 'lg-at', 'at'));
-    if (hm) gh.appendChild(teamChip({ id: state.homeTeamId, ...hm }, { size: 44, league: lg }));
-    c.appendChild(gh);
-
-    if (aw && hm) {
-      c.appendChild(el('div', 'lg-hgame-t',
-        (aw.short || aw.name) + ' at ' + (hm.short || hm.name)));
+    for (const [id, t] of [[state.awayTeamId, aw], [state.homeTeamId, hm]]) {
+      if (!t) continue;
+      const side = el('div', 'lg-hgame-side');
+      side.appendChild(teamChip({ id, ...t }, { size: 44, league: lg }));
+      side.appendChild(el('div', 'lg-hgame-t', t.short || t.name));
+      gh.appendChild(side);
     }
+    c.appendChild(gh);
 
     const toKick = state.kickoffUtc - now;
     const counting = toKick < 24 * 60 * 60 * 1000;
@@ -4998,19 +5000,16 @@ const CSS = `
    size, which is the largest type outside the live layer's own bank strip. */
 .lg-hgame-t { font-size: var(--t-figure); font-weight: 800; line-height: 1.2;
   letter-spacing: -0.01em; }
-/* The quiet connector the share card uses. It separates two crests; it is not a
-   thing to read, so it gets the smallest size and the dim color. */
-.lg-at { font-size: var(--t-body); font-weight: 700; color: var(--dim); }
 /* 🔴 THE UPCOMING CARD'S CRESTS SIT SIDE BY SIDE. Jason, 2026-09-10, circling
    Villanova at Louisville: .lg-head is a one-column grid (the scoreboard puts
-   its own three-column row inside it), so this card stacked crest, "at",
-   crest down the top half of the card. Away left, "at" in the middle, home
-   right - the scoreboard's 1fr auto 1fr, scoped to this card only. */
-.lg-hgame .lg-head { grid-template-columns: 1fr auto 1fr; align-items: center; }
-/* Centered under the crests, like the countdown between them. Jason, 2026-09-11:
-   "can you center the school name under the logo, and center the date/time line
-   on the card." */
-.lg-hgame .lg-hgame-t, .lg-hgame .lg-hgame-b { text-align: center; }
+   its own three-column row inside it), so this card stacked the crests down the
+   top half of the card. Two equal columns, away left and home right, scoped to
+   this card only. The "at" between them went on 2026-09-11. */
+.lg-hgame .lg-head { grid-template-columns: 1fr 1fr; align-items: start; }
+/* Each name centered under its own crest. Jason, 2026-09-11: "center villanova
+   under their logo, kill the 'at' and louisville under their logo." */
+.lg-hgame-side { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.lg-hgame .lg-hgame-b { text-align: center; }
 .lg-hgame-b { font-size: var(--t-body); color: var(--dim); }
 .lg-hgame-go { font-size: var(--t-emph); font-weight: 800; color: var(--accent); margin-top: 4px; }
 .lg-mark { display: flex; align-items: baseline; gap: 0; }
