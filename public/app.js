@@ -52,7 +52,9 @@ const ROUTES = [
   { id: 'standings', dest: 'standings', screen: 'p5-standings',    state: 'ready',       label: 'Standings' },
   { id: 'invite',    dest: 'slate',     screen: 'p1-invite',       state: 'ready',       label: 'Invite landing' },
   { id: 'create',    dest: 'slate',     screen: 'p6-create',       state: 'create',      label: 'Create a pool' },
-  { id: 'rules',     dest: 'live',      screen: 's6-rules',        state: 'ready',       label: 'Rules' },
+  /* Rules lives under More now, so the More tab is the one lit while you read it. */
+  { id: 'rules',     dest: 'info',      screen: 's6-rules',        state: 'ready',       label: 'Rules' },
+  { id: 'info',      dest: 'info',      screen: 's9-more',         state: 'ready',       label: 'More' },
   /* 🔴 THE ONLY ROUTE THAT IS NOT FIXTURES. It polls the Worker, holds what it
    * gets behind the user's own delay, and settles against the play that actually
    * happened. Everything else here is a design surface; this one is the product. */
@@ -199,8 +201,49 @@ const TITLES = {
   create: 'Create a pool',
   invite: 'Invite',
   rules: 'Rules',
+  info: 'More',
   settings: 'Settings',
 };
+
+/* 🔴 "ANY GIVEN…" COMPLETES ITSELF ON THE FRONT DOOR. Jason, 2026-09-11: "i
+ * also want the title at the top to be 'ANY GIVEN...' then rotate 'Saturday',
+ * 'Sunday', 'Team', 'Roster' and any others you can think of." It is the
+ * wordmark idea from the cold launch (the name finishing its own sentence),
+ * with the beat kept: the ellipsis shows first, then the words. It opens on the
+ * day's own word - Saturday on a Saturday - and holds on it under reduced
+ * motion. Only the home route spins; every other screen names itself. */
+const GIVEN_WORDS = ['Saturday', 'Sunday', 'Team', 'Roster', 'Snap', 'Down', 'Drive',
+  'Play', 'Game', 'Week', 'Monday Night'];
+let GIVEN_TIMER = null;
+function stopGiven() {
+  if (GIVEN_TIMER) { clearTimeout(GIVEN_TIMER); GIVEN_TIMER = null; }
+}
+function spinGiven(tb) {
+  stopGiven();
+  const day = new Date().getDay();
+  let i = Math.max(0, GIVEN_WORDS.indexOf(day === 0 ? 'Sunday' : day === 1 ? 'Monday Night' : 'Saturday'));
+  tb.textContent = 'Any Given';
+  tb.setAttribute('aria-label', 'Any Given');
+  const w = document.createElement('span');
+  w.className = 'ag-given';
+  w.textContent = '…';
+  tb.appendChild(w);
+  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (still) { w.textContent = ' ' + GIVEN_WORDS[i]; return; }
+  const next = (delay) => {
+    GIVEN_TIMER = setTimeout(() => {
+      if (!w.isConnected) { stopGiven(); return; }
+      w.classList.add('is-out');
+      GIVEN_TIMER = setTimeout(() => {
+        w.textContent = ' ' + GIVEN_WORDS[i];
+        i = (i + 1) % GIVEN_WORDS.length;
+        w.classList.remove('is-out');
+        next(2600);
+      }, 250);
+    }, delay);
+  };
+  next(1400);
+}
 
 async function mount() {
   const route = currentRoute();
@@ -225,7 +268,12 @@ async function mount() {
    * the route list - a route with no entry keeps "Any Given", which is right
    * for the design-harness routes: they are not places a person navigates to. */
   const tb = document.getElementById('topbar-title');
-  if (tb) tb.textContent = TITLES[route.id] || 'Any Given…';
+  stopGiven();
+  if (tb) {
+    tb.removeAttribute('aria-label');
+    if (route.id === 'home') spinGiven(tb);
+    else tb.textContent = TITLES[route.id] || 'Any Given…';
+  }
   /* 🔴 THE BAR TITLE ONLY APPEARS ONCE THE PAGE'S OWN TITLE HAS GONE.
    *
    * Adding the bar put the screen's name on screen twice - "Build a parlay"

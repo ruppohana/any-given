@@ -69,6 +69,12 @@ export const DESTINATIONS = [
    * every other label here does. "Your picks" is the app talking ABOUT them. */
   { id: 'picks',     label: 'My picks',  href: '/p/:pool/me' },
   { id: 'standings', label: 'Standings', href: '/p/:pool/standings' },
+  /* 🔴 SIX, AND THE SIXTH IS EVERYTHING ELSE. Jason, 2026-09-11: "i did not see
+   * the linked pages in the setting tab. we can add another icon at the end of
+   * the bar for all the other pages?" - sent with an info glyph. The rules and
+   * the home-screen walkthrough had nowhere a person would find them; the ⋮
+   * menu is settings, and #/settings was a screen nobody lands on. */
+  { id: 'info',      label: 'More',      href: '/info' },
 ];
 
 /** Which destination a cold open lands on. Origin decides, never a guess. */
@@ -128,7 +134,10 @@ const NAV_PATHS = {
    * AIR, which is the one thing this tab has that the others do not. Two arcs
    * a side, not his three: at 24px the third merges into the second. The dot
    * is drawn separately in navIcon, filled and red. */
-  live: 'M8.6 8.6a4.8 4.8 0 0 0 0 6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 5.7a8.9 8.9 0 0 0 0 12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6'
+  live: 'M8.6 8.6a4.8 4.8 0 0 0 0 6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 5.7a8.9 8.9 0 0 0 0 12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6',
+  /* An info mark - Jason sent the circled "i". Outline circle and stem on the
+   * family's grid and stroke; the dot is filled in navIcon, like the live dot. */
+  info: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 11v5.5'
 };
 
 function navIcon(id) {
@@ -154,6 +163,12 @@ function navIcon(id) {
   if (id === 'live') {
     const dot = document.createElementNS(NS, 'circle');
     dot.setAttribute('cx', '12'); dot.setAttribute('cy', '12'); dot.setAttribute('r', '2.3');
+    dot.setAttribute('fill', 'currentColor');
+    svg.appendChild(dot);
+  }
+  if (id === 'info') {
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', '12'); dot.setAttribute('cy', '7.8'); dot.setAttribute('r', '1.2');
     dot.setAttribute('fill', 'currentColor');
     svg.appendChild(dot);
   }
@@ -229,7 +244,7 @@ export const NAV_CSS = [
      The scrim below does the rest: content dissolves into the ground as it
      passes under the pill instead of being cut by its edge. */
   '.ag-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;',
-  '  grid-template-columns: repeat(5, 1fr); gap: 2px;',
+  '  grid-template-columns: repeat(6, 1fr); gap: 2px;',
   /* 🔴 TRANSLUCENT, WITH THE OPAQUE VERSION AS THE FLOOR. Jason, 2026-09-10:
      "Can the nav bar be transparent to some extent?" - asked one message after
      the scrim stopped painting a grey plinth under it, and the two are the same
@@ -420,7 +435,9 @@ export const NAV_CSS = [
   '.ag-nav-item[aria-current="page"] { color: var(--on-accent);',
   '  box-shadow: none; border-top: 0; margin-top: 0; }',
   '.ag-nav-item[aria-current="page"]::before { content: ""; position: absolute;',
-  '  left: 50%; top: 50%; width: 64px; height: 34px; transform: translate(-50%, -50%);',
+  /* min(), because six cells at 375px are ~55px wide and a fixed 64px pill
+     would spill into the neighbors. */
+  '  left: 50%; top: 50%; width: min(64px, calc(100% - 4px)); height: 34px; transform: translate(-50%, -50%);',
   '  border-radius: var(--radius-nav-item); background: var(--accent); z-index: -1; }',
   '.ag-nav-item[data-unavailable="true"] { color: var(--dim); opacity: .45; pointer-events: none; }',
   /* S5: on a real window the bar moves to the side. Desktop is a SECOND LAYOUT,

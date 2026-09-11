@@ -186,6 +186,11 @@
      above every pool screen without becoming the design. */
   .ag-sample { margin: 0 0 10px; padding: 8px 10px; font-size: 12px; line-height: 1.4;
     color: var(--dim); border: 1px dashed var(--line); border-radius: 10px; }
+  /* The rotating completion of "Any Given…" in the bar on the front door. */
+  .ag-given { display: inline-block; color: var(--accent);
+    transition: opacity .25s ease, transform .25s ease; }
+  .ag-given.is-out { opacity: 0; transform: translateY(-4px); }
+  @media (prefers-reduced-motion: reduce) { .ag-given { transition: none; } }
   </style>
   <dialog id="settings" class="ag-sheet"></dialog>
   <div class="ag-shell">

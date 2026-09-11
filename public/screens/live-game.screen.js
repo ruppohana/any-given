@@ -3839,6 +3839,41 @@ function modeCard(wrap, compact) {
  * landing and a settings page, and it is why the earlier orphan "NFL · change"
  * chip was wrong in a way this is not: that chip floated beside a hub that was
  * already asking the same question two rows below it. */
+/* 🔴 THE HERO. Jason, 2026-09-11, sending Deuce's tennis dashboard as the
+ * inspiration: a stadium across the top of the front door, "generated", "i
+ * would like the hero images to rotate", and "i want the stadium chopped off
+ * like the inspiration image". So these are crops INTO the stadium - stands and
+ * field filling the frame, the outer buildings cut away - not the whole object
+ * floating on white. Sources are Jason's isometric renders, kept whole in
+ * art/hero/; public/hero/ carries only the 1200x800 WebP crops.
+ *
+ * It crossfades every six seconds and holds still under reduced motion. The
+ * index lives on S so a repaint of the front door (a step change, a timer)
+ * does not snap it back to the first stadium. Decoration only: aria-hidden,
+ * empty alts, and the three doors below say everything the page says. */
+const HERO_IMAGES = ['/hero/hero-1.webp', '/hero/hero-2.webp', '/hero/hero-3.webp'];
+function heroBlock() {
+  const h = el('div', 'lg-hero');
+  h.setAttribute('aria-hidden', 'true');
+  if (!Number.isInteger(S.heroIx)) S.heroIx = Math.floor(Math.random() * HERO_IMAGES.length);
+  HERO_IMAGES.forEach((src, i) => {
+    const img = el('img', 'lg-hero-img' + (i === S.heroIx ? ' is-on' : ''));
+    img.src = src; img.alt = ''; img.decoding = 'async';
+    h.appendChild(img);
+  });
+  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!still) {
+    const t = setInterval(() => {
+      if (!h.isConnected) { clearInterval(t); return; }
+      const imgs = h.children;
+      imgs[S.heroIx].classList.remove('is-on');
+      S.heroIx = (S.heroIx + 1) % imgs.length;
+      imgs[S.heroIx].classList.add('is-on');
+    }, 6000);
+  }
+  return h;
+}
+
 function homeScreen(wrap) {
   /* 🔴 HOME IS THE FORK. ALWAYS. Jason settled this on 2026-09-09, after saying
    * "Home button still goes here" seven times and my guessing wrong every time.
@@ -3870,6 +3905,8 @@ function homeScreen(wrap) {
    * 🔴 A COMMENT SAYING WHERE SOMETHING WENT IS NOT EVIDENCE THAT IT ARRIVED.
    * Both halves of that move were written down; only one was carried out, and
    * the prose read as though the whole thing had been. */
+  /* The hero heads every step of the front door - it is the door, not a step. */
+  wrap.appendChild(heroBlock());
   if (S.homeStep === 'go') {
     wrap.appendChild(goCard(wrap));
     return;
@@ -5023,6 +5060,18 @@ const CSS = `
 .lg-mark { display: flex; align-items: baseline; gap: 0; }
 .lg-mark-stem { color: var(--dim); font-weight: 700; }
 .lg-mark-end { color: var(--accent); font-weight: 800; }
+/* The hero: full bleed through .ag-main's 10px padding, flush under the top bar,
+   the stadium cropped to fill it. The fade runs into the page ground so the
+   front door's first line sits on the bottom of the picture, Deuce's overlap,
+   and the text there is on near-solid ground, not on a white roof. */
+.lg-hero { position: relative; height: 220px; margin: -10px -10px -28px; overflow: hidden; }
+.lg-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  opacity: 0; transition: opacity 1.2s ease; }
+.lg-hero-img.is-on { opacity: 1; }
+.lg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to bottom, transparent 45%, var(--bg) 100%); }
+.lg-hero + * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .lg-hero-img { transition: none; } }
 .lg-sportrow { margin-top: 2px; }
 .lg-sportpick { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .lg-sportpick-logo { display: block; object-fit: contain; }

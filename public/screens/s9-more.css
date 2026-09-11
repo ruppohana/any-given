@@ -1,0 +1,12 @@
+/* S9 - More. One card, hairline rows, a chevron at the edge - the same list shape
+   the rest of the app uses for things you tap to go somewhere. */
+.scr-s9-more .s9-list { display: grid; padding: 0; overflow: hidden; }
+.scr-s9-more .s9-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  gap: 2px 10px; padding: 12px; min-height: var(--tap-min);
+  text-decoration: none; color: var(--fg); border-bottom: 1px solid var(--line);
+}
+.scr-s9-more .s9-row:last-child { border-bottom: 0; }
+.scr-s9-more .s9-t { font-size: var(--t-body); font-weight: 700; }
+.scr-s9-more .s9-chev { grid-row: 1 / span 2; grid-column: 2; font-size: 20px; line-height: 1; color: var(--dim); }
+.scr-s9-more .s9-b { grid-column: 1; font-size: var(--t-micro); color: var(--dim); line-height: 1.4; }
