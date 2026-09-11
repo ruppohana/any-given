@@ -4811,7 +4811,14 @@ const CSS = `
 .lg-x { display: grid; place-content: center; gap: 2px; text-decoration: none;
   padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-card);
   background: var(--card); color: var(--fg); }
-.lg-x-mark { font-size: 18px; line-height: 1; text-align: center; }
+/* 🔴 ONE ICON BOX FOR BOTH BUTTONS. Jason, 2026-09-10: "can the text for 'text
+   it' and 'post it' be on the same line vertically?" The speech bubble is an
+   18px SVG and the X is a font glyph, so the two marks were different heights
+   and each button centered its own stack - the labels landed at different
+   heights. A fixed 20px box for the mark puts both labels on one line. */
+.lg-x-mark { display: flex; align-items: center; justify-content: center;
+  height: 20px; font-size: 18px; line-height: 1; }
+.lg-x-mark svg { display: block; }
 .lg-x-l { font-size: var(--t-micro); color: var(--dim); }
 /* 🔴 THE INVITE IS QUIET. Jason, 2026-09-09: "The card for the game is more
    important than the invite a friend, but the outline suggests otherwise."
