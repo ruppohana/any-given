@@ -106,9 +106,13 @@ const NAV_PATHS = {
   picks: 'M4 8a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4zM9.5 12.5l1.8 1.8 3.2-3.6',
   /* Three bars of different heights. A leaderboard, not a chart. */
   standings: 'M6 20v-6M12 20V6M18 20v-9',
-  /* A ball, tilted, for the live game - the same shape as the header mark so
-   * the two places the app draws a football agree. */
-  live: 'M3.4 12C6.6 7 17.4 7 20.6 12 17.4 17 6.6 17 3.4 12Z'
+  /* 🔴 A BROADCAST, NOT A BALL. Jason, 2026-09-10, sending the picture:
+   * "live icon" - a dot with arcs radiating either side. The tilted football
+   * said "football", which every tab in this app already is; the arcs say ON
+   * AIR, which is the one thing this tab has that the others do not. Two arcs
+   * a side, not his three: at 24px the third merges into the second. The dot
+   * is drawn separately in navIcon, filled and red. */
+  live: 'M8.6 8.6a4.8 4.8 0 0 0 0 6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 5.7a8.9 8.9 0 0 0 0 12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6'
 };
 
 function navIcon(id) {
@@ -127,8 +131,16 @@ function navIcon(id) {
   path.setAttribute('stroke-width', '1.9');
   path.setAttribute('stroke-linecap', 'round');
   path.setAttribute('stroke-linejoin', 'round');
-  if (id === 'live') path.setAttribute('transform', 'rotate(-32 12 12)');
   svg.appendChild(path);
+  /* The on-air dot: the one filled mark in the bar, and deliberately so - it
+     is the signal, and red is what "live" has meant on every broadcast and
+     every phone since there were either. It stays red on the active pill. */
+  if (id === 'live') {
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', '12'); dot.setAttribute('cy', '12'); dot.setAttribute('r', '2.3');
+    dot.setAttribute('fill', '#e5392e');
+    svg.appendChild(dot);
+  }
   return svg;
 }
 
