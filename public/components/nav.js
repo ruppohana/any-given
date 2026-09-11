@@ -100,8 +100,14 @@ export function coldStart(ctx) {
 const NAV_PATHS = {
   /* A house. Home is the front door, so it is literally a door. */
   home: 'M3.5 10.5 12 4l8.5 6.5V19a1 1 0 0 1-1 1h-5v-5h-5v5h-5a1 1 0 0 1-1-1z',
-  /* A calendar: the week, which is what a slate is. */
-  slate: 'M4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 10h16M8 4v4M16 4v4',
+  /* 🔴 A CLAPPERBOARD - A SLATE. Jason, 2026-09-10: "slate icon, make the same
+   * style", sending a page of film slates. The calendar said "the week", which
+   * is true and generic; the clapperboard is the word itself, and it reads at
+   * 24px because the tilted clapper is a shape nothing else in the bar has.
+   * Outline, 1.9 stroke, round caps, same grid - the family rule holds. Path
+   * adapted from Lucide's "clapperboard" (ISC license), relative moves made
+   * absolute so it concatenates into one path. */
+  slate: 'M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3ZM6.2 5.3l3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
   /* A ticket with a check - your card, and the things on it that landed. */
   picks: 'M4 8a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4zM9.5 12.5l1.8 1.8 3.2-3.6',
   /* Three bars of different heights. A leaderboard, not a chart. */
