@@ -624,9 +624,12 @@ export function render(root, data, state) {
     /* THE SHARED HEADER. "1 members" is fixed here as well - the option list
      * got the plural right and this line built the same sentence a second time
      * and got it wrong, which is the argument for one template in miniature. */
+    /* 🔴 NO LEAGUE MARK AND NO h1. Jason, 2026-09-10: "standings does the same
+     * think, clean it up as well" - same as the slate and My picks. The top bar
+     * says "Standings"; this keeps only the sub line. */
     host.appendChild(pageHeader({
       title: 'Standings',
-      league: data.sport === 'nfl' ? 'nfl' : 'ncaa',
+      noTitle: true,
       sub: pool.name + ' · ' + pool.memberCount
         + (pool.memberCount === 1 ? ' member' : ' members')
     }));

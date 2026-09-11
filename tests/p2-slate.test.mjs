@@ -637,16 +637,11 @@ test('every product screen uses the shared header, and it carries the league mar
   assert.ok(!/ag-hd-tag/.test(HEAD), 'the text pill is replaced by the mark, not kept beside it');
 
   const dir = new URL('../public/screens/', import.meta.url);
-  for (const f of ['p5-standings.screen.js']) {
-    const src = readFileSync(new URL(f, dir), 'utf8');
-    assert.match(src, /pageHeader\(\{/, f + ' does not use the shared header');
-    assert.match(src, /league:/, f + ' does not pass its league to the header');
-  }
-  /* 🔴 EXCEPT THE SLATE AND MY PICKS. Jason, 2026-09-10: "remove the ncaa logo
-   * off this page" / "as well as the slate below the ncaa logo", then "my pics
-   * do the same thing that the slate did before". The top bar names the screen;
-   * the page header carries only the sub line - no league mark, no h1. */
-  for (const f of ['p2-slate.screen.js', 'p4-picks.screen.js']) {
+  /* 🔴 THE POOL SCREENS DROP THE MARK AND THE h1. Jason, 2026-09-10: "remove
+   * the ncaa logo off this page" / "as well as the slate below the ncaa logo",
+   * then My picks, then "standings does the same think, clean it up as well".
+   * The top bar names the screen; the page header carries only the sub line. */
+  for (const f of ['p2-slate.screen.js', 'p4-picks.screen.js', 'p5-standings.screen.js']) {
     const src = readFileSync(new URL(f, dir), 'utf8');
     const at = src.indexOf('.appendChild(pageHeader({');
     assert.ok(at > 0, f + ' does not use the shared header');
