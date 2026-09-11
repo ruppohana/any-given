@@ -587,6 +587,11 @@ function buildSettings() {
         paintAccount();
         return;
       }
+      /* 🔴 CLOSE THIS SHEET FIRST. It is a modal <dialog>, which lives in the
+       * browser's top layer; the sign-in sheet is a fixed div, and no z-index
+       * beats the top layer. Opened from here it sat BEHIND the menu and only
+       * appeared when "Done" was tapped - Jason, 2026-09-10. */
+      dlg.close();
       if (await openSignIn()) paintAccount();
     };
     accRow.append(who, b);
