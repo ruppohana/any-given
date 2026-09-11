@@ -542,6 +542,41 @@ function buildSettings() {
   d.append(dl, dv, r);
   box.appendChild(d);
 
+  /* --- your account ---
+   * 🔴 THE WAY IN THAT ISN'T A WALL. The sign-in sheet opens by itself only
+   * when the server demands it (REQUIRE_EMAIL); this row is how somebody signs
+   * in on purpose - to carry their picks to a new phone, or to check which
+   * address they used - and how they sign out. Added 2026-09-10 so Jason could
+   * run the first real code end to end before enforcement is switched on. */
+  const acc = document.createElement('div'); acc.className = 'ag-set';
+  const accL = document.createElement('div'); accL.className = 'ag-set-l'; accL.textContent = 'YOUR ACCOUNT';
+  const accRow = document.createElement('div'); accRow.className = 'ag-row';
+  const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+  const paintAccount = () => {
+    accRow.textContent = '';
+    const token = lsGet('ag.session'), email = lsGet('ag.email');
+    const who = document.createElement('span');
+    who.textContent = token && email ? email : 'Not signed in';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = token ? 'Sign out' : 'Sign in with email';
+    b.style.cssText = 'font:inherit;font-weight:700;min-height:36px;padding:0 12px;margin-left:auto;'
+      + 'border:1px solid var(--line);border-radius:var(--radius-button,10px);background:var(--card);color:var(--fg)';
+    b.onclick = async () => {
+      if (token) {
+        try { await fetch('/api/auth/logout', { method: 'POST', headers: { authorization: 'Bearer ' + token } }); } catch { /* offline */ }
+        try { localStorage.removeItem('ag.session'); } catch { /* private */ }
+        paintAccount();
+        return;
+      }
+      if (await openSignIn()) paintAccount();
+    };
+    accRow.append(who, b);
+  };
+  paintAccount();
+  acc.append(accL, accRow);
+  box.appendChild(acc);
+
   /* --- who you are --- */
   const n = document.createElement('div'); n.className = 'ag-set';
   const nl = document.createElement('div'); nl.className = 'ag-set-l'; nl.textContent = 'YOUR NAME ON THE BOARD';
