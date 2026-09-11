@@ -85,10 +85,6 @@ REQUIRE_EMAIL = "1"
 # it can change without a code change.
 NUGGET_ENABLED = "0"
 NUGGET_MODEL = "claude-sonnet-5"
-# 🔴 THE 2-TEAM TEST (Jason, 2026-09-11: "Two team."). Seeds two of Sunday's NFL
-# teams ONCE on the next ten-minute tick, then records it as done in KV. Remove
-# this line after reading /api/nuggets/status; a new value is a new test.
-NUGGET_TEST = "2026-09-13:01"
 
 # ------------------------------------------------------------------
 # NOT DECLARED YET, AND ON PURPOSE
