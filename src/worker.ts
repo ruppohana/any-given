@@ -32,6 +32,11 @@ export interface Env {
    *  `wrangler secret put RESEND_API_KEY`. MAIL_FROM overrides the sender. */
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
+  /** MailerSend (MailerLite's transactional sender) - preferred when set.
+   *  `wrangler secret put MAILERSEND_API_KEY`. MAIL_FROM_EMAIL overrides
+   *  codes@anygiven.app, and must be on a domain verified in MailerSend. */
+  MAILERSEND_API_KEY?: string;
+  MAIL_FROM_EMAIL?: string;
   /** "1" = picks, groups and joins need a verified email. Off until the sender
    *  and the sign-in sheet are both live. */
   REQUIRE_EMAIL?: string;

@@ -77,7 +77,28 @@ export async function requireIdentity(req: Request, env: any, deviceId: unknown,
   return { userId: d };
 }
 
+/* 🔴 MAILERSEND FIRST. Jason, 2026-09-10: "i have mailer" - MailerLite, account
+ * 2486821. MailerLite sends campaigns and automations to subscribers and has no
+ * endpoint for one email to one person on demand, which is what a sign-in code
+ * is; driving codes through a subscriber + automation would put every player on
+ * a marketing list and stop delivering to anyone who unsubscribed. MailerSend is
+ * the same company's transactional product and is built for exactly this.
+ * Resend stays as the fallback so either key switches sign-in on. */
 async function sendCode(env: any, email: string, code: string): Promise<boolean> {
+  const subject = `${code} is your Any Given code`;
+  const text = `Your Any Given code is ${code}.\n\nIt works for 10 minutes. If you didn't ask for it, you can ignore this email.`;
+  if (env.MAILERSEND_API_KEY) {
+    const r = await fetch('https://api.mailersend.com/v1/email', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${env.MAILERSEND_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        from: { email: env.MAIL_FROM_EMAIL || 'codes@anygiven.app', name: 'Any Given' },
+        to: [{ email }],
+        subject, text
+      })
+    });
+    return r.ok;
+  }
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
@@ -103,7 +124,9 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
     /* COPPA: collecting a child's email needs a parent's consent. The app does
        not collect it at all without this confirmation. */
     if (b.ageOk !== true) return json({ error: 'You need to be 13 or older to play.' }, 400);
-    if (!env.RESEND_API_KEY) return json({ error: 'Email sign-in isn’t switched on yet.', sender: false }, 503);
+    if (!env.MAILERSEND_API_KEY && !env.RESEND_API_KEY) {
+      return json({ error: 'Email sign-in isn’t switched on yet.', sender: false }, 503);
+    }
 
     const now = Date.now();
     const prev = await env.DB.prepare('SELECT sent_at, sends FROM verify_code WHERE email = ?')
