@@ -393,6 +393,14 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* 🔴 THE SCROLLBAR'S ROOM IS ALWAYS RESERVED. Jason, 2026-09-11: "on pages with
+   the vertical bar, the elipses and the nav bar jump." A desktop scrollbar takes
+   its width out of the page only on pages tall enough to scroll, so the menu and
+   the fixed nav moved left by that much every time you went from a short page to
+   a long one. `stable` keeps the gutter on every page; the bar itself still only
+   appears where it is needed. Phones use overlay scrollbars and are unaffected. */
+html { scrollbar-gutter: stable; }
+
 body {
   margin: 0;
   background: var(--bg);
