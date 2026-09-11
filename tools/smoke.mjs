@@ -114,6 +114,14 @@ for (const sp of ['nfl', 'college-football']) {
   for (const g of games) {
     liveN++;
     const key = `${sp}:${g.id}`;
+    /* 🔴 ONE RETRY, 25 SECONDS LATER, BECAUSE THIS RUNS STRAIGHT AFTER A
+     * DEPLOY. A deploy restarts the poller DO, which empties the in-memory
+     * copy it serves, so for up to one heartbeat (20s) the Worker correctly
+     * falls back to KV. Failing on that flagged a healthy game on the very
+     * first ship after this check was added. A game still bad 25s later is
+     * really bad. */
+    for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 25000));
     try {
       const res = await fetch(`${base}/api/state/${key}`);
       const src = res.headers.get('x-state-source') || '?';
@@ -125,13 +133,20 @@ for (const sp of ['nfl', 'college-football']) {
       if (src !== 'do') why.push(`served from ${src}`);
       if (age > limit) why.push(`pushed ${Math.round(age / 1000)}s ago (limit ${limit / 1000}s)`);
       if (typeof lag === 'number' && lag < 0) why.push(`publish lag ${Math.round(lag / 1000)}s`);
+      if (why.length && attempt === 0) {
+        console.log('retry'.padEnd(9), key.padEnd(28), '- ' + why.join('; '));
+        continue;
+      }
       console.log((why.length ? 'LIVE-BAD' : 'live ok').padEnd(9), key.padEnd(28),
         `${src} · pushed ${Math.round(age / 1000)}s · lag ${lag == null ? '-' : Math.round(lag / 1000) + 's'}`,
         why.length ? '- ' + why.join('; ') : '');
       if (why.length) liveBad.push(key);
+      break;
     } catch (e) {
+      if (attempt === 0) { console.log('retry'.padEnd(9), key.padEnd(28), '- ' + String(e?.message || e)); continue; }
       console.log('LIVE-BAD'.padEnd(9), key, '- ' + String(e?.message || e));
       liveBad.push(key);
+    }
     }
   }
 }
