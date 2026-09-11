@@ -4140,7 +4140,9 @@ function pregame(state, now, wrap) {
     const c = el('div', 'card lg-hgame lg-pre');
     /* The kicker shares its row with the bell (drawn once the teams are known). */
     const top = el('div', 'lg-hgame-top');
-    top.appendChild(el('div', 'lg-hgame-k', 'Upcoming'));
+    /* "Upcoming…" with the pause - Jason, 2026-09-11: "change UPCOMMING TO
+     * UPCOMMING...". The same beat as the "Any Given…" wordmark. */
+    top.appendChild(el('div', 'lg-hgame-k', 'Upcoming…'));
     c.appendChild(top);
 
     /* Each school's name sits under its own crest, away left and home right, with
@@ -4965,7 +4967,8 @@ const CSS = `
 .lg-next { display: grid; gap: 8px; }
 .lg-next-h { display: flex; align-items: baseline; justify-content: space-between;
   gap: 8px; margin: 4px 2px 0; }
-.lg-next-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
+/* Section size, not caption size - Jason, 2026-09-11: "make next larger". */
+.lg-next-k { font-size: var(--t-section); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--dim); }
 .lg-next-n { font-size: var(--t-micro); color: var(--dim); }
 .lg-next-day { font-size: var(--t-micro); font-weight: 700; color: var(--dim); margin: 6px 2px 0; }
