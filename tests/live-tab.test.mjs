@@ -37,3 +37,36 @@ test('the Live tab reopens the last game only while it is still being played', (
     'and the screen falls back to the picker - the strip and the next game');
   assert.ok(/final: true/.test(SRC), 'the stored last game is marked final so the next tap skips it');
 });
+
+test('the Live screen never parks on a game that was already over when it arrived', () => {
+  // Jason, 2026-09-10: "i still have the problem with going back to 'live' after
+  // the game is over." The first key is a constant (FAMU at Miami, long final);
+  // a final on arrival - not an invite, not watched to its end - moves on first.
+  const at = SRC.indexOf("S.raw.status === 'final' && !S.forced && !S.sawLive && S.sport");
+  assert.ok(at > 0, 'a final on arrival is caught');
+  assert.ok(SRC.slice(at, at + 200).includes('if (await refreshKey(wrap, S.sport)) return;'),
+    'and it moves to the next game before painting the final');
+  assert.ok(SRC.includes("if (S.raw && S.raw.status === 'live') S.sawLive = true;"), 'watching it live keeps you on its final');
+  assert.ok(/\n\s*S\.sawLive = false;\r?\n/.test(SRC), 'reset on every mount');
+  assert.ok(/sport !== S\.sport\) return false;[\s\S]{0,120}return true;/.test(SRC), 'refreshKey says whether it moved');
+});
+
+test("the Live screen has no week's card - the slate tab is one tap away", () => {
+  // Jason, 2026-09-10: "we dont need this, someone can just hit the slate icon below."
+  assert.equal(SRC.includes("S.mode === 'pool' ? 'Open your group' : \"The week's card\""), false);
+});
+
+test('a poll reply about a game the screen has left is thrown away', () => {
+  // Jason, 2026-09-10: "it flashes villanova then shows the florida game over
+  // then after about 30 seconds goes back to villanova." FAMU's late reply was
+  // applied on top of Villanova. Each poll remembers its key and checks it after
+  // every await before touching S.raw or S.board.
+  const at = SRC.indexOf('async function poll(wrap) {');
+  const end = SRC.indexOf('S.board = calls;', at);
+  assert.ok(end > at, 'the board reply is guarded too');
+  const body = SRC.slice(at, end + 20);
+  assert.ok(body.includes('const key = S.key;'), 'the poll remembers the game it asked about');
+  assert.ok(body.includes("fetch('/api/state/' + key)"), 'and asks about that key');
+  assert.ok((body.match(/if \(key !== S\.key\) return;/g) || []).length >= 3,
+    'and drops the reply after each await if the screen has moved on');
+});

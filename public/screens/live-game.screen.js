@@ -2083,6 +2083,7 @@ export function render(root, _data, screenState) {
    * every time. Cleared on every mount so the first paint after a navigation is
    * unconditional. */
   S.lastSig = null;
+  S.sawLive = false;
   if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
   else if (lastKey) { S.sport = lastKey.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
@@ -2168,9 +2169,10 @@ async function refreshKey(wrap, sport) {
   /* Guard the sport as well as the value: the lookup is async and somebody can
    * switch leagues while it is in flight, which would point the NFL card at a
    * college game with no error anywhere. */
-  if (!k || k === S.key || sport !== S.sport) return;
+  if (!k || k === S.key || sport !== S.sport) return false;
   S.key = k; S.raw = null; S.board = []; S.noGame = false;
   paint(wrap); poll(wrap);
+  return true;
 }
 
 /* 🔴 A GAME NOBODY IS POLLING YET STILL HAS A PRE-GAME. Found 2026-09-10 on the
@@ -2201,13 +2203,24 @@ function preFromSlate(key) {
 }
 
 async function poll(wrap) {
+  /* 🔴 AN ANSWER ABOUT A GAME WE HAVE ALREADY LEFT IS THROWN AWAY. Jason,
+   * 2026-09-10: "it flashes villanova then shows the florida game over then
+   * after about 30 seconds goes back to villanova." On arrival the first poll
+   * asks about the GAME_FOR constant (FAMU) while refreshKey moves the screen to
+   * Villanova; FAMU's reply then landed on top of Villanova and drew its final
+   * until a later poll put Villanova back. Each poll now remembers the key it
+   * asked about and drops a reply once the screen has moved on. */
+  const key = S.key;
   try {
     const [stateRes, boardRes] = await Promise.all([
-      fetch('/api/state/' + S.key),
-      fetch('/api/board/' + S.key)
+      fetch('/api/state/' + key),
+      fetch('/api/board/' + key)
     ]);
+    if (key !== S.key) return;
     if (stateRes.ok) {
-      S.raw = stampLeague(await stateRes.json()); S.noGame = false;
+      const fresh = stampLeague(await stateRes.json());
+      if (key !== S.key) return;
+      S.raw = fresh; S.noGame = false;
       /* The game the Live tab goes back to - only ever one that was LIVE on
          this screen, never a pre-game or a final you merely looked at. */
       if (S.raw && S.raw.status === 'live' && S.key) store.set('lastLive', { key: S.key, at: Date.now() });
@@ -2225,10 +2238,21 @@ async function poll(wrap) {
       if (S.raw && S.raw.status === 'final' && S.fromLast) {
         S.fromLast = false; S.forced = false;
         if (S.sport) {
-          refreshKey(wrap, S.sport);
           if (S.keyTimer) clearInterval(S.keyTimer);
           S.keyTimer = setInterval(() => { if (!S.forced && S.sport) refreshKey(wrap, S.sport); }, 300000);
         }
+      }
+      /* 🔴 NEVER PARK ON A GAME THAT WAS ALREADY OVER WHEN THE SCREEN ARRIVED.
+       * Jason, 2026-09-10, again on FAMU at Miami: "i still have the problem with
+       * going back to 'live' after the game is over." The Live screen's first key
+       * is a constant (GAME_FOR) - FAMU, finished hours ago - and the lookup that
+       * replaces it ran after the final had already been drawn. A game that is
+       * final on arrival, not named by an invite, and not watched to its end on
+       * this screen (S.sawLive) moves straight to the next one, BEFORE painting.
+       * If there is no next game, the final is drawn as before. */
+      if (S.raw && S.raw.status === 'live') S.sawLive = true;
+      if (S.raw && S.raw.status === 'final' && !S.forced && !S.sawLive && S.sport) {
+        if (await refreshKey(wrap, S.sport)) return;
       }
     }
     /* 🔴 404 IS AN ANSWER, NOT A SILENCE. The Worker says "nothing pushed for
@@ -2246,7 +2270,11 @@ async function poll(wrap) {
         S.noGame = true;
       }
     }
-    if (boardRes.ok) S.board = (await boardRes.json()).calls || [];
+    if (boardRes.ok) {
+      const calls = (await boardRes.json()).calls || [];
+      if (key !== S.key) return;
+      S.board = calls;
+    }
 
     /* 🔴 A REPAINT THAT CHANGES NOTHING IS THE BLINK. Jason, twice: "The logos
      * blink." / "Logos still blink."
@@ -2867,12 +2895,10 @@ function paint(wrap) {
      * because a pre-game screen is a browsing screen. It disappears the moment
      * the game starts and tiles carrying a price and a countdown appear, which
      * is the ad doctrine's actual rule rather than a place on the page. */
-    const wk = el('button', 'lg-mode lg-go lg-wide');
-    wk.appendChild(el('span', 'lg-mode-h', S.mode === 'pool' ? 'Open your group' : "The week's card"));
-    wk.appendChild(el('span', 'lg-mode-b', S.mode === 'pool'
-      ? 'Pick the week for points' : 'Against the spread, every pick pays 2.00×'));
-    wk.onclick = () => { location.hash = '#/slate'; };
-    wrap.appendChild(wk);
+    /* 🔴 NO "WEEK'S CARD" DOOR HERE. Jason, 2026-09-10, circling it: "we dont
+     * need this, someone can just hit the slate icon below." The nav already
+     * goes to the slate (and to Standings for a group), so a card-sized button
+     * to the same place was a second way to the same tab. */
 
     /* 🔴 NO SECOND INVITE. pregame() already appends one, and adding another
      * here put the same button on the screen twice - the kind of duplicate that
