@@ -582,3 +582,20 @@
   background: var(--accent); border-color: var(--accent); color: var(--on-accent);
 }
 .scr-p2-slate .p2-filter[data-on="true"] .p2-filter-n { color: var(--on-accent); opacity: .8; }
+
+
+/* The live score in the center slot. center() had CSS once and the redesign
+   took it with the function; restored at the size a scoreboard wants. */
+.scr-p2-slate .p2-sides > .p2-center {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; flex: 0 0 auto; padding: 0 4px;
+}
+.scr-p2-slate .p2-center .p2-c-lo { font-size: 10px; font-weight: 800; letter-spacing: .06em; color: var(--dim); }
+.scr-p2-slate .p2-center .p2-c-lo[data-live="true"] { color: var(--accent); }
+.scr-p2-slate .p2-score { display: flex; align-items: baseline; gap: 4px; }
+/* 🔴 17px, THE SCREEN'S CEILING - NOT 20. The pool scores in points, and its
+   largest type is the pool's own name; a figure may not outrank it. I set
+   20px and the §5 type test refused the build. The token rather than a
+   literal keeps it on the scale if the scale ever moves. */
+.scr-p2-slate .p2-score .p2-sc { font-size: var(--t-section); font-weight: 800; }
+.scr-p2-slate .p2-score .p2-sc[data-loser="true"] { color: var(--dim); }

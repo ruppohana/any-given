@@ -52,7 +52,7 @@ import { progress, crowdLabel } from '/components/fmt.js';
    separately what "Top 25" means is how one of them ends up counting a game
    the other does not - and the counts are printed on the chips, so the
    disagreement would be visible and unexplainable. p6 owns the rule. */
-import { filterOptions, gamePasses, FILTER_ALL, filterKey } from '/screens/p6-allgames.screen.js';
+import { filterOptions, gamePasses, FILTER_ALL, filterKey, overlayLive } from '/screens/p6-allgames.screen.js';
 
 export const id = 'p2-slate';
 export const title = 'The slate';
@@ -600,7 +600,7 @@ async function realSlate(byId, sport) {
     if (!res.ok) return null;
     const d = await res.json();
     if (!Array.isArray(d.games) || !d.games.length) return null;
-    return d.games.map((g) => {
+    const list = d.games.map((g) => {
       /* Identity travels WITH the game, because the shipped team file is a
        * snapshot and the feed is not. Fall back to it only for what is missing. */
       for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
@@ -616,6 +616,25 @@ async function realSlate(byId, sport) {
         lastMeeting: g.lastMeeting || null
       });
     }).filter((g) => g.home && g.away);
+    /* 🔴 THE SAME LIVE OVERLAY AS ALL GAMES, and this is the screen that
+     * needs it most: an invite link opens HERE. The pool slate built its
+     * games through its own mapper rather than fetchSlate, so the held
+     * live score never reached it - during FAMU at Miami it would have
+     * shown a game in progress as not started. Imported from p6 rather
+     * than restated, so both screens hold to the same delay and close on
+     * the same real clock. */
+    /* 🔴 THE OVERLAY FAILS SOFT - IT MUST NEVER COST THE SLATE. First
+     * version awaited it bare, inside the same try as the slate fetch, so
+     * any throw from the overlay landed in `catch { return null }` and
+     * dropped the ENTIRE pool slate - the screen an invite link opens,
+     * blanked by an enhancement. The ship gate caught it: the p2 tests load
+     * this module with its import lines stripped, overlayLive is not
+     * defined there, and previewData came back with zero games.
+     *
+     * That environment is artificial and the lesson is not: live scores are
+     * a garnish on a slate that is already correct without them. If the
+     * overlay fails for ANY reason, the slate's own values stand. */
+    try { return await overlayLive(list, sport); } catch { return list; }
   } catch { return null; }
 }
 
@@ -809,7 +828,23 @@ export async function previewData(fixtures, state) {
    * against the real kickoff, so the wrong clock silently decides which rows a
    * thumb may touch. */
   if (live) now = Date.now();
-  if (short && real.length === 3) {
+  /* 🔴 FIXTURE ANCHORING IS FOR FIXTURES ONLY - `!live` IS THE WHOLE FIX.
+   * The line just above already moves a live slate onto the real clock.
+   * Then this block ran anyway, because /slate is the `ready-short` route and
+   * the three captured fixtures always load - so it re-anchored `now` to the
+   * fixture Saturday (real[1] + 90 minutes, 5 September) and reset every
+   * game kicking after that back to `scheduled` with its scores nulled.
+   *
+   * That is every real game this season. Found at 5:22 PM with FAMU at
+   * Miami 0-14 in the first quarter: overlayLive wrote in_progress and the
+   * score, this block wiped both, and the pool slate - the screen an invite
+   * link opens - showed a game in progress as "Next up". overlayLive itself
+   * was correct in isolation; the bug was a later step undoing it.
+   *
+   * The anchor was right when this route could only show the three
+   * captured finals. It has been wrong since the slate started coming off
+   * the feed, and nothing showed it until a real game was live. */
+  if (!live && short && real.length === 3) {
     /* Between the second and third captured kickoff. Two of the three are genuinely over
      * and carry their real final scores; the third has not kicked off yet, so its result
      * is WITHHELD rather than shown early - status back to `scheduled`, scores back to
@@ -1174,6 +1209,7 @@ function row(ctx, game) {
    * drops rows is a list you cannot trust to be the week. */
   const done = game.status === 'final' || game.status === 'void';
   if (done) r.dataset.when = 'past';
+  else if (game.status === 'in_progress') r.dataset.when = 'live';
   else if (game.id === ctx.nextGameId) r.dataset.when = 'next';
   else r.dataset.when = 'upcoming';
   if (ctx.mode === 'week') r.dataset.market = marketOf(ctx.picks[game.id]);
@@ -1270,7 +1306,18 @@ function row(ctx, game) {
    * So the glyph is not decoration - it is the only thing on the card that says
    * WHERE the game is. With "VS" between them the left/right order was an
    * arbitrary convention somebody had to learn; with "@" it is a sentence. */
-  sides.append(zone(ctx, game, 'away'), el('span', 'p2-at', '@'), zone(ctx, game, 'home'));
+  /* 🔴 THE @ BECOMES THE SCORE ONCE THE GAME HAS STARTED - which is what
+   * center() was written to do and had stopped doing. Its own comment says
+   * "the kickoff time is REPLACED IN PLACE by the live state. Same slot, no
+   * badge, no extra column." Then the Deuce redesign rebuilt this row with a
+   * bare '@' separator and nothing called center() again, so an in-progress
+   * or final game had nowhere to show its score. Found on FAMU at Miami,
+   * 0-14 in the first quarter, drawn on the pool slate as "Next up" with no
+   * score at all - while previewData held status in_progress the whole time.
+   * The data was right; the one function that could draw it was dead code. */
+  const mid = (game.status === 'in_progress' || game.status === 'final')
+    ? center(ctx, game) : el('span', 'p2-at', '@');
+  sides.append(zone(ctx, game, 'away'), mid, zone(ctx, game, 'home'));
   r.appendChild(sides);
   return r;
 }
@@ -1466,7 +1513,11 @@ export function render(root, data, state) {
      * rather than per row, so 24 rows cannot disagree about which one is next. */
     nextGameId: (() => {
       const up = (data.games || [])
-        .filter((g) => g.status !== 'final' && g.status !== 'void')
+        /* 🔴 A LIVE GAME IS NOT "NEXT UP". This excluded only final and void,
+           so during FAMU at Miami the game in progress was flagged as the next
+           one to pick - on a row you can no longer pick at all. Next means the
+           next game that has not started. */
+        .filter((g) => g.status !== 'final' && g.status !== 'void' && g.status !== 'in_progress')
         .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
       return up.length ? up[0].id : null;
     })(),
