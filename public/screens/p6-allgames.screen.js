@@ -557,7 +557,7 @@ export async function resolveWeek(sport, fallback) {
  * handful of small KV reads, not 86.
  */
 export async function overlayLive(games, sport, now = Date.now()) {
-  let delay = 45000;
+  let delay = 30000;   /* the app default - see app.js moveOldDefaultDelay */
   try {
     const v = JSON.parse(localStorage.getItem('ag.delayMs'));
     if (typeof v === 'number' && v >= 0) delay = v;

@@ -122,6 +122,25 @@ function watchRoot() {
   ROOT_OBS.observe(root, { childList: true });
 }
 
+/* 🔴 THE DEFAULT DELAY IS 30s NOW, NOT 45. Jason, 2026-09-10, FAMU at Miami:
+ * "We are at least 2 plays behind." Measured the same minute: ESPN posts a
+ * play 27-37s after the snap on its own, and the 45s delay was holding ZERO
+ * plays - it was stacking on top of ESPN's lag rather than covering it. 45 was
+ * calibrated on the opener against a stream 39s behind; tonight's TV was
+ * closer to live. At 30 the app shows each play about as soon as ESPN has it.
+ *
+ * ONE-TIME MOVE for a device still holding exactly the old default. After it
+ * runs once, whatever anybody sets - 45 included - is left alone. */
+(function moveOldDefaultDelay() {
+  try {
+    if (localStorage.getItem('ag.delayDefaultV') === '30') return;
+    if (JSON.parse(localStorage.getItem('ag.delayMs')) === 45000) {
+      localStorage.setItem('ag.delayMs', JSON.stringify(30000));
+    }
+    localStorage.setItem('ag.delayDefaultV', '30');
+  } catch { /* no storage - the defaults below are 30 anyway */ }
+})();
+
 function wireTopbarTitle() {
   watchRoot();
   const tb = document.getElementById('topbar-title');
@@ -454,7 +473,7 @@ function buildSettings() {
   const dv = document.createElement('div'); dv.className = 'ag-row';
   const dvL = document.createElement('span');
   const r = document.createElement('input');
-  r.type = 'range'; r.min = '0'; r.max = '90'; r.step = '5'; r.value = String((get('delayMs', 45000)) / 1000);
+  r.type = 'range'; r.min = '0'; r.max = '90'; r.step = '5'; r.value = String((get('delayMs', 30000)) / 1000);
   const label = () => { dvL.textContent = r.value === '0' ? 'Live — no gap to call into' : r.value + ' seconds behind'; };
   label();
   /* 🔴 IT ANNOUNCES ITSELF, because this sheet opens ON TOP of a screen that is

@@ -150,7 +150,7 @@ function deviceId() {
 const S = {
   key: null,
   raw: null,            // last pushed state from the Worker
-  delayMs: store.get('delayMs', 45000),
+  delayMs: store.get('delayMs', 30000),
   name: store.get('name', ''),
   stake: store.get('stake', 10),
   calls: store.get('calls', {}),   // afterPlayId -> { type, choice, stake, p }
@@ -1289,7 +1289,14 @@ function drawField(wrap, state, ball, cam) {
    
      Realism loses to legibility on a graphic this size - the same call as the
      40-yard window and the deleted far-side numbers. */
-  const BALL_V = 0.5;
+  /* 🔴 UP INTO THE FAR BAND, NOW THAT MIDFIELD HAS A CREST. Jason, 2026-09-10:
+     "Can we shift the ball and arrows up a little since we have the center
+     logo now." The crest fills v 0.3-0.7, which is exactly where the ball
+     sat. 0.22 is the other clear band on this field - between the far hash
+     row (0.06) and the upper inner row (0.36) - so the ball keeps the
+     legibility the 0.5 decision was for and stops sitting on the logo. The
+     chevrons read the ball's own y, so they move with it. */
+  const BALL_V = 0.22;
   const bp = P(ball, BALL_V);
   /* 🔴 TWICE THE SIZE. Jason: "make the ball 2x larger." It is the subject of
      the graphic and it was the smallest mark on it - smaller than a yard
@@ -2181,7 +2188,7 @@ function wireDelay(wrap) {
 }
 
 function paint(wrap) {
-  S.delayMs = store.get('delayMs', 45000);
+  S.delayMs = store.get('delayMs', 30000);
   wireDelay(wrap);
   wrap.innerHTML = '';
   const now = Date.now();
