@@ -108,10 +108,20 @@ const NAV_PATHS = {
    * adapted from Lucide's "clapperboard" (ISC license), relative moves made
    * absolute so it concatenates into one path. */
   slate: 'M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3ZM6.2 5.3l3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
-  /* A ticket with a check - your card, and the things on it that landed. */
-  picks: 'M4 8a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4zM9.5 12.5l1.8 1.8 3.2-3.6',
-  /* Three bars of different heights. A leaderboard, not a chart. */
-  standings: 'M6 20v-6M12 20V6M18 20v-9',
+  /* 🔴 A PICKAXE - MY PICKS. Jason, 2026-09-10: "pick icon" / "pick axe."
+   * Same move as the clapperboard for the slate: the ticket-with-a-check was
+   * a fair picture of "your card" and says nothing a word does not; the
+   * pickaxe IS the word, and a diagonal handle under a curved head is a shape
+   * no other tab in the bar has. Outline, 1.9 stroke, same grid. Path adapted
+   * from Lucide's "pickaxe" (ISC). */
+  picks: 'M14.531 12.469 6.619 20.38a1 1 0 1 1-3-3l7.912-7.912M15.686 4.314A12.5 12.5 0 0 0 5.461 2.958 1 1 0 0 0 5.58 4.71a22 22 0 0 1 6.318 3.393M17.7 3.7a1 1 0 0 0-1.4 0l-4.6 4.6a1 1 0 0 0 0 1.4l2.6 2.6a1 1 0 0 0 1.4 0l4.6-4.6a1 1 0 0 0 0-1.4zM19.686 8.314a12.501 12.501 0 0 1 1.356 10.225 1 1 0 0 1-1.751-.119 22 22 0 0 0-3.393-6.319',
+  /* 🔴 A PODIUM. Jason, 2026-09-10: "standings icon", sending a 2-1-3 podium.
+   * Three bars of different heights were meant as "a leaderboard, not a
+   * chart" and read as a chart anyway - the bar-chart glyph is what every
+   * analytics app uses. A podium is unambiguous: somebody is first. Outline
+   * only, his colors dropped for the bar's one color; the "1" on the top step
+   * stays because it is what makes three boxes a podium at 24px. */
+  standings: 'M3 18h18a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-1a1 1 0 0 1 1-1zM9 18V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v12M4 18v-8a1 1 0 0 1 1-1h4M15 12h4a1 1 0 0 1 1 1v5M11.4 9.3l1-.8V13',
   /* 🔴 A BROADCAST, NOT A BALL. Jason, 2026-09-10, sending the picture:
    * "live icon" - a dot with arcs radiating either side. The tilted football
    * said "football", which every tab in this app already is; the arcs say ON
