@@ -971,10 +971,14 @@ function gameStrip(wrap) {
     if (key === nowKey && S.raw) {
       try { sc = held(S.raw, S.delayMs, Date.now()) || g; } catch { sc = g; }
     }
+    /* The day goes in front of the time. Jason, 2026-09-11, on a strip of
+       4:00 PM chips: "how do i know what date or day of the week these are?"
+       A time alone is ambiguous the moment the strip spans two days. */
+    const kick = new Date(g.kickoffUtc);
     b.appendChild(el('span', 'lg-gamechip-s num', g.status === 'in_progress'
       ? ((sc.awayScore ?? 0) + '–' + (sc.homeScore ?? 0))
-      : new Date(g.kickoffUtc).toLocaleTimeString(undefined,
-          { hour: 'numeric', minute: '2-digit' })));
+      : kick.toLocaleDateString(undefined, { weekday: 'short' }) + ' '
+        + kick.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })));
 
     b.onclick = () => {
       if (key === nowKey) return;
