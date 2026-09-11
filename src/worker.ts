@@ -19,6 +19,7 @@ export { LivePoller } from './poller-do.ts';
 
 import { readLive, settleAgainst, type LiveState } from './live.ts';
 import { parseSlate, type Sport } from './feed/espn.ts';
+import { handleAuth, requireIdentity, sessionAccount } from './auth.ts';
 
 export interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
@@ -27,6 +28,13 @@ export interface Env {
   SEASON?: string;
   /** Set with `wrangler secret put PUSH_TOKEN`. Without it nothing can write. */
   PUSH_TOKEN?: string;
+  /** Email sign-in (src/auth.ts). The key is Jason's to set:
+   *  `wrangler secret put RESEND_API_KEY`. MAIL_FROM overrides the sender. */
+  RESEND_API_KEY?: string;
+  MAIL_FROM?: string;
+  /** "1" = picks, groups and joins need a verified email. Off until the sender
+   *  and the sign-in sheet are both live. */
+  REQUIRE_EMAIL?: string;
 }
 
 const SPORTS: Record<string, Sport> = {
@@ -165,6 +173,10 @@ export default {
        *
        * The token is a secret rather than a check on the caller's address,
        * because a Worker cannot trust an IP. */
+      /* ---- email sign-in: /api/auth/start, /verify, /me, /logout ---- */
+      const authRes = await handleAuth(req, env, p, json);
+      if (authRes) return authRes;
+
       if (p === '/api/push' && req.method === 'POST') {
         const token = req.headers.get('x-push-token') || '';
         if (!env.PUSH_TOKEN || token !== env.PUSH_TOKEN) return json({ error: 'no' }, 401);
@@ -520,9 +532,16 @@ export default {
           side?: string; sport?: string; week?: number; spread?: number | null;
           kickoffUtc?: number;
         };
-        if (!b.deviceId || !b.gameId || (b.side !== 'home' && b.side !== 'away')) {
-          return json({ error: 'deviceId, gameId and a side are required' }, 400);
+        if (!b.gameId || (b.side !== 'home' && b.side !== 'away')) {
+          return json({ error: 'gameId and a side are required' }, 400);
         }
+        /* 🔴 WHO, DECIDED BY THE SERVER. A session's account whenever one is
+           sent; the bare device id only while email is not yet required. This
+           is the line Jason's "I can log in for you and tank your picks"
+           was about - see src/auth.ts. */
+        const who = await requireIdentity(req, env, b.deviceId, json);
+        if ('error' in who) return who.error;
+        const userId = who.userId;
         const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
         const poolId = b.poolId || (sport === 'nfl' ? 'world-nfl' : 'world-cfb');
         const week = Number(b.week) || 0;
@@ -546,7 +565,7 @@ export default {
            ON CONFLICT(pool_id, user_id) DO UPDATE SET
              display_name = CASE WHEN excluded.display_name <> ''
                                  THEN excluded.display_name ELSE member.display_name END`
-        ).bind(poolId, b.deviceId, String(b.name || '').slice(0, 24), week).run();
+        ).bind(poolId, userId, String(b.name || '').slice(0, 24), week).run();
 
         /* 🔴 ONE PICK PER PERSON PER GAME, ENFORCED BY THE PRIMARY KEY rather
          * than by a check - the same trick one-call-per-snap uses. A second pick
@@ -560,7 +579,7 @@ export default {
            ON CONFLICT(pool_id, user_id, game_id) DO UPDATE SET
              side = excluded.side, made_at = excluded.made_at,
              spread_at = excluded.spread_at`
-        ).bind(poolId, b.deviceId, String(b.gameId), b.side, Date.now(), week, sport,
+        ).bind(poolId, userId, String(b.gameId), b.side, Date.now(), week, sport,
                typeof b.spread === 'number' ? b.spread : null).run();
 
         return json({ ok: true, poolId });
@@ -575,7 +594,9 @@ export default {
        */
       if (p === '/api/pool/create' && req.method === 'POST') {
         const b = await req.json() as { deviceId?: string; name?: string; poolName?: string; sport?: string; week?: number };
-        if (!b.deviceId) return json({ error: 'deviceId is required' }, 400);
+        const who = await requireIdentity(req, env, b.deviceId, json);
+        if ('error' in who) return who.error;
+        const userId = who.userId;
         const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
         /* 🔴 A POOL CAN BE ONE WEEK, OR THE SEASON. Jason: "The pools can also
          * be single weeks." NULL is the season, which is every pool that
@@ -601,12 +622,12 @@ export default {
           `INSERT INTO pool (id, name, commissioner_id, scope, scope_arg, ranking_source,
                              ats, season, scope_locked_at, created_at, sport, week)
            VALUES (?, ?, ?, 'all', NULL, NULL, 0, 2026, NULL, ?, ?, ?)`
-        ).bind(code, String(b.poolName || 'Our pool').slice(0, 40), b.deviceId, Date.now(), sport, week).run();
+        ).bind(code, String(b.poolName || 'Our pool').slice(0, 40), userId, Date.now(), sport, week).run();
 
         await env.DB.prepare(
           `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
            VALUES (?, ?, ?, 0, 'commissioner')`
-        ).bind(code, b.deviceId, String(b.name || '').slice(0, 24)).run();
+        ).bind(code, userId, String(b.name || '').slice(0, 24)).run();
 
         return json({ ok: true, poolId: code, name: b.poolName || 'Our pool', sport, week });
       }
@@ -614,7 +635,10 @@ export default {
       /* Join by code. Idempotent: joining twice is joining. */
       if (p === '/api/pool/join' && req.method === 'POST') {
         const b = await req.json() as { deviceId?: string; code?: string; name?: string };
-        if (!b.deviceId || !b.code) return json({ error: 'deviceId and code are required' }, 400);
+        if (!b.code) return json({ error: 'code is required' }, 400);
+        const who = await requireIdentity(req, env, b.deviceId, json);
+        if ('error' in who) return who.error;
+        const userId = who.userId;
         /* Uppercased and stripped, because somebody typing a code off a screen
          * will send it in whatever case and spacing their keyboard produced. */
         const code = String(b.code).toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -626,7 +650,7 @@ export default {
           `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
            VALUES (?, ?, ?, 0, 'player')
            ON CONFLICT(pool_id, user_id) DO NOTHING`
-        ).bind(code, b.deviceId, String(b.name || '').slice(0, 24)).run();
+        ).bind(code, userId, String(b.name || '').slice(0, 24)).run();
 
         return json({ ok: true, poolId: pool.id, name: pool.name, sport: pool.sport });
       }
@@ -656,7 +680,9 @@ export default {
        * it is the question "am I in a pool" - which the screen must be able to
        * answer before it can offer to start one. */
       if (p === '/api/pool/mine') {
-        const device = url.searchParams.get('device') || '';
+        /* A signed-in person's groups follow the account, not the phone. */
+        const me = await sessionAccount(req, env);
+        const device = me ? me.accountId : (url.searchParams.get('device') || '');
         if (!device) return json({ pools: [] });
         const rows = await env.DB.prepare(
           `SELECT p.id, p.name, p.sport,
