@@ -3040,9 +3040,14 @@ function paint(wrap) {
     const done = el('div', 'card lg-done');
     done.appendChild(el('div', 'lg-done-h', 'Final'));
     done.appendChild(el('div', 'lg-done-b',
+      /* 🔴 THE CHANGE, SIGNED, THEN THE TOTAL - SAID AS A TOTAL. Jason,
+         2026-09-10: "12 of 212 marbles? Or +12 with a total of 212 marbles."
+         "Up 12, on 212 Marbles" set two bare numbers side by side and let
+         them read as a fraction. The sign says which one is the change; the
+         words "a total of" say which one is the balance. */
       S.bank === START_BANK
-        ? 'You finished level.'
-        : `You finished ${S.bank > START_BANK ? 'up' : 'down'} ${Math.abs(S.bank - START_BANK)}, on ${S.bank} Marbles.`));
+        ? `You finished even, with ${S.bank} Marbles.`
+        : `You finished ${signed(S.bank - START_BANK)}, with a total of ${S.bank} Marbles.`));
     wrap.appendChild(done);
   } else if (!type && last && atHalfTime(state)) {
     const c = el('div', 'card lg-call is-waiting');
