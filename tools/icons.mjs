@@ -35,6 +35,16 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, rmSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+/* 🔴 RETIRED 2026-09-10 - DO NOT RUN. The monogram above is gone: the icons are
+ * Jason's stadium drawings, copied as final from the vault's
+ * `Swing Route/Any Given/live/icon/` (see its README). This script writes
+ * apple-touch-icon.png, icon-192.png and icon-512.png by the SAME NAMES, so
+ * running it would silently put the old AG monogram back over them. */
+if (!process.argv.includes('--i-mean-the-old-monogram')) {
+  console.error('tools/icons.mjs is retired - the icons are final assets from the vault. Not writing.');
+  process.exit(1);
+}
+
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const out = fileURLToPath(new URL('../public/icons/', import.meta.url));
 const tmp = fileURLToPath(new URL('../.icon-tmp.html', import.meta.url));
