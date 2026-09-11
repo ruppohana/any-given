@@ -3145,8 +3145,14 @@ function paint(wrap) {
      * keeps its own order (run first); only the card reorders, and the grid
      * flows by column so this list reads down the left, then down the right. */
     const SCRIPT_ORDER = ['pass_yes', 'pass_no', 'run_yes', 'run_no'];
-    /* Yes/no cards that carry a play line behind each tile - see .has-art. */
-    const LINE_ART = new Set(['explosive', 'first_down', 'drive_breakout']);
+    /* Yes/no cards that carry a play line behind each tile - see .has-art. Empty
+     * since Jason's figure library (2026-09-11) took those three cards; the SVGs
+     * stay in ART until he has seen the figures on them. */
+    const LINE_ART = new Set([]);
+    /* Cards with Jason's figures behind each tile - see .has-fig and
+     * tools/figures.mjs, which writes public/art/fig-<card>-<n>.png. */
+    const FIG_CARDS = new Set(['explosive', 'first_down', 'third_down', 'kickoff_return',
+      'drive_end', 'drive_breakout', 'three_and_out', 'redzone_outcome']);
     const SCRIPT_SHORT = { pass_yes: 'First down', pass_no: 'Short', run_yes: 'First down', run_no: 'Short' };
     const isScript = type.id === 'script';
     const shown = isScript
@@ -3156,7 +3162,9 @@ function paint(wrap) {
     const tiles = el('div', 'lg-tiles' + (isScript ? ' is-script' : priced.length > 3 ? ' is-4' : '')
       + ' n-' + priced.length + (type.id === 'fourth_down' ? ' is-fourth' : '')
       + (type.id === 'direction' ? ' is-dir' : '')
-      + (LINE_ART.has(type.id) ? ' has-art art-' + type.id : ''));
+      + (LINE_ART.has(type.id) ? ' has-art art-' + type.id : '')
+      + (FIG_CARDS.has(type.id) ? ' has-fig fig-' + type.id : '')
+      + (type.id === 'redzone_outcome' ? ' is-3stack' : ''));
     for (const o of shown) {
       const b = el('button', 'lg-tile');
       const win = Math.round(S.stake * o.pays) - S.stake;
@@ -5391,6 +5399,51 @@ const CSS = `
 /* "They break one" and "They do not" run nearly the width of the tile, so these
    two sit lower, under the label. */
 .art-drive_breakout .lg-tile::before { -webkit-mask-size: auto 70%; mask-size: auto 70%; }
+/* 🔴 JASON'S FIGURE LIBRARY ON THE REST OF THE CARDS - his "Look these over",
+   mapped card by card and "Yes" to a mockup of all eleven. Each tile's figure is
+   its own mask the shape of the tile (tools/figures.mjs), standing on the bottom
+   edge against the inner side, every figure on a card at one scale. */
+.lg-tiles.has-fig .lg-tile { position: relative; overflow: hidden; }
+.lg-tiles.has-fig .lg-tile > * { position: relative; }
+.lg-tiles.has-fig .lg-tile::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: var(--fg); opacity: .24; -webkit-mask: var(--art) no-repeat; mask: var(--art) no-repeat;
+  -webkit-mask-size: auto 100%; mask-size: auto 100%; }
+.lg-tiles.has-fig.n-2 .lg-tile:nth-child(1)::before, .lg-tiles.has-fig.is-4 .lg-tile:nth-child(odd)::before,
+.lg-tiles.has-fig.n-3 .lg-tile:nth-child(1)::before { -webkit-mask-position: right 0 bottom 0; mask-position: right 0 bottom 0; }
+.lg-tiles.has-fig.n-2 .lg-tile:nth-child(2)::before, .lg-tiles.has-fig.is-4 .lg-tile:nth-child(even)::before,
+.lg-tiles.has-fig.n-3 .lg-tile:nth-child(3)::before { -webkit-mask-position: left 0 bottom 0; mask-position: left 0 bottom 0; }
+.lg-tiles.has-fig.n-3 .lg-tile:nth-child(2)::before { -webkit-mask-position: center bottom; mask-position: center bottom; }
+.fig-explosive .lg-tile:nth-child(1) { --art: url('/art/fig-explosive-1.png'); }
+.fig-explosive .lg-tile:nth-child(2) { --art: url('/art/fig-explosive-2.png'); }
+.fig-first_down .lg-tile:nth-child(1) { --art: url('/art/fig-first_down-1.png'); }
+.fig-first_down .lg-tile:nth-child(2) { --art: url('/art/fig-first_down-2.png'); }
+.fig-third_down .lg-tile:nth-child(1) { --art: url('/art/fig-third_down-1.png'); }
+.fig-third_down .lg-tile:nth-child(2) { --art: url('/art/fig-third_down-2.png'); }
+.fig-kickoff_return .lg-tile:nth-child(1) { --art: url('/art/fig-kickoff_return-1.png'); }
+.fig-kickoff_return .lg-tile:nth-child(2) { --art: url('/art/fig-kickoff_return-2.png'); }
+.fig-drive_end .lg-tile:nth-child(1) { --art: url('/art/fig-drive_end-1.png'); }
+.fig-drive_end .lg-tile:nth-child(2) { --art: url('/art/fig-drive_end-2.png'); }
+.fig-drive_end .lg-tile:nth-child(3) { --art: url('/art/fig-drive_end-3.png'); }
+.fig-drive_end .lg-tile:nth-child(4) { --art: url('/art/fig-drive_end-4.png'); }
+.fig-drive_breakout .lg-tile:nth-child(1) { --art: url('/art/fig-drive_breakout-1.png'); }
+.fig-drive_breakout .lg-tile:nth-child(2) { --art: url('/art/fig-drive_breakout-2.png'); }
+.fig-three_and_out .lg-tile:nth-child(1) { --art: url('/art/fig-three_and_out-1.png'); }
+.fig-three_and_out .lg-tile:nth-child(2) { --art: url('/art/fig-three_and_out-2.png'); }
+.fig-redzone_outcome .lg-tile:nth-child(1) { --art: url('/art/fig-redzone_outcome-1.png'); }
+.fig-redzone_outcome .lg-tile:nth-child(2) { --art: url('/art/fig-redzone_outcome-2.png'); }
+.fig-redzone_outcome .lg-tile:nth-child(3) { --art: url('/art/fig-redzone_outcome-3.png'); }
+/* 🔴 TOUCHDOWN AND FIELD GOAL SIDE BY SIDE, NOTHING ON ITS OWN LINE. Jason,
+   2026-09-11: "Maybe touchdown and field goal on the top line and nothing on its
+   own line below?" Three across left no room - "Touchdown" ran into the tile's
+   edge and the figures sat behind the payouts. Two columns, the third tile across
+   both; text keeps the outer edges (Field goal right), Nothing reads from the
+   left with its figure at the far end. */
+.lg-tiles.is-3stack { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+.lg-tiles.is-3stack .lg-tile:nth-child(3) { grid-column: 1 / -1; }
+.lg-tiles.is-3stack .lg-tile:nth-child(2) { text-align: right; justify-items: end; }
+.lg-tiles.is-3stack .lg-tile:nth-child(3) { text-align: left; justify-items: start; }
+.lg-tiles.has-fig.is-3stack .lg-tile:nth-child(2)::before { -webkit-mask-position: left 0 bottom 0; mask-position: left 0 bottom 0; }
+.lg-tiles.has-fig.is-3stack .lg-tile:nth-child(3)::before { -webkit-mask-position: right 0 bottom 0; mask-position: right 0 bottom 0; }
 /* The stoppage nugget - one true thing, while nothing is happening. */
 .lg-nugget { display: grid; gap: 6px; }
 .lg-nugget-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;

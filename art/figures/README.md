@@ -23,6 +23,9 @@ saved here as sent:
 - `jason-picks-2026-09-11.png` — a picked set: throws, runs with speed lines, the diving
   fumble and recovery, holder and kicker, the chain crew, goal posts, the touchdown signal.
 
+- `jason-first-down-signal-2026-09-11.png` — "First down signal": the referee pointing,
+  front-facing and side-on. The front-facing one replaced the library's arms-out figure.
+
 `node tools/figures.mjs` cuts them into `public/art/fig-*.png` (alpha masks, both figures
 on a card at one scale). Re-run it after changing the sheet or the crop boxes.
 
