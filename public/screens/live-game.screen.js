@@ -5274,6 +5274,11 @@ const CSS = `
    2026-09-11, asked what "the fuzz" was, then "Yes crisp edge". The cut-outs have
    clean edges of their own; the fade only hid a crop that no longer exists. */
 .lg-hero + * { position: relative; z-index: 1; }
+/* EVERY CARD UNDER IT, NOT JUST THE FIRST. Jason, 2026-09-11: "The 200 marble
+   card need to be pulled forward in draw order." The stadium bleeds 75px down
+   and only the row directly after it was lifted, so the Marbles card - the
+   second thing under the picture - had the stands drawn over its heading. */
+.lg-hero ~ .card { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) { .lg-hero-img { transition: none; }
   .lg-hero-img.is-on, .lg-hero-img.is-off { animation: none; transform: none; } }
 .lg-sportrow { margin-top: 2px; }
