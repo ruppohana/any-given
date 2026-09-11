@@ -138,14 +138,16 @@
   background: var(--surface-1); border: 1px solid var(--line);
   border-radius: var(--radius-l1); box-shadow: none; }
 
-/* 🔴 AND THE DAY HEADER STOPS BEING STICKY. Pinned at top:38px it hung over the
-   first card of the next day and clipped it - visible as a white strip with a
-   half-row under it. A sticky label made sense over a continuous table where you
-   could lose track of which day you were in; over discrete cards separated by
-   8px of ground it is a lid sliding across them.
+/* 🔴 THE DAY HEADER IS STICKY AGAIN, AND THIS TIME IT CANNOT LEAVE ITS DAY.
+   Jason, 2026-09-11: "can you make the date/date stick at the top while
+   scrolling down?" - the same night the day chips came off.
 
-   The day chips at the top of the screen are the way to jump between days, and
-   they were always the better answer to that question. */
+   It was un-stuck because, pinned at top:38px on the ground, it hung over the
+   first card of the NEXT day. It is a <summary> inside its own <details> now,
+   and a sticky box is confined to its containing block - so it pins while its
+   own day scrolls under it and is carried off with that day's last card. It
+   sits under the top bar and the filter pills (44 + 60, measured), on the day
+   card's own surface so the games pass beneath it rather than through it. */
 /* The day header now lives INSIDE the day card, so it is a row of it rather
    than a label on the ground. */
 /* (declared once, with the summary rules below - see the duplicate guard.) */
@@ -198,7 +200,10 @@
   min-height: 32px; border-radius: 10px; scroll-margin-top: 72px;
   /* No negative margin - see the day card above. The header takes the same step
      as everything else in the stack. */
+  position: sticky; top: var(--topbar-h); z-index: 3; background: var(--surface-1);
   }
+/* With the filter pills on screen they are pinned too, so the date goes below them. */
+.scr-p2-slate:has(.p2-filters) .p2-grp { top: calc(var(--topbar-h) + 60px); }
 .scr-p2-slate .p2-grp::-webkit-details-marker { display: none; }
 .scr-p2-slate .p2-grp:hover { background: var(--track); }
 .scr-p2-slate .p2-grp-r { display: inline-flex; align-items: center; gap: 6px; }
