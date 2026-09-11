@@ -461,6 +461,8 @@ export function probFromSpread(spread, side, sport) {
 function deviceId() {
   try {
     let v = localStorage.getItem('ag.device');
+    /* The live screen used to store it JSON-quoted; unwrap and write back bare. */
+    if (v && v[0] === '"') { v = v.replace(/"/g, ''); localStorage.setItem('ag.device', v); }
     if (!v) {
       v = 'd' + Math.random().toString(36).slice(2) + Date.now().toString(36);
       localStorage.setItem('ag.device', v);

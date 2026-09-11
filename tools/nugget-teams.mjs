@@ -28,20 +28,31 @@ const pacific = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Am
 const date = arg('date', pacific(Date.now() + 24 * 60 * 60 * 1000));
 const dayBefore = pacific(Date.parse(date + 'T12:00:00Z') - 24 * 60 * 60 * 1000);
 
+/* 🔴 A FAILED FETCH IS NOT AN EMPTY DAY. These used to `continue` silently, so
+ * "no games tomorrow", "all fresh" and "the slate did not load" all printed the
+ * same empty list - flagged by the first dry run, 2026-09-10. Every failure is
+ * now named in `errors` and the exit code is 2, so a run can tell them apart.
+ * A 404 on week+1 is normal (not published yet) and is not an error. */
 const out = [];
+const errors = [];
 for (const sport of ['nfl', 'college-football']) {
   const lg = sport === 'nfl' ? 'nfl' : 'ncaa';
   let wk;
-  try { wk = Number((await (await fetch(`${base}/api/state/slate:${sport}:current`)).text()).trim()); } catch { continue; }
-  if (!wk) continue;
+  try {
+    const r = await fetch(`${base}/api/state/slate:${sport}:current`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    wk = Number((await r.text()).trim());
+  } catch (e) { errors.push(`${sport} current week: ${e.message}`); continue; }
+  if (!wk) { errors.push(`${sport} current week: empty`); continue; }
   const seen = new Set();
   for (const w of [wk, wk + 1]) {
     let slate;
     try {
       const r = await fetch(`${base}/api/state/slate:${sport}:${season}:${w}`);
-      if (!r.ok) continue;
+      if (r.status === 404 && w === wk + 1) continue;
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       slate = await r.json();
-    } catch { continue; }
+    } catch (e) { errors.push(`${sport} week ${w}: ${e.message}`); continue; }
     for (const g of slate.games || []) {
       if (!g.kickoffUtc || g.status === 'final' || pacific(g.kickoffUtc) !== date) continue;
       for (const t of g.teams || []) {
@@ -60,5 +71,7 @@ for (const sport of ['nfl', 'college-football']) {
   }
 }
 out.sort((a, b) => a.kickoffUtc - b.kickoffUtc || a.team.localeCompare(b.team));
-console.error(`${date}: ${out.length} team(s) ${all ? 'playing' : 'need research'}`);
-console.log(JSON.stringify({ date, dayBefore, teams: out }, null, 2));
+console.error(`${date}: ${out.length} team(s) ${all ? 'playing' : 'need research'}`
+  + (errors.length ? ` - ${errors.length} slate fetch(es) FAILED` : ''));
+console.log(JSON.stringify({ date, dayBefore, teams: out, errors }, null, 2));
+if (errors.length) process.exitCode = 2;

@@ -24,8 +24,10 @@ Work in `C:\Claude\Knowledge\anygiven`. It is its own git repo with a GitHub rem
    (`> "$TEMP/..."`): a write outside the repo is a permission prompt, and a prompt in an
    unattended run waits for a human who is asleep — it stalled the first dry run on 2026-09-10.
    It prints `{date, dayBefore, teams:[{league, teamId, team, abbrev, opponent, file, asOf}]}` —
-   only teams whose file is missing or older than the day before the game. **If `teams` is empty,
-   stop and report "no games tomorrow" (or "all fresh").**
+   only teams whose file is missing or older than the day before the game. **If `errors` is
+   non-empty (exit code 2), a slate did not load: report which, and research only the teams that
+   did list.** **If `teams` is empty and `errors` is empty, stop and report "no games tomorrow"
+   (or "all fresh").**
 
 2. **Research in batches.** Four teams per subagent, keeping both teams of one game in the same
    batch where possible. Dispatch `general-purpose` subagents **in the background, at most 8 at a

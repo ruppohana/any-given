@@ -93,6 +93,14 @@ export async function sessionAccount(req: Request, env: any): Promise<Session | 
  * WHO IS THIS, for the pool endpoints. A session wins whenever one is sent.
  * Without one: the device id while enforcement is off, a 401 while it is on.
  */
+/* 🔴 ONE SPELLING OF A DEVICE ID. The live screen stored `ag.device` JSON-encoded
+ * until 2026-09-10, so some phones posted `"abc"` - quotes included - and D1
+ * holds picks under both spellings. Strip the quotes on the way in; the sign-in
+ * migration matches both, so a quoted history still moves to the account. */
+export function normDevice(v: unknown): string {
+  return String(v || '').replace(/"/g, '').slice(0, 80);
+}
+
 export async function requireIdentity(req: Request, env: any, deviceId: unknown, json: Json):
   Promise<{ userId: string } | { error: Response }> {
   const s = await sessionAccount(req, env);
@@ -105,7 +113,7 @@ export async function requireIdentity(req: Request, env: any, deviceId: unknown,
   if (env.REQUIRE_EMAIL === '1') {
     return { error: json({ error: 'email_required', message: 'Sign in with your email to play.' }, 401) };
   }
-  const d = String(deviceId || '').slice(0, 80);
+  const d = normDevice(deviceId);
   if (!d) return { error: json({ error: 'deviceId is required' }, 400) };
   return { userId: d };
 }
@@ -187,7 +195,7 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
     const b = await req.json().catch(() => ({})) as any;
     const email = normEmail(b.email);
     const code = String(b.code || '').replace(/\D/g, '');
-    const deviceId = String(b.deviceId || '').slice(0, 80);
+    const deviceId = normDevice(b.deviceId);
     const row = await env.DB.prepare('SELECT code_hash, expires_at, attempts FROM verify_code WHERE email = ?')
       .bind(email).first() as any;
     if (!row) return json({ error: 'Ask for a new code.' }, 400);
@@ -216,9 +224,10 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
           `INSERT INTO device_account (device_id, account_id, linked_at) VALUES (?, ?, ?)
            ON CONFLICT(device_id) DO UPDATE SET account_id = excluded.account_id, linked_at = excluded.linked_at`
         ).bind(deviceId, acct.id, now),
-        env.DB.prepare('UPDATE OR IGNORE pick SET user_id = ? WHERE user_id = ?').bind(acct.id, deviceId),
-        env.DB.prepare('UPDATE OR IGNORE member SET user_id = ? WHERE user_id = ?').bind(acct.id, deviceId),
-        env.DB.prepare('UPDATE pool SET commissioner_id = ? WHERE commissioner_id = ?').bind(acct.id, deviceId)
+        /* Both spellings - see normDevice. */
+        env.DB.prepare('UPDATE OR IGNORE pick SET user_id = ? WHERE user_id IN (?, ?)').bind(acct.id, deviceId, `"${deviceId}"`),
+        env.DB.prepare('UPDATE OR IGNORE member SET user_id = ? WHERE user_id IN (?, ?)').bind(acct.id, deviceId, `"${deviceId}"`),
+        env.DB.prepare('UPDATE pool SET commissioner_id = ? WHERE commissioner_id IN (?, ?)').bind(acct.id, deviceId, `"${deviceId}"`)
       ]);
     }
     const token = randHex(32);

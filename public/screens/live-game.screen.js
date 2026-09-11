@@ -137,10 +137,19 @@ const store = {
   set(k, v) { try { localStorage.setItem('ag.' + k, JSON.stringify(v)); } catch {} }
 };
 
+/* 🔴 RAW, NOT store.get. Every other screen and the sign-in sheet keep
+ * `ag.device` as a bare string; this one used to JSON-encode it, so a phone that
+ * opened Live first posted picks as `"abc"` (quotes and all), and a phone that
+ * opened the slate first had its raw `dabc` fail JSON.parse here and get a NEW
+ * id minted over it - stranding every pick it had made. Found in D1 2026-09-10.
+ * Read raw, unwrap a quoted legacy value, and write it back bare. */
 function deviceId() {
-  let id = store.get('device', null);
-  if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('device', id); }
-  return id;
+  try {
+    let v = localStorage.getItem('ag.device');
+    if (v && v[0] === '"') { try { v = JSON.parse(v); } catch { v = v.replace(/"/g, ''); } localStorage.setItem('ag.device', v); }
+    if (!v) { v = 'd' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('ag.device', v); }
+    return v;
+  } catch { return 'anon'; }
 }
 
 /* ------------------------------------------------------------------ *

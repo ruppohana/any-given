@@ -67,6 +67,9 @@ export function signedInHandle() { return get('ag.handle'); }
 
 function deviceId() {
   let v = get('ag.device');
+  /* A quoted value is the live screen's old JSON encoding - unwrap it, or the
+   * picks it made under the bare id never migrate to the account. */
+  if (v[0] === '"') { v = v.replace(/"/g, ''); put('ag.device', v); }
   if (!v) { v = 'd' + Math.random().toString(36).slice(2) + Date.now().toString(36); put('ag.device', v); }
   return v;
 }
