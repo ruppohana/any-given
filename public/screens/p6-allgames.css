@@ -390,7 +390,9 @@
 .scr-p6-allgames .p6a-filter {
   flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
   font: inherit; min-height: 34px; padding: 0 11px;
-  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  /* 10px, the slate's filter pill - Jason, 2026-09-11: "change the radius". The
+     same control on both screens, so the same corners. */
+  border: 1px solid var(--line); border-radius: 10px;
   background: var(--card); color: var(--fg); white-space: nowrap;
 }
 .scr-p6-allgames .p6a-filter-l { font-size: var(--t-micro); font-weight: 700; }

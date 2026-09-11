@@ -23,20 +23,32 @@ responsible to kindness."* And "sure" to relaying email through Any Given.
 ## 1 · The section
 
 Group pools is **its own section with its own bottom bar**, reached from Home's
-"Group pools" door (which now goes straight to `#/g`).
+"Group pools" door (which now goes straight to `#/gpicks`).
 
 | Route (hash) | Screen module | state | Group-bar tab lit |
 |---|---|---|---|
-| `#/g` | `g1-group` | `ready` | Group |
-| `#/gpicks` | `p2-slate` | `group` | Picks |
-| `#/gstandings` | `p5-standings` | `group` | Standings |
-| `#/gcommish` | `g2-commish` | `ready` | Group |
-| `#/grules` | `g3-group-rules` | `ready` | Rules |
+| `#/gpicks` | `p2-slate` | `group` | **Pool** |
+| `#/gstandings` | `p5-standings` | `group` | **Standings** |
+| `#/g` | `g1-group` | `ready` | **Info** |
+| `#/gcommish` | `g2-commish` | `ready` | **Info** |
+| `#/grules` | `g3-group-rules` | `ready` | **Info** |
 
-**The group bar** (session-owned, `components/nav.js` + `app.js`): **Home · Picks ·
-Standings · Group · Rules.** Home is the app's front door (`#/home`), the way out of the
-section. The main bar (Home · Live · Slate · My picks · Standings · More) is untouched
-and never shows on these routes.
+**The group bar** (session-owned, `components/nav.js` + `app.js`): **Home · Pool ·
+Standings · Info** — Jason's own four, 2026-09-11: *"home, pool, standing and info"*.
+Home is the app's front door (`#/home`), the way out. **Pool** is your picks in the
+current group. **Info** (`#/g`, `g1-group`) is the group page: start or join when you are
+in none; otherwise the members, the messages, the commissioner's tools (a door to
+`#/gcommish`) and the group's rules (a door to `#/grules`). The main bar (Home · Live ·
+Slate · My picks · Standings · More) is untouched and never shows on these routes.
+
+**So `p2-slate` in `group` state with no group (or signed out) must not be a dead end:**
+it shows the start-or-join card that sends you to `#/g`.
+
+**Amended mid-run, 2026-09-11, after A's return — an invite link lands on `#/g`, not the
+slate.** `app.js` looks up `/?pool=CODE`, stores `ag.pendingPool` and opens `#/g`, where
+`g1-group` fills Join with the code and **clears the key after a successful join**. The
+public slate **no longer joins anyone on a first pick and shows no "You're invited" line**
+— a group's picks are its own, so a slate pick could never count there. D was told.
 
 **The current group** is `localStorage['ag.group']` (a group code). Read and write it
 **only** through `components/group.js`. It is not `ag.scope` (that is the old world/group

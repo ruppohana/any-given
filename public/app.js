@@ -17,7 +17,7 @@
  * whole escape hatch if a school or a conference ever writes.
  */
 
-import { navBar, NAV_CSS } from '/components/nav.js';
+import { navBar, NAV_CSS, GROUP_DESTINATIONS } from '/components/nav.js';
 import { STATES_CSS } from '/components/states.js';
 import { TEAM_CHIP_CSS } from '/components/team-chip.js';
 import { adSlot, AD_CSS } from '/components/ad.js';
@@ -55,6 +55,16 @@ const ROUTES = [
   /* Rules lives under More now, so the More tab is the one lit while you read it. */
   { id: 'rules',     dest: 'info',      screen: 's6-rules',        state: 'ready',       label: 'Rules' },
   { id: 'info',      dest: 'info',      screen: 's9-more',         state: 'ready',       label: 'More' },
+  /* 🔴 GROUP POOLS - ITS OWN SECTION AND ITS OWN BAR: Home · Pool · Standings ·
+   * Info. Jason, 2026-09-11. `nav: 'group'` draws components/nav.js
+   * GROUP_DESTINATIONS instead of the main bar; `dest` is which of its tabs is
+   * lit. The commissioner's tools and the group rules live under Info. See
+   * CONTRACT-GROUPS.md. */
+  { id: 'gpicks',     dest: 'g-pool',      nav: 'group', screen: 'p2-slate',       state: 'group', label: 'Group pool - picks' },
+  { id: 'gstandings', dest: 'g-standings', nav: 'group', screen: 'p5-standings',   state: 'group', label: 'Group standings' },
+  { id: 'g',          dest: 'g-info',      nav: 'group', screen: 'g1-group',       state: 'ready', label: 'Group' },
+  { id: 'gcommish',   dest: 'g-info',      nav: 'group', screen: 'g2-commish',     state: 'ready', label: 'Commissioner' },
+  { id: 'grules',     dest: 'g-info',      nav: 'group', screen: 'g3-group-rules', state: 'ready', label: 'Group rules' },
   /* 🔴 THE ONLY ROUTE THAT IS NOT FIXTURES. It polls the Worker, holds what it
    * gets behind the user's own delay, and settles against the play that actually
    * happened. Everything else here is a design surface; this one is the product. */
@@ -202,6 +212,11 @@ const TITLES = {
   invite: 'Invite',
   rules: 'Rules',
   info: 'More',
+  gpicks: 'Pool',
+  gstandings: 'Standings',
+  g: 'Group',
+  gcommish: 'Commissioner',
+  grules: 'Group rules',
   settings: 'Settings',
 };
 
@@ -367,10 +382,10 @@ async function mount() {
     root.appendChild(adSlot('banner'));
   }
 
-  drawNav(route.dest);
+  drawNav(route.dest, route.nav);
 }
 
-function drawNav(active) {
+function drawNav(active, which) {
   const old = document.querySelector('.ag-nav');
   if (old) old.remove();
   const nav = navBar(active, {
@@ -385,7 +400,11 @@ function drawNav(active) {
      * was the only call card that existed. It stopped making sense the moment
      * the app had a real one, and nothing caught it because both screens look
      * almost identical — which is precisely why the mock was built. */
-    hrefFor: (d) => '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
+    /* The group section draws its own bar; each of its tabs names its route. */
+    destinations: which === 'group' ? GROUP_DESTINATIONS : undefined,
+    hrefFor: which === 'group'
+      ? (d) => '#/' + d.route
+      : (d) => '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
   });
   /* 🔴 THE LIVE TAB SAYS WHERE IT CAME FROM. The front door's College/NFL
    * buttons also land on #/live, and there the league just picked must win -
@@ -485,17 +504,19 @@ async function boot() {
     });
   }
 
-  /* 🔴 A GROUP INVITE OPENS THE GROUP'S SLATE. Found 2026-09-10: the standings
-   * screen's "Copy invite" has been sending `/?pool=CODE` since 2026-09-09 and
-   * nothing anywhere read it - a friend who tapped it got the front door and
-   * no sign of the group they were invited to.
+  /* 🔴 A GROUP INVITE OPENS THE GROUP PAGE, WITH THE CODE ALREADY IN JOIN.
+   * Found 2026-09-10: the standings screen's "Copy invite" had been sending
+   * `/?pool=CODE` since 2026-09-09 and nothing read it.
    *
-   * Doctrine: nothing sits in front of the slate, and an invite link opens the
-   * ACTUAL slate. So the code is looked up, remembered as the group being
-   * joined, the league switched to the group's, and the person lands on the
-   * games with a line saying whose group this is. Their first pick joins them
-   * (see p2-slate). Used once and taken out of the address, for the same
-   * reason as ?game= - a query string outlives every navigation after it. */
+   * It used to land on the public slate and let the first pick join the group.
+   * That ended 2026-09-11 with group pools as their own section: a group keeps
+   * its own picks, so a pick on the public slate never counts in the group, and
+   * joining is a real step (Jason: "invite people to this invite only group").
+   * So the code is looked up, remembered as `ag.pendingPool`, and the person
+   * lands on `#/g` - Info in the group bar - where g1-group fills the Join
+   * field with it and clears it once they are in. Used once and taken out of
+   * the address, for the same reason as ?game= - a query string outlives every
+   * navigation after it. */
   /* 🔴 IS SIGN-IN REQUIRED, AND IS THIS PHONE STILL SIGNED IN? Asked once, not
    * awaited - the first paint must not wait on it. The slate reads
    * window.agAuthRequired to decide whether a pick opens the sign-in sheet
@@ -524,13 +545,13 @@ async function boot() {
         localStorage.setItem('ag.pendingPool', JSON.stringify(info));
         localStorage.setItem('ag.sport', JSON.stringify(info.sport));
       }
-    } catch { /* a dead or offline invite still opens the slate */ }
+    } catch { /* a dead or offline invite still opens the group page, where Join says so */ }
     try {
       const q = new URLSearchParams(location.search);
       q.delete('pool');
       const qs = q.toString();
-      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + '#/slate');
-    } catch { location.hash = '#/slate'; }
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + '#/g');
+    } catch { location.hash = '#/g'; }
   }
 
   /* 🔴 NO HASH MEANS THE GAME, not the first entry in a list. */

@@ -270,8 +270,14 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
 
   if (p === '/api/group/invite' && post) {
     if (!isCommish) return onlyCommish();
-    const { ok, bad } = parseEmails(b.emails);
+    /* Parsed uncapped so a batch over the limit is refused whole - capping here
+     * used to drop every valid address past 20 without a word (found by the
+     * commissioner screen's agent, 2026-09-11). */
+    const { ok, bad } = parseEmails(b.emails, Infinity);
     if (!ok.length) return json({ error: 'no_emails', message: 'Add at least one email address.', bad }, 400);
+    if (ok.length > LIMITS.invitesPerBatch) {
+      return json({ error: 'too_many', message: `That is ${ok.length} addresses. Send ${LIMITS.invitesPerBatch} at a time.`, bad }, 400);
+    }
     if (!mailerReady(env)) return json({ error: 'no_mailer', message: 'Email is not set up yet. Share the link instead.', bad }, 503);
     const used = await mailedToday(env, gid, null, ['invite']) as any;
     if (Number(used.n) + ok.length > LIMITS.invitesPerDay) {

@@ -77,6 +77,22 @@ export const DESTINATIONS = [
   { id: 'info',      label: 'More',      href: '/info' },
 ];
 
+/* 🔴 THE GROUP SECTION HAS ITS OWN BAR. Jason, 2026-09-11: "it is almost like this
+ * is its own seperate pages and bottom nav bar, seperate from the other betting
+ * pages and live pages." And then the tabs themselves: "the pool side would have
+ * in the nav... home, pool, standing and info?" - so four. Home is the way back
+ * out to the front door; Pool is your picks in the current group (the thing you
+ * do there, so it is one tap); Info is the group page - start or join, members,
+ * messages, invites, the commissioner's tools and the group's rules. `route` is
+ * the hash each tab opens - app.js draws this bar on routes marked
+ * `nav: 'group'` (CONTRACT-GROUPS.md §1). */
+export const GROUP_DESTINATIONS = [
+  { id: 'home',        label: 'Home',      route: 'home' },
+  { id: 'g-pool',      label: 'Pool',      route: 'gpicks' },
+  { id: 'g-standings', label: 'Standings', route: 'gstandings' },
+  { id: 'g-info',      label: 'Info',      route: 'g' },
+];
+
 /** Which destination a cold open lands on. Origin decides, never a guess. */
 export function coldStart(ctx) {
   ctx = ctx || {};
@@ -137,8 +153,20 @@ const NAV_PATHS = {
   live: 'M8.6 8.6a4.8 4.8 0 0 0 0 6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 5.7a8.9 8.9 0 0 0 0 12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6',
   /* An info mark - Jason sent the circled "i". Outline circle and stem on the
    * family's grid and stroke; the dot is filled in navIcon, like the live dot. */
-  info: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 11v5.5'
+  info: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 11v5.5',
+  /* A GROUP - Jason sent the picture, 2026-09-11: three people in outline, the
+   * one in front whole, the two behind as a head and a shoulder. Drawn on the
+   * family's 24 grid at its stroke. It is the group bar's Pool tab and the Home
+   * door for Group pools. */
+  'g-pool': 'M9.2 9a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0 -5.6 0M3.6 6.8a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M16 6.8a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M7.5 20.5v-3.7a3.8 3.8 0 0 1 3.8-3.8h1.4a3.8 3.8 0 0 1 3.8 3.8v3.7zM7.2 10.9H4.9a2.9 2.9 0 0 0-2.9 2.9V17h2.6M16.8 10.9h2.3a2.9 2.9 0 0 1 2.9 2.9V17h-2.6',
+  /* ALL GAMES - a calendar with the week's slots. Jason, 2026-09-11: "we have
+   * live and group, come up with one for all games." All games is the whole
+   * week, so it is the week: a page with two binder rings and six days. */
+  allgames: 'M5 5h14a1.5 1.5 0 0 1 1.5 1.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V6.5A1.5 1.5 0 0 1 5 5zM3.5 9.5h17M8 3v4M16 3v4M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2M14.5 16.5h2'
 };
+/* The group bar's Standings is the main bar's podium; Info is the info mark. */
+NAV_PATHS['g-standings'] = NAV_PATHS.standings;
+NAV_PATHS['g-info'] = NAV_PATHS.info;
 
 function navIcon(id) {
   const NS = 'http://www.w3.org/2000/svg';
@@ -166,7 +194,7 @@ function navIcon(id) {
     dot.setAttribute('fill', 'currentColor');
     svg.appendChild(dot);
   }
-  if (id === 'info') {
+  if (id === 'info' || id === 'g-info') {
     const dot = document.createElementNS(NS, 'circle');
     dot.setAttribute('cx', '12'); dot.setAttribute('cy', '7.8'); dot.setAttribute('r', '1.2');
     dot.setAttribute('fill', 'currentColor');
@@ -181,7 +209,13 @@ export function navBar(active, opts) {
   nav.className = 'ag-nav';
   nav.setAttribute('aria-label', 'Main');
 
-  for (const d of DESTINATIONS) {
+  /* opts.destinations: the group section's own bar (GROUP_DESTINATIONS). The
+   * column count follows the list through --nav-n, so the rail's single column
+   * at desktop width still wins over it. */
+  const list = opts.destinations || DESTINATIONS;
+  nav.style.setProperty('--nav-n', String(list.length));
+  if (opts.destinations) nav.dataset.bar = 'group';
+  for (const d of list) {
     const a = document.createElement('a');
     a.className = 'ag-nav-item';
     a.dataset.dest = d.id;
@@ -243,8 +277,9 @@ export const NAV_CSS = [
 
      The scrim below does the rest: content dissolves into the ground as it
      passes under the pill instead of being cut by its edge. */
-  '.ag-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;',
-  '  grid-template-columns: repeat(6, 1fr); gap: 2px;',
+  /* --nav-n defaults to the main bar\'s six; navBar() sets it inline per list. */
+  '.ag-nav { --nav-n: 6; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;',
+  '  grid-template-columns: repeat(var(--nav-n), 1fr); gap: 2px;',
   /* 🔴 TRANSLUCENT, WITH THE OPAQUE VERSION AS THE FLOOR. Jason, 2026-09-10:
      "Can the nav bar be transparent to some extent?" - asked one message after
      the scrim stopped painting a grey plinth under it, and the two are the same

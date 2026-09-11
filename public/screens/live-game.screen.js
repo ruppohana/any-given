@@ -3655,11 +3655,22 @@ function modeCard(wrap, compact) {
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');
+    /* Each door carries its mark - Jason, 2026-09-11: "we have live and group,
+     * come up with one for all games." Only on the front door; the compact hub
+     * row keeps its words alone. */
+    if (!compact && DOOR_ICONS[o.id]) {
+      b.classList.add('has-ico');
+      b.appendChild(doorIcon(o.id));
+    }
     b.appendChild(el('span', 'lg-mode-h', o.h));
     b.appendChild(el('span', 'lg-mode-b', o.b));
     if (compact && o.id === S.mode) b.classList.add('is-on');
     b.onclick = () => {
       S.mode = o.id; store.set('mode', o.id);
+      /* 🔴 GROUP POOLS IS ITS OWN SECTION NOW - Jason, 2026-09-11. The door
+       * goes straight to it; a group carries its own league, so there is no
+       * NFL / College step in front of it. */
+      if (o.id === 'pool' && S.isHome) { location.hash = '#/gpicks'; return; }
       /* On the front door the first card advances to the second. Everywhere
        * else this card is a setting being changed in place. */
       if (S.isHome) S.homeStep = 'sport';
@@ -3753,6 +3764,36 @@ function modeCard(wrap, compact) {
  * landing and a settings page, and it is why the earlier orphan "NFL · change"
  * chip was wrong in a way this is not: that chip floated beside a hub that was
  * already asking the same question two rows below it. */
+/* THE FRONT DOOR'S MARKS - the same drawings as the bottom bar (components/nav.js
+ * NAV_PATHS): the broadcast for Live, the week's calendar for All games, the three
+ * people for Group pools. Outline, 1.9 stroke, the family's 24 grid. */
+const DOOR_ICONS = {
+  live: 'M8.6 8.6a4.8 4.8 0 0 0 0 6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 5.7a8.9 8.9 0 0 0 0 12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6',
+  allgames: 'M5 5h14a1.5 1.5 0 0 1 1.5 1.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V6.5A1.5 1.5 0 0 1 5 5zM3.5 9.5h17M8 3v4M16 3v4M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2M14.5 16.5h2',
+  pool: 'M9.2 9a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0 -5.6 0M3.6 6.8a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M16 6.8a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0M7.5 20.5v-3.7a3.8 3.8 0 0 1 3.8-3.8h1.4a3.8 3.8 0 0 1 3.8 3.8v3.7zM7.2 10.9H4.9a2.9 2.9 0 0 0-2.9 2.9V17h2.6M16.8 10.9h2.3a2.9 2.9 0 0 1 2.9 2.9V17h-2.6'
+};
+function doorIcon(kind) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '28'); svg.setAttribute('height', '28');
+  svg.setAttribute('class', 'lg-mode-ico');
+  svg.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('d', DOOR_ICONS[kind]);
+  p.setAttribute('fill', 'none'); p.setAttribute('stroke', 'currentColor');
+  p.setAttribute('stroke-width', '1.9');
+  p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+  svg.appendChild(p);
+  if (kind === 'live') {
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', '12'); dot.setAttribute('cy', '12'); dot.setAttribute('r', '2.3');
+    dot.setAttribute('fill', 'currentColor');
+    svg.appendChild(dot);
+  }
+  return svg;
+}
+
 /* 🔴 THE HERO. Jason, 2026-09-11, sending Deuce's tennis dashboard as the
  * inspiration: a stadium across the top of the front door, "generated", "i
  * would like the hero images to rotate", and "i want the stadium chopped off
@@ -4954,6 +4995,11 @@ const CSS = `
   border: 1px solid var(--line); border-radius: var(--radius-card);
   background: var(--card); color: var(--fg); }
 .lg-mode-h { font-size: var(--t-emph); font-weight: 800; }
+/* A door with its mark: the icon in its own column, spanning the title and the
+   line under it, in the accent. */
+.lg-mode.has-ico { grid-template-columns: 32px 1fr; column-gap: 12px; align-items: center; }
+.lg-mode.has-ico .lg-mode-ico { grid-row: 1 / span 2; color: var(--accent); }
+.lg-mode.has-ico .lg-mode-h, .lg-mode.has-ico .lg-mode-b { grid-column: 2; }
 /* The hub version is a strip, not a page: two choices, no essay, and the one you
    are in is marked so the card reads as WHERE YOU ARE rather than as a question
    being asked again. */

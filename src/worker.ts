@@ -600,7 +600,7 @@ export default {
           .bind(String(b.gameId)).first<{ kickoff_utc: number }>();
         const kickoff = g ? g.kickoff_utc : Number(b.kickoffUtc) || 0;
         if (kickoff && Date.now() >= kickoff) {
-          return json({ error: 'that game has kicked off', locked: true }, 409);
+          return json({ error: 'that game has kicked off', message: 'That game has kicked off. Picks lock at kickoff.', locked: true }, 409);
         }
 
         /* 🔴 A GROUP IS INVITE-ONLY, SO A PICK NEVER JOINS ONE. Jason,
@@ -805,6 +805,32 @@ export default {
       /* The board. Straight up, which is what a group pool is (Jason,
        * 2026-09-09) - the against-the-spread product is the week's card and it
        * is not a pool. */
+      /* 🔴 YOUR OWN PICKS IN ONE GROUP. A group's picks are its own since
+       * 2026-09-11 and the Pool screen only had the phone's copy - so picks made on
+       * another device, or copied into a group by migration 0007, showed as
+       * unpicked (found by the Pool screen's agent). Signed in, members only, the
+       * caller's rows and nobody else's, never cached (`json` sends no-store). The
+       * world pool is not served here: it has its own device history. */
+      if (p === '/api/pool/picks' && req.method === 'GET') {
+        const s = await sessionAccount(req, env);
+        if (!s) return json({ error: 'signed_out', message: 'Sign in to see your picks.' }, 401);
+        const poolId = String(url.searchParams.get('pool') || '');
+        if (!poolId || poolId.startsWith('world-')) {
+          return json({ error: 'pool_required', message: 'Which group?' }, 400);
+        }
+        const sport = url.searchParams.get('sport') === 'nfl' ? 'nfl' : 'college-football';
+        const week = Number(url.searchParams.get('week')) || 0;
+        const inIt = await env.DB.prepare(
+          'SELECT 1 AS x FROM member WHERE pool_id = ? AND user_id = ?'
+        ).bind(poolId, s.accountId).first();
+        if (!inIt) return json({ error: 'not_a_member', message: 'You are not in this group.' }, 403);
+        const rows = await env.DB.prepare(
+          `SELECT game_id AS gameId, side FROM pick
+            WHERE pool_id = ? AND user_id = ? AND sport = ? AND (? = 0 OR week = ?)`
+        ).bind(poolId, s.accountId, sport, week, week).all();
+        return json({ pool: poolId, sport, week, picks: rows.results || [] });
+      }
+
       if (p === '/api/pool/standings') {
         const sport = url.searchParams.get('sport') === 'nfl' ? 'nfl' : 'college-football';
         let week = Number(url.searchParams.get('week')) || 0;
