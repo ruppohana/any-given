@@ -5235,11 +5235,15 @@ const CSS = `
    empty underneath. Centering keeps the tap target and sits the words in the
    middle of it; the two spans still share a line. */
 .lg-stakechip { display: inline-flex; align-items: center; gap: 6px; font: inherit;
-  min-height: var(--tap-min); padding: 4px 14px; margin: 2px 0 6px;
+  /* 32px drawn, 44px to the thumb. Jason, 2026-09-11: "The marble pill is to
+     tall, typical." The ::after below keeps the full --tap-min hit area. */
+  min-height: 32px; padding: 2px 12px; margin: 2px 0 6px; position: relative;
   /* 10px, not a capsule - Jason, 2026-09-11: "The marbles need to have the
      radius changed to 10." The same corner as the tiles under it. */
   border: 1px solid var(--line); border-radius: var(--radius-button);
   background: var(--surface-3); color: var(--fg); }
+.lg-stakechip::after { content: ''; position: absolute; left: 0; right: 0;
+  top: calc((var(--tap-min) - 100%) / -2); bottom: calc((var(--tap-min) - 100%) / -2); }
 .lg-stakechip-n { font-size: var(--t-emph); font-weight: 800; }
 .lg-stakechip-l { font-size: var(--t-micro); color: var(--dim); }
 .lg-bank-lead { flex: 0 0 100%; font-size: var(--t-micro); color: var(--dim);
