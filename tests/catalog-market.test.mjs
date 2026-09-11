@@ -331,6 +331,38 @@ test('the NFL priors are measured, and differ from college where the football di
   assert.ok(byId('run_pass').ratesNfl.pass > byId('run_pass').rates.pass, 'the NFL passes more');
 });
 
+/* 🔴 THE NFL RED-ZONE PRIOR WAS THE DRIVE-END PRIOR, COPIED (found 2026-09-11):
+ * { td: .266, fg: .209 } priced an NFL red-zone touchdown at 3.7x when it happens
+ * 58% of the time. So the prior is recounted here from the captured games on
+ * every run - a copied number cannot pass a count of the real thing. */
+test('the NFL red-zone prior is the red zone, counted from the captured games', async () => {
+  const { byId } = await import('../src/catalog.ts');
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../fixtures/nfl/', import.meta.url);
+  const n = { td: 0, fg: 0, none: 0 };
+  for (const f of readdirSync(dir)) {
+    const j = JSON.parse(readFileSync(new URL(f, dir), 'utf8'));
+    const seen = new Set();
+    for (const d of (j.drives && j.drives.previous) || []) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const reached = (d.plays || []).some((p) => [p.start && p.start.yardsToEndzone, p.end && p.end.yardsToEndzone]
+        .some((y) => typeof y === 'number' && y > 0 && y <= 20));
+      const r = String(d.result || '').toUpperCase();
+      if (!reached || /END OF/.test(r)) continue;
+      n[r === 'TD' ? 'td' : r === 'FG' ? 'fg' : 'none']++;
+    }
+  }
+  const total = n.td + n.fg + n.none;
+  assert.ok(total >= 40, `only ${total} red-zone trips found`);
+  const rz = byId('redzone_outcome').ratesNfl;
+  for (const k of Object.keys(n)) {
+    assert.ok(Math.abs(rz[k] - n[k] / total) < 0.02,
+      `${k}: prior ${rz[k]}, counted ${(n[k] / total).toFixed(3)} over ${total} trips`);
+  }
+  assert.notEqual(rz.td, byId('drive_end').ratesNfl.td, 'not the drive-end prior under another name');
+});
+
 /* 🔴 THE QUESTION MUST BE ABOUT THE PLAY THAT HAS NOT HAPPENED YET.
  *
  * Found by the dry run on 2026-09-09. The screen derived isKickoff / isPunt /

@@ -243,7 +243,12 @@ export const CALL_TYPES: CallType[] = [
     scope: 'drive',
     baseRate: 0.56,
     rates: { td: 0.56, fg: 0.19, none: 0.25 },
-    ratesNfl: { td: 0.266, fg: 0.209, none: 0.525 }
+    /* 🔴 MEASURED, NOT COPIED. This read { td: .266, fg: .209, none: .525 } - the
+     * NFL drive_end TD and FG rates, digit for digit - so an NFL red-zone
+     * touchdown was priced at 27% (3.7x) when it happens 58% of the time. Counted
+     * 2026-09-11 over the 8 captured NFL games in fixtures/nfl/: 50 red-zone trips,
+     * end of half excluded - 29 TD, 14 FG, 7 nothing. Jason: "Yes." to replacing it. */
+    ratesNfl: { td: 0.58, fg: 0.28, none: 0.14 }
   },
 
   /* ---- WHAT THE MARKET ACTUALLY SELLS. Jason, 2026-09-08: "ask what

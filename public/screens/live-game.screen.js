@@ -3145,10 +3145,6 @@ function paint(wrap) {
      * keeps its own order (run first); only the card reorders, and the grid
      * flows by column so this list reads down the left, then down the right. */
     const SCRIPT_ORDER = ['pass_yes', 'pass_no', 'run_yes', 'run_no'];
-    /* Yes/no cards that carry a play line behind each tile - see .has-art. Empty
-     * since Jason's figure library (2026-09-11) took those three cards; the SVGs
-     * stay in ART until he has seen the figures on them. */
-    const LINE_ART = new Set([]);
     /* Cards with Jason's figures behind each tile - see .has-fig and
      * tools/figures.mjs, which writes public/art/fig-<card>-<n>.png. */
     const FIG_CARDS = new Set(['explosive', 'first_down', 'third_down', 'kickoff_return',
@@ -3162,7 +3158,6 @@ function paint(wrap) {
     const tiles = el('div', 'lg-tiles' + (isScript ? ' is-script' : priced.length > 3 ? ' is-4' : '')
       + ' n-' + priced.length + (type.id === 'fourth_down' ? ' is-fourth' : '')
       + (type.id === 'direction' ? ' is-dir' : '')
-      + (LINE_ART.has(type.id) ? ' has-art art-' + type.id : '')
       + (FIG_CARDS.has(type.id) ? ' has-fig fig-' + type.id : '')
       + (type.id === 'redzone_outcome' ? ' is-3stack' : ''));
     for (const o of shown) {
@@ -4910,24 +4905,10 @@ function bragButton(state, rows) {
 const PLAY_ART = (paths) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#000" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`)}")`;
 /* Jason: "for right, a banana shaped thick line with an arrow ... mirror for left." */
 const BANANA = '<path d="M24 94 C22 60 34 38 64 30"/><polyline points="50.8,42.8 64,30 46.2,25.4"/>';
-/* A yard line (dashed) and the line to gain with its two chain poles (solid). An
- * arrow that crosses one is the yes; an arrow stopped short under a block is the no. */
-const YARD_LINE = '<path d="M10 52 H90" stroke-width="4" stroke-dasharray="7 7"/>';
-const CHAIN_LINE = '<path d="M12 52 H88 M12 42 V62 M88 42 V62" stroke-width="5"/>';
-const THROUGH = '<path d="M50 94 L50 22"/><polyline points="38,34 50,20 62,34"/>';
-const STOPPED = '<path d="M50 94 L50 70"/><path d="M37 68 H63"/>';
 const ART = {
   dirLeft: PLAY_ART(`<g transform="translate(100 0) scale(-1 1)">${BANANA}</g>`),
   dirMid: PLAY_ART('<path d="M50 94 L50 34"/><polyline points="38,46 50,32 62,46"/>'),
-  dirRight: PLAY_ART(BANANA),
-  tenYes: PLAY_ART(YARD_LINE + THROUGH),
-  tenNo: PLAY_ART(YARD_LINE + STOPPED),
-  chainsYes: PLAY_ART(CHAIN_LINE + THROUGH),
-  chainsNo: PLAY_ART(CHAIN_LINE + STOPPED),
-  /* A long cut-back run that gets away, against a short one that runs into a
-   * tackler's X. */
-  breakYes: PLAY_ART('<path d="M34 96 L34 80 L56 64 L56 46 L42 32 L42 22"/><polyline points="31,33 42,18 53,33"/>'),
-  breakNo: PLAY_ART('<path d="M40 96 L40 84 L54 74 L54 68"/><path d="M44 40 L64 60 M64 40 L44 60"/>')
+  dirRight: PLAY_ART(BANANA)
 };
 
 const CSS = `
@@ -5378,27 +5359,6 @@ const CSS = `
 .lg-tiles.is-dir .lg-tile:nth-child(2)::before { -webkit-mask-position: center bottom 4px; mask-position: center bottom 4px; }
 .lg-tiles.is-dir .lg-tile:nth-child(3) { --art: ${ART.dirRight}; }
 .lg-tiles.is-dir .lg-tile:nth-child(3)::before { -webkit-mask-position: left 2px bottom 4px; mask-position: left 2px bottom 4px; }
-/* PLAY LINES ON THE YES/NO CARDS - the plan Jason said "Yes" to, 2026-09-11.
-   Ten yards or more: an arrow through a dashed yard line, or stopped short of it.
-   Move the chains: the same against the line to gain and its two poles. Break
-   one: a cut-back run off the top of the tile, or a short one that is stopped.
-   Yes is the first tile, so its line sits on the right; No's on the left. */
-.lg-tiles.has-art .lg-tile { position: relative; overflow: hidden; }
-.lg-tiles.has-art .lg-tile > * { position: relative; }
-.lg-tiles.has-art .lg-tile::before { content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: var(--fg); opacity: .24; -webkit-mask: var(--art) no-repeat; mask: var(--art) no-repeat;
-  -webkit-mask-size: auto 84%; mask-size: auto 84%; }
-.lg-tiles.has-art .lg-tile:nth-child(1)::before { -webkit-mask-position: right 2px bottom 4px; mask-position: right 2px bottom 4px; }
-.lg-tiles.has-art .lg-tile:nth-child(2)::before { -webkit-mask-position: left 2px bottom 4px; mask-position: left 2px bottom 4px; }
-.art-explosive .lg-tile:nth-child(1) { --art: ${ART.tenYes}; }
-.art-explosive .lg-tile:nth-child(2) { --art: ${ART.tenNo}; }
-.art-first_down .lg-tile:nth-child(1) { --art: ${ART.chainsYes}; }
-.art-first_down .lg-tile:nth-child(2) { --art: ${ART.chainsNo}; }
-.art-drive_breakout .lg-tile:nth-child(1) { --art: ${ART.breakYes}; }
-.art-drive_breakout .lg-tile:nth-child(2) { --art: ${ART.breakNo}; }
-/* "They break one" and "They do not" run nearly the width of the tile, so these
-   two sit lower, under the label. */
-.art-drive_breakout .lg-tile::before { -webkit-mask-size: auto 70%; mask-size: auto 70%; }
 /* 🔴 JASON'S FIGURE LIBRARY ON THE REST OF THE CARDS - his "Look these over",
    mapped card by card and "Yes" to a mockup of all eleven. Each tile's figure is
    its own mask the shape of the tile (tools/figures.mjs), standing on the bottom

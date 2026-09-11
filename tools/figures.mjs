@@ -37,7 +37,6 @@ const FIG = {
   runner: [SHEET, { left: 350, top: 355, width: 320, height: 283 }],
   kicker: [SHEET, { left: 265, top: 647, width: 345, height: 338 }],
   tackle: [LIB, { left: 10, top: 245, width: 160, height: 150 }],
-  sack: [LIB, { left: 172, top: 245, width: 130, height: 150 }],
   fumble: [LIB, { left: 312, top: 255, width: 185, height: 140 }],
   punt: [LIB, { left: 1050, top: 245, width: 130, height: 150 }],
   puntReturn: [LIB, { left: 1180, top: 260, width: 140, height: 135 }],
@@ -46,7 +45,6 @@ const FIG = {
   fgAttempt: [LIB, { left: 148, top: 445, width: 175, height: 148 }],
   goalPosts: [LIB, { left: 360, top: 440, width: 115, height: 155 }],
   tdSignal: [LIB, { left: 30, top: 640, width: 110, height: 155 }],
-  firstDownSignal: [LIB, { left: 160, top: 660, width: 165, height: 135 }],
   ballOnTee: [LIB, { left: 650, top: 870, width: 70, height: 100 }],
   run2: [PICKS, { left: 1150, top: 40, width: 300, height: 270 }],
   /* The linesman with the "1" pole and the chain running off toward his partner -
