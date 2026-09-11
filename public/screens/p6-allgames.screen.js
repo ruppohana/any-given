@@ -1626,6 +1626,36 @@ export function render(root, data, state) {
   }
   paintTally();
 
+  /* 🔴 THE LIVE ROWS KEEP MOVING. overlayLive ran once, on load - so with
+   * the board left open the FAMU at Miami score froze at whatever it was
+   * when the page drew, which on a live row is worse than no score: it
+   * looks current and is not.
+   *
+   * Every 30 seconds the games inside the poll window are re-overlaid and
+   * ONLY their cards repaint, through the same repaint() that already
+   * carries a card's open state across a rebuild. Thirty seconds rather than
+   * the poller's ten: this is a weekly board you glance at, the live screen
+   * is where the second-by-second view lives, and a board of thirty live
+   * Saturday games should not be thirty requests every ten seconds.
+   *
+   * One timer, on window, cleared on every render and the moment the root
+   * stops being this screen - so navigating away cannot leave it polling in
+   * the background, and a re-render cannot stack a second one. */
+  if (window.__agLiveTimer) { clearInterval(window.__agLiveTimer); window.__agLiveTimer = null; }
+  const inPlay = games.filter((g) => g.fromLive
+    || (g.status !== 'final' && num(g.kickoffUtc)
+      && Date.now() >= g.kickoffUtc - 15 * 60 * 1000
+      && Date.now() < g.kickoffUtc + 6 * 60 * 60 * 1000));
+  if (inPlay.length) {
+    window.__agLiveTimer = setInterval(async () => {
+      if (!document.body.contains(root) || !root.classList.contains('scr-p6-allgames')) {
+        clearInterval(window.__agLiveTimer); window.__agLiveTimer = null; return;
+      }
+      await overlayLive(inPlay, fsport);
+      for (const g of inPlay) ctx.repaint(g.id);
+    }, 30000);
+  }
+
   /* The filter, above the board. Persisted per sport, because the answer to
      "which league am I in" and "which conference do I care about" are the
      same answer every week for most people. */
