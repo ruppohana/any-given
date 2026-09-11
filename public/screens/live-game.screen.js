@@ -3412,14 +3412,26 @@ function goCard(wrap) {
 }
 
 function introCard(wrap) {
+  /* 🔴 THE NUMBER IS THE PERSON'S SETTING, AND THE SLIDER IS IN THE MENU.
+   * Two stale facts in one card, both from changes made today. It said
+   * "45 seconds" as a literal - but the delay is user-set, so anybody who
+   * had moved it was told a number that was not theirs. And it said "Slide
+   * it to zero", pointing at a slider that moved into the ⋮ menu this
+   * afternoon when Jason asked for it to leave this screen. Copy that
+   * describes a control has to move when the control does. */
+  const secs = Math.round(S.delayMs / 1000);
   const c = el('div', 'card lg-intro');
-  c.appendChild(el('div', 'lg-intro-h', 'You are 45 seconds behind, and that is the point'));
+  c.appendChild(el('div', 'lg-intro-h', secs > 0
+    ? 'You are ' + secs + ' seconds behind, and that is the point'
+    : 'You are watching live, with no gap to call into'));
   c.appendChild(el('p', 'lg-intro-b',
     'The feed only tells us a play happened after it happened. So the app shows you the game '
-    + 'as it stood 45 seconds ago — which means when it asks what happens next, on your '
+    + 'as it stood ' + (secs > 0 ? secs + ' seconds ago' : 'a moment ago')
+    + ' — which means when it asks what happens next, on your '
     + 'television the snap genuinely has not been taken yet. That gap is the whole game.'));
   c.appendChild(el('p', 'lg-intro-b',
-    'Slide it to zero and there is no gap left to call into. It becomes a scoreboard.'));
+    'Change it any time from the ⋮ menu. Set it to zero and there is no gap left to call '
+    + 'into — it becomes a scoreboard.'));
   const go = el('button', 'lg-intro-go', 'Got it');
   go.onclick = () => { store.set('seenIntro', 1); S.seenIntro = true; paint(wrap); };
   c.appendChild(go);
