@@ -30,8 +30,13 @@
    Negative margins pull it out through the container's padding and the padding
    is given back inside, so the bar spans edge to edge while its text stays
    aligned with the rows below. */
+/* 🔴 IT PINS UNDER THE TOP BAR AND THE PILLS NOW, NOT AT 0. Jason, 2026-09-11:
+   "yes. move the bar." Once the persistent top bar arrived, top:0 put this
+   whole bar BEHIND it - measured at 0-38 under a 44px top bar, invisible the
+   moment you scrolled. It sits below the top bar, and below the filter pills
+   when they are on screen (60px, measured). The day header stacks under it. */
 .scr-p2-slate .p2-bar {
-  position: sticky; top: 0; z-index: 4;
+  position: sticky; top: var(--topbar-h); z-index: 4;
   margin-inline: -10px; padding-inline: 10px;
   /* One centred figure now that the column labels are gone - and it keeps clear
      of the fixed menu button at the top right, which is what it used to collide
@@ -200,10 +205,12 @@
   min-height: 32px; border-radius: 10px; scroll-margin-top: 72px;
   /* No negative margin - see the day card above. The header takes the same step
      as everything else in the stack. */
-  position: sticky; top: var(--topbar-h); z-index: 3; background: var(--surface-1);
+  position: sticky; top: calc(var(--topbar-h) + 38px); z-index: 3; background: var(--surface-1);
   }
-/* With the filter pills on screen they are pinned too, so the date goes below them. */
-.scr-p2-slate:has(.p2-filters) .p2-grp { top: calc(var(--topbar-h) + 60px); }
+/* The pinned stack, top down: top bar (--topbar-h), filter pills (60px, when
+   present), the picked bar (38px), then the date. */
+.scr-p2-slate:has(.p2-filters) .p2-bar { top: calc(var(--topbar-h) + 60px); }
+.scr-p2-slate:has(.p2-filters) .p2-grp { top: calc(var(--topbar-h) + 98px); }
 .scr-p2-slate .p2-grp::-webkit-details-marker { display: none; }
 .scr-p2-slate .p2-grp:hover { background: var(--track); }
 .scr-p2-slate .p2-grp-r { display: inline-flex; align-items: center; gap: 6px; }
