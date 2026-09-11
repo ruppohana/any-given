@@ -222,11 +222,14 @@ function spinGiven(tb) {
   stopGiven();
   const day = new Date().getDay();
   let i = Math.max(0, GIVEN_WORDS.indexOf(day === 0 ? 'Sunday' : day === 1 ? 'Monday Night' : 'Saturday'));
-  tb.textContent = 'Any Given';
+  /* The ellipsis STAYS, and the word follows it: "Any Given… Saturday". Jason,
+   * 2026-09-11: "add '... ' after Given on the splash page". It was replaced by
+   * the first word; the pause is the beat, so it never leaves. */
+  tb.textContent = 'Any Given…';
   tb.setAttribute('aria-label', 'Any Given');
   const w = document.createElement('span');
   w.className = 'ag-given';
-  w.textContent = '…';
+  w.textContent = '';
   tb.appendChild(w);
   const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (still) { w.textContent = ' ' + GIVEN_WORDS[i]; return; }
