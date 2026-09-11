@@ -5007,6 +5007,10 @@ const CSS = `
    crest down the top half of the card. Away left, "at" in the middle, home
    right - the scoreboard's 1fr auto 1fr, scoped to this card only. */
 .lg-hgame .lg-head { grid-template-columns: 1fr auto 1fr; align-items: center; }
+/* Centered under the crests, like the countdown between them. Jason, 2026-09-11:
+   "can you center the school name under the logo, and center the date/time line
+   on the card." */
+.lg-hgame .lg-hgame-t, .lg-hgame .lg-hgame-b { text-align: center; }
 .lg-hgame-b { font-size: var(--t-body); color: var(--dim); }
 .lg-hgame-go { font-size: var(--t-emph); font-weight: 800; color: var(--accent); margin-top: 4px; }
 .lg-mark { display: flex; align-items: baseline; gap: 0; }
