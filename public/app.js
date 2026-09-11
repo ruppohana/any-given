@@ -418,15 +418,16 @@ function drawNav(active, which) {
       ? (d) => '#/' + d.route
       : (d) => '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
   });
-  /* 🔴 THE LIVE TAB SAYS WHERE IT CAME FROM. The front door's College/NFL
-   * buttons also land on #/live, and there the league just picked must win -
-   * so "open the last game you had up" can only be keyed to a tap on THIS
-   * tab. A flag rather than a URL parameter: a parameter would outlive the
-   * navigation, which is exactly the ?game= bug fixed an hour ago. And a tap
-   * on the tab you are already on changes no hash, so it re-mounts by hand. */
+  /* 🔴 THE LIVE TAB OPENS THE GAME PICKER. Jason, 2026-09-11, with three games
+   * on at once: "Selecting live games immediately take me to Villanova only, no
+   * choice on the other two games" - then "remove the return to the last game.
+   * Go to the selector." This replaces 2026-09-10's "open the last game you had
+   * up". Still a flag keyed to a tap on THIS tab, not a URL parameter (which
+   * would outlive the navigation - the ?game= bug), and a tap on the tab you
+   * are already on changes no hash, so it re-mounts by hand. */
   const liveTab = nav.querySelector('[data-dest="live"]');
   if (liveTab) liveTab.addEventListener('click', () => {
-    window.__agGoLast = true;
+    window.__agPick = true;
     if (location.hash === '#/live') mount();
   });
   document.querySelector('.ag-shell').appendChild(nav);

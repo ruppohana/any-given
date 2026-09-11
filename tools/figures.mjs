@@ -119,7 +119,11 @@ async function place(c, scale, side, box, file) {
   const N = info.width * info.height, rgba = Buffer.alloc(N * 4);
   for (let p = 0; p < N; p++) rgba[p * 4 + 3] = 255 - data[p * info.channels];
   const fig = await sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
-  const left = side === 'right' ? box.W - info.width - 6 : side === 'left' ? 6 : Math.round((box.W - info.width) / 2);
+  /* 16px off the tile's edge, not 6. Jason, 2026-09-11: "The helmet is cut off
+   * the dude on the left." The art was whole; at 6px the tackler's helmet sat
+   * against the tile's rounded border on a phone and read as sliced. */
+  const EDGE = 16;
+  const left = side === 'right' ? box.W - info.width - EDGE : side === 'left' ? EDGE : Math.round((box.W - info.width) / 2);
   /* In a tall pill the figure straddles the seam, so it reads as one picture
    * over both taps; in a single tile it stands on the bottom edge. */
   const top = box.pill ? Math.round((box.H - info.height) / 2) : box.H - info.height - Math.round(box.H * 0.05);

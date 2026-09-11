@@ -24,18 +24,26 @@ test('the assumption is not stored - Home still asks', () => {
   assert.equal(line.includes('store.set'), false, 'assumed for this screen only');
 });
 
-test('the Live tab reopens the last game only while it is still being played', () => {
-  // Jason, 2026-09-10: "if you go back to the live page, then you go back to the
-  // last live page you were on. but if that game is over then you should go to
-  // the picker."
-  assert.ok(/lastSeen\.key && !lastSeen\.final/.test(SRC), 'a final already seen is skipped');
-  assert.ok(SRC.includes('S.fromLast = !forced && !!lastKey;'), 'the tab remembers it came from the last game');
-  const at = SRC.indexOf("S.raw.status === 'final' && S.fromLast");
-  assert.ok(at > 0, 'a last game that ended after you left is caught on the first poll');
-  const branch = SRC.slice(at, at + 700);
-  assert.ok(branch.includes('S.forced = false') && branch.includes('refreshKey(wrap, S.sport)'),
-    'and the screen falls back to the picker - the strip and the next game');
-  assert.ok(/final: true/.test(SRC), 'the stored last game is marked final so the next tap skips it');
+test('the Live tab opens the game picker, not the last game', () => {
+  // Jason, 2026-09-11, with three games on: "Selecting live games immediately
+  // take me to Villanova only, no choice on the other two games" - then "Ok
+  // remove the return to the last game. Go to the selector." Replaces 09-10's
+  // return-to-the-last-game.
+  const APP = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.ok(APP.includes('window.__agPick = true;'), 'a tap on the tab asks for the picker');
+  assert.ok(SRC.includes('S.pick = !forced && !S.isHome && window.__agPick === true;'),
+    'only from the tab - an invite link still opens its own game');
+  assert.ok(SRC.includes('if (S.pick) { gamePicker(wrap, now); return; }'), 'the picker draws instead of a game');
+  assert.equal(/lastLive|__agGoLast|lastKey/.test(SRC + APP), false, 'the return to the last game is gone');
+});
+
+test('the board settles a drive call as a drive call, by the phone\'s own rule', () => {
+  // 2026-09-11: the list said a red-zone call lost; the board said void. The
+  // server keeps no scope or driveId, so the board fills both the way makeCall
+  // does - the scope from the catalog, the drive from the play it followed.
+  assert.ok(SRC.includes('scope: type.scope, driveId: afterPlay.driveId'), 'the phone\'s rule');
+  assert.ok(SRC.includes("scope: c.scope || (byId(c.type) || {}).scope || 'play'"), 'the board takes the scope from the catalog');
+  assert.ok(SRC.includes('driveId: c.driveId || (after && after.driveId)'), 'and the drive from the play it followed');
 });
 
 test('the Live screen never parks on a game that was already over when it arrived', () => {

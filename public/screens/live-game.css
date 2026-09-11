@@ -336,6 +336,13 @@
    crest crosses an internal seam, never the outer edge. */
 .scr-live-game .lg-bug-team { overflow: visible; position: relative; z-index: 2; }
 .scr-live-game .lg-bug-sc { position: relative; z-index: 1; }
+/* 🔴 BUT NEVER OVER THE BLACK LINE. Jason, 2026-09-11, live on Villanova at
+   Louisville: "The logos are over the down and dist." The crest bleeds out of
+   its 62px row, and the bottom bleed landed on the clock and the down - the V
+   covered the "1" of "1ST". So the ROW clips: the crest keeps its size and its
+   sideways bleed over the score color, and stops at the seam above the black
+   line. The top was already clipped by the bug's own edge. */
+.scr-live-game .lg-bug-r:not(.lg-bug-r2) { overflow: hidden; }
 .scr-live-game .lg-bug-team > :first-child { flex: 0 0 auto; }
 /* Possession sits with the score - beside the number you are reading anyway.
    🔴 ABSOLUTE, SO IT COSTS NO WIDTH. As an inline dot it made the possessing

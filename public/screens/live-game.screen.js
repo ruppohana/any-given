@@ -32,7 +32,7 @@ import { detect } from '/src/lib/detect.js';
 /* 🔴 A REAL IMAGE FILE, not an unfurled card. The og:image can say which game is
  * on; it can never say what YOU just called, because it is one picture per URL
  * cached hard by the crawler. Web Share Level 2 attaches an actual PNG. */
-import { shareResult, shareReaction, MOMENTS } from '/components/sharecard.js';
+import { shareReaction, MOMENTS, PHRASE } from '/components/sharecard.js';
 /* `tooClose` and `normalizeColor` come from the chip rather than being written
    again here - the bug and the slate have to agree about when two teams clash,
    or the same fixture is legible in one place and not the other. */
@@ -1497,6 +1497,10 @@ function held(raw, delayMs, now) {
     return { ...raw, plays: visible, holding };
   }
   const last = visible[visible.length - 1];
+  /* The play after the last one shown - held back by the delay, if the feed has
+   * it. Only its STARTING down and distance are read (see situation, below). */
+  const at = (raw.plays || []).findIndex((p) => p.id === last.id);
+  const nextUp = at >= 0 ? raw.plays[at + 1] || null : null;
   const oobYard = OOB_SPOT[leagueOf(raw)] || 35;
   const oob = kickOutOfBounds(last);
   const oobTeam = oob && raw.teams ? raw.teams[last.endTeamId || last.offenseTeamId] : null;
@@ -1509,8 +1513,18 @@ function held(raw, delayMs, now) {
     awayScore: last.awayScore != null ? last.awayScore : raw.awayScore,
     situation: raw.situation ? {
       ...raw.situation,
-      down: last.endDown != null ? last.endDown : raw.situation.down,
-      distance: last.endDistance != null ? last.endDistance : raw.situation.distance,
+      /* 🔴 THE NEXT SNAP'S OWN DOWN FIRST. Found 2026-09-11 on Villanova at
+       * Louisville: "Pass, first down" was offered after a THIRD-down
+       * incompletion and voided on the field goal - a fourth-down snap, which
+       * should have asked "Go for it, or kick?". Where the visible play had no
+       * end down yet, the fallback was the LIVE situation, and with the TV delay
+       * that had already moved past the kick to the next drive. The play after
+       * the visible one - held back, never shown - starts with exactly the down
+       * the viewer's TV is showing, so it tells them nothing the TV has not. */
+      down: nextUp && nextUp.startDown != null ? nextUp.startDown
+        : last.endDown != null ? last.endDown : raw.situation.down,
+      distance: nextUp && nextUp.distance != null ? nextUp.distance
+        : last.endDistance != null ? last.endDistance : raw.situation.distance,
       /* The feed's own sentence for where the ball is, after the last play you
          have been shown - never the live one. */
       downDistanceText: oob
@@ -1906,7 +1920,17 @@ function boardRows(state) {
     /* The newest name a device sent wins, so naming yourself after your first
      * call renames you on the board rather than leaving a stranger up there. */
     if (c.at > row.at && c.name) { row.name = c.name; row.at = c.at; }
-    const r = settleOne(c, state);
+    /* 🔴 A DRIVE CALL ON THE BOARD IS STILL A DRIVE CALL. Found 2026-09-11 on
+     * Villanova at Louisville: Jason's own list said a red-zone call LOST (-10)
+     * while the board said "1-0 · 2 void". The server keeps type, choice, stake
+     * and price - not scope or driveId - so settleOne took the drive call for a
+     * play call of a type the snap settler does not know, and voided it. Both
+     * are filled here by the same rule the phone used when the call was made:
+     * the scope from the catalog, the drive from the play it was made after. */
+    const after = (state.plays || []).find((p) => p.id === c.afterPlayId);
+    const full = { ...c, scope: c.scope || (byId(c.type) || {}).scope || 'play',
+                   driveId: c.driveId || (after && after.driveId) };
+    const r = settleOne(full, state);
     if (r.open) row.open++;
     else if (r.void) row.voided++;
     else { row.profit += r.delta; if (r.landed) row.won++; else row.lost++; }
@@ -1951,30 +1975,21 @@ export function render(root, _data, screenState) {
     } catch { /* an address we cannot rewrite still plays the invited game */ }
   }
   S.isHome = screenState === 'home';
-  /* 🔴 THE LIVE TAB OPENS THE LAST LIVE GAME YOU HAD UP. Jason, 2026-09-10.
-   * Only from the tab (see drawNav in app.js) - the front door also lands
-   * here, and there the league just chosen wins. Six hours is a game and its
-   * aftermath; older than that it is not "the game you had up". */
-  const goLast = !forced && !S.isHome && window.__agGoLast === true;
-  window.__agGoLast = false;
-  const lastSeen = goLast ? store.get('lastLive', null) : null;
-  /* 🔴 ...AND ONLY WHILE IT IS STILL BEING PLAYED. Jason, 2026-09-10: "if you go
-   * back to the live page, then you go back to the last live page you were on.
-   * but if that game is over then you should go to the picker." A final already
-   * seen is skipped here; one that ended after you left is caught by the first
-   * poll (S.fromLast, below) and sent to the picker from there. */
-  const lastKey = lastSeen && lastSeen.key && !lastSeen.final
-    && (Date.now() - (lastSeen.at || 0)) < 6 * 60 * 60 * 1000
-    ? lastSeen.key : null;
-  S.fromLast = !forced && !!lastKey;
-  if (lastKey && (!S.raw || String(S.raw.gameId) !== lastKey.split(':')[1])) { S.raw = null; S.board = []; }
-  S.key = forced || lastKey || (S.sport ? GAME_FOR[S.sport] : null);
+  /* 🔴 THE LIVE TAB OPENS THE GAME PICKER. Jason, 2026-09-11, with three games
+   * on: "Selecting live games immediately take me to Villanova only, no choice
+   * on the other two games", then "Ok remove the return to the last game. Go to
+   * the selector." This replaces 2026-09-10's open-the-last-game-you-had-up.
+   * Only from the tab (see drawNav in app.js): the front door also lands here,
+   * and an invite link names its own game. */
+  S.pick = !forced && !S.isHome && window.__agPick === true;
+  window.__agPick = false;
+  S.key = forced || (S.sport ? GAME_FOR[S.sport] : null);
   /* Recorded on the state, not just held in this closure: the 5-minute
    * re-check runs long after mount() has returned and has to know that this
    * session came in on an invite link naming its own game. Reading an
    * undefined S.forced there would silently retarget somebody's invite to
    * whatever is next on the slate. */
-  S.forced = !!forced || !!lastKey;
+  S.forced = !!forced;
   /* Reset on arrival, so Home is a door and not a wizard somebody is stuck in. */
   /* A new game is a new camera. Without this the field pans from wherever the
      last game left the ball, which looks like a mistake because it is one. */
@@ -1998,7 +2013,6 @@ export function render(root, _data, screenState) {
   S.lastSig = null;
   S.sawLive = false;
   if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
-  else if (lastKey) { S.sport = lastKey.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
   paint(wrap);
   if (S.timer) clearInterval(S.timer);
@@ -2134,27 +2148,6 @@ async function poll(wrap) {
       const fresh = stampLeague(await stateRes.json());
       if (key !== S.key) return;
       S.raw = fresh; S.noGame = false;
-      /* The game the Live tab goes back to - only ever one that was LIVE on
-         this screen, never a pre-game or a final you merely looked at. */
-      if (S.raw && S.raw.status === 'live' && S.key) store.set('lastLive', { key: S.key, at: Date.now() });
-      /* 🔴 THE LAST GAME IS OVER - MARK IT, AND IF THE TAB BROUGHT YOU, GO TO THE
-       * PICKER. Jason, 2026-09-10, on FAMU at Miami still filling the Live tab
-       * three hours after it ended: "if that game is over then you should go to
-       * the picker." The stored game is marked final so the next tap skips it
-       * outright; if this visit came from the tab (S.fromLast) the forced key is
-       * dropped and the screen falls back to the strip and the next game. Somebody
-       * who WATCHED it end did not come from the tab, so they stay on the final. */
-      if (S.raw && S.raw.status === 'final' && S.key) {
-        const ls = store.get('lastLive', null);
-        if (ls && ls.key === S.key && !ls.final) store.set('lastLive', { ...ls, final: true });
-      }
-      if (S.raw && S.raw.status === 'final' && S.fromLast) {
-        S.fromLast = false; S.forced = false;
-        if (S.sport) {
-          if (S.keyTimer) clearInterval(S.keyTimer);
-          S.keyTimer = setInterval(() => { if (!S.forced && S.sport) refreshKey(wrap, S.sport); }, 300000);
-        }
-      }
       /* 🔴 NEVER PARK ON A GAME THAT WAS ALREADY OVER WHEN THE SCREEN ARRIVED.
        * Jason, 2026-09-10, again on FAMU at Miami: "i still have the problem with
        * going back to 'live' after the game is over." The Live screen's first key
@@ -2366,6 +2359,10 @@ function paint(wrap) {
    * here too; picking any game from the strip still sets it from the game. */
   if (!S.isHome && !S.mode) S.mode = 'live';
   if (!S.isHome && !S.sport) S.sport = 'college-football';
+
+  /* The Live tab's picker - see render(). Live games first, then the rest of
+   * the week; a tap on one opens it. */
+  if (S.pick) { gamePicker(wrap, now); return; }
 
   /* 🔴 HOME IS A DESTINATION, AND IT STOPS HERE. Jason said "Home should start
    * here" three times and each time I put the hub ON TOP of the game — which is
@@ -3237,19 +3234,32 @@ function paint(wrap) {
   const react = reactions(state, wrap);
   if (react) wrap.appendChild(react);
 
-  /* ---- brag about the best one ---- */
-  const brag = bragButton(state, rows);
-  if (brag) wrap.appendChild(brag);
-
   /* ---- what happened ---- */
   if (rows.length) {
     const list = el('div', 'card lg-rows');
+    /* Jason, 2026-09-11: "Title this 'My picks' like on this game below." */
+    list.appendChild(el('div', 'lg-board-h', 'My picks'));
     for (const r of rows.slice(0, 8)) {
       const row = el('div', 'lg-row' + (r.open ? ' is-open' : r.void ? ' is-void' : r.landed ? ' is-up' : ' is-down'));
-      row.appendChild(el('span', 'lg-row-label', r.label));
-      row.appendChild(el('span', 'lg-row-why', r.open ? 'open' : r.because || ''));
+      /* 🔴 SAID IN WORDS. Jason, 2026-09-11, on "Field goal · open · —" and
+       * "Pass, first down · not a run-or-pass snap · 0": "What is this?" A tile
+       * label and a settler's reason are shorthand for someone looking at the
+       * question. So the row says the call as a sentence, what it is waiting
+       * on, and a cancelled call says its Marbles came back instead of "0". */
+      const WHY = { td: 'ended in a touchdown', fg: 'ended in a field goal', punt: 'ended in a punt',
+        'punt td': 'ended in a punt', downs: 'turned over on downs', int: 'intercepted',
+        fumble: 'fumbled away', 'missed fg': 'missed the field goal',
+        'not a run-or-pass snap': 'the next play was not a run or pass',
+        'the play did not happen': 'the play did not count' };
+      const ph = PHRASE[r.type + ':' + r.choice];
+      const said = ph ? ph.charAt(0) + ph.slice(1).toLowerCase() : r.label;
+      row.appendChild(el('span', 'lg-row-label', said));
+      row.appendChild(el('span', 'lg-row-why', r.open
+        ? (r.scope === 'drive' ? 'waiting on the drive' : 'waiting on the snap')
+        : r.void ? 'cancelled: ' + (WHY[r.because] || r.because || 'the play did not count')
+        : WHY[r.because] || r.because || ''));
       const v = el('span', 'lg-row-delta num');
-      v.textContent = r.open ? '—' : r.void ? '0' : signed(r.delta);
+      v.textContent = r.open ? '—' : r.void ? 'back' : signed(r.delta);
       row.appendChild(v);
       list.appendChild(row);
     }
@@ -4161,32 +4171,60 @@ function bellLink(title, startMs, key, venue) {
  *
  * The slate comes from alsoFor(), which fetches it in the background and
  * repaints when it lands; until then there is simply no list. */
-function nextList(wrap, state, now) {
+/** The Live tab's game picker: the Live now and Next lists and nothing else. */
+function gamePicker(wrap, now) {
+  const before = wrap.childElementCount;
+  nextList(wrap, S.raw, now, true);
+  if (wrap.childElementCount !== before) return;
+  const loaded = S.also && S.also.sport === S.sport;
+  const c = el('div', 'card lg-nogame');
+  c.appendChild(el('div', 'lg-nogame-h', loaded ? 'No games left this week' : 'Finding the games…'));
+  wrap.appendChild(c);
+}
+
+function nextList(wrap, state, now, everyGame) {
   const also = alsoFor(wrap, now);
   if (!also) return;
   const sport = also.sport;
   const here = String((S.key || '').split(':')[1] || '');
   const games = (also.games || [])
-    .filter((g) => g && g.id && g.status !== 'final' && g.status !== 'void' && String(g.id) !== here)
+    .filter((g) => g && g.id && g.status !== 'final' && g.status !== 'void' && (everyGame || String(g.id) !== here))
     .sort((a, b) => {
       const live = (x) => (x.status === 'in_progress' ? 0 : 1);
       return live(a) - live(b) || a.kickoffUtc - b.kickoffUtc;
     });
   if (!games.length) return;
 
-  const box = el('section', 'lg-next');
-  box.setAttribute('aria-label', 'Next games');
-  const h = el('div', 'lg-next-h');
-  h.appendChild(el('span', 'lg-next-k', 'Next'));
-  h.appendChild(el('span', 'lg-next-n num', games.length === 1 ? '1 game' : games.length + ' games'));
-  box.appendChild(h);
-
+  /* 🔴 LIVE IS NOT NEXT. Jason, 2026-09-11: "It is not next and live now." The
+   * live games sat under the NEXT heading as its first day group, and the count
+   * beside NEXT included them. So they are their own section, LIVE NOW, above
+   * NEXT, each with its own count - and a tap on one still switches to that
+   * game, because the card's link carries ?game=. */
   const dayOf = (ms) => new Date(ms).toLocaleDateString(undefined, { weekday: 'long' });
-  let lastDay = null;
-  for (const g of games) {
+  const section = (label, aria, list) => {
+    if (!list.length) return;
+    const box = el('section', 'lg-next');
+    box.setAttribute('aria-label', aria);
+    const h = el('div', 'lg-next-h');
+    h.appendChild(el('span', 'lg-next-k', label));
+    h.appendChild(el('span', 'lg-next-n num', list.length === 1 ? '1 game' : list.length + ' games'));
+    box.appendChild(h);
+    let lastDay = null;
+    for (const g of list) nextCard(box, g, sport, dayOf, (day) => {
+      if (day !== lastDay) { box.appendChild(el('div', 'lg-next-day', day)); lastDay = day; }
+    });
+    wrap.appendChild(box);
+  };
+  section('Live now', 'Live games', games.filter((g) => g.status === 'in_progress'));
+  section('Next', 'Next games', games.filter((g) => g.status !== 'in_progress'));
+}
+
+/** One small game card in the Live now / Next lists. `dayLabel` is called for
+ *  an upcoming game only - a live one needs no day. */
+function nextCard(box, g, sport, dayOf, dayLabel) {
+  {
     const live = g.status === 'in_progress';
-    const day = live ? 'Live now' : dayOf(g.kickoffUtc);
-    if (day !== lastDay) { box.appendChild(el('div', 'lg-next-day', day)); lastDay = day; }
+    if (!live) dayLabel(dayOf(g.kickoffUtc));
 
     const teams = {};
     for (const t of (g.teams || [])) if (t && t.id) teams[String(t.id)] = t;
@@ -4220,7 +4258,6 @@ function nextList(wrap, state, now) {
     card.appendChild(side(g.homeTeamId, hm));
     box.appendChild(card);
   }
-  wrap.appendChild(box);
 }
 
 function pregame(state, now, wrap) {
@@ -4871,7 +4908,7 @@ function reactions(state, wrap) {
     const won = a > h ? aw : h > a ? hm : null;
     add('final', a === h ? 'All square at the end.' : won ? `${won.short} on top.` : '');
   }
-  for (const p of recent) {
+  for (const p of recent.slice().reverse()) {
     const t = (p.text || '').toLowerCase();
     if (/touchdown/.test(t)) add('touchdown', p.text);
     else if (/intercepted|fumble.*recovered by/.test(t)) add('turnover', p.text);
@@ -4881,47 +4918,39 @@ function reactions(state, wrap) {
   }
   if (!found.length) return null;
 
-  const card = el('div', 'card lg-react');
-  card.appendChild(el('div', 'lg-react-h', 'Send it'));
-  const row = el('div', 'lg-react-row');
-  for (const f of found.slice(0, 3)) {
-    const m = MOMENTS[f.k];
-    const b = el('button', 'lg-react-b');
-    b.style.setProperty('--m', m.tint);
-    b.appendChild(el('span', 'lg-react-w', m.word));
-    row.appendChild(b);
-    b.onclick = async () => {
-      const before = b.querySelector('.lg-react-w').textContent;
-      b.querySelector('.lg-react-w').textContent = '…';
-      /* The link rides in the text: a shared picture carries the wordmark, not
-       * a tappable way back to the game. */
-      const r = await shareReaction(state, f.k, f.line, xText(state) + '\n' + gameLink());
-      b.querySelector('.lg-react-w').textContent =
-        r === 'shared' ? 'SENT' : r === 'downloaded' ? 'SAVED' : before;
-    };
-  }
-  card.appendChild(row);
-  return card;
-}
-
-function bragButton(state, rows) {
-  const landed = (rows || []).filter((r) => r.landed === true && r.delta > 0);
-  if (!landed.length) return null;
-  const best = landed.reduce((a, b) => (a.delta >= b.delta ? a : b));
-
+  /* 🔴 ONE BIG BUTTON, AND IT SHARES THE MOMENT. Jason, 2026-09-11: "I like
+   * the green share it. But I don't think anyone is going to want that, I think
+   * they might share the [moment cards]... So make that the way we push out one
+   * of those and get rid of the little send it touchdown." So the green button
+   * now makes the moment's picture - FINAL first, then the newest play - and
+   * both the row of small word-buttons and the button that shared your own
+   * call are gone. */
+  const f = found[0];
+  const m = MOMENTS[f.k];
+  const word = m.word.charAt(0) + m.word.slice(1).toLowerCase();
   const b = el('button', 'lg-brag');
-  b.appendChild(el('span', 'lg-brag-h', `Share it — ${best.label} at ${payoutOf(best)}×`));
-  b.appendChild(el('span', 'lg-brag-b', 'Makes a picture with the score and your call on it.'));
+  b.appendChild(el('span', 'lg-brag-h', `Share it — ${word}`));
+  b.appendChild(el('span', 'lg-brag-b', 'Makes a picture with the score on it.'));
   b.onclick = async () => {
     const sub = b.querySelector('.lg-brag-b');
     sub.textContent = 'Drawing it…';
-    const r = await shareResult(state, best, xText(state) + '\n' + gameLink());
+    const r = await shareReaction(state, f.k, f.line, momentText(state, word));
     sub.textContent = r === 'shared' ? 'Sent.'
       : r === 'downloaded' ? 'Saved to your downloads — attach it to a post.'
-      : r === 'cancelled' ? 'Makes a picture with the score and your call on it.'
+      : r === 'cancelled' ? 'Makes a picture with the score on it.'
       : 'This browser cannot make the picture. The link still works.';
   };
   return b;
+}
+
+/* 🔴 THE TEXT SAYS WHAT THE PICTURE SAYS. Jason, earlier the same day: "The
+ * text message and graphic don't match." A touchdown picture goes out with the
+ * touchdown and the score, the teams' tags and the link back to the game -
+ * never a brag about some other call. */
+function momentText(state, word) {
+  const aw = state.teams && state.teams[state.awayTeamId], hm = state.teams && state.teams[state.homeTeamId];
+  const score = aw && hm ? ` ${aw.short} ${state.awayScore}, ${hm.short} ${state.homeScore}.` : '';
+  return `${word}${word === 'Final' ? '.' : '!'}${score}\n\n${hashtags(state)}\n${gameLink()}`;
 }
 
 /* 🔴 THE CHIP MUST SAY HOW FAR BEHIND WE ACTUALLY ARE, NOT HOW FAR WE ASKED TO
@@ -4995,13 +5024,6 @@ const CSS = `
 .lg-delayline-l { font-weight: 700; letter-spacing: .04em; color: var(--accent); }
 .lg-delayline.is-live .lg-delayline-l { color: var(--down); }
 .lg-delayline-a { text-decoration: underline; }
-.lg-react { display: grid; gap: 8px; padding: 12px; }
-.lg-react-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; color: var(--dim); }
-.lg-react-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.lg-react-b { font: inherit; padding: 10px 14px; min-height: var(--tap-min);
-  border: 2px solid var(--m); border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--m) 12%, var(--card)); color: var(--m); }
-.lg-react-w { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; }
 .lg-brag { display: grid; gap: 3px; text-align: left; font: inherit; width: 100%;
   padding: 13px 12px; border: 2px solid var(--up); border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--up) 10%, var(--card)); color: var(--fg); }

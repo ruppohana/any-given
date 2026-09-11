@@ -183,27 +183,34 @@ export function reactionBlob(state, momentKey, line) {
   return drawCard(state, MOMENTS[momentKey] || MOMENTS.called_it, line, momentKey === 'fun_fact');
 }
 
-/**
- * The brag: a call that landed.
- *
- * 🔴 THE CALL IS THE WORD. Jason, 2026-09-11: "Called it and called it wrong
- * seem stupid." The old card led with "Called it." and put the call in a small
- * box underneath. Now it is the same card as TOUCHDOWN, with the thing they
- * called as the word - PASS, FIRST DOWN - and the product's whole claim as the
- * line: the price it showed BEFORE the snap, and what it paid. There is no
- * losing version: the brag is only offered for a call that landed, and nobody
- * posts the one they lost.
- *
- * @param call a settled call: { label, stake, pays, delta, landed }
- */
-export function shareCardBlob(state, call) {
-  if (!call) return reactionBlob(state, 'called_it', '');
-  const sign = (call.delta > 0 ? '+' : '') + call.delta;
-  const line = call.landed === true
-    ? `Before the snap, at ${call.pays}×. ${sign} Marbles.`
-    : `Before the snap, at ${call.pays}×.`;
-  return drawCard(state, { word: String(call.label || '').toUpperCase(), tint: GOLD }, line, false);
-}
+/* 🔴 THE CALL IN WORDS A FRIEND CAN READ. Jason, 2026-09-11, on "PASS, FIRST
+ * DOWN": "What is pass first down…. Mean?" A tile label is written for someone
+ * looking at the question above it; a shared picture has no question above it.
+ * So every choice gets the sentence it stands for, keyed type:choice, and the
+ * tile's own label is only the fallback. Used by the My picks list; the picture
+ * of your own call is gone (Jason, 2026-09-11 - the moment is what gets sent). */
+export const PHRASE = {
+  'script:run_yes': 'RUN FOR A FIRST DOWN',   'script:run_no': 'RUN, SHORT OF THE STICKS',
+  'script:pass_yes': 'PASS FOR A FIRST DOWN', 'script:pass_no': 'PASS, SHORT OF THE STICKS',
+  'run_pass:run': 'THEY RUN IT',              'run_pass:pass': 'THEY THROW IT',
+  'fourth_down:go': 'THEY GO FOR IT',         'fourth_down:kick': 'THEY KICK IT',
+  'kickoff_return:past': 'RETURNED PAST THE 25', 'kickoff_return:short': 'NOT PAST THE 25',
+  'third_down:convert': 'THIRD DOWN CONVERTED', 'third_down:stop': 'STOPPED ON THIRD DOWN',
+  'explosive:yes': 'TEN YARDS OR MORE',       'explosive:no': 'UNDER TEN YARDS',
+  'field_goal:good': 'IT IS GOOD',            'field_goal:miss': 'NO GOOD',
+  'drive_end:td': 'TOUCHDOWN DRIVE',          'drive_end:fg': 'FIELD GOAL DRIVE',
+  'drive_end:punt': 'THEY PUNT',              'drive_end:turnover': 'THEY TURN IT OVER',
+  'drive_breakout:yes': 'A 25-YARD PLAY',     'drive_breakout:no': 'NO BIG PLAY',
+  'drive_redzone:yes': 'THEY REACH THE RED ZONE', 'drive_redzone:no': 'THEY STALL',
+  'direction:left': 'THE PLAY GOES LEFT',     'direction:middle': 'UP THE MIDDLE',
+  'direction:right': 'THE PLAY GOES RIGHT',
+  'first_down:yes': 'THEY MOVE THE CHAINS',   'first_down:no': 'NO FIRST DOWN',
+  'redzone_outcome:td': 'RED ZONE TOUCHDOWN', 'redzone_outcome:fg': 'RED ZONE FIELD GOAL',
+  'redzone_outcome:none': 'NO POINTS FROM THE RED ZONE',
+  'punt_fair_catch:fair': 'FAIR CATCH',       'punt_fair_catch:return': 'HE RUNS IT BACK',
+  'three_and_out:yes': 'THREE AND OUT',       'three_and_out:no': 'THEY MOVE IT'
+};
+
 
 /**
  * Share it as a FILE where the browser can, and fall back rather than fail.
@@ -228,10 +235,6 @@ async function shareBlob(blob, text) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   return 'downloaded';
-}
-
-export async function shareResult(state, call, text) {
-  return shareBlob(await shareCardBlob(state, call).catch(() => null), text);
 }
 
 export async function shareReaction(state, momentKey, line, text) {
