@@ -132,13 +132,13 @@ function navIcon(id) {
   path.setAttribute('stroke-linecap', 'round');
   path.setAttribute('stroke-linejoin', 'round');
   svg.appendChild(path);
-  /* The on-air dot: the one filled mark in the bar, and deliberately so - it
-     is the signal, and red is what "live" has meant on every broadcast and
-     every phone since there were either. It stays red on the active pill. */
+  /* The on-air dot, in the bar's own color. It was red for one deploy and
+     Jason: "make the all the same style, so, not red." One family - a mark
+     that is always red competes with the filled pill for which tab is lit. */
   if (id === 'live') {
     const dot = document.createElementNS(NS, 'circle');
     dot.setAttribute('cx', '12'); dot.setAttribute('cy', '12'); dot.setAttribute('r', '2.3');
-    dot.setAttribute('fill', '#e5392e');
+    dot.setAttribute('fill', 'currentColor');
     svg.appendChild(dot);
   }
   return svg;
