@@ -225,6 +225,11 @@ test('every control is a 44px target and every figure is tabular', () => {
     assert.ok(m, cls + ' has no rule');
     const at = m.index;
     const block = CCSS.slice(CCSS.indexOf('{', at), CCSS.indexOf('}', at));
+    /* A switch may be a 30px pill whose ::after reaches the other 14px - the
+     * settings switch, adopted after Jason's "This toggle looks bad." (2026-09-11).
+     * 30 + 7 + 7 is still a 44px target. */
+    if (cls === '.g1-switch' && /height:\s*30px/.test(block)
+        && /\.g1-switch::after\s*\{[^}]*inset:\s*-7px/.test(CCSS)) continue;
     assert.match(block, /min-height:\s*var\(--tap-min\)/, cls + ' is under 44px');
   }
   for (const cls of ['.g1-count', '.g1-code', '.g1-meta', '.g1-sec-h']) {

@@ -11,8 +11,9 @@ morning is simply picked up by the next one.**
 **How Jason hears about a problem:** the run sends one PushNotification if anything fails (step 8 of
 the task), and — independent of the laptop — the Worker emails him (`ALERT_EMAIL`) once a day after
 10 AM if any game inside 48 hours still has a team without current nuggets (`src/nugget-due.ts`,
-`GET /api/nuggets/due`). It ran day-before until 2026-09-11; the Cloudflare research desk exists but
-is off (Jason: *"Laptop."*, at $2.29 a team).
+`GET /api/nuggets/due`). It ran day-before until 2026-09-11. A Cloudflare research desk was built and
+priced at $2.29 a team; Jason chose the laptop (*"Laptop."*) and then had the desk removed
+(*"Remove the cloudflare research"*) — it is in git history.
 
 **Why it exists** — Jason, 2026-09-10: *"grab 10 for each team, fun/odd nuggets and when all else
 fails, factual, should cover the entire game"*, *"Current, and just before the game"*, *"1 day

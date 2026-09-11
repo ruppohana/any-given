@@ -208,6 +208,10 @@ test('every tappable thing clears 44px', () => {
   for (const cls of ['p6-scope', 'p6-seg-b', 'p6-conf', 'p6-game', 'p6-input',
                      'p6-switch', 'p6-copy', 'p6-link', 'p6-code', 'p6-danger',
                      'p6-confirm-no', 'p6-primary']) {
+    /* The switch is a 30px pill with a ::after reaching the other 14px - the
+     * settings switch (2026-09-11, "This toggle looks bad."). Still 44px to a thumb. */
+    if (cls === 'p6-switch' && /\.p6-switch\s*\{[^}]*height:\s*30px/.test(CSS)
+        && /\.p6-switch::after\s*\{[^}]*inset:\s*-7px/.test(CSS)) continue;
     const re = new RegExp(`\\.${cls}[^{]*\\{[^}]*min-height:\\s*var\\(--tap-min\\)`);
     assert.match(CSS, re, `${cls} does not declare min-height: var(--tap-min)`);
   }

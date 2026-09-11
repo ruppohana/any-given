@@ -59,8 +59,7 @@ for (const t of (due && due.teams) || []) {
   const file = join(ROOT, 'public', 'nuggets', t.league, t.teamId + '.json');
   let asOf = null;
   if (existsSync(file)) { try { asOf = JSON.parse(readFileSync(file, 'utf8')).asOf || null; } catch { asOf = null; } }
-  /* A team the Cloudflare desk already covered in KV counts as fresh too. */
-  const fresh = isFreshForNext(asOf, t) || (t.by === 'kv' && t.fresh);
+  const fresh = isFreshForNext(asOf, t);
   if (fresh && !all) continue;
   out.push({ league: t.league, teamId: t.teamId, team: t.team, opponent: t.opponent,
              kickoffUtc: t.kickoffUtc, gameDate: t.gameDate, prevDate: t.prevDate, file, asOf, fresh });

@@ -1,8 +1,6 @@
 import { pollDecision } from './lib/poll-window.ts';
 import { captureSlate } from './slate-cron.ts';
 export { LivePoller } from './poller-do.ts';
-export { NuggetDesk } from './nugget-desk.ts';
-import { tomorrowPacific, teamsPlaying, isFresh, pacificDate, type TeamJob } from './lib/nuggets.ts';
 import { computeDue, nuggetAlertTick } from './nugget-due.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
  *
@@ -45,13 +43,6 @@ export interface Env {
   /** "1" = picks, groups and joins need a verified email. Off until the sender
    *  and the sign-in sheet are both live. */
   REQUIRE_EMAIL?: string;
-  /** The day-before nuggets research (src/nugget-desk.ts). The key is Jason's
-   *  to set: `wrangler secret put ANTHROPIC_API_KEY`. NUGGET_ENABLED "1" lets
-   *  the 5 AM cron seed the queue; NUGGET_MODEL names the model. */
-  NUGGET_DESK?: DurableObjectNamespace;
-  ANTHROPIC_API_KEY?: string;
-  NUGGET_ENABLED?: string;
-  NUGGET_MODEL?: string;
 }
 
 const SPORTS: Record<string, Sport> = {
@@ -144,62 +135,6 @@ async function upstream(url: string, ttl: number): Promise<any> {
   return res.json();
 }
 
-/* 🔴 THE NUGGET SEED. Which teams play tomorrow (Pacific), minus any already
- * fresh in KV or in a static file, queued on the desk - the same selection as
- * tools/nugget-teams.mjs, read from the KV slates the ten-minute cron keeps.
- * A slate that did not load is reported in errors, never read as "no games" -
- * the same lesson nugget-teams.mjs learned on 2026-09-10. */
-async function seedNuggets(env: any, opts: { now?: number; limit?: number; date?: string } = {}) {
-  const now = opts.now || Date.now();
-  /* A date may be named - a test run aimed at a day not yet researched (the
-   * first one, 2026-09-11, priced two of Sunday's NFL teams while Saturday was
-   * already fresh). Anything else means tomorrow. */
-  const named = /^\d{4}-\d{2}-\d{2}$/.test(String(opts.date || '')) ? String(opts.date) : '';
-  const { date, dayBefore } = named
-    ? { date: named, dayBefore: pacificDate(Date.parse(named + 'T12:00:00Z') - 24 * 60 * 60 * 1000) }
-    : tomorrowPacific(now);
-  const season = Number(env.SEASON) || 2026;
-  const slates: { sport: string; games: any[] }[] = [];
-  const errors: string[] = [];
-  for (const sport of ['nfl', 'college-football']) {
-    const wk = Number(String((await env.LIVE.get(`slate:${sport}:current`)) || '').trim());
-    if (!wk) { errors.push(`${sport}: no current week`); continue; }
-    for (const w of [wk, wk + 1]) {
-      const raw = await env.LIVE.get(`slate:${sport}:${season}:${w}`);
-      if (!raw) { if (w === wk) errors.push(`${sport} week ${w}: no slate`); continue; }
-      try { slates.push({ sport, games: JSON.parse(raw).games || [] }); } catch { errors.push(`${sport} week ${w}: bad JSON`); }
-    }
-  }
-  const all = teamsPlaying(slates, date);
-  const jobs: TeamJob[] = [];
-  let fresh = 0;
-  for (const j of all) {
-    let asOf: string | null = null;
-    try {
-      const kv = await env.LIVE.get(`nuggets:${j.league}:${j.teamId}`);
-      if (kv) asOf = JSON.parse(kv).asOf || null;
-    } catch { /* unreadable counts as missing */ }
-    if (!isFresh(asOf, dayBefore)) {
-      try {
-        const r = await env.ASSETS.fetch(new Request(`https://anygiven.app/nuggets/${j.league}/${j.teamId}.json`));
-        if (r.ok) asOf = ((await r.json()) as any).asOf || null;
-      } catch { /* no static file */ }
-    }
-    if (isFresh(asOf, dayBefore)) { fresh++; continue; }
-    jobs.push(j);
-  }
-  const queued = opts.limit && opts.limit > 0 ? jobs.slice(0, opts.limit) : jobs;
-  let desk: any = null;
-  if (queued.length && env.NUGGET_DESK) {
-    const stub = env.NUGGET_DESK.get(env.NUGGET_DESK.idFromName('desk'));
-    const res = await stub.fetch('https://desk/seed', {
-      method: 'POST', body: JSON.stringify({ jobs: queued, today: pacificDate(now) })
-    });
-    desk = await res.json();
-  }
-  return { date, dayBefore, playing: all.length, fresh, needed: jobs.length, queued: queued.length, errors, desk };
-}
-
 export default {
   /* 🔴 THE SCHEDULED HALF. Jason: "Did we move everything to the cloud?"
    * Not until this. Every ten minutes: refresh the week's slate from the core
@@ -215,40 +150,11 @@ export default {
    * Both leagues, every run. The NFL and college seasons overlap all autumn
    * and there is no cheaper way to know which has a game on than to look. */
   async scheduled(event: any, env: any, ctx: any) {
-    /* 🔴 THE 5 AM NUGGET SEED rides its own cron line, never the ten-minute
-     * slate refresh. NUGGET_ENABLED off means it does nothing at all. */
-    if (event && event.cron === '0 12 * * *') {
-      if (env.NUGGET_ENABLED === '1') {
-        ctx.waitUntil(seedNuggets(env).then(
-          (r) => console.log('nuggets seed', JSON.stringify(r)),
-          (e) => console.log('nuggets seed FAILED', String(e?.message || e))));
-      } else {
-        console.log('nuggets seed skipped: NUGGET_ENABLED is not "1"');
-      }
-      return;
-    }
     /* The game-facts alert: an hourly look from 10 AM, one email a day at most,
      * only when a game inside 48 hours has a team without current nuggets. */
     ctx.waitUntil(nuggetAlertTick(env).then(
       (r) => { if (!r || !(r as any).skipped) console.log('nuggets alert', JSON.stringify(r)); },
       (e) => console.log('nuggets alert FAILED', String(e?.message || e))));
-    /* 🔴 A ONE-TIME TEST RUN, BY CONFIGURATION. NUGGET_TEST = "<date>:<teams>"
-     * (first use "2026-09-13:2" - two of Sunday's NFL teams) seeds that many teams
-     * for that date ONCE, on the next ten-minute tick, and writes its done-record
-     * BEFORE seeding so a second tick cannot run it again. Nobody has to hold the
-     * push token to price a run. Jason, 2026-09-11: "Two team." Remove the var
-     * after; a new value is a new test. */
-    const nt = String(env.NUGGET_TEST || '').match(/^(\d{4}-\d{2}-\d{2}):(\d{1,2})$/);
-    if (nt) {
-      const doneKey = 'nuggets:test:' + nt[0];
-      ctx.waitUntil((async () => {
-        if (await env.LIVE.get(doneKey)) return;
-        await env.LIVE.put(doneKey, JSON.stringify({ startedAt: Date.now() }), { expirationTtl: 60 * 60 * 24 * 30 });
-        const r = await seedNuggets(env, { date: nt[1], limit: Number(nt[2]) });
-        console.log('nuggets test', JSON.stringify(r));
-        await env.LIVE.put(doneKey, JSON.stringify({ seededAt: Date.now(), ...r }), { expirationTtl: 60 * 60 * 24 * 30 });
-      })().catch((e: any) => console.log('nuggets test FAILED', String(e?.message || e))));
-    }
     const season = Number(env.SEASON) || 2026;
     ctx.waitUntil((async () => {
       for (const sport of ['nfl', 'college-football']) {
@@ -285,38 +191,11 @@ export default {
        * The token is a secret rather than a check on the caller's address,
        * because a Worker cannot trust an IP. */
       /* ---- email sign-in: /api/auth/start, /verify, /me, /logout ---- */
-      /* ---- nuggets: KV first (the Cloudflare desk), the static file second ----
-       * The client already asks for /nuggets/<league>/<id>.json; it cannot tell
-       * which of the two answered, and does not need to. */
-      const nm = p.match(/^\/nuggets\/(nfl|ncaa)\/(\d+)\.json$/);
-      if (nm && req.method === 'GET') {
-        const kv = await env.LIVE.get(`nuggets:${nm[1]}:${nm[2]}`);
-        if (kv) return new Response(kv, { headers: {
-          'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
-        return env.ASSETS.fetch(req);
-      }
       /* Which teams are due for nuggets, and which play inside 48 hours without
        * them (src/nugget-due.ts). Read-only; the laptop run and the alert use it. */
       if (p === '/api/nuggets/due' && req.method === 'GET') {
         const days = Math.min(14, Math.max(1, Number(url.searchParams.get('days')) || 7));
         return json(await computeDue(env, Date.now(), days));
-      }
-      /* The desk's controls - behind the push token, like every other write. */
-      if (p === '/api/nuggets/run' || p === '/api/nuggets/status' || p === '/api/nuggets/stop') {
-        /* Status is readable - counts, team names and token usage, nothing secret -
-         * so a run's cost can be checked without anybody handling the token. Run
-         * and stop are writes and need it. */
-        const write = p !== '/api/nuggets/status';
-        if (write && (!env.PUSH_TOKEN || req.headers.get('x-push-token') !== env.PUSH_TOKEN)) return json({ error: 'no' }, 401);
-        if (!env.NUGGET_DESK) return json({ error: 'no desk bound' }, 500);
-        if (p === '/api/nuggets/run' && req.method === 'POST') {
-          const b = await req.json().catch(() => ({})) as any;
-          return json(await seedNuggets(env, { limit: Number(b.limit) || 0, date: b.date }));
-        }
-        const stub = env.NUGGET_DESK.get(env.NUGGET_DESK.idFromName('desk'));
-        const r = await stub.fetch('https://desk/' + (p.endsWith('/stop') ? 'stop' : 'status'),
-          { method: p.endsWith('/stop') ? 'POST' : 'GET' });
-        return new Response(await r.text(), { status: r.status, headers: { 'content-type': 'application/json' } });
       }
 
       const authRes = await handleAuth(req, env, p, json);

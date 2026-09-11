@@ -1,0 +1,58 @@
+{
+  "league": "nfl",
+  "teamId": "1",
+  "team": "Atlanta Falcons",
+  "asOf": "2026-09-11",
+  "nuggets": [
+    {
+      "text": "Bijan Robinson set the Falcons' single-season scrimmage-yards record with 2,255 yards in 2025.",
+      "kind": "fun",
+      "source": "https://www.atlantafalcons.com/news/bijan-robinson-scrimmage-yards-monday-night-football-history"
+    },
+    {
+      "text": "Robinson's 93-yard TD run in 2025 was the NFL's longest that year and Atlanta's first 90-yard run since 2006.",
+      "kind": "odd",
+      "source": "https://www.atlantafalcons.com/news/bijan-robinson-scrimmage-yards-monday-night-football-history"
+    },
+    {
+      "text": "John Abraham's 68.5 sacks in Atlanta are the most in franchise history since sacks became official in 1982.",
+      "kind": "fun",
+      "source": "https://www.atlantafalcons.com/news/atlanta-falcons-induct-john-abraham-bill-fralic-ring-of-honor-2026"
+    },
+    {
+      "text": "Bill Fralic's dominant blocking at Pitt is credited with inspiring the term 'pancake block.'",
+      "kind": "odd",
+      "source": "https://www.atlantafalcons.com/news/atlanta-falcons-induct-john-abraham-bill-fralic-ring-of-honor-2026"
+    },
+    {
+      "text": "Matt Ryan, Atlanta's all-time passing leader, became the Falcons' first-ever President of Football in 2026.",
+      "kind": "fun",
+      "source": "https://www.atlantafalcons.com/team/front-office-roster/matt-ryan"
+    },
+    {
+      "text": "Tua Tagovailoa beat out Michael Penix Jr. to win the Falcons' Week 1 starting quarterback job in 2026.",
+      "kind": "fact",
+      "source": "https://www.atlantafalcons.com/news/falcons-name-tua-tagovailoa-starting-quarterback-week-1"
+    },
+    {
+      "text": "Kevin Stefanski takes over as Falcons head coach in 2026 after leading the Browns from 2020 to 2025.",
+      "kind": "fact",
+      "source": "https://en.wikipedia.org/wiki/2026_Atlanta_Falcons_season"
+    },
+    {
+      "text": "Bijan Robinson, Chris Lindstrom, Jessie Bates III, Divine Deablo and Nick Folk are Atlanta's 2026 team captains.",
+      "kind": "fact",
+      "source": "https://www.atlantafalcons.com/news/atlanta-falcons-2026-team-captains"
+    },
+    {
+      "text": "The Falcons will play the Bengals at Real Madrid's Bernabéu Stadium in Week 9, their sixth game outside the U.S.",
+      "kind": "odd",
+      "source": "https://www.atlantafalcons.com/news/atlanta-falcons-madrid-international-game-2026-bernabeu"
+    },
+    {
+      "text": "Atlanta debuts new uniforms in 2026, wearing white on the road to open the season at Pittsburgh.",
+      "kind": "odd",
+      "source": "https://www.atlantafalcons.com/news/falcons-2026-uniform-schedule"
+    }
+  ]
+}

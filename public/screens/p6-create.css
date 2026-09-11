@@ -289,12 +289,16 @@
 .scr-p6-create .p6-switch-note { display: block; margin-top: 2px; }
 
 /* One element, 44px of target, a hairline knob. No shadow, no gradient. */
+/* 🔴 A 30px PILL WITH A 44px REACH - the settings switch. Jason, 2026-09-11, of
+   the same switch on the group screen: "This toggle looks bad." 52 wide by 44
+   tall is nearly a circle; the ::after keeps the 44px target instead. */
 .scr-p6-create .p6-switch {
   flex: none;
   width: 52px;
-  min-height: var(--tap-min);
-  height: var(--tap-min);
-  padding: 0 4px;
+  height: 30px;
+  min-height: 30px;
+  padding: 2px;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -302,8 +306,9 @@
   border-radius: var(--radius-pill);
   background: var(--track);
 }
+.scr-p6-create .p6-switch::after { content: ''; position: absolute; inset: -7px -4px; }
 .scr-p6-create .p6-knob {
-  width: 20px; height: 20px;
+  width: 24px; height: 24px;
   border-radius: 50%;
   background: var(--card);
   border: 1px solid var(--line);

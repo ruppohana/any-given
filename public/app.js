@@ -383,7 +383,19 @@ async function mount() {
   }
 
   drawNav(route.dest, route.nav);
+
+  /* 🔴 A NEW PAGE OPENS AT ITS TOP. Jason, 2026-09-11: "When I hit group rules it
+   * should justify to the top of the page." The screens re-render into the same
+   * document, so the scroll position of the page you left carried over - tap
+   * Group rules from halfway down the group page and the rules opened halfway
+   * down. Only when the route changed: a screen that re-mounts itself in place
+   * (sign-in, the Live tab tapped again) keeps where you were. */
+  if (location.hash !== lastMountedHash) {
+    lastMountedHash = location.hash;
+    window.scrollTo(0, 0);
+  }
 }
+let lastMountedHash = null;
 
 function drawNav(active, which) {
   const old = document.querySelector('.ag-nav');

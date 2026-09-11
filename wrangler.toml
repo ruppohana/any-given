@@ -16,10 +16,7 @@ compatibility_date = "2026-09-08"
 # It is a LIST rather than `true` on purpose: routing all 1,500 logo files through
 # the Worker to rewrite two meta tags on one path would put a function invocation
 # in front of every crest on a 131-game slate.
-# /nuggets/* joins the list (2026-09-11): the day-before research now lands in KV,
-# and the Worker serves KV first and the static file second at the same URL the
-# client already asks for - so the screen does not change.
-assets = { directory = "dist", binding = "ASSETS", run_worker_first = ["/", "/index.html", "/nuggets/*"] }
+assets = { directory = "dist", binding = "ASSETS", run_worker_first = ["/", "/index.html"] }
 
 # 🔴 THE REAL DOMAIN. Bought 2026-09-08 from Cloudflare Registrar, in the same
 # account this Worker deploys to — which is the whole reason .app was chosen over
@@ -79,12 +76,6 @@ SEASON = "2026"
 # collecting strangers' emails before a policy is posted is what CalOPPA forbids.
 # Back to "0" is the whole rollback: device ids work again, nothing is lost.
 REQUIRE_EMAIL = "1"
-# 🔴 THE NUGGET DESK (src/nugget-desk.ts). "0" = the 5 AM cron does nothing; it is
-# switched to "1" only after a measured test run has priced a team. The key is
-# Jason's to set: `wrangler secret put ANTHROPIC_API_KEY`. The model is a var so
-# it can change without a code change.
-NUGGET_ENABLED = "0"
-NUGGET_MODEL = "claude-sonnet-5"
 # 🔴 THE GAME-FACTS ALERT (src/nugget-due.ts). Jason, 2026-09-11: "How will I know
 # if there is a problem?" Once a day at most, after 10 AM Pacific, and only when a
 # game inside 48 hours has a team without current nuggets. His own address - the
@@ -136,16 +127,17 @@ class_name = "LivePoller"
 tag = "v1"
 new_sqlite_classes = ["LivePoller"]
 
-# 🔴 THE NUGGET DESK - the day-before research, off the laptop. Jason, 2026-09-11:
-# "can we have this run someplace else other than my laptop in the future?" One
-# DO works a queue one team per alarm against the Claude API and writes KV.
-[[durable_objects.bindings]]
-name = "NUGGET_DESK"
-class_name = "NuggetDesk"
-
+# THE NUGGET DESK WAS HERE - the day-before research as a Durable Object against
+# the Claude API (2026-09-11). Measured at $2.29 a team, Jason chose the laptop
+# ("Laptop."), then "Remove the cloudflare research". v2 created the class and
+# stays, because migrations are history; v3 deletes the class and its storage.
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["NuggetDesk"]
+
+[[migrations]]
+tag = "v3"
+deleted_classes = ["NuggetDesk"]
 
 # 🔴 THE SLATE REFRESHES ITSELF. Ten minutes: fast enough that a final score
 # and a moved line are never stale for long, slow enough that ESPN never
@@ -153,6 +145,4 @@ new_sqlite_classes = ["NuggetDesk"]
 # whole live mechanic fits in a 27-second window, which is why that half runs
 # on Durable Object alarms at ten seconds instead.
 [triggers]
-# "0 12 * * *" is 5 AM Pacific in summer (4 AM in winter): the day-before
-# nuggets seed. It only queues work when NUGGET_ENABLED = "1".
-crons = ["*/10 * * * *", "0 12 * * *"]
+crons = ["*/10 * * * *"]

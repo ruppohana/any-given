@@ -58,21 +58,14 @@ export async function computeDue(env: any, now = Date.now(), days = 7) {
 
   const teams: any[] = [];
   for (const t of nextGames(rows, now, days)) {
-    let asOf: string | null = null, by = '';
+    /* The static file is the only store since the Cloudflare desk and its KV
+     * copies were removed (2026-09-11). */
+    let asOf: string | null = null;
     try {
-      const kv = await env.LIVE.get(`nuggets:${t.league}:${t.teamId}`);
-      if (kv) { asOf = JSON.parse(kv).asOf || null; by = 'kv'; }
-    } catch { /* unreadable counts as missing */ }
-    if (!isFreshForNext(asOf, t)) {
-      try {
-        const r = await env.ASSETS.fetch(new Request(`https://anygiven.app/nuggets/${t.league}/${t.teamId}.json`));
-        if (r.ok) {
-          const s = ((await r.json()) as any).asOf || null;
-          if (s && (!asOf || s > asOf)) { asOf = s; by = 'file'; }
-        }
-      } catch { /* no static file */ }
-    }
-    teams.push({ ...t, asOf, by, fresh: isFreshForNext(asOf, t) });
+      const r = await env.ASSETS.fetch(new Request(`https://anygiven.app/nuggets/${t.league}/${t.teamId}.json`));
+      if (r.ok) asOf = ((await r.json()) as any).asOf || null;
+    } catch { /* no static file */ }
+    teams.push({ ...t, asOf, fresh: isFreshForNext(asOf, t) });
   }
   const urgent = teams.filter((t) => !t.fresh && t.kickoffUtc - now < 2 * DAY);
   return { now, today: pacificDate(now), days, total: teams.length, due: teams.filter((t) => !t.fresh), urgent, teams, errors };
