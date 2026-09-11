@@ -4882,6 +4882,13 @@ function bragButton(state, rows) {
  * arrival by the poller and published with the state, so there is one source
  * and not two copies of the same arithmetic. */
 
+/* The play diagrams behind the script card's two pills - see .lg-tiles.is-script
+ * below. Drawn here as SVG and inlined as data URIs, so there is no file to fetch
+ * and nothing to cache-bust. Stroke colour is irrelevant: they are used as masks. */
+const PLAY_ART = (paths) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 170" fill="none" stroke="#000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`)}")`;
+const PASS_ART = PLAY_ART('<circle cx="134" cy="152" r="7"/><path d="M131 143 C104 118 106 76 140 50" stroke-dasharray="7 7"/><polyline points="127,52 140,50 136,63"/>');
+const RUN_ART = PLAY_ART('<circle cx="134" cy="152" r="7"/><path d="M134 144 L134 118 L114 98 L114 56"/><polyline points="106,66 114,54 122,66"/>');
+
 const CSS = `
 .lg { display: grid; gap: 10px; }
 .lg-delay { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); }
@@ -5274,6 +5281,23 @@ const CSS = `
 .lg-tiles.is-script .lg-tile:nth-child(even) { border-top-left-radius: 0; border-top-right-radius: 0;
   margin-top: -1px; }
 .lg-tiles.is-script .lg-tile.is-mine { position: relative; z-index: 1; }
+/* 🔴 A PLAY DIAGRAM BEHIND EACH PILL. Jason, 2026-09-11: "Can I put a graphic in
+   the tall pill?", then "Option A." The pass pill carries the quarterback's O and
+   a dashed throw, the run pill the back's O and a cut upfield. ONE drawing spans
+   both tiles of a column: each tile shows half of it (mask 100% by 200%, the top
+   half on top, the bottom half below), so it reads as one picture over two taps.
+   It is a mask filled with --fg at .16, so it follows the theme, and it sits in
+   the right-hand third, clear of the words and the payout. */
+.lg-tiles.is-script .lg-tile { position: relative; overflow: hidden; }
+.lg-tiles.is-script .lg-tile > * { position: relative; }
+.lg-tiles.is-script .lg-tile::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: var(--fg); opacity: .16;
+  -webkit-mask: var(--art) no-repeat; mask: var(--art) no-repeat;
+  -webkit-mask-size: 100% 200%; mask-size: 100% 200%; }
+.lg-tiles.is-script .lg-tile:nth-child(odd)::before { -webkit-mask-position: 0 0; mask-position: 0 0; }
+.lg-tiles.is-script .lg-tile:nth-child(even)::before { -webkit-mask-position: 0 100%; mask-position: 0 100%; }
+.lg-tiles.is-script .lg-tile:nth-child(-n+2) { --art: ${PASS_ART}; }
+.lg-tiles.is-script .lg-tile:nth-child(n+3) { --art: ${RUN_ART}; }
 /* The stoppage nugget - one true thing, while nothing is happening. */
 .lg-nugget { display: grid; gap: 6px; }
 .lg-nugget-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
