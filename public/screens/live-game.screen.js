@@ -2008,13 +2008,23 @@ export function render(root, _data, screenState) {
     } catch { /* an address we cannot rewrite still plays the invited game */ }
   }
   S.isHome = screenState === 'home';
-  S.key = forced || (S.sport ? GAME_FOR[S.sport] : null);
+  /* 🔴 THE LIVE TAB OPENS THE LAST LIVE GAME YOU HAD UP. Jason, 2026-09-10.
+   * Only from the tab (see drawNav in app.js) - the front door also lands
+   * here, and there the league just chosen wins. Six hours is a game and its
+   * aftermath; older than that it is not "the game you had up". */
+  const goLast = !forced && !S.isHome && window.__agGoLast === true;
+  window.__agGoLast = false;
+  const lastSeen = goLast ? store.get('lastLive', null) : null;
+  const lastKey = lastSeen && lastSeen.key && (Date.now() - (lastSeen.at || 0)) < 6 * 60 * 60 * 1000
+    ? lastSeen.key : null;
+  if (lastKey && (!S.raw || String(S.raw.gameId) !== lastKey.split(':')[1])) { S.raw = null; S.board = []; }
+  S.key = forced || lastKey || (S.sport ? GAME_FOR[S.sport] : null);
   /* Recorded on the state, not just held in this closure: the 5-minute
    * re-check runs long after mount() has returned and has to know that this
    * session came in on an invite link naming its own game. Reading an
    * undefined S.forced there would silently retarget somebody's invite to
    * whatever is next on the slate. */
-  S.forced = !!forced;
+  S.forced = !!forced || !!lastKey;
   /* Reset on arrival, so Home is a door and not a wizard somebody is stuck in. */
   /* A new game is a new camera. Without this the field pans from wherever the
      last game left the ball, which looks like a mistake because it is one. */
@@ -2037,6 +2047,7 @@ export function render(root, _data, screenState) {
    * unconditional. */
   S.lastSig = null;
   if (forced) { S.sport = forced.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
+  else if (lastKey) { S.sport = lastKey.split(':')[0] === 'nfl' ? 'nfl' : 'college-football'; }
 
   paint(wrap);
   if (S.timer) clearInterval(S.timer);
@@ -2047,7 +2058,7 @@ export function render(root, _data, screenState) {
    * moment later. Doing it the other way round would hold a blank screen behind
    * a network round trip on every load, to fix a card that is only wrong once a
    * week. An invite link is never overridden — it names its own game. */
-  if (!forced && S.sport) {
+  if (!S.forced && S.sport) {
     refreshKey(wrap, S.sport);
     /* Re-checked on a slow cycle so a card left open through a kickoff moves on
      * to the next game by itself rather than counting down past zero. */
@@ -2158,7 +2169,12 @@ async function poll(wrap) {
       fetch('/api/state/' + S.key),
       fetch('/api/board/' + S.key)
     ]);
-    if (stateRes.ok) { S.raw = stampLeague(await stateRes.json()); S.noGame = false; }
+    if (stateRes.ok) {
+      S.raw = stampLeague(await stateRes.json()); S.noGame = false;
+      /* The game the Live tab goes back to - only ever one that was LIVE on
+         this screen, never a pre-game or a final you merely looked at. */
+      if (S.raw && S.raw.status === 'live' && S.key) store.set('lastLive', { key: S.key, at: Date.now() });
+    }
     /* 🔴 404 IS AN ANSWER, NOT A SILENCE. The Worker says "nothing pushed for
      * that game yet" and this used to ignore it and keep drawing a skeleton, so
      * a sport nobody is polling looked identical to a sport that was one second

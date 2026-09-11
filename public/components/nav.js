@@ -41,6 +41,16 @@ export const DESTINATIONS = [
    * and left somebody who had wandered off with no obvious way back to the thing
    * they came for. */
   { id: 'home',      label: 'Home',      href: '/live/:game' },
+  /* 🔴 FIVE NOW, AND LIVE IS BACK. Jason, 2026-09-10: "Let's add a live button
+   * to the bottom nav. Have it go directly to the last live game you had up."
+   *
+   * The "four, not five" note below was right when it was written and both of
+   * its reasons have since gone: the bar showed WORDS, and five of them wrapped
+   * to two rows at 375px - the words are gone, and five 24px icons fit the
+   * pill with room to spare. And Home WAS the game, so Live duplicated it -
+   * Home is now the front door with three doors, and getting back to the game
+   * you were watching took three taps. This is one. */
+  { id: 'live',      label: 'Live',      href: '/live/:game' },
   { id: 'slate',     label: 'Slate',     href: '/p/:pool/week/:week' },
   /* 🔴 FOUR, NOT FIVE. Home and Live both led to the live game once Home was
    * added, so the bar carried a duplicate AND wrapped to two rows at 375px —
@@ -191,7 +201,7 @@ export const NAV_CSS = [
      The scrim below does the rest: content dissolves into the ground as it
      passes under the pill instead of being cut by its edge. */
   '.ag-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid;',
-  '  grid-template-columns: repeat(4, 1fr); gap: 2px;',
+  '  grid-template-columns: repeat(5, 1fr); gap: 2px;',
   /* 🔴 TRANSLUCENT, WITH THE OPAQUE VERSION AS THE FLOOR. Jason, 2026-09-10:
      "Can the nav bar be transparent to some extent?" - asked one message after
      the scrim stopped painting a grey plinth under it, and the two are the same

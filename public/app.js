@@ -52,7 +52,7 @@ const ROUTES = [
    * the live screen instead of building the thing he was pointing at. A landing
    * that scrolls straight into the game IS the game. */
   { id: 'home',      dest: 'home',      screen: 'live-game',       state: 'home',        label: 'Home' },
-  { id: 'live',      dest: 'home',      screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
+  { id: 'live',      dest: 'live',      screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
   { id: 'now',       dest: 'live',      screen: 'l4-now',          state: 'open',        label: 'The call (fixtures)' },
   { id: 'landed',    dest: 'live',      screen: 'l7-result',       state: 'landed',      label: 'Result — landed' },
   { id: 'missed',    dest: 'live',      screen: 'l7-result',       state: 'missed',      label: 'Result — missed' },
@@ -301,6 +301,17 @@ function drawNav(active) {
      * the app had a real one, and nothing caught it because both screens look
      * almost identical — which is precisely why the mock was built. */
     hrefFor: (d) => '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
+  });
+  /* 🔴 THE LIVE TAB SAYS WHERE IT CAME FROM. The front door's College/NFL
+   * buttons also land on #/live, and there the league just picked must win -
+   * so "open the last game you had up" can only be keyed to a tap on THIS
+   * tab. A flag rather than a URL parameter: a parameter would outlive the
+   * navigation, which is exactly the ?game= bug fixed an hour ago. And a tap
+   * on the tab you are already on changes no hash, so it re-mounts by hand. */
+  const liveTab = nav.querySelector('[data-dest="live"]');
+  if (liveTab) liveTab.addEventListener('click', () => {
+    window.__agGoLast = true;
+    if (location.hash === '#/live') mount();
   });
   document.querySelector('.ag-shell').appendChild(nav);
 }
