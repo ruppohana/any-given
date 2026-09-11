@@ -2393,8 +2393,15 @@ function paint(wrap) {
    * explainer under the league question - could never execute. The gates stay
    * for every OTHER route, where landing on a game with no sport chosen still
    * has to ask rather than guess. */
-  if (!S.isHome && !S.mode) { wrap.appendChild(modeCard(wrap)); return; }
-  if (!S.isHome && !S.sport) { wrap.appendChild(sportCard(wrap)); return; }
+  /* 🔴 THE LIVE TAB ALREADY ANSWERED "WHAT ARE YOU HERE FOR?" Jason, 2026-09-10:
+   * "i dont remember it having a duplicate of the 'what are you here for'". A
+   * phone with nothing stored hit these gates on the Live tab and got Home's
+   * questions a second time. Tapping Live IS the answer, so it is assumed for
+   * this screen - and NOT stored, so Home still asks. The league falls back to
+   * college, the product's default, rather than asking Home's second question
+   * here too; picking any game from the strip still sets it from the game. */
+  if (!S.isHome && !S.mode) S.mode = 'live';
+  if (!S.isHome && !S.sport) S.sport = 'college-football';
 
   /* 🔴 HOME IS A DESTINATION, AND IT STOPS HERE. Jason said "Home should start
    * here" three times and each time I put the hub ON TOP of the game — which is
