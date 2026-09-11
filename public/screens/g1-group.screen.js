@@ -382,12 +382,11 @@ function startForm(host, data) {
   const sw = el('div', 'g1-switch-row');
   const swText = el('div', 'g1-switch-text');
   swText.appendChild(el('span', 'g1-switch-label', 'Pick against the spread'));
-  /* 🔴 SAYS ONLY WHAT IS TRUE. `/api/pool/standings` scores every group straight
-   * up and never reads `ats` (session, 2026-09-11) - whether it should is open
-   * (wiki conflicts #14). Until that is decided the switch is saved and the page
-   * says it does not change the score, the same sentence g2-commish uses. */
-  swText.appendChild(el('span', 'g1-note', 'Saved with the group. For now the standings count '
-    + 'who wins either way. The commissioner can change it later.'));
+  /* The commissioner's option - Jason, 2026-09-11: "the comish has the option."
+   * `/api/pool/standings` scores the cover when it is on, against the line the
+   * pick was made at. */
+  swText.appendChild(el('span', 'g1-note', 'Off: pick who wins. On: your team has to cover the '
+    + 'spread you picked at. The commissioner can change it later.'));
   const swB = btn('g1-switch', '', () => { form.ats = !form.ats; swB.setAttribute('aria-checked', String(form.ats)); });
   swB.setAttribute('role', 'switch');
   swB.setAttribute('aria-checked', 'false');

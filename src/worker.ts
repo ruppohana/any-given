@@ -903,7 +903,7 @@ export default {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
            ON CONFLICT(id) DO UPDATE SET
              kickoff_utc = excluded.kickoff_utc,
-             spread      = excluded.spread,
+             spread      = COALESCE(excluded.spread, game.spread),
              status      = excluded.status,
              home_score  = excluded.home_score,
              away_score  = excluded.away_score`
@@ -924,7 +924,9 @@ export default {
         return json({ ok: true, wrote: Math.min(list.length, 200) });
       }
 
-      /* The board. Straight up, which is what a group pool is (Jason,
+      /* The board. Straight up unless a group's commissioner turns against-the-
+       * spread on (Jason, 2026-09-11: "the comish has the option" - see the
+       * scoring below). What that amends was 09-09's, word for word (Jason,
        * 2026-09-09) - the against-the-spread product is the week's card and it
        * is not a pool. */
       /* 🔴 YOUR OWN PICKS IN ONE GROUP. A group's picks are its own since
@@ -995,25 +997,45 @@ export default {
          * mode), migration 0007 seeded every group with its members' world picks
          * so no board reset, and the world board still reads the world pool. */
         const pickPool = poolId.startsWith('world-') ? worldId : poolId;
+        let ats = false;
         try {
-          const meta = await env.DB.prepare('SELECT week FROM pool WHERE id = ?')
+          const meta = await env.DB.prepare('SELECT week, ats FROM pool WHERE id = ?')
             .bind(poolId).first() as any;
           if (meta && Number.isInteger(meta.week)) week = meta.week;
+          if (meta && Number(meta.ats) === 1 && !poolId.startsWith('world-')) ats = true;
         } catch { /* a pool with no row cannot be narrowed */ }
 
+        /* 🔴 AGAINST THE SPREAD IS THE COMMISSIONER'S OPTION. Jason, 2026-09-11:
+         * "the comish has the option." With the group's switch on, a pick wins
+         * when its side COVERS, the same arithmetic as `resolveGame` in
+         * src/lib/pool.ts: home score + home spread - away score.
+         *
+         * The line is the one the pick was made at (`pick.spread_at`, what the
+         * row showed when it was tapped), then the game's, then none - and no line
+         * scores straight up, as pool.ts does. Not the game's line first: the
+         * slate cron rewrites `game.spread` every ten minutes, so it is a moving
+         * number, and a person should be held to the line they saw.
+         *
+         * A margin of exactly zero is a push, and a push is the one void path: it
+         * counts for nobody - not a win, not a loss, not played. Straight up, zero
+         * is a tie and voids the same way. The fragment is a constant chosen here,
+         * never built from the request. */
+        const margin = ats
+          ? '(g.home_score + COALESCE(p.spread_at, g.spread, 0) - g.away_score)'
+          : '(g.home_score - g.away_score)';
         const rows = await env.DB.prepare(
           `SELECT m.user_id AS id,
                   m.display_name AS name,
                   COUNT(p.game_id) AS picks,
                   SUM(CASE WHEN g.status = 'final' AND g.void = 0
                             AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-                            AND g.home_score <> g.away_score
-                            AND p.side = CASE WHEN g.home_score > g.away_score
+                            AND ${margin} <> 0
+                            AND p.side = CASE WHEN ${margin} > 0
                                               THEN 'home' ELSE 'away' END
                        THEN 1 ELSE 0 END) AS wins,
                   SUM(CASE WHEN g.status = 'final' AND g.void = 0
                             AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-                            AND g.home_score <> g.away_score
+                            AND ${margin} <> 0
                        THEN 1 ELSE 0 END) AS played
              FROM member m
              LEFT JOIN pick p
@@ -1026,7 +1048,7 @@ export default {
             LIMIT 200`
         ).bind(pickPool, sport, week, week, poolId).all();
 
-        return json({ pool: poolId, sport, week, rows: rows.results || [],
+        return json({ pool: poolId, sport, week, ats, rows: rows.results || [],
                       fetchedAt: Date.now() });
       }
 

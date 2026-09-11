@@ -386,7 +386,10 @@ export async function captureSlate(env: any, sport: string, season: number) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
          ON CONFLICT(id) DO UPDATE SET
            kickoff_utc = excluded.kickoff_utc,
-           spread      = excluded.spread,
+           /* A missing line never blanks a known one: the odds feed can drop a
+              game's line once it is final, and a group against the spread
+              falls back to this line for any pick made without one. */
+           spread      = COALESCE(excluded.spread, game.spread),
            status      = excluded.status,
            home_score  = excluded.home_score,
            away_score  = excluded.away_score,

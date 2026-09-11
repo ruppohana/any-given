@@ -235,18 +235,24 @@ test('scoring: a right pick counts one, only final games with a winner count', (
   const sql = WORKER.slice(WORKER.indexOf("if (p === '/api/pool/standings')"),
                            WORKER.indexOf("if (p === '/api/slate')"));
   assert.match(sql, /SUM\(CASE WHEN g\.status = 'final' AND g\.void = 0/);
-  assert.match(sql, /AND g\.home_score <> g\.away_score/);
+  /* A zero margin - a tie straight up, a push against the spread - counts for
+   * nobody: it is in neither wins nor played. */
+  assert.match(sql, /AND \$\{margin\} <> 0/);
+  assert.match(sql, /: '\(g\.home_score - g\.away_score\)'/);
   assert.match(sql, /ORDER BY wins DESC/);
   assert.match(sql, /FROM member m\s+LEFT JOIN pick p/);
   /* Cancelled and postponed games never reach 'final' in the cron. */
   assert.match(CRON, /const status = statusName === 'STATUS_FINAL' \? 'final'\s*: statusName === 'STATUS_SCHEDULED' \? 'scheduled' : 'in_progress';/);
 
-  /* 🔴 THE GAP THIS PAGE LEAVES OPEN, AS A TRIPWIRE. The standings do not read
-   * the group's against-the-spread setting, so the page says nothing about how a
-   * spread is scored, and no push. The day this fails, the standings learned the
-   * spread: add the sentence to sScoring and the push to its void line. */
-  assert.doesNotMatch(sql, /spread|\bats\b/,
-    'the standings now read the spread - the page must say how it scores');
+  /* 🔴 THE TRIPWIRE FIRED, AS WRITTEN. It pinned that the standings ignored the
+   * spread, so the page said nothing about it. On 2026-09-11 the commissioner's
+   * switch became scored ("the comish has the option") and this failed - so the
+   * page says how the spread scores and the push is in its void line, and this
+   * now pins both halves: the scorer reads the group's line, and the page says so. */
+  assert.match(sql, /COALESCE\(p\.spread_at, g\.spread, 0\)/, 'scored against the line the pick was made at');
+  assert.match(sql, /Number\(meta\.ats\) === 1/, 'only when the commissioner turned it on');
+  assert.match(JS, /covers the spread it was picked at/, 'the page says how the spread scores');
+  assert.match(JS, /lands ' \+\s*'exactly on the spread never counts/, 'the push is in the void line');
 });
 
 test('the commissioner: settings, invites, mute, remove - and removal sticks', () => {

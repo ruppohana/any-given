@@ -14,17 +14,16 @@
  * 🔴 EVERY RULE HERE IS TRUE OF THE CODE AS IT STANDS, NOT OF THE BRIEF. Two
  * places the brief and the code part company, and the page follows the code:
  *
- *  1. AGAINST THE SPREAD IS A SETTING, NOT A SCORING RULE - YET. The commissioner
- *     can switch it (src/groups.ts /api/group/settings) and the pick stores the
- *     line, but /api/pool/standings counts a pick right when the team won the
- *     game outright and never reads `ats`. So this page names the setting and says
- *     nothing about how a spread is scored. The test pins that gap; when the
- *     standings learn the spread, it fails and this page gets the sentence.
- *  2. NO PUSH, AND NO POSTPONEMENT, IN THE VOID LINE. With no spread scoring there
- *     is no push; and the slate cron stores a postponed game as in progress, so if
- *     it is later played under the same id it counts. What is certain from the SQL
- *     is that a game counts only once it is final with a winner - a cancelled game
- *     and a tie never do - and that is what the page says.
+ *  1. AGAINST THE SPREAD IS THE COMMISSIONER'S OPTION, AND IT IS SCORED. Jason,
+ *     2026-09-11: "the comish has the option." The commissioner switches it
+ *     (src/groups.ts /api/group/settings) and /api/pool/standings scores the cover
+ *     against the line the pick was made at (`pick.spread_at`, then the game's).
+ *     This page used to leave the spread out because the scorer ignored it; the
+ *     test that pinned that gap fired, as it was written to, and the sentence is in.
+ *  2. A PUSH IS IN THE VOID LINE; A POSTPONEMENT IS NOT. A margin of exactly zero
+ *     against the line counts for nobody, the same as a tie. The slate cron stores
+ *     a postponed game as in progress, so if it is later played under the same id
+ *     it counts - so the page promises nothing about postponements.
  *
  * 🔴 THE WORDS AND NUMBERS ARE NOT TYPED HERE. The kindness line and every limit
  * are read out of src/lib/groups.ts, the same module the server enforces them
@@ -174,13 +173,20 @@ function sScoring() {
     'takes nothing away.'));
   box.appendChild(para('Points are the only score in a group.'));
 
+  box.appendChild(subHead('Straight up, or against the spread'));
+  /* The commissioner's option (Jason, 2026-09-11). The line is the pick's own -
+   * `pick.spread_at` in /api/pool/standings - see the header. */
+  box.appendChild(para('Straight up is the default: a pick is right when its team wins. ' +
+    'When the commissioner turns against the spread on, a pick is right when its team ' +
+    'covers the spread it was picked at - the line on the game when you tapped it.'));
+
   box.appendChild(subHead('When a game does not count'));
   /* "No points won and none lost, for anybody who picked it" is s6-rules sVoid's
-   * sentence. The push and the postponement are left out on purpose - see the
-   * header. */
-  box.appendChild(para('A game counts only once it is final and somebody won it. A game ' +
-    'that is cancelled, or ends level, never counts. No points won and none lost, for ' +
-    'anybody who picked it.'));
+   * sentence. The postponement is left out on purpose - see the header. */
+  box.appendChild(para('A game counts only once it is final and somebody won it - against ' +
+    'the spread, once somebody covered. A game that is cancelled, ends level, or lands ' +
+    'exactly on the spread never counts. No points won and none lost, for anybody who ' +
+    'picked it.'));
 
   box.appendChild(subHead('The standings'));
   box.appendChild(bullets([

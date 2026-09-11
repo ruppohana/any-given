@@ -387,7 +387,7 @@ export function render(root, data, state) {
     sw.appendChild(track);
     /* Worded to what the server does today - see the header of this file. */
     const note = el('p', 'g2-note',
-      'Sets whether this group picks against the spread. For now the group standings count the straight-up winner either way.');
+      'On: a pick counts when its team covers the spread it was picked at, and a spread that lands exactly counts for nobody. Off: pick who wins.');
     const m = msgLine();
     sw.addEventListener('click', async () => {
       if (sw.disabled) return;

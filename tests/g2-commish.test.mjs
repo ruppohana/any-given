@@ -300,13 +300,18 @@ test('rename posts {id, name}, drops the cached group list, and shows a server m
   assert.match(text(r2.root), /A group needs a name\./);
 });
 
-test('the spread switch posts {id, ats} and does not promise a scoring change', async () => {
+test('the spread switch posts {id, ats} and says what it scores', async () => {
+  /* Scored since 2026-09-11 (Jason: "the comish has the option"): against the
+   * line each pick was made at, and a push counts for nobody. The sentence used
+   * to say the standings ignored it, which was true until then. */
   world();
   ROUTES['/api/group/settings'] = () => reply(200, { ok: true, group: { id: G.id, name: G.name, ats: true } });
   const { root } = await mount();
   const sw = byTag(root, 'button').find((b) => b.attrs.role === 'switch');
   assert.equal(sw.attrs['aria-checked'], 'false');
-  assert.match(text(root), /standings count the straight-up winner either way/);
+  assert.match(text(root), /covers the spread it was picked at/);
+  assert.match(text(root), /lands exactly counts for nobody/);
+  assert.doesNotMatch(text(root), /either way/, 'the old "does not change the score" line is gone');
   await sw.fire('click');
   assert.deepEqual(CALLS.find((c) => c.path === '/api/group/settings').body, { id: G.id, ats: true });
 });
