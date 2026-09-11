@@ -21,6 +21,7 @@ import { readLive, settleAgainst, type LiveState } from './live.ts';
 import { parseSlate, type Sport } from './feed/espn.ts';
 import { handleAuth, requireIdentity, sessionAccount } from './auth.ts';
 import { icsFromQuery } from './lib/ics.ts';
+import { handleGroups } from './groups.ts';
 
 export interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
@@ -186,6 +187,10 @@ export default {
       /* ---- email sign-in: /api/auth/start, /verify, /me, /logout ---- */
       const authRes = await handleAuth(req, env, p, json);
       if (authRes) return authRes;
+
+      /* ---- group pools: /api/group/* (src/groups.ts) - 2026-09-11 ---- */
+      const groupRes = await handleGroups(req, env, p, json);
+      if (groupRes) return groupRes;
 
       /* ---- the alert bell: one game as a calendar event ----
        * Jason, 2026-09-11: "yes, calendar for now". Stateless - the bell's link
@@ -598,9 +603,21 @@ export default {
           return json({ error: 'that game has kicked off', locked: true }, 409);
         }
 
+        /* 🔴 A GROUP IS INVITE-ONLY, SO A PICK NEVER JOINS ONE. Jason,
+         * 2026-09-11: "invite people to this invite only group". Picks carry the
+         * group's id now (a dropdown per group), and a pick into a group you are
+         * not in - or were removed from - is refused rather than quietly making
+         * you a member. The world pool keeps its implicit join. */
+        if (!poolId.startsWith('world-')) {
+          const inIt = await env.DB.prepare(
+            'SELECT 1 AS x FROM member WHERE pool_id = ? AND user_id = ?'
+          ).bind(poolId, userId).first();
+          if (!inIt) return json({ error: 'not_a_member', message: 'You are not in this group.' }, 403);
+        }
+
         /* Membership is implicit: your first pick joins you. An explicit join
          * step in front of a pick is the account wall wearing a different hat. */
-        await env.DB.prepare(
+        if (poolId.startsWith('world-')) await env.DB.prepare(
           `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
            VALUES (?, ?, ?, ?, 'player')
            ON CONFLICT(pool_id, user_id) DO UPDATE SET
@@ -686,6 +703,11 @@ export default {
         const pool = await env.DB.prepare('SELECT id, name, sport FROM pool WHERE id = ?')
           .bind(code).first<{ id: string; name: string; sport: string }>();
         if (!pool) return json({ error: 'no pool with that code' }, 404);
+        /* Removed by the commissioner means the code does not let you back in. */
+        const gone = await env.DB.prepare(
+          'SELECT 1 AS x FROM pool_removed WHERE pool_id = ? AND user_id = ?'
+        ).bind(code, userId).first();
+        if (gone) return json({ error: 'removed', message: 'The commissioner removed you from this group.' }, 403);
 
         await env.DB.prepare(
           `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
@@ -817,6 +839,14 @@ export default {
          * office group and your family group both score it. A second set of
          * picks per group would be a second slate to fill in. */
         const worldId = sport === 'nfl' ? 'world-nfl' : 'world-cfb';
+        /* 🔴 REVERSED 2026-09-11: A GROUP SCORES ITS OWN PICKS. Jason: "if i am
+         * part of more than one group, then i need a dropdown to enter different
+         * selections for the different groups." The note above was the right
+         * product for one slate; it is not for a person in two groups who picks
+         * differently in each. Picks now carry the group's id (the slate's group
+         * mode), migration 0007 seeded every group with its members' world picks
+         * so no board reset, and the world board still reads the world pool. */
+        const pickPool = poolId.startsWith('world-') ? worldId : poolId;
         try {
           const meta = await env.DB.prepare('SELECT week FROM pool WHERE id = ?')
             .bind(poolId).first() as any;
@@ -846,7 +876,7 @@ export default {
             GROUP BY m.user_id, m.display_name
             ORDER BY wins DESC, picks DESC
             LIMIT 200`
-        ).bind(worldId, sport, week, week, poolId).all();
+        ).bind(pickPool, sport, week, week, poolId).all();
 
         return json({ pool: poolId, sport, week, rows: rows.results || [],
                       fetchedAt: Date.now() });

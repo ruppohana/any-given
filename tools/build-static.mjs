@@ -51,8 +51,13 @@ async function walk(dir) {
 const retarget = (src) => src.replace(
   /(from\s+['"])(\.{1,2}\/[^'"]+|\/[^'"]+)\.ts(['"])/g, '$1$2.js$3');
 
-await rm(DIST, { recursive: true, force: true });
+/* 🔴 EMPTY dist/, DO NOT DELETE IT. `wrangler dev` holds the folder open to serve
+ * it, and removing the directory itself fails with EBUSY on Windows - found
+ * 2026-09-11, when the ship died mid-build while a local dev server was up for the
+ * group screens. Clearing its contents works with the server running, and the
+ * server picks up what it finds. */
 await mkdir(DIST, { recursive: true });
+for (const e of await readdir(DIST)) await rm(join(DIST, e), { recursive: true, force: true });
 
 /* 1 - the client, verbatim except for the import specifiers. */
 for (const file of await walk(join(ROOT, 'public'))) {
