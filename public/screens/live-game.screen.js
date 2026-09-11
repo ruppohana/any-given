@@ -4107,10 +4107,52 @@ const ALSO_TTL = 10 * 60 * 1000;
  * Returns the cached slate only when it is for the league of the game on
  * screen; kicks off a background fetch when it is missing, stale or for the
  * other league, and repaints when it lands. */
+/* 🔴 A MINUTE WHILE ANYTHING IS ON. Jason, 2026-09-11, comparing with CBS: "4
+ * games vs 3 and the scores". The list kept its copy of the slate for ten
+ * minutes, so Rutgers at Boston College, kicked off since, was not live yet and
+ * every score was ten minutes old. While a game is on or about to start, the
+ * copy is a minute old at most; on a quiet night it stays ten. */
+function alsoTtl(c, now) {
+  const busy = (c.games || []).some((g) => isLive(g, now)
+    || (g.kickoffUtc && Math.abs(g.kickoffUtc - now) < 15 * 60 * 1000));
+  return busy ? 60 * 1000 : ALSO_TTL;
+}
+
+/* Live by the clock as well as by the slate. The slate is captured every ten
+ * minutes, so a game past its kickoff and not over is on, whatever the last
+ * capture said - the same rule the poller gate uses (pollDecision). */
+function isLive(g, now) {
+  if (g.status === 'in_progress') return true;
+  return g.status !== 'final' && g.status !== 'void' && !!g.kickoffUtc
+    && g.kickoffUtc <= now && now - g.kickoffUtc < 5 * 60 * 60 * 1000;
+}
+
+/* 🔴 A LIVE CARD SHOWS THE GAME'S OWN SCORE, NOT THE SLATE'S. Jason saw 3-10 and
+ * 0-14 while CBS said 3-17 and 0-21: the slate's score is a capture. Every live
+ * game has a poller holding the real number, so the card asks it - at most every
+ * 20 seconds a game - and repaints when the answer lands. A game its poller says
+ * is over drops out of Live now. */
+const LIVE_SCORE = {};
+function liveScore(wrap, sport, g) {
+  const k = sport + ':' + g.id;
+  const c = LIVE_SCORE[k];
+  if ((!c || Date.now() - c.at > 20000) && !(c && c.busy)) {
+    LIVE_SCORE[k] = { ...(c || { at: 0 }), busy: true };
+    fetch('/api/state/' + k)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        LIVE_SCORE[k] = d ? { at: Date.now(), a: d.awayScore, h: d.homeScore, status: d.status } : { at: Date.now() };
+        if (d) { S.lastSig = null; paint(wrap); }
+      })
+      .catch(() => { LIVE_SCORE[k] = { at: Date.now() }; });
+  }
+  return c && c.a != null ? c : null;
+}
+
 function alsoFor(wrap, now) {
   const sport = (S.key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
   const cached = S.also;
-  if (!cached || cached.sport !== sport || (now - cached.at) > ALSO_TTL) {
+  if (!cached || cached.sport !== sport || (now - cached.at) > alsoTtl(cached, now)) {
     if (!S.alsoBusy) {
       S.alsoBusy = true;
       fetch('/api/state/slate:' + sport + ':2026:' + (SLATE_WEEK[sport] || 1))
@@ -4194,7 +4236,7 @@ function nextList(wrap, state, now, everyGame) {
   const games = (also.games || [])
     .filter((g) => g && g.id && g.status !== 'final' && g.status !== 'void' && (everyGame || String(g.id) !== here))
     .sort((a, b) => {
-      const live = (x) => (x.status === 'in_progress' ? 0 : 1);
+      const live = (x) => (isLive(x, now) ? 0 : 1);
       return live(a) - live(b) || a.kickoffUtc - b.kickoffUtc;
     });
   if (!games.length) return;
@@ -4216,18 +4258,20 @@ function nextList(wrap, state, now, everyGame) {
     let lastDay = null;
     for (const g of list) nextCard(box, g, sport, dayOf, (day) => {
       if (day !== lastDay) { box.appendChild(el('div', 'lg-next-day', day)); lastDay = day; }
-    });
+    }, wrap, now);
     wrap.appendChild(box);
   };
-  section('Live now', 'Live games', games.filter((g) => g.status === 'in_progress'));
-  section('Next', 'Next games', games.filter((g) => g.status !== 'in_progress'));
+  const over = (g) => (LIVE_SCORE[sport + ':' + g.id] || {}).status === 'final';
+  section('Live now', 'Live games', games.filter((g) => isLive(g, now) && !over(g)));
+  section('Next', 'Next games', games.filter((g) => !isLive(g, now)));
 }
 
 /** One small game card in the Live now / Next lists. `dayLabel` is called for
  *  an upcoming game only - a live one needs no day. */
-function nextCard(box, g, sport, dayOf, dayLabel) {
+function nextCard(box, g, sport, dayOf, dayLabel, wrap, now) {
   {
-    const live = g.status === 'in_progress';
+    const live = isLive(g, now);
+    const ls = live ? liveScore(wrap, sport, g) : null;
     if (!live) dayLabel(dayOf(g.kickoffUtc));
 
     const teams = {};
@@ -4254,7 +4298,7 @@ function nextCard(box, g, sport, dayOf, dayLabel) {
     card.appendChild(side(g.awayTeamId, a));
     const mid = el('span', 'lg-next-mid');
     mid.appendChild(el('span', 'lg-next-when num', live
-      ? (g.awayScore ?? 0) + '–' + (g.homeScore ?? 0)
+      ? ((ls ? ls.a : g.awayScore) ?? 0) + '–' + ((ls ? ls.h : g.homeScore) ?? 0)
       : new Date(g.kickoffUtc).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })));
     /* No bell on a game already under way - nothing is left to be reminded of. */
     if (!live) mid.appendChild(bellLink(title, g.kickoffUtc, sport + ':' + g.id, g.venue));
