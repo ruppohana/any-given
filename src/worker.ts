@@ -101,7 +101,11 @@ async function mergeBoard(env: any, key: string, call: any): Promise<void> {
     const k = `board:${key}`;
     const raw = await env.LIVE.get(k);
     const prev = raw ? (JSON.parse(raw).calls || []) : [];
-    const same = (c: any) => c && c.deviceId === call.deviceId && c.afterPlayId === call.afterPlayId;
+    /* Merged on the PERSON where there is one (userId, set since sign-in was
+       required) and on the phone for calls made before that - so one account
+       on two phones is one row, and old rows still merge as they always did. */
+    const who = (c: any) => (c && (c.userId || c.deviceId)) || '';
+    const same = (c: any) => c && who(c) === who(call) && c.afterPlayId === call.afterPlayId;
     const calls = prev.filter((c: any) => !same(c));
     calls.push(call);
     /* Same 6-hour life as a call record. A board that outlived its calls would
@@ -436,14 +440,26 @@ export default {
           key?: string; deviceId?: string; name?: string;
           afterPlayId?: string; type?: string; choice?: string; stake?: number; p?: number;
         };
-        if (!b.key || !b.deviceId || !b.afterPlayId || !b.type || !b.choice) {
-          return json({ error: 'key, deviceId, afterPlayId, type and choice are required' }, 400);
+        if (!b.key || !b.afterPlayId || !b.type || !b.choice) {
+          return json({ error: 'key, afterPlayId, type and choice are required' }, 400);
         }
+        /* 🔴 THE FIRST LIVE CALL ASKS FOR SIGN-IN TOO. Jason, 2026-09-10: "yes,
+         * gate the first live call too." Same rule as a pick, from the same
+         * function: a session's account when one is sent, a 401 email_required
+         * (or profile_required) when REQUIRE_EMAIL is on and there is none. The
+         * call then belongs to the ACCOUNT and shows under its handle - nobody
+         * can post a call as somebody else any more than a pick. */
+        const who = await requireIdentity(req, env, b.deviceId, json);
+        if ('error' in who) return who.error;
+        const userId = who.userId;
+        const me = await sessionAccount(req, env);
+        const callerName = ((me && me.handle) || b.name || 'Someone').slice(0, 24);
         /* 🔴 ONE CALL PER SNAP, enforced by the KEY rather than by a check.
          * The id is the game, the person and the play they called after - so a
          * second tap on the same snap overwrites rather than double-counting, and
-         * requirement 7.4 holds without the server having to remember anything. */
-        const id = `call:${b.key}:${b.deviceId}:${b.afterPlayId}`;
+         * requirement 7.4 holds without the server having to remember anything.
+         * Keyed by the ACCOUNT, so one person on two phones is still one call. */
+        const id = `call:${b.key}:${userId}:${b.afterPlayId}`;
         const existing = await env.LIVE.get(id);
         if (existing) {
           /* 🔴 A LATE NAME MAY LAND. THE PICK MAY NOT.
@@ -463,7 +479,7 @@ export default {
            * and the play, so a second tap addresses the same record by
            * construction. */
           const prev = JSON.parse(existing);
-          const name = (b.name || '').slice(0, 24);
+          const name = callerName === 'Someone' ? '' : callerName;
           if (name && name !== prev.name) {
             const renamed = { ...prev, name };
             await env.LIVE.put(id, JSON.stringify(renamed), { expirationTtl: 60 * 60 * 6 });
@@ -473,8 +489,10 @@ export default {
           return json({ ok: true, alreadyCalled: true, call: prev });
         }
 
+        /* deviceId stays the PHONE that made the call - the screen finds its own
+           rows by it - and userId is the person, which the board merges on. */
         const call = {
-          key: b.key, deviceId: b.deviceId, name: (b.name || 'Someone').slice(0, 24),
+          key: b.key, deviceId: String(b.deviceId || userId), userId, name: callerName,
           afterPlayId: b.afterPlayId, type: b.type, choice: b.choice,
           stake: Math.max(0, Math.min(25, Number(b.stake) || 10)),
           p: typeof b.p === 'number' ? b.p : null,

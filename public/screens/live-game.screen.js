@@ -3301,6 +3301,22 @@ function paint(wrap) {
  * the page, as a real field, and skippable.
  */
 async function makeCall(wrap, type, offer, afterPlay, state) {
+  /* 🔴 SIGN IN AT THE FIRST CALL. Jason, 2026-09-10: "yes, gate the first live
+   * call too." When the server requires an account and this phone has no
+   * signed-in handle, the tap opens the sign-in sheet instead of calling.
+   *
+   * 🔴 AND THE CALL IS NOT PLACED FOR THEM AFTERWARDS. Signing in can take
+   * longer than the gap between snaps; auto-placing the call they tapped a
+   * minute ago could land it on a snap that has already happened. So the
+   * screen repaints on the question that is open NOW and they tap again -
+   * one extra tap, once, instead of a call made against the wrong play. */
+  let signedIn = false;
+  try { signedIn = !!(localStorage.getItem('ag.session') && localStorage.getItem('ag.handle')); } catch { /* private */ }
+  if (window.agAuthRequired && !signedIn && window.agOpenSignIn) {
+    await window.agOpenSignIn();
+    paint(wrap);
+    return;
+  }
   S.calls[afterPlay.id] = {
     /* 🔴 THE CALL REMEMBERS WHICH GAME IT WAS MADE IN. Without this the bank
        cannot be per game, because a play id alone does not say what it
@@ -3317,10 +3333,13 @@ async function makeCall(wrap, type, offer, afterPlay, state) {
   store.set('calls', S.calls);
   paint(wrap);
   try {
-    await fetch('/api/call', {
+    /* Through the sign-in sheet's fetch, so the session goes with the call. */
+    let handle = '';
+    try { handle = localStorage.getItem('ag.handle') || ''; } catch { /* private */ }
+    await (window.agApiFetch || fetch)('/api/call', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        key: S.key, deviceId: deviceId(), name: S.name,
+        key: S.key, deviceId: deviceId(), name: handle || S.name,
         afterPlayId: afterPlay.id, type: type.id, choice: offer.choice.id,
         stake: S.stake, p: offer.p
       })
