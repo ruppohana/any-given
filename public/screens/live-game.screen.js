@@ -2851,7 +2851,7 @@ function paint(wrap) {
      * six rows of other fixtures. A list of what else is on is a browsing
      * aid; it never outranks the two things this screen is asking you to do. */
     alsoOn(wrap, state, now);
-    wrap.appendChild(adSlot('banner', 'Your ad here · reserved, nothing sold yet'));
+    wrap.appendChild(adSlot('banner'));
     return;
   }
 

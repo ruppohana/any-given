@@ -41,28 +41,35 @@ const SHAPES = {
  * @param note   what would go here, in plain words, so the placeholder is
  *               self-explaining to anybody who opens the app before it sells
  */
+/* 🔴 THE EMPTY SLOT SELLS ITSELF. Jason, 2026-09-10: "change this to Banner -
+ * Reserved, Your name here. and then if you click, have it send an email".
+ * A tap opens a mail to Jason - the same address the privacy page publishes.
+ * Still no network, no tag, no script: a mailto link is not an ad. */
+const AD_MAIL = 'mailto:ruppohana@gmail.com?subject=' + encodeURIComponent('Advertising on Any Given');
+
 export function adSlot(kind, note) {
   const shape = SHAPES[kind] || SHAPES.inline;
-  const box = document.createElement('div');
+  const box = document.createElement('a');
   box.className = 'ag-ad ag-ad--' + kind;
+  box.href = AD_MAIL;
   box.style.minHeight = shape.h + 'px';
   /* 🔴 IT ANNOUNCES ITSELF AS EMPTY. A grey rectangle with no words reads as a
    * broken image or a failed load, and somebody will report it as a bug. */
-  box.setAttribute('role', 'note');
-  box.setAttribute('aria-label', 'Advertising space, currently empty');
+  box.setAttribute('aria-label', 'Advertise here - email Any Given');
 
   const l = document.createElement('span');
   l.className = 'ag-ad-l';
   l.textContent = 'AD SPACE';
   const n = document.createElement('span');
   n.className = 'ag-ad-n';
-  n.textContent = note || `${shape.label} · reserved, nothing sold yet`;
+  n.textContent = note || `${shape.label} - Reserved, Your name here.`;
   box.append(l, n);
   return box;
 }
 
 export const AD_CSS = `
 .ag-ad { display: grid; place-content: center; gap: 2px; text-align: center;
+  text-decoration: none; cursor: pointer;
   border: 1px dashed var(--line); border-radius: 10px; color: var(--dim);
   background: color-mix(in srgb, var(--card) 60%, transparent); }
 .ag-ad-l { font-size: 10px; font-weight: 800; letter-spacing: .1em; }
