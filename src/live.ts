@@ -286,7 +286,9 @@ export function readDrives(summary: any): LiveDrive[] {
  * has no star rather than a wrong one - 7.2's rule is that the parser says
  * who the play was about, and "nobody" is an answer where "No Huddle" is a
  * lie. */
-const NOT_A_PLAYER = /^(?:No Huddle|No Good|Shotgun|Pistol|Under Center|Good|Timeout|Penalty|End)\b/i;
+/* "Injury Update" joined the list the same night - the feed writes injury
+   notices as plays, and one came through as a rusher. */
+const NOT_A_PLAYER = /^(?:No Huddle|No Good|Shotgun|Pistol|Under Center|Good|Timeout|Penalty|End|Injury|Official|Two-Minute)\b/i;
 const FORMATION = /\(?\b(?:No Huddle|Shotgun|Pistol|Under Center)\b(?:[\s,-]*(?:No Huddle|Shotgun|Pistol|Under Center)\b)*\)?[\s,-]*/gi;
 
 function starOf(text: string, typeText: string, offenseTeamId: string) {

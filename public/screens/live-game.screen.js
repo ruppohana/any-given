@@ -4146,7 +4146,7 @@ function pregame(state, now, wrap) {
  * name shaped like one ("B.Corum", "N.Thomas") is ever put in a sentence. */
 /* A person: "B.Corum" (live grammar) or "Bryce Young" (the 2024-25 grammar,
    see BUILD-BRIEF 7.1) - and never a formation or a result word. */
-const REAL_NAME = /^(?!(?:No Huddle|No Good|Shotgun|Pistol|Under Center|Good|Timeout|Penalty|End)\b)[A-Z][A-Za-z'-]*(?:\.\s?|\s)[A-Z][A-Za-z'-]+/;
+const REAL_NAME = /^(?!(?:No Huddle|No Good|Shotgun|Pistol|Under Center|Good|Timeout|Penalty|End|Injury|Official|Two-Minute)\b)[A-Z][A-Za-z'-]*(?:\.\s?|\s)[A-Z][A-Za-z'-]+/;
 function nuggets(state) {
   const out = [];
   const plays = (state && state.plays) || [];
@@ -4193,9 +4193,16 @@ function nuggets(state) {
     for (const t of (g.teams || [])) byId[String(t.id)] = t;
     const home = byId[String(g.homeTeamId)], away = byId[String(g.awayTeamId)];
     const hn = nick(g.homeTeamId) || (home && home.short), an = nick(g.awayTeamId) || (away && away.short);
-    if (home && away && home.record && away.record) out.push(`They came in ${an} ${away.record}, ${hn} ${home.record}.`);
+    /* 🔴 NOT A RECORD NOBODY HAS PLAYED FOR. Jason, 2026-09-10, on a timeout
+       in week one: "This is a stupid fact." It read "They came in 49ers 0-0,
+       Rams 0-0." - true, and it says nothing. A record only counts as a
+       nugget once both teams have games in it. */
+    const played = (r) => String(r || '').split('-').reduce((a, v) => a + (Number(v) || 0), 0);
+    if (home && away && played(home.record) > 0 && played(away.record) > 0) {
+      out.push(`The ${an} came in ${away.record}; the ${hn} ${home.record}.`);
+    }
     for (const [t, n] of [[away, an], [home, hn]]) {
-      if (t && t.rank) out.push(`${n} are ranked #${t.rank}${t.conference ? ' in the ' + t.conference + ' - and the country' : ''}.`.replace(' in the ' + (t.conference || '') + ' - and the country', ''));
+      if (t && t.rank) out.push(`${n} came in ranked #${t.rank} in the country.`);
       if (t && t.form && /^[WLT]{3,}$/.test(t.form)) out.push(`${n}' last ${t.form.length}: ${t.form.split('').join(' ')}.`);
     }
     const hs = Number(state.homeScore) || 0, as = Number(state.awayScore) || 0;
