@@ -5219,7 +5219,9 @@ const CSS = `
    middle of it; the two spans still share a line. */
 .lg-stakechip { display: inline-flex; align-items: center; gap: 6px; font: inherit;
   min-height: var(--tap-min); padding: 4px 14px; margin: 2px 0 6px;
-  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  /* 10px, not a capsule - Jason, 2026-09-11: "The marbles need to have the
+     radius changed to 10." The same corner as the tiles under it. */
+  border: 1px solid var(--line); border-radius: var(--radius-button);
   background: var(--surface-3); color: var(--fg); }
 .lg-stakechip-n { font-size: var(--t-emph); font-weight: 800; }
 .lg-stakechip-l { font-size: var(--t-micro); color: var(--dim); }
