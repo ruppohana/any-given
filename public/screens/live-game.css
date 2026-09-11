@@ -543,23 +543,9 @@
   letter-spacing: .1em; text-transform: uppercase; color: var(--accent);
   margin-bottom: 3px; }
 
-/* THE GAME SELECTOR — only present when there is more than one game to pick
-   from. See gameStrip() for why. */
-.scr-live-game .lg-games { display: flex; gap: 6px; padding-bottom: 2px; }
-.scr-live-game .lg-gamechip { flex: 0 0 auto; display: grid; justify-items: start;
-  gap: 1px; min-height: var(--tap-min); padding: 6px 12px; font: inherit;
-  text-align: left; background: var(--card); color: var(--fg);
-  border: 1px solid var(--line); border-radius: var(--radius-pill); }
-.scr-live-game .lg-gamechip[data-on="true"] { background: var(--accent);
-  color: var(--on-accent); border-color: var(--accent); }
-.scr-live-game .lg-gamechip-t { font-size: var(--t-micro); font-weight: 800;
-  letter-spacing: .03em; white-space: nowrap; }
-.scr-live-game .lg-gamechip-s { font-size: 10px; color: var(--dim); }
-.scr-live-game .lg-gamechip[data-on="true"] .lg-gamechip-s { color: var(--on-accent); opacity: .85; }
-/* A live game gets the one dot this app uses for "happening now". */
-.scr-live-game .lg-gamechip[data-live="true"] .lg-gamechip-t::before {
-  content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px;
-  border-radius: 50%; background: var(--down); vertical-align: middle; }
+/* The game-selector chip strip that sat here is gone - Jason, 2026-09-11:
+   "i think i like to see removing the top strip." Switching games is the Next
+   list's small cards now; see nextList() in live-game.screen.js. */
 
 /* 🔴 THE MOMENT, WRITTEN ACROSS THE FIELD. Jason, 2026-09-10: "flash
    touchdown on the field when it happens, same with field goal. Same with the

@@ -911,100 +911,9 @@ function armCountdown() {
   }, 1000);
 }
 
-/* 🔴 THE GAME SELECTOR. Jason: "after hitting call it live, what will it look
- * like on days with multiple games within a close time frame and or at the
- * same time." Then: "Make a game selector."
- *
- * The honest answer to the question was that it looked like ONE game, chosen
- * for you. nextGameKey() sorted the week by kickoff and took the first
- * non-final one, which is a sensible rule when a single game is on and an
- * arbitrary one when eight kick within a minute of each other. Sunday would
- * have shown a game nobody picked with no way to leave it.
- *
- * 🔴 IT ONLY DRAWS WHEN THERE IS A CHOICE TO MAKE. One game on the wire and
- * the strip is absent - a picker with a single option is furniture that
- * teaches you to ignore pickers. Thursday and Monday look exactly as they do
- * now; Sunday grows a row.
- *
- * Live games come first and are marked, because that is what somebody opening
- * this screen means by "what is on". Upcoming ones follow in kickoff order so
- * you can arm the next one before it starts. Finals are dropped: there is
- * nothing left to call, and the record of what you called is on the board.
- */
-function gameStrip(wrap) {
-  const also = alsoFor(wrap, Date.now());
-  const games = (also && also.games) || [];
-  const sp = also ? also.sport : S.sport;
-  const mine = games
-    .filter((g) => g && g.id && g.status !== 'final' && g.status !== 'void')
-    .sort((a, b) => {
-      const live = (x) => (x.status === 'in_progress' ? 0 : 1);
-      return live(a) - live(b) || a.kickoffUtc - b.kickoffUtc;
-    });
-  if (mine.length < 2) return null;
-
-  const nowKey = String(S.key || '');
-  const strip = el('div', 'lg-games ag-scroll-x');
-  strip.setAttribute('role', 'group');
-  strip.setAttribute('aria-label', 'Choose a game');
-
-  for (const g of mine) {
-    const key = sp + ':' + g.id;
-    const b = el('button', 'lg-gamechip');
-    b.type = 'button';
-    if (key === nowKey) { b.dataset.on = 'true'; b.setAttribute('aria-current', 'true'); }
-    if (g.status === 'in_progress') b.dataset.live = 'true';
-
-    const byId = {};
-    for (const t of (g.teams || [])) byId[String(t.id)] = t;
-    const away = byId[String(g.awayTeamId)], home = byId[String(g.homeTeamId)];
-    b.appendChild(el('span', 'lg-gamechip-t',
-      ((away && away.abbrev) || '?') + ' @ ' + ((home && home.abbrev) || '?')));
-    /* Live games show the score, upcoming ones the time. The same slot, and
-       it is always the thing you would ask about that game right now. */
-    /* 🔴 THE GAME ON SCREEN TAKES ITS SCORE FROM THE BOARD, NOT THE SLATE.
-     * The slate is a ten-minute cron capture, so on SF at LAR the chip read
-     * 0-0 directly above a scoreboard reading 3-0. The held state is the one
-     * the scoreboard draws - same delay, so the chip cannot spoil a score the
-     * board has not shown yet. Other games have only the slate to go on. */
-    let sc = g;
-    if (key === nowKey && S.raw) {
-      try { sc = held(S.raw, S.delayMs, Date.now()) || g; } catch { sc = g; }
-    }
-    /* The day goes in front of the time. Jason, 2026-09-11, on a strip of
-       4:00 PM chips: "how do i know what date or day of the week these are?"
-       A time alone is ambiguous the moment the strip spans two days. */
-    const kick = new Date(g.kickoffUtc);
-    b.appendChild(el('span', 'lg-gamechip-s num', g.status === 'in_progress'
-      ? ((sc.awayScore ?? 0) + '–' + (sc.homeScore ?? 0))
-      : kick.toLocaleDateString(undefined, { weekday: 'short' }) + ' '
-        + kick.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })));
-
-    b.onclick = () => {
-      if (key === nowKey) return;
-      /* 🔴 FORCED, so refreshKey() stops choosing for them. Without this the
-       * five-minute key refresh would quietly drag the screen back to
-       * whatever it thinks is next, and the person's choice would appear to
-       * undo itself for no visible reason. */
-      S.forced = true;
-      S.key = key;
-      /* Everything held is about the OLD game. Carrying any of it across is
-       * how a board ends up showing one game's score over another's plays. */
-      S.raw = null; S.board = []; S.noGame = false;
-      S.fieldNode = null; FIELD_CAM = null;
-      if (FIELD_RAF) { cancelAnimationFrame(FIELD_RAF); FIELD_RAF = null; }
-      /* Ask the server to make sure something is polling it. The cron starts
-         pollers for live games every ten minutes; this closes the gap for
-         somebody who picks a game in between. */
-      try { fetch('/api/poller/ensure?game=' + encodeURIComponent(g.id)
-        + '&sport=' + encodeURIComponent(sp)).catch(() => {}); } catch { /* offline */ }
-      paint(wrap);
-      poll(wrap);
-    };
-    strip.appendChild(b);
-  }
-  return strip;
-}
+/* The game-selector chip strip (gameStrip) is gone - Jason, 2026-09-11: "i
+ * think i like to see removing the top strip." Switching games is the Next
+ * list's small cards; see nextList(). */
 
 function fieldStrip(state) {
   const si = state && state.situation;
@@ -2390,10 +2299,7 @@ function paint(wrap) {
    * it - plus a league mark that the crests on the scoreboard already make
    * obvious - was 170px of phone between the menu and the game. The game strip
    * is now the first thing under the bar. */
-  if (!S.isHome) {
-    const gs = gameStrip(wrap);
-    if (gs) wrap.appendChild(gs);
-  }
+  /* No game strip under the bar any more (2026-09-11) - see nextList(). */
 
   /* 🔴 HOME IS DECIDED FIRST, BEFORE ANY GAME STATE IS CONSULTED. It used to sit
    * below the loading guard, the no-game branch and the two choice gates, so on
@@ -2913,7 +2819,7 @@ function paint(wrap) {
      * Upcoming card, which pushed the week's card - a primary action - below
      * six rows of other fixtures. A list of what else is on is a browsing
      * aid; it never outranks the two things this screen is asking you to do. */
-    alsoOn(wrap, state, now);
+    nextList(wrap, state, now);
     wrap.appendChild(adSlot('banner'));
     return;
   }
@@ -3353,6 +3259,9 @@ function paint(wrap) {
   }
 
   wrap.appendChild(inviteButton(state));
+  /* The rest of the week, live games first - and the way to switch games now
+   * the strip is gone. */
+  nextList(wrap, state, now);
 
   wrap.appendChild(el('p', 'lg-foot',
     `feed ${age}s old · holding ${state.holding} play${state.holding === 1 ? '' : 's'} behind your ${S.delayMs / 1000}s delay`));
@@ -3689,13 +3598,9 @@ function modeCard(wrap, compact) {
   /* No "What are you here for?" heading on the front door - Jason, 2026-09-11,
    * with the stadium hero above it: "remove the what are you here for?". The
    * hero and the three doors ask the question; the paragraph says the terms. */
-  if (!compact) {
-    c.appendChild(el('p', 'lg-sport-b',
-      'Three ways in. Two of them stake marbles at a price you see before you tap - '
-      + 'one snap by snap while you watch, one across the whole week. The third is '
-      + 'your group, scored in points, with nothing staked. The scores never add'
-      + ' together.'));
-  }
+  /* No "Three ways in..." paragraph either - Jason, 2026-09-11: "get rid of all
+   * of this". The stadium and the three doors are the front door now; each door
+   * carries its own one line, and the rules say the rest. */
 
   /* 🔴 TWO ON THE FIRST CARD, AND THE SEAM IS WHAT IS AT STAKE. Jason,
    * 2026-09-09: "First card, simulated betting or weekly group pools. You pick
@@ -4100,100 +4005,69 @@ function alsoFor(wrap, now) {
   return cached && cached.sport === sport ? cached : null;
 }
 
-function alsoOn(wrap, state, now) {
-  const key = S.key;
-  const sport = (key || '').split(':')[0] === 'nfl' ? 'nfl' : 'college-football';
-  const cached = S.also;
+/* 🔴 NEXT - EVERY OTHER GAME LEFT THIS WEEK, AS SMALL CARDS. Jason, 2026-09-11:
+ * "i think i like to see removing the top strip. change also on sunday to be
+ * next in the list. have all the rest of the week. be small cards with the team
+ * name and logos minimalish. consensed verion of this" - the Upcoming card - and
+ * then "the upcomming next... one is larger... like it is now."
+ *
+ * So the game on screen keeps its big card, and everything else is a list of
+ * small ones under it: live games first with their score, then the rest of the
+ * week in kickoff order, with a day label wherever the day changes. It replaces
+ * BOTH the chip strip that sat under the top bar and the six-row "Also on <day>"
+ * list - they showed the same games twice and disagreed once (the >= fix that
+ * same night). Each card links to its game, which is also how you switch games
+ * now that the strip is gone, live or not.
+ *
+ * The slate comes from alsoFor(), which fetches it in the background and
+ * repaints when it lands; until then there is simply no list. */
+function nextList(wrap, state, now) {
+  const also = alsoFor(wrap, now);
+  if (!also) return;
+  const sport = also.sport;
+  const here = String((S.key || '').split(':')[1] || '');
+  const games = (also.games || [])
+    .filter((g) => g && g.id && g.status !== 'final' && g.status !== 'void' && String(g.id) !== here)
+    .sort((a, b) => {
+      const live = (x) => (x.status === 'in_progress' ? 0 : 1);
+      return live(a) - live(b) || a.kickoffUtc - b.kickoffUtc;
+    });
+  if (!games.length) return;
 
-  /* Refresh in the background when it is missing or stale. It never draws - the
-   * next paint picks it up, which is what keeps this out of the render path. */
-  if (!cached || cached.sport !== sport || (now - cached.at) > ALSO_TTL) {
-    if (!S.alsoBusy) {
-      S.alsoBusy = true;
-      fetch('/api/state/slate:' + sport + ':2026:' + (SLATE_WEEK[sport] || 1))
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!d) return;
-          S.also = { sport, at: Date.now(), games: d.games || [] };
-          /* 🔴 AND WAKE THE SCREEN. The pre-game repaint guard means nothing
-           * redraws while the countdown sits on the same minute - so a card that
-           * arrives after the first paint would never be drawn at all, which is
-           * exactly what happened the first time these two fixes met. A cache
-           * that fills silently on a screen that has stopped repainting is a
-           * feature that works everywhere except in production. */
-          S.lastSig = null;
-          paint(wrap);
-        })
-        .catch(() => {})
-        .then(() => { S.alsoBusy = false; });
-    }
-  }
-  if (!cached || cached.sport !== sport) return;
-
-  /* 🔴 THE SAME DAY FIRST. Jason, 2026-09-09: "Do all the games for the DAY show
-   * up here when there is more than 1?"
-   *
-   * They did not - it was the next three kickoffs, whichever day they landed on,
-   * which is the wrong grouping for the question somebody is actually asking. On
-   * a Wednesday with one opener the answer is "nothing else tonight" and the
-   * card should say so rather than advertising Saturday. On a Saturday with
-   * twenty games the whole point is what else is on TODAY.
-   *
-   * So the list is the rest of THIS day, all of it, and it falls back to the
-   * next day only when today has nothing left. A game at 9am and a game at 8pm
-   * are the same day to a person planning an afternoon. */
-  const dayKey = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
-  const thisDay = dayKey(state.kickoffUtc || now);
-
-  /* 🔴 AT OR AFTER, NOT STRICTLY AFTER. Jason, 2026-09-11: the strip at the top
-   * showed NORF @ UVA and RICH @ NCSU at 4:00 PM beside VILL @ LOU, and this
-   * card said "2 more games" - the two games kicking off at the SAME minute as
-   * this one were filtered out by a `>`. This game itself is excluded by id. */
-  const upcoming = (cached.games || [])
-    .filter((g) => g && g.status !== 'final' && g.kickoffUtc >= (state.kickoffUtc || now)
-                   && String(g.id) !== String((key || '').split(':')[1]))
-    .sort((a, b) => a.kickoffUtc - b.kickoffUtc);
-  if (!upcoming.length) return;
-
-  const sameDay = upcoming.filter((g) => dayKey(g.kickoffUtc) === thisDay);
-  const games = sameDay.length ? sameDay : upcoming;
-  /* 🔴 A CAP EVEN ON THE SAME DAY. Twenty rows here is a second slate on a
-   * screen that is about ONE game, and the slate already exists and is better at
-   * being a slate. Six is enough to read at a glance; the rest is a link. */
-  const CAP = 6;
-  const sameDayCount = sameDay.length;
-
-  const box = el('div', 'card lg-also');
-  const h = el('div', 'lg-also-h');
-  /* The heading names the day when the list IS the day, so "Also on Saturday"
-   * beside six rows cannot be mistaken for the whole week. */
-  h.appendChild(el('span', 'lg-also-k', sameDayCount
-    ? 'Also on ' + new Date(state.kickoffUtc || now).toLocaleDateString(undefined, { weekday: 'long' })
-    : 'Next up'));
-  h.appendChild(el('span', 'lg-also-n num',
-    games.length === 1 ? '1 more game' : games.length + ' more games'));
+  const box = el('section', 'lg-next');
+  box.setAttribute('aria-label', 'Next games');
+  const h = el('div', 'lg-next-h');
+  h.appendChild(el('span', 'lg-next-k', 'Next'));
+  h.appendChild(el('span', 'lg-next-n num', games.length === 1 ? '1 game' : games.length + ' games'));
   box.appendChild(h);
 
-  for (const g of games.slice(0, CAP)) {
-    const teams = {};
-    for (const t of (g.teams || [])) if (t && t.id) teams[t.id] = t;
-    const a = teams[g.awayTeamId], hm = teams[g.homeTeamId];
-    const row = el('a', 'lg-also-r');
-    /* 🔴 A REAL QUERY STRING, NOT ONE INSIDE THE HASH. mount() reads
-     * location.search, so '#/live?game=...' puts the parameter somewhere nothing
-     * looks - the link would navigate and then show whatever game was already
-     * loaded, silently. Same shape the invite button builds, colon and all. */
-    row.href = '/?game=' + encodeURIComponent(sport + ':' + g.id).replace(/%3A/g, ':');
-    row.appendChild(el('span', 'lg-also-t',
-      ((a && (a.short || a.abbrev)) || '?') + ' at ' + ((hm && (hm.short || hm.abbrev)) || '?')));
-    row.appendChild(el('span', 'lg-also-w num', untilLabel(g.kickoffUtc - now)));
-    box.appendChild(row);
-  }
+  const dayOf = (ms) => new Date(ms).toLocaleDateString(undefined, { weekday: 'long' });
+  let lastDay = null;
+  for (const g of games) {
+    const live = g.status === 'in_progress';
+    const day = live ? 'Live now' : dayOf(g.kickoffUtc);
+    if (day !== lastDay) { box.appendChild(el('div', 'lg-next-day', day)); lastDay = day; }
 
-  if (games.length > CAP) {
-    const more = el('a', 'lg-also-more', 'See the whole week →');
-    more.href = '#/slate';
-    box.appendChild(more);
+    const teams = {};
+    for (const t of (g.teams || [])) if (t && t.id) teams[String(t.id)] = t;
+    const a = teams[String(g.awayTeamId)], hm = teams[String(g.homeTeamId)];
+
+    const card = el('a', 'lg-next-c' + (live ? ' is-live' : ''));
+    /* A real query string, not one inside the hash - mount() reads
+     * location.search. Same shape the invite link builds. */
+    card.href = '/?game=' + encodeURIComponent(sport + ':' + g.id).replace(/%3A/g, ':');
+    const side = (id, t) => {
+      const s = el('span', 'lg-next-side');
+      if (t) s.appendChild(teamChip({ id, ...t }, { size: 28, league: sport }));
+      s.appendChild(el('span', 'lg-next-name', (t && (t.short || t.abbrev || t.name)) || '?'));
+      return s;
+    };
+    card.appendChild(side(g.awayTeamId, a));
+    card.appendChild(el('span', 'lg-next-mid num', live
+      ? (g.awayScore ?? 0) + '–' + (g.homeScore ?? 0)
+      : new Date(g.kickoffUtc).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })));
+    card.appendChild(side(g.homeTeamId, hm));
+    box.appendChild(card);
   }
   wrap.appendChild(box);
 }
@@ -5032,18 +4906,26 @@ const CSS = `
 .lg-hgame-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
 /* What else is on tonight. A short list, not a second slate. */
-.lg-also { display: grid; gap: 2px; padding: 12px; }
-.lg-also-h { display: flex; align-items: baseline; justify-content: space-between;
-  gap: 8px; margin-bottom: 4px; }
-.lg-also-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
+/* NEXT - the rest of the week as small cards, a condensed Upcoming card each:
+   crest and short name either side, the time (or a live score) between them.
+   See nextList(). Replaces the .lg-also rows and the .lg-games chip strip. */
+.lg-next { display: grid; gap: 8px; }
+.lg-next-h { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin: 4px 2px 0; }
+.lg-next-k { font-size: var(--t-micro); font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; color: var(--dim); }
-.lg-also-n { font-size: var(--t-micro); color: var(--dim); }
-.lg-also-r { display: flex; align-items: baseline; justify-content: space-between;
-  gap: 10px; min-height: 44px; padding: 4px 0; text-decoration: none; color: var(--fg);
-  border-top: 1px solid var(--line); font-size: var(--t-body); }
-.lg-also-w { color: var(--dim); font-size: var(--t-micro); white-space: nowrap; }
-.lg-also-more { display: block; padding: 10px 0 2px; font-size: var(--t-micro);
-  font-weight: 800; color: var(--accent); text-decoration: none; }
+.lg-next-n { font-size: var(--t-micro); color: var(--dim); }
+.lg-next-day { font-size: var(--t-micro); font-weight: 700; color: var(--dim); margin: 6px 2px 0; }
+.lg-next-c { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 8px; padding: 10px 12px; min-height: var(--tap-min); text-decoration: none;
+  color: var(--fg); background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-card); }
+.lg-next-side { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.lg-next-name { max-width: 100%; font-size: var(--t-body); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-next-mid { font-size: var(--t-micro); color: var(--dim); white-space: nowrap; }
+.lg-next-c.is-live { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.lg-next-c.is-live .lg-next-mid { font-size: var(--t-body); font-weight: 800; color: var(--accent); }
 /* The wordmark, at Section like every other page title. It was Score size,
    which made the app's own name compete with the game it is about. */
 .lg-home-mark { display: flex; align-items: baseline; gap: 0;
@@ -5084,12 +4966,21 @@ const CSS = `
    so there is white above the stadium ("can you lower them so there is white
    above the stadium", 2026-09-11), and the hero's own wider box trims the bottom. */
 .lg-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  object-position: 50% 0%; opacity: 0; transition: opacity 1.2s ease; }
-.lg-hero-img.is-on { opacity: 1; }
+  object-position: 50% 0%; opacity: 0; transform-origin: 50% 35%;
+  transition: opacity 1.2s ease, transform 8s linear; }
+/* THE KEN BURNS DRIFT. Jason, 2026-09-11: "what is it called when you pan across
+   the image and/or zoom in/out?" / "i was thinking about doing it subtely on the
+   hero images". A transition, not a keyframe: the image showing eases in and
+   across over 8s (it is swapped at 6, so it never stops moving), and the one
+   leaving eases back the same way while it fades - an animation would snap
+   back to scale 1 the instant its class came off. A different drift per image. */
+.lg-hero-img.is-on { opacity: 1; transform: scale(1.06) translate(-1%, .6%); }
+.lg-hero-img:nth-child(2).is-on { transform: scale(1.06) translate(1%, .6%); }
+.lg-hero-img:nth-child(3).is-on { transform: scale(1.05) translate(0, 1%); }
 .lg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(to bottom, transparent 72%, var(--bg) 100%); }
 .lg-hero + * { position: relative; z-index: 1; }
-@media (prefers-reduced-motion: reduce) { .lg-hero-img { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .lg-hero-img, .lg-hero-img.is-on { transition: none; transform: none; } }
 .lg-sportrow { margin-top: 2px; }
 .lg-sportpick { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .lg-sportpick-logo { display: block; object-fit: contain; }
