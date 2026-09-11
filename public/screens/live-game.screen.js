@@ -3532,11 +3532,12 @@ function marblesCard() {
 
 function sportCard(wrap) {
   const c = el('div', 'lg-sport');
-  c.appendChild(el('div', 'lg-sport-h', 'Which are you watching?'));
-  c.appendChild(el('p', 'lg-sport-b', S.mode === 'pool'
-    ? 'Which slate your group is picking from.'
-    : 'It changes how calls are settled and how they are priced — a sack counts as a pass in the NFL '
-      + 'and as a run in college, and the model behind the prices is built on college play-by-play.'));
+  /* 🔴 NO HEADING, NO EXPLANATION - THE TWO MARKS ARE THE QUESTION. Jason,
+   * 2026-09-11: "Remove all of the which are you watching... text." The heading
+   * and the paragraph about sacks and pricing sat over the stadium art; a screen
+   * reader still hears the question, as the group's label. */
+  c.setAttribute('role', 'group');
+  c.setAttribute('aria-label', 'Which are you watching?');
   const row = el('div', 'lg-sport-row');
   for (const id of ['nfl', 'college-football']) {
     const b = el('button', 'lg-sport-pick');
