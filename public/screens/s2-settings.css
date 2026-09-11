@@ -121,6 +121,13 @@
   background: transparent; border: 0; color: var(--accent);
   font-size: var(--t-micro); font-weight: 600;
 }
+/* The Rules row: one full-width tap target, accent text, chevron at the edge. */
+.scr-s2-settings .s2-rules-link {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: var(--tap-min); color: var(--accent); text-decoration: none;
+  font-size: var(--t-body); font-weight: 600;
+}
+.scr-s2-settings .s2-rules-chev { font-size: 20px; line-height: 1; color: var(--dim); }
 
 /* A page of eight, and NO INNER SCROLLER - a 268px scroll box in the middle of a
  * settings page eats the wheel and strands everything under it. Search is the

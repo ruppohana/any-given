@@ -114,6 +114,17 @@ export function pageHeader(opts) {
     const s = document.createElement('p');
     s.className = 'ag-hd-s';
     s.textContent = o.sub;
+    /* opts.link: a quiet link at the end of the sub line. First use, Jason
+     * 2026-09-11: "How it's scored" on the slate and My picks, into the rules -
+     * the answer sits where the question comes up. */
+    if (o.link && o.link.href) {
+      s.appendChild(document.createTextNode(' · '));
+      const a = document.createElement('a');
+      a.className = 'ag-hd-link';
+      a.href = o.link.href;
+      a.textContent = (o.link.label || '') + ' ›';
+      s.appendChild(a);
+    }
     l.appendChild(s);
   }
   h.appendChild(l);
@@ -174,6 +185,7 @@ export const HEADER_CSS = `
    each screen's own sub line; it belongs to the template now. */
 .ag-hd-s { margin: 1px 0 0; font-size: var(--t-micro); color: var(--dim);
   line-height: 1.35; font-variant-numeric: tabular-nums; }
+.ag-hd-link { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
 /* THE ANCHOR — the league mark and the football, same place on every screen.
    Above the title rather than beside it, so a long title can never push it off
    the row or wrap underneath it. */

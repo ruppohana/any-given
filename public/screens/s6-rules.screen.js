@@ -568,38 +568,17 @@ function sAge(data) {
  * @returns {{pool: object|null, tiebreakGame: object|null, lastSync: number}}
  */
 export async function previewData(fixtures, state) {
-  let tiebreakGame = null;
-  try {
-    const g = await fixtures.load('real-utep-at-ou');
-    const c = g.header.competitions[0];
-    const home = c.competitors.find(function (x) { return x.homeAway === 'home'; });
-    const away = c.competitors.find(function (x) { return x.homeAway === 'away'; });
-    tiebreakGame = {
-      id: c.id,
-      kickoffUtc: Date.parse(c.date),
-      home: fixtures.teams.teams[home.team.id],
-      away: fixtures.teams.teams[away.team.id]
-    };
-  } catch (e) {
-    tiebreakGame = null;  /* a fixture that will not load is a state, not a crash */
-  }
-
-  /* 🔴 STUB, and named as one in the return. There is no captured pool anywhere
-   * in fixtures/ - `Pool` in src/lib/types.ts is a shape with no instance on
-   * disk. Everything below is a plausible pool, not a real one. The teams inside
-   * the tiebreak row above ARE real; this envelope is not. */
-  const pool = {
-    id: 'K7RTQZ',
-    name: 'Thursday Night Regulars',
-    scope: 'top25',
-    scopeArg: null,
-    rankingSource: 'ap',
-    ats: false,
-    memberCount: 9,
-    scopeLockedAt: Date.now() - 86400000 * 7
-  };
-
-  return { pool: pool, tiebreakGame: tiebreakGame, lastSync: Date.now() - 62000 };
+  /* 🔴 NO STUB POOL AND NO FIXTURE TIEBREAK. Jason, 2026-09-11: "fix the rules
+   * page. yes link from settings." It showed "Thursday Night Regulars", nine
+   * members, a pool nobody is in, and "This week's tiebreak game: UTEP at OU"
+   * out of a captured fixture from a week already played - under the app's own
+   * "Sample data" banner. Now that Settings links here, the page is the rules
+   * and nothing else. poolCard() and sTies() already draw nothing when these are
+   * null. When a real group's settings can be read, they go back in here.
+   *
+   * `noSample` tells the shell there is nothing made up on this screen, so its
+   * "Sample data" banner stays off - the rules are not preview data. */
+  return { pool: null, tiebreakGame: null, lastSync: Date.now(), noSample: true };
 }
 
 /* -------------------------------------------------------------- the assembly */
@@ -685,7 +664,18 @@ function poolCard(data, opts) {
 /** The whole ruleset. Used by ready, offline, loading and error alike - because
  *  rules are not live data and there is no state in which they are unavailable. */
 function allRules(root, data) {
-  root.appendChild(indexBlock(null));
+  /* 🔴 THE INDEX SCROLLS, IT DOES NOT CHANGE THE HASH. The rows were plain
+   * `#void` links, and the app routes on the hash: tapping one replaced
+   * `#/rules` with `#void`, the router found no such screen, and the rules page
+   * unmounted. Found 2026-09-11 by clicking the first row. The scroll clears the
+   * sticky top bar so the answer's heading lands in view, not under it. */
+  root.appendChild(indexBlock(function (ev, id) {
+    ev.preventDefault();
+    const t = document.getElementById(id);
+    if (!t) return;
+    const bar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 0;
+    window.scrollTo({ top: t.getBoundingClientRect().top + window.scrollY - bar - 8, behavior: 'smooth' });
+  }));
   /* bannerAbove: the void line is printed once, in the banner under the title. */
   SECTIONS.forEach(function (s) {
     root.appendChild(sectionCard(s, data, { bannerAbove: true }));

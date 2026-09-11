@@ -1903,7 +1903,9 @@ function head(root, data, _) {
       /* "your group" read wrong for anybody only in the everyone-in pool, and
        * the line never said what to do. Jason, 2026-09-10: yes to "pick the
        * winners". */
-      : 'Week ' + wk + ' · pick the winners · scored in points'
+      : 'Week ' + wk + ' · pick the winners · scored in points',
+    /* Jason, 2026-09-11: yes to a "How it's scored" line into the rules. */
+    link: { label: 'How it’s scored', href: '#/rules' }
   }));
   /* 🔴 THE OLD HEADER IS DELETED, NOT HIDDEN BEHIND THE NEW ONE. It was four
    * elements invented on this screen - a kicker in caps, an h1 carrying the

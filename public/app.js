@@ -294,7 +294,10 @@ async function mount() {
    * week off the feed, so calling those games made up would be as wrong as
    * calling the invented ones real. The screen reports whether its rows came off
    * the wire and this reads that — it does not guess from the route. */
-  if (route.dest !== 'home' && route.screen !== 'live-game' && !lastData?.fromFeed) {
+  /* `noSample`: a screen with nothing made up on it (the rules) says so, and
+   * gets no banner - "these games are made up" over a page of rules is the
+   * banner lying in the other direction. */
+  if (route.dest !== 'home' && route.screen !== 'live-game' && !lastData?.fromFeed && !lastData?.noSample) {
     const b = document.createElement('p');
     b.className = 'ag-sample';
     b.textContent = 'Sample data — these games, spreads and scores are made up. '

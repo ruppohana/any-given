@@ -575,6 +575,21 @@ function balanceSection() {
   return sec;
 }
 
+/* 🔴 THE WAY TO THE RULES. Jason, 2026-09-11: "we need these types of pages but
+ * they probably come from the settings page?" and then "yes link from settings".
+ * The rules screen existed and nothing in the app linked to it - it was reachable
+ * only by typing #/rules. Settings is where people look for how an app works. */
+function rulesSection() {
+  const c = card('Rules');
+  const a = el('a', 's2-rules-link', 'Rules and how it works');
+  a.href = '#/rules';
+  a.appendChild(el('span', 's2-rules-chev', '›'));
+  c.appendChild(a);
+  c.appendChild(el('p', 's2-note',
+    'Scoring, ties, cancelled games and what a call pays - every rule in one place.'));
+  return c;
+}
+
 export function render(root, data, state) {
   root.innerHTML = '';
   root.classList.add('scr-s2-settings');
@@ -645,4 +660,5 @@ export function render(root, data, state) {
   root.appendChild(densitySection(data));
   root.appendChild(alertsSection(data));
   root.appendChild(balanceSection());
+  root.appendChild(rulesSection());
 }
