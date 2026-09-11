@@ -5040,19 +5040,20 @@ const CSS = `
    The first version was a TRANSITION, and a transition never runs on an
    element's first style: every stadium was drawn already zoomed and sat still,
    and a repaint of Home redrew it that way again. An animation runs from the
-   moment the class lands, first paint included. 1.00 -> 1.18 and a 4-5% pan
-   over 6.5s, a different line per image ("the zoom, pan is pretty small" /
-   "increase it" - it was 1.10 and 2%); the image leaving holds its end frame
-   (.is-off) while it fades, so nothing snaps back to scale 1. */
+   moment the class lands, first paint included. 1.00 -> 1.08-1.09 and a 2-2.5%
+   pan over 6.5s, a different line per image. It went 1.10 / 2% -> "increase
+   it" -> 1.18 / 5% -> "split the difference between the no pan/zoom and where
+   we are now", which is this. The image leaving holds its end frame (.is-off)
+   while it fades, so nothing snaps back to scale 1. */
 .lg-hero-img.is-on { opacity: 1; animation: lg-kb-a 6.5s ease-out forwards; }
 .lg-hero-img:nth-child(2).is-on { animation-name: lg-kb-b; }
 .lg-hero-img:nth-child(3).is-on { animation-name: lg-kb-c; }
-.lg-hero-img.is-off { transform: scale(1.18) translate(-5%, 2%); }
-.lg-hero-img:nth-child(2).is-off { transform: scale(1.18) translate(5%, 2%); }
-.lg-hero-img:nth-child(3).is-off { transform: scale(1.16) translate(0, 4%); }
-@keyframes lg-kb-a { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.18) translate(-5%, 2%); } }
-@keyframes lg-kb-b { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.18) translate(5%, 2%); } }
-@keyframes lg-kb-c { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.16) translate(0, 4%); } }
+.lg-hero-img.is-off { transform: scale(1.09) translate(-2.5%, 1%); }
+.lg-hero-img:nth-child(2).is-off { transform: scale(1.09) translate(2.5%, 1%); }
+.lg-hero-img:nth-child(3).is-off { transform: scale(1.08) translate(0, 2%); }
+@keyframes lg-kb-a { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.09) translate(-2.5%, 1%); } }
+@keyframes lg-kb-b { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.09) translate(2.5%, 1%); } }
+@keyframes lg-kb-c { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.08) translate(0, 2%); } }
 .lg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(to bottom, transparent 72%, var(--bg) 100%); }
 .lg-hero + * { position: relative; z-index: 1; }
