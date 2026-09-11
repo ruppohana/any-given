@@ -1,0 +1,181 @@
+/* G1 - the group page. Every rule scoped under .scr-g1-group.
+ *
+ * Depth is 1px solid var(--line); nothing in this file draws a shadow. Emphasis
+ * reads var(--accent). Every control a thumb hits is var(--tap-min) tall. There
+ * is one filled control per open form, and it is .g1-primary. */
+
+.scr-g1-group .g1 { display: grid; gap: 12px; }
+.scr-g1-group .g1 > .ag-hd { margin-bottom: 0; }
+
+.scr-g1-group .g1-flash {
+  margin: 0; padding: 10px 12px;
+  border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-card); background: var(--card);
+  font-size: var(--t-body); font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.scr-g1-group .g1-card { display: grid; gap: 8px; padding: 14px 12px; }
+.scr-g1-group .g1-h { margin: 0; font-size: var(--t-emph); font-weight: 800; line-height: 1.25; }
+.scr-g1-group .g1-p { margin: 0; font-size: var(--t-body); color: var(--dim); line-height: 1.45; }
+.scr-g1-group .g1-note { margin: 0; font-size: var(--t-micro); color: var(--dim); line-height: 1.45; }
+
+/* ------------------------------------------------------------ the group */
+
+.scr-g1-group .g1-switcher .ag-gsw-one { font-size: var(--t-section); white-space: normal; overflow-wrap: anywhere; }
+.scr-g1-group .g1-meta { margin: 0; font-size: var(--t-body); color: var(--fg); font-variant-numeric: tabular-nums; }
+.scr-g1-group .g1-ats,
+.scr-g1-group .g1-role { margin: 0; font-size: var(--t-micro); color: var(--dim); }
+.scr-g1-group .g1-role { color: var(--accent); font-weight: 700; }
+
+/* ------------------------------------------------------------ the invite */
+
+.scr-g1-group .g1-code {
+  min-height: var(--tap-min); display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--bg);
+  font-size: var(--t-figure); font-weight: 800; letter-spacing: .22em; text-indent: .22em;
+  font-variant-numeric: tabular-nums;
+}
+.scr-g1-group .g1-link {
+  min-height: var(--tap-min); display: flex; align-items: center; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--bg);
+  font-size: var(--t-body); overflow-x: auto; white-space: nowrap; user-select: all;
+  font-variant-numeric: tabular-nums;
+}
+.scr-g1-group .g1-ok { margin: 0; font-size: var(--t-body); color: var(--up); font-weight: 600; }
+.scr-g1-group .g1-ok:empty,
+.scr-g1-group .g1-err:empty,
+.scr-g1-group .g1-why:empty { display: none; }
+.scr-g1-group .g1-primary[data-done="true"] { background: var(--up); border-color: var(--up); }
+
+/* ----------------------------------------------------- sections and lists
+   A list is not a card: members sit on the page, divided by hairlines. */
+
+.scr-g1-group .g1-sec { display: grid; gap: 8px; }
+.scr-g1-group .g1-sec-h {
+  margin: 4px 0 0; font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dim); font-variant-numeric: tabular-nums;
+}
+.scr-g1-group .g1-members { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.scr-g1-group .g1-mem {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: var(--tap-min); padding: 0 2px; border-bottom: 1px solid var(--line);
+}
+.scr-g1-group .g1-mem-name { font-size: var(--t-body); font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.scr-g1-group .g1-tags { display: flex; gap: 6px; flex: 0 0 auto; }
+.scr-g1-group .g1-tag {
+  padding: 2px 7px; border: 1px solid var(--line); border-radius: var(--radius-chip);
+  font-size: var(--t-micro); font-weight: 700; color: var(--dim);
+}
+.scr-g1-group .g1-tag--c { color: var(--accent); border-color: var(--accent); }
+.scr-g1-group .g1-tag--you { color: var(--fg); }
+
+/* ------------------------------------------------------------- buttons */
+
+.scr-g1-group .g1-btn,
+.scr-g1-group .g1-choice,
+.scr-g1-group .g1-danger {
+  min-height: var(--tap-min); padding: 0 14px;
+  border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--card);
+  color: var(--fg); font-size: var(--t-body); font-weight: 700;
+}
+.scr-g1-group .g1-btn[aria-expanded="true"],
+.scr-g1-group .g1-choice[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.scr-g1-group .g1-btn:disabled { opacity: .5; cursor: default; }
+.scr-g1-group .g1-primary {
+  min-height: var(--tap-min); width: 100%; padding: 0 16px;
+  border: 1px solid var(--accent); border-radius: var(--radius-button);
+  background: var(--accent); color: var(--on-accent);
+  font-size: var(--t-emph); font-weight: 800;
+}
+.scr-g1-group .g1-primary:disabled { opacity: .45; cursor: default; }
+.scr-g1-group .g1-danger { color: var(--down); width: 100%; }
+.scr-g1-group .g1-danger--solid { background: var(--down); border-color: var(--down); color: var(--on-accent); }
+.scr-g1-group .g1-danger:disabled { opacity: .6; }
+
+.scr-g1-group .g1-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.scr-g1-group .g1-onboard { display: grid; gap: 10px; }
+.scr-g1-group .g1-intro { display: grid; gap: 6px; }
+.scr-g1-group .g1-msgbtns { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.scr-g1-group .g1-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.scr-g1-group .g1-row2 .g1-primary { width: 100%; }
+
+/* ------------------------------------------------------------- forms */
+
+.scr-g1-group .g1-labelrow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.scr-g1-group .g1-label {
+  display: block; margin: 4px 0 0; font-size: var(--t-micro); font-weight: 700; color: var(--dim);
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.scr-g1-group .g1-count { font-size: var(--t-micro); color: var(--dim); font-variant-numeric: tabular-nums; }
+.scr-g1-group .g1-input,
+.scr-g1-group .g1-ta {
+  width: 100%; min-height: var(--tap-min); padding: 0 10px;
+  font: inherit; font-size: var(--t-emph); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+}
+.scr-g1-group .g1-ta { min-height: 120px; padding: 10px; line-height: 1.4; resize: vertical; font-size: var(--t-body); }
+.scr-g1-group .g1-input--code { text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
+.scr-g1-group .g1-input:focus-visible,
+.scr-g1-group .g1-ta:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.scr-g1-group .g1-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.scr-g1-group .g1-seg-b {
+  min-height: var(--tap-min); border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); color: var(--fg); font-size: var(--t-body); font-weight: 600;
+}
+.scr-g1-group .g1-seg-b[aria-checked="true"] { border-color: var(--accent); color: var(--accent); font-weight: 800; }
+
+.scr-g1-group .g1-switch-row {
+  display: flex; align-items: center; gap: 12px; padding: 8px 0 0; border-top: 1px solid var(--line);
+}
+.scr-g1-group .g1-switch-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.scr-g1-group .g1-switch-label { font-size: var(--t-body); font-weight: 700; }
+.scr-g1-group .g1-switch {
+  flex: none; width: 52px; min-height: var(--tap-min); height: var(--tap-min); padding: 0 4px;
+  display: flex; align-items: center; justify-content: flex-start;
+  border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--track);
+}
+.scr-g1-group .g1-knob {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--line); transition: transform .12s ease;
+}
+.scr-g1-group .g1-switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.scr-g1-group .g1-switch[aria-checked="true"] .g1-knob { transform: translateX(22px); }
+
+/* The pledge: the whole row is the target, the box is the mark. */
+.scr-g1-group .g1-pledge {
+  display: flex; align-items: flex-start; gap: 10px; min-height: var(--tap-min); padding: 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--bg);
+  font-size: var(--t-body); line-height: 1.45; cursor: pointer;
+}
+.scr-g1-group .g1-pledge:has(.g1-check:checked) { border-color: var(--accent); }
+.scr-g1-group .g1-check { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.scr-g1-group .g1-pledge-t { font-weight: 600; }
+
+.scr-g1-group .g1-why { margin: 0; font-size: var(--t-micro); color: var(--dim); }
+.scr-g1-group .g1-err { margin: 0; font-size: var(--t-body); color: var(--down); font-weight: 600; line-height: 1.4; }
+.scr-g1-group .g1-private { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-button); }
+
+/* -------------------------------------------------------------- doors */
+
+.scr-g1-group .g1-doors { display: grid; padding: 0; overflow: hidden; }
+.scr-g1-group .g1-door {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  gap: 2px 10px; padding: 12px; min-height: var(--tap-min);
+  text-decoration: none; color: var(--fg); border-bottom: 1px solid var(--line);
+}
+.scr-g1-group .g1-door:last-child { border-bottom: 0; }
+.scr-g1-group .g1-door-t { font-size: var(--t-body); font-weight: 700; }
+.scr-g1-group .g1-door-chev { grid-row: 1 / span 2; grid-column: 2; font-size: 20px; line-height: 1; color: var(--dim); }
+.scr-g1-group .g1-door-b { grid-column: 1; font-size: var(--t-micro); color: var(--dim); line-height: 1.4; }
+
+/* ------------------------------------------------------------- leave */
+
+.scr-g1-group .g1-leave { margin-top: 8px; }
+.scr-g1-group .g1-confirm {
+  display: grid; gap: 8px; padding: 10px;
+  border: 1px solid var(--down); border-radius: var(--radius-button); background: var(--card);
+}
+.scr-g1-group .g1-confirm-q { margin: 0; font-size: var(--t-body); line-height: 1.45; }
