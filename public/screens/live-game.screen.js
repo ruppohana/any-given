@@ -1574,6 +1574,20 @@ function atHalfTime(state) {
     || (/end (of )?(the )?(quarter|period)|end quarter/i.test(t) && last.quarter === 2);
 }
 
+/* 🔴 THE END OF ANY QUARTER RETIRES THE QUESTION. Jason, 2026-09-11, at the end
+ * of Q1 on Villanova at Louisville: "End of the first quarter should retire the
+ * choice below." Two minutes of teams changing ends with a priced question still
+ * sitting there; the screen shows the waiting tile (and its nugget) instead, as
+ * it does at half time. The cost, accepted: the first snap of the next quarter
+ * is not callable - the next question opens after it. */
+function atQuarterEnd(state) {
+  const plays = (state && state.plays) || [];
+  const last = plays[plays.length - 1];
+  if (!last) return false;
+  const t = (last.typeText || '') + ' ' + (last.text || '');
+  return /end (of )?(the )?(quarter|period)|end quarter/i.test(t) && !/end of game|end game/i.test(t);
+}
+
 /* 🔴 THE TEAM, NOT "THEY". Jason, 2026-09-10: "Do 'they'... change they to
  * the team name 'Sun Devils'." A pronoun makes you work out who is meant,
  * mid-snap, with two teams on the screen. The nickname is what the person on
@@ -1619,7 +1633,7 @@ function questionFor(state) {
    *
    * A stoppage of a couple of minutes is fine and still gets a question - the
    * break pill says the wait is coming. Thirteen minutes is not. */
-  if (atHalfTime(state)) return null;
+  if (atHalfTime(state) || atQuarterEnd(state)) return null;
   const s = (last.text || '').toLowerCase();
 
   /* A drive starts when the possession that is about to snap is not the one that

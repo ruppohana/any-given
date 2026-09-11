@@ -37,6 +37,13 @@ test('the Live tab opens the game picker, not the last game', () => {
   assert.equal(/lastLive|__agGoLast|lastKey/.test(SRC + APP), false, 'the return to the last game is gone');
 });
 
+test('the end of a quarter retires the question', () => {
+  // Jason, 2026-09-11: "End of the first quarter should retire the choice below."
+  assert.ok(SRC.includes('function atQuarterEnd(state)'), 'a quarter end is recognized');
+  assert.ok(SRC.includes('if (atHalfTime(state) || atQuarterEnd(state)) return null;'),
+    'and no question is offered across it');
+});
+
 test('a game link mounts once, on the game it names', () => {
   // Jason, 2026-09-11: "Selecting Norfolk Virginia takes me to Villanova still."
   // The no-hash redirect used location.replace, whose hashchange arrived after
