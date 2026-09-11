@@ -3683,9 +3683,10 @@ function modeCard(wrap, compact) {
     h.appendChild(el('span', 'lg-mark-stem', 'Any Given…'));
     h.appendChild(el('span', 'lg-mark-end', ' Snap'));
     c.appendChild(h);
-  } else {
-    c.appendChild(el('div', 'lg-sport-h', 'What are you here for?'));
   }
+  /* No "What are you here for?" heading on the front door - Jason, 2026-09-11,
+   * with the stadium hero above it: "remove the what are you here for?". The
+   * hero and the three doors ask the question; the paragraph says the terms. */
   if (!compact) {
     c.appendChild(el('p', 'lg-sport-b',
       'Three ways in. Two of them stake marbles at a price you see before you tap - '
