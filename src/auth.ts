@@ -121,9 +121,11 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
     const b = await req.json().catch(() => ({})) as any;
     const email = normEmail(b.email);
     if (!EMAIL.test(email)) return json({ error: 'That doesn’t look like an email address.' }, 400);
-    /* COPPA: collecting a child's email needs a parent's consent. The app does
-       not collect it at all without this confirmation. */
-    if (b.ageOk !== true) return json({ error: 'You need to be 13 or older to play.' }, 400);
+    /* 🔴 18+, NOT 13+. The app is rated 18+ (settled.md, "18+, taken
+       honestly", 2026-09-07) and the sign-in first shipped asking 13+ - the
+       COPPA line - until Jason caught it: "i thought we were asking 18+ for
+       apple". 18 covers COPPA as well. No email is stored without it. */
+    if (b.ageOk !== true) return json({ error: 'You need to be 18 or older to play.' }, 400);
     if (!env.MAILERSEND_API_KEY && !env.RESEND_API_KEY) {
       return json({ error: 'Email sign-in isn’t switched on yet.', sender: false }, 503);
     }

@@ -4,8 +4,9 @@
  * you and tank your picks." The server decides who needs to sign in
  * (src/auth.ts, REQUIRE_EMAIL); this sheet is only ever the answer to it.
  *
- * TWO STEPS, NO PASSWORD. Step one asks for the address and the 13-or-older
- * confirmation (COPPA: no child's email is collected without it). Step two
+ * TWO STEPS, NO PASSWORD. Step one asks for the address and the 18-or-older
+ * confirmation - the app is 18+ (settled.md, "18+, taken honestly"; Jason:
+ * "i thought we were asking 18+ for apple"). Step two
  * takes the code from the email. Nothing else is asked - no name, no birthday,
  * no password to invent and forget.
  *
@@ -110,13 +111,13 @@ export function openSignIn(reason) {
       inp.placeholder = 'you@example.com'; inp.value = email || signedInEmail();
       const age = el('label', 'ag-si-age');
       const cb = document.createElement('input'); cb.type = 'checkbox';
-      age.append(cb, document.createTextNode('I’m 13 or older'));
+      age.append(cb, document.createTextNode('I’m 18 or older'));
       const go = el('button', 'ag-si-go', 'Send code'); go.type = 'button';
       const err = el('p', 'ag-si-err', errMsg || '');
       go.onclick = async () => {
         email = inp.value.trim();
         if (!email) { inp.focus(); return; }
-        if (!cb.checked) { err.textContent = 'You need to be 13 or older to play.'; return; }
+        if (!cb.checked) { err.textContent = 'You need to be 18 or older to play.'; return; }
         go.disabled = true; go.textContent = 'Sending…'; err.textContent = '';
         try {
           const r = await fetch('/api/auth/start', { method: 'POST', headers: { 'content-type': 'application/json' },
