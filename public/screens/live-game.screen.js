@@ -5066,7 +5066,11 @@ const CSS = `
    the stadium cropped to fill it. The fade runs into the page ground so the
    front door's first line sits on the bottom of the picture, Deuce's overlap,
    and the text there is on near-solid ground, not on a white roof. */
-.lg-hero { position: relative; height: 220px; margin: -10px -10px -28px; overflow: hidden; }
+/* 300px and no overlap - Jason, 2026-09-11: "show more of the image, lower the
+   text". The stadiums are cut out of their white now (transparent WebP), so the
+   space above each one is the page's own ground, the way Deuce's court sits on
+   its page, in either theme. */
+.lg-hero { position: relative; height: 300px; margin: -10px -10px 0; overflow: hidden; }
 /* Pinned to the TOP of the picture: the crops start at the top of Jason's renders
    so there is white above the stadium ("can you lower them so there is white
    above the stadium", 2026-09-11), and the hero's own wider box trims the bottom. */
@@ -5074,7 +5078,7 @@ const CSS = `
   object-position: 50% 0%; opacity: 0; transition: opacity 1.2s ease; }
 .lg-hero-img.is-on { opacity: 1; }
 .lg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(to bottom, transparent 45%, var(--bg) 100%); }
+  background: linear-gradient(to bottom, transparent 72%, var(--bg) 100%); }
 .lg-hero + * { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) { .lg-hero-img { transition: none; } }
 .lg-sportrow { margin-top: 2px; }
