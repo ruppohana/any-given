@@ -115,7 +115,9 @@
 .scr-p5-standings .p5-head,
 .scr-p5-standings .p5-row {
   display: grid;
-  grid-template-columns: 26px 24px 22px minmax(0, 1fr) 44px 44px;
+  /* 58px for the last column: "SEASON" spelled out (Jason, 2026-09-11) is six
+     micro caps with tracking and does not fit the 44px "SEA" did. */
+  grid-template-columns: 26px 24px 22px minmax(0, 1fr) 44px 58px;
   gap: 6px; align-items: center;
   /* The card has no padding of its own, so the rows carry it. Without this the
      rank sat on the card's left edge and SEA on its right - Jason, 2026-09-11:

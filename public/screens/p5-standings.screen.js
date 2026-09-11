@@ -774,8 +774,10 @@ export function render(root, data, state) {
      * only. Rank and name are unlabelled because they need no label. */
     const head = el('div', 'p5-head');
     head.append(el('span', null, ''), el('span', null, ''), el('span', null, ''), el('span', null, ''));
-    const wk = el('span', 'p5-col' + (basis === 'week' ? ' p5-col--on' : ''), 'Wk');
-    const sea = el('span', 'p5-col' + (basis === 'season' ? ' p5-col--on' : ''), 'Sea');
+    /* Spelled out. Jason, 2026-09-11: "go ahead and spell out season. i read
+     * Seattle when i see SEA." In a football app a three-letter cap is a team. */
+    const wk = el('span', 'p5-col' + (basis === 'week' ? ' p5-col--on' : ''), 'Week');
+    const sea = el('span', 'p5-col' + (basis === 'season' ? ' p5-col--on' : ''), 'Season');
     head.append(wk, sea);
     card.appendChild(head);
 
