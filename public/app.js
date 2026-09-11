@@ -420,6 +420,24 @@ async function boot() {
    * games with a line saying whose group this is. Their first pick joins them
    * (see p2-slate). Used once and taken out of the address, for the same
    * reason as ?game= - a query string outlives every navigation after it. */
+  /* 🔴 IS SIGN-IN REQUIRED, AND IS THIS PHONE STILL SIGNED IN? Asked once, not
+   * awaited - the first paint must not wait on it. The slate reads
+   * window.agAuthRequired to decide whether a pick opens the sign-in sheet
+   * first (Jason: "first pick is fine"). A saved session the server no longer
+   * knows is dropped here, so the menu never claims somebody is signed in
+   * when every request would say otherwise. */
+  try {
+    const tok = localStorage.getItem('ag.session') || '';
+    fetch('/api/auth/me', { headers: tok ? { authorization: 'Bearer ' + tok } : {} })
+      .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        window.agAuthRequired = !!(j && j.required);
+        if (!ok && tok) { try { localStorage.removeItem('ag.session'); } catch { /* private */ } }
+        if (ok && j.handle) { try { localStorage.setItem('ag.handle', j.handle); } catch { /* private */ } }
+      })
+      .catch(() => { /* offline: the server still decides on each request */ });
+  } catch { /* no storage */ }
+
   const poolCode = new URLSearchParams(location.search).get('pool');
   if (poolCode) {
     try {

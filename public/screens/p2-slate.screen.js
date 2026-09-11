@@ -1572,6 +1572,18 @@ export function render(root, data, state) {
       if (oldRow && g) oldRow.replaceWith(row(ctx, g));
     },
     onPick: (gameId, side) => {
+      /* 🔴 SIGN IN AT THE FIRST PICK, BEFORE THE PICK. Jason: "first pick is
+       * fine." When the server requires an account and this phone has none,
+       * the tap opens the sign-in sheet first and the pick happens only once
+       * it succeeds. Picking first and asking after would show a pick on the
+       * row that the server had refused - a pick that looks made and counts
+       * for nothing is the worst state this screen could be in. */
+      let signedIn = false;
+      try { signedIn = !!(localStorage.getItem('ag.session') && localStorage.getItem('ag.handle')); } catch { /* private */ }
+      if (window.agAuthRequired && !signedIn && window.agOpenSignIn) {
+        window.agOpenSignIn().then((ok) => { if (ok) ctx.onPick(gameId, side); });
+        return;
+      }
       /* 🔴 CREATE THE ROW IF IT IS NOT THERE. Jason, 2026-09-09: "This weeks
        * card does not allow me to pick."
        *
