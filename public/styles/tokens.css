@@ -259,19 +259,19 @@
 
   --nest-inset: 6px;
   --nest-step: calc(var(--nest-inset) + 1px);
-  /* 🔴 THE SLATE'S NESTED RAMP CANNOT SIMPLY BE 8. Concentric corners need
-   * inner = outer − inset, and the slate stacks three of them: day card, game
-   * card, pick target. At 8px for the outer the chain runs 8 → 1 → −6, which
-   * is not a ramp, it is a collapse.
+  /* 🔴 10px ON THE OUTSIDE, AND THE RAMP IS CLAMPED AT ZERO. Jason, 2026-09-11,
+   * on the slate's day containers: "these radaii are to large" / "10 pix".
    *
-   * So the day card drops as far as the arithmetic allows and no further:
-   * 16 → 9 → 2. Flatter, in the same direction as everything else, and still
-   * genuinely concentric - which is the property Jason asked for by name when
-   * he said "can these offsets and radius' line up?". Making the outer 8 would
-   * satisfy one instruction by breaking an earlier one. */
-  --radius-l1: 18px;
-  --radius-l2: calc(var(--radius-l1) - var(--nest-step));
-  --radius-l3: calc(var(--radius-l2) - var(--nest-step));
+   * Concentric corners need inner = outer − step (7px here), and the slate
+   * stacks three: day card, game card, pick target. At 10 the chain runs
+   * 10 → 3 → −4, and a negative radius is an invalid declaration that silently
+   * falls back to square. So the ramp is clamped: 10 → 3 → 0. Still concentric
+   * - the property Jason asked for with "can these offsets and radius' line
+   * up?" - with the innermost corners square rather than broken. (It was 18,
+   * and the note here said 16 → 9 → 2: stale by one edit.) */
+  --radius-l1: 10px;
+  --radius-l2: max(0px, calc(var(--radius-l1) - var(--nest-step)));
+  --radius-l3: max(0px, calc(var(--radius-l2) - var(--nest-step)));
 
   /* 🔴 ONE SHADOW, AND IT IS A REVERSAL WORTH NAMING. DESIGN.md says "There are
    * no drop shadows in this interface and none are to be added", and that was
