@@ -5057,7 +5057,9 @@ const CSS = `
 .lg-hgame .lg-hgame-b { text-align: center; }
 .lg-hgame-b { font-size: var(--t-body); color: var(--dim); }
 .lg-hgame-go { font-size: var(--t-emph); font-weight: 800; color: var(--accent); margin-top: 4px; }
-.lg-mark { display: flex; align-items: baseline; gap: 0; }
+/* .3em, not 0: a flex item drops the leading space in " Snap", so it read
+   "Any Given…Snap". Jason, 2026-09-11: "add a space between ... and anything else". */
+.lg-mark { display: flex; align-items: baseline; gap: .3em; }
 .lg-mark-stem { color: var(--dim); font-weight: 700; }
 .lg-mark-end { color: var(--accent); font-weight: 800; }
 /* The hero: full bleed through .ag-main's 10px padding, flush under the top bar,

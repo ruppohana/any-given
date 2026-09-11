@@ -190,6 +190,10 @@
   .ag-given { display: inline-block; color: var(--accent);
     transition: opacity .25s ease, transform .25s ease; }
   .ag-given.is-out { opacity: 0; transform: translateY(-4px); }
+  /* A space after the ellipsis, always (Jason, 2026-09-11: "add a space between
+     ... and anything else"). A margin, not a space character - the inline-block
+     swallowed the leading space, so it read "Any Given…Sunday". */
+  .ag-given:not(:empty) { margin-left: .3em; }
   @media (prefers-reduced-motion: reduce) { .ag-given { transition: none; } }
   </style>
   <dialog id="settings" class="ag-sheet"></dialog>

@@ -232,13 +232,15 @@ function spinGiven(tb) {
   w.textContent = '';
   tb.appendChild(w);
   const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (still) { w.textContent = ' ' + GIVEN_WORDS[i]; return; }
+  /* No leading space in the word: .ag-given is inline-block, which drops it, so
+   * the gap after the ellipsis is a margin in index.html's style block. */
+  if (still) { w.textContent = GIVEN_WORDS[i]; return; }
   const next = (delay) => {
     GIVEN_TIMER = setTimeout(() => {
       if (!w.isConnected) { stopGiven(); return; }
       w.classList.add('is-out');
       GIVEN_TIMER = setTimeout(() => {
-        w.textContent = ' ' + GIVEN_WORDS[i];
+        w.textContent = GIVEN_WORDS[i];
         i = (i + 1) % GIVEN_WORDS.length;
         w.classList.remove('is-out');
         next(2600);
