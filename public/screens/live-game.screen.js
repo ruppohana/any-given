@@ -3139,8 +3139,18 @@ function paint(wrap) {
     card.appendChild(stakeChip);
 
     const priced = priceFor(type, state, state.situation?.offenseTeamId || last.offenseTeamId);
-    const tiles = el('div', 'lg-tiles' + (priced.length > 3 ? ' is-4' : ''));
-    for (const o of priced) {
+    /* 🔴 THE SCRIPT QUESTION IS TWO COLUMNS, NOT FOUR BOXES. Jason, 2026-09-11:
+     * "The left side is pass, first down on top and short on the bottom. The
+     * right side is run, first down on top, short on the bottom." The catalog
+     * keeps its own order (run first); only the card reorders, and the grid
+     * flows by column so this list reads down the left, then down the right. */
+    const SCRIPT_ORDER = ['pass_yes', 'pass_no', 'run_yes', 'run_no'];
+    const isScript = type.id === 'script';
+    const shown = isScript
+      ? SCRIPT_ORDER.map((id) => priced.find((o) => o.choice.id === id)).filter(Boolean)
+      : priced;
+    const tiles = el('div', 'lg-tiles' + (isScript ? ' is-script' : priced.length > 3 ? ' is-4' : ''));
+    for (const o of shown) {
       const b = el('button', 'lg-tile');
       b.appendChild(el('span', 'lg-tile-label', o.choice.label));
       /* 🔴 THE PRICE IS ON THE TILE, BEFORE THE TAP. */
@@ -5254,6 +5264,16 @@ const CSS = `
    split it evenly whatever the labels say. */
 .lg-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+/* 🔴 SCRIPT: TWO TALL PILLS, FOUR TAPS. Jason, 2026-09-11: between the two pass
+   options and between the two run options, "remove the radius so they look like
+   1 tall pill. But they are still 4 clickable options." Each column's pair meets
+   with no gap and shares one hairline (the -1px); only the outer corners round. */
+.lg-tiles.is-script { grid-auto-flow: column; grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto; column-gap: 8px; row-gap: 0; }
+.lg-tiles.is-script .lg-tile:nth-child(odd) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.lg-tiles.is-script .lg-tile:nth-child(even) { border-top-left-radius: 0; border-top-right-radius: 0;
+  margin-top: -1px; }
+.lg-tiles.is-script .lg-tile.is-mine { position: relative; z-index: 1; }
 /* The stoppage nugget - one true thing, while nothing is happening. */
 .lg-nugget { display: grid; gap: 6px; }
 .lg-nugget-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
