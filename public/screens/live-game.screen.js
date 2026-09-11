@@ -3149,7 +3149,8 @@ function paint(wrap) {
     const shown = isScript
       ? SCRIPT_ORDER.map((id) => priced.find((o) => o.choice.id === id)).filter(Boolean)
       : priced;
-    const tiles = el('div', 'lg-tiles' + (isScript ? ' is-script' : priced.length > 3 ? ' is-4' : ''));
+    const tiles = el('div', 'lg-tiles' + (isScript ? ' is-script' : priced.length > 3 ? ' is-4' : '')
+      + (type.id === 'direction' ? ' is-dir' : ''));
     for (const o of shown) {
       const b = el('button', 'lg-tile');
       b.appendChild(el('span', 'lg-tile-label', o.choice.label));
@@ -5275,6 +5276,10 @@ const CSS = `
    split it evenly whatever the labels say. */
 .lg-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+/* LEFT, MIDDLE, RIGHT READ WHERE THEY POINT. Jason, 2026-09-11: "Have the center
+   card, center the text. The Right card right justify the text." */
+.lg-tiles.is-dir .lg-tile:nth-child(2) { text-align: center; justify-items: center; }
+.lg-tiles.is-dir .lg-tile:nth-child(3) { text-align: right; justify-items: end; }
 /* 🔴 SCRIPT: TWO TALL PILLS, FOUR TAPS. Jason, 2026-09-11: between the two pass
    options and between the two run options, "remove the radius so they look like
    1 tall pill. But they are still 4 clickable options." Each column's pair meets
