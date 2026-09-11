@@ -46,6 +46,24 @@ export function cleanName(n: unknown, max = LIMITS.nameMax): string {
   return String(n ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
+/** Which games a group picks from. Jason, 2026-09-11: "All games is fine for NFL.
+ *  But it is tough for NCAA. We need a toggle for when setting up the group or the
+ *  [commissioner] can change." A college group picks all games, the Top 25 (a game
+ *  with a ranked team) or one conference (a game with a team from it); an NFL group
+ *  is always all games. `null` is a choice that cannot be honored - a conference
+ *  with no name. */
+export type GroupScope = 'all' | 'top25' | 'conference';
+export function cleanScope(sport: unknown, scope: unknown, arg: unknown): { scope: GroupScope; arg: string | null } | null {
+  if (sport === 'nfl') return { scope: 'all', arg: null };
+  const s = String(scope ?? 'all');
+  if (s === 'all' || s === 'top25') return { scope: s, arg: null };
+  if (s === 'conference') {
+    const a = cleanName(arg, 40);
+    return a ? { scope: 'conference', arg: a } : null;
+  }
+  return null;
+}
+
 const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]{2,}$/;
 
 /** Emails from an array or a pasted list (commas, spaces, new lines). Lowercased,

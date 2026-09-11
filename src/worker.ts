@@ -135,6 +135,37 @@ async function upstream(url: string, ttl: number): Promise<any> {
   return res.json();
 }
 
+/* 🔴 A GAME THAT HAS NOT STARTED HAS NO LIVE STATE, SO ITS LINK UNFURLED AS THE
+ * PRODUCT PITCH. Jason, 2026-09-11: "The text message and graphic don't match" -
+ * the Text it message named Villanova at Louisville, and the link could only say
+ * "Any Given Snap", because the poller writes a game once it is on and the share
+ * went out three hours before kickoff. The week's slate already holds the teams
+ * and the kickoff; this builds the few fields the tags read from it. */
+async function slateState(env: any, key: string): Promise<any | null> {
+  const m = /^(nfl|college-football):(\d+)$/.exec(key);
+  if (!m) return null;
+  const sport = m[1], id = m[2];
+  const season = Number(env.SEASON) || 2026;
+  const wk = Number(String((await env.LIVE.get(`slate:${sport}:current`)) || '').trim());
+  if (!wk) return null;
+  for (const w of [wk, wk + 1, wk - 1]) {
+    const raw = await env.LIVE.get(`slate:${sport}:${season}:${w}`);
+    if (!raw) continue;
+    const g = ((JSON.parse(raw).games || []) as any[]).find((x) => String(x.id) === id);
+    if (!g) continue;
+    const teams: Record<string, any> = {};
+    for (const t of g.teams || []) {
+      teams[String(t.id)] = { name: t.name || t.short || t.abbrev, abbrev: t.abbrev || t.short || t.name };
+    }
+    return {
+      teams, awayTeamId: String(g.awayTeamId), homeTeamId: String(g.homeTeamId), kickoffUtc: g.kickoffUtc,
+      status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'live' : 'scheduled',
+      awayScore: g.awayScore, homeScore: g.homeScore
+    };
+  }
+  return null;
+}
+
 export default {
   /* 🔴 THE SCHEDULED HALF. Jason: "Did we move everything to the cloud?"
    * Not until this. Every ten minutes: refresh the week's slate from the core
@@ -1009,10 +1040,12 @@ export default {
         const res = await env.ASSETS.fetch(new Request(new URL('/', url).toString(), req));
         try {
           const raw = await env.LIVE.get(key);
-          if (!raw) return res;
-          const st = JSON.parse(raw);
+          /* Before kickoff the poller has written nothing; the week's slate has the
+           * teams and the kickoff (slateState, above the default export). */
+          const st = raw ? JSON.parse(raw) : await slateState(env, key);
+          if (!st) return res;
           const away = st.teams?.[st.awayTeamId], home = st.teams?.[st.homeTeamId];
-          if (!away || !home) return res;
+          if (!away || !home || !away.name || !home.name) return res;
 
           const match = `${away.name} at ${home.name}`;
           const when = st.kickoffUtc

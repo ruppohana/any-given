@@ -100,6 +100,54 @@ export function groupSwitcher(groups, currentId, onChange) {
   return wrap;
 }
 
+/* WHICH GAMES A COLLEGE GROUP PICKS FROM. Jason, 2026-09-11: "All games is fine
+ * for NFL. But it is tough for NCAA. We need a toggle for when setting up the group
+ * or the [commissioner] can change. When looking at the games for that group you
+ * should only see what is configured for the group." The server keeps it
+ * (src/lib/groups.ts cleanScope); the slate filters on it. */
+export const SCOPE_CHOICES = [
+  { value: 'all', label: 'All games' },
+  { value: 'top25', label: 'Top 25' },
+  { value: 'conference', label: 'Conference' }
+];
+
+/** "All games", "Top 25 games", "Big Ten games" - for a line or a flash. */
+export function scopeText(scope, arg) {
+  if (scope === 'top25') return 'Top 25 games';
+  if (scope === 'conference' && arg) return arg + ' games';
+  return 'All games';
+}
+
+/** What each choice means, in one line. */
+export function scopeNote(scope) {
+  if (scope === 'top25') return 'Any game with a ranked team in it. It changes each week with the poll.';
+  if (scope === 'conference') return 'Any game with a team from that conference.';
+  return 'Every college game on the slate, about 130 a week.';
+}
+
+let CONFS = null;
+/**
+ * The conferences in this week's college slate, most games first - the choices for
+ * a group's one conference. Read off the live slate so each name is exactly the one
+ * a game carries. Never throws; [] when the slate is not there.
+ * @returns {Promise<Array<{name:string,count:number}>>}
+ */
+export async function collegeConferences() {
+  if (CONFS) return CONFS;
+  const f = (typeof window !== 'undefined' && window.agApiFetch) || fetch;
+  try {
+    const wk = Number(String(await (await f('/api/state/slate:college-football:current')).text()).trim());
+    if (!wk) return [];
+    const r = await f('/api/state/slate:college-football:2026:' + wk);
+    if (!r.ok) return [];
+    const d = await r.json();
+    const n = new Map();
+    for (const g of (d && d.games) || []) for (const c of g.conferences || []) n.set(c, (n.get(c) || 0) + 1);
+    CONFS = [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count }));
+    return CONFS;
+  } catch { return []; }
+}
+
 export const GROUP_CSS = `
 .ag-gsw { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ag-gsw-l { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;

@@ -5,9 +5,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CODE_ALPHABET, LIMITS, KINDNESS, newCode, normCode, cleanName, parseEmails, cleanBody,
+  CODE_ALPHABET, LIMITS, KINDNESS, newCode, normCode, cleanName, cleanScope, parseEmails, cleanBody,
   inviteMail, messageMail
 } from '../src/lib/groups.ts';
+
+test('which games: a college group chooses, an NFL group is all games', () => {
+  // Jason, 2026-09-11: "All games is fine for NFL. But it is tough for NCAA."
+  assert.deepEqual(cleanScope('nfl', 'top25', null), { scope: 'all', arg: null }, 'the NFL is all games');
+  assert.deepEqual(cleanScope('college-football', undefined, null), { scope: 'all', arg: null }, 'the default');
+  assert.deepEqual(cleanScope('college-football', 'top25', 'SEC'), { scope: 'top25', arg: null });
+  assert.deepEqual(cleanScope('college-football', 'conference', '  Big   Ten '), { scope: 'conference', arg: 'Big Ten' });
+  assert.equal(cleanScope('college-football', 'conference', '  '), null, 'a conference needs a name');
+  assert.equal(cleanScope('college-football', 'handpick', 'x'), null, 'only the three a group offers');
+});
 
 test('a code is six characters from the no-vowel alphabet', () => {
   for (let i = 0; i < 200; i++) {

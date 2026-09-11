@@ -23,7 +23,7 @@
  */
 import { sessionAccount } from './auth.ts';
 import { sendMail, mailerReady } from './mail.ts';
-import { newCode, normCode, cleanName, parseEmails, cleanBody, inviteMail, messageMail, LIMITS, KINDNESS } from './lib/groups.ts';
+import { newCode, normCode, cleanName, cleanScope, parseEmails, cleanBody, inviteMail, messageMail, LIMITS, KINDNESS } from './lib/groups.ts';
 
 type Json = (body: unknown, status?: number, ttl?: number) => Response;
 
@@ -79,7 +79,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
   /* ---- my groups ---- */
   if (p === '/api/group/mine') {
     const rows = ((await env.DB.prepare(
-      `SELECT g.id, g.name, g.sport, g.week, g.ats, m.role,
+      `SELECT g.id, g.name, g.sport, g.week, g.ats, g.scope, g.scope_arg, m.role,
               (SELECT COUNT(*) FROM member m2 WHERE m2.pool_id = g.id) AS members
          FROM member m JOIN pool g ON g.id = m.pool_id
         WHERE m.user_id = ? AND g.id NOT LIKE 'world-%'
@@ -87,7 +87,8 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     ).bind(uid).all()).results || []) as any[];
     return json({
       groups: rows.map((r) => ({ id: r.id, name: r.name, sport: r.sport, week: r.week ?? null,
-                                 ats: !!r.ats, members: r.members, role: r.role })),
+                                 ats: !!r.ats, scope: r.scope || 'all', scopeArg: r.scope_arg || null,
+                                 members: r.members, role: r.role })),
       kindness: KINDNESS
     });
   }
@@ -99,6 +100,9 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     if (!name) return json({ error: 'name_required', message: 'Give the group a name.' }, 400);
     const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
     const ats = b.ats ? 1 : 0;
+    /* Which games - college groups choose, an NFL group is all games. */
+    const sc = cleanScope(sport, b.scope, b.scopeArg);
+    if (!sc) return json({ error: 'scope_required', message: 'Pick the conference.' }, 400);
     /* The code is the group's id, so a collision is checked, not hoped against. */
     let id = '';
     for (let i = 0; i < 8 && !id; i++) {
@@ -112,8 +116,8 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
       env.DB.prepare(
         `INSERT INTO pool (id, name, commissioner_id, scope, scope_arg, ranking_source,
                            ats, season, scope_locked_at, created_at, sport, week, pledge_at)
-         VALUES (?, ?, ?, 'all', NULL, NULL, ?, 2026, NULL, ?, ?, NULL, ?)`
-      ).bind(id, name, uid, ats, now, sport, now),
+         VALUES (?, ?, ?, ?, ?, NULL, ?, 2026, NULL, ?, ?, NULL, ?)`
+      ).bind(id, name, uid, sc.scope, sc.arg, ats, now, sport, now),
       env.DB.prepare(
         `INSERT INTO member (pool_id, user_id, display_name, joined_week, role)
          VALUES (?, ?, ?, 0, 'commissioner')`
@@ -121,7 +125,8 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     ]);
     return json({
       ok: true,
-      group: { id, name, sport, week: null, ats: !!ats, members: 1, role: 'commissioner' },
+      group: { id, name, sport, week: null, ats: !!ats, scope: sc.scope, scopeArg: sc.arg,
+               members: 1, role: 'commissioner' },
       invite: { code: id, link: `${SITE}/?pool=${id}` }
     });
   }
@@ -158,7 +163,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
   const gid = normCode(post ? b.id : url.searchParams.get('id'));
   if (!gid) return json({ error: 'id_required' }, 400);
   const g = await env.DB.prepare(
-    `SELECT id, name, sport, week, ats, created_at, pledge_at FROM pool
+    `SELECT id, name, sport, week, ats, scope, scope_arg, created_at, pledge_at FROM pool
       WHERE id = ? AND id NOT LIKE 'world-%'`
   ).bind(gid).first() as any;
   if (!g) return json({ error: 'no_group', message: 'That group is gone.' }, 404);
@@ -187,6 +192,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     const c = members.find((m) => m.role === 'commissioner');
     return json({
       group: { id: g.id, name: g.name, sport: g.sport, week: g.week ?? null, ats: !!g.ats,
+               scope: g.scope || 'all', scopeArg: g.scope_arg || null,
                createdAt: g.created_at, pledged: !!g.pledge_at },
       you: { role: mine.role, muted: !!mine.muted },
       commissioner: c ? c.name : null,
@@ -203,11 +209,22 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     const name = b.name == null ? null : cleanName(b.name);
     if (name === '') return json({ error: 'name_required', message: 'A group needs a name.' }, 400);
     const ats = b.ats == null ? null : (b.ats ? 1 : 0);
+    /* Which games: the commissioner's to change, and it takes effect on the slate
+     * at once. Picks already made are not deleted - they still count. */
+    let sc: { scope: string; arg: string | null } | null = null;
+    if (b.scope != null) {
+      sc = cleanScope(g.sport, b.scope, b.scopeArg);
+      if (!sc) return json({ error: 'scope_required', message: 'Pick the conference.' }, 400);
+    }
     await env.DB.prepare(
       'UPDATE pool SET name = COALESCE(?, name), ats = COALESCE(?, ats) WHERE id = ?'
     ).bind(name, ats, gid).run();
-    const now = await env.DB.prepare('SELECT name, ats FROM pool WHERE id = ?').bind(gid).first() as any;
-    return json({ ok: true, group: { id: gid, name: now.name, ats: !!now.ats } });
+    if (sc) {
+      await env.DB.prepare('UPDATE pool SET scope = ?, scope_arg = ? WHERE id = ?').bind(sc.scope, sc.arg, gid).run();
+    }
+    const now = await env.DB.prepare('SELECT name, ats, scope, scope_arg FROM pool WHERE id = ?').bind(gid).first() as any;
+    return json({ ok: true, group: { id: gid, name: now.name, ats: !!now.ats,
+                                     scope: now.scope || 'all', scopeArg: now.scope_arg || null } });
   }
 
   if (p === '/api/group/remove' && post) {

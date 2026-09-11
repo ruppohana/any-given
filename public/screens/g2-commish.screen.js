@@ -43,7 +43,8 @@
  * CONTRACT-GROUPS.md §3). A person's tap calls the API from its handler, then the
  * screen reloads its data and repaints. Every error `message` is shown verbatim.
  */
-import { myGroups, pickCurrent, groupSwitcher, forgetGroups, GROUP_CSS } from '/components/group.js';
+import { myGroups, pickCurrent, groupSwitcher, forgetGroups, GROUP_CSS,
+         SCOPE_CHOICES, scopeText, scopeNote, collegeConferences } from '/components/group.js';
 import { pageHeader, HEADER_CSS } from '/components/header.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 
@@ -101,7 +102,8 @@ async function load(opts) {
   if (!groups.length) return { ...base, view: 'no-group', groups };
 
   const g = pickCurrent(groups);
-  const out = { ...base, groups, currentId: g.id, kindness: mine.kindness || '' };
+  const out = { ...base, groups, currentId: g.id, kindness: mine.kindness || '',
+                conferences: g.sport === 'nfl' ? [] : await collegeConferences() };
   const r = await call('/api/group/detail?id=' + encodeURIComponent(g.id));
   if (r.offline) return { ...out, view: 'offline' };
   if (r.status === 401) return { ...out, view: 'signed-out' };
@@ -301,6 +303,7 @@ export function render(root, data, state) {
 
     host.appendChild(nameSection(group, flashFor('name')));
     host.appendChild(atsSection(group, flashFor('ats')));
+    if (group.sport !== 'nfl') host.appendChild(scopeSection(group, d.conferences || [], flashFor('scope')));
     if (detail.invite) host.appendChild(inviteSection(group, detail.invite));
     host.appendChild(membersSection(group, members, flashFor('members')));
     host.appendChild(doors());
@@ -402,6 +405,78 @@ export function render(root, data, state) {
       say(m, r.j.message || (r.offline ? 'No connection. Nothing was changed.' : 'That did not save.'), 'bad');
     });
     card.append(sw, note, m);
+    if (flash) card.appendChild(flash);
+    s.appendChild(card);
+    return s;
+  }
+
+  /* ---- which games (a college group) ----
+   * Jason, 2026-09-11: "We need a toggle for when setting up the group or the
+   * [commissioner] can change. When looking at the games for that group you should
+   * only see what is configured for the group." */
+  function scopeSection(group, confs, flash) {
+    const { s, h } = section('Which games');
+    h.id = 'g2-scope-l';
+    const card = el('div', 'g2-card');
+    const cur = { scope: group.scope || 'all', arg: group.scopeArg || '' };
+    let pick = cur.scope, arg = cur.arg;
+    const seg = el('div', 'g2-seg');
+    seg.setAttribute('role', 'radiogroup');
+    seg.setAttribute('aria-labelledby', 'g2-scope-l');
+    const btns = SCOPE_CHOICES.map((o) => {
+      const b = el('button', 'g2-seg-b', o.label);
+      b.type = 'button';
+      b.setAttribute('role', 'radio');
+      b.dataset.v = o.value;
+      b.addEventListener('click', () => { pick = o.value; paint(); });
+      seg.appendChild(b);
+      return b;
+    });
+    const sel = el('select', 'g2-sel');
+    sel.setAttribute('aria-label', 'Conference');
+    const ph = el('option', '', confs.length ? 'Choose a conference' : 'The conference list loads with this week’s games');
+    ph.value = '';
+    sel.appendChild(ph);
+    const names = confs.map((c) => c.name);
+    /* The group's own conference stays choosable in a week it has no games. */
+    if (cur.arg && !names.includes(cur.arg)) names.unshift(cur.arg);
+    for (const n of names) {
+      const c = confs.find((x) => x.name === n);
+      const o = el('option', '', n + (c ? ' · ' + c.count + (c.count === 1 ? ' game' : ' games') + ' this week' : ''));
+      o.value = n;
+      sel.appendChild(o);
+    }
+    sel.value = arg;
+    sel.addEventListener('change', () => { arg = sel.value; paint(); });
+    const note = el('p', 'g2-note', '');
+    const save = el('button', 'g2-btn g2-btn--primary g2-wide', 'Save');
+    save.type = 'button';
+    const m = msgLine();
+    function paint() {
+      for (const b of btns) b.setAttribute('aria-checked', String(b.dataset.v === pick));
+      sel.hidden = pick !== 'conference';
+      note.textContent = scopeNote(pick) + ' Changing it changes the games everyone in the group sees, '
+        + 'starting now. Picks already made still count.';
+      const same = pick === cur.scope && (pick !== 'conference' || arg === cur.arg);
+      save.disabled = same || (pick === 'conference' && !arg);
+    }
+    paint();
+    save.addEventListener('click', async () => {
+      if (save.disabled) return;
+      save.disabled = true;
+      save.textContent = 'Saving…';
+      const r = await call('/api/group/settings',
+        { id: group.id, scope: pick, scopeArg: pick === 'conference' ? arg : null });
+      if (r.ok) {
+        forgetGroups();
+        await refresh(undefined, { where: 'scope', text: 'This group now picks from ' + scopeText(pick, arg) + '.' });
+        return;
+      }
+      save.textContent = 'Save';
+      paint();
+      say(m, r.j.message || (r.offline ? 'No connection. Nothing was changed.' : 'That did not save.'), 'bad');
+    });
+    card.append(seg, sel, note, save, m);
     if (flash) card.appendChild(flash);
     s.appendChild(card);
     return s;

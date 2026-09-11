@@ -30,7 +30,7 @@
  * standings screen draws into a host div for the same reason.
  */
 import { currentGroupId, setCurrentGroupId, myGroups, pickCurrent, groupSwitcher,
-         forgetGroups, GROUP_CSS } from '/components/group.js';
+         forgetGroups, GROUP_CSS, SCOPE_CHOICES, scopeNote, collegeConferences } from '/components/group.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { pageHeader, HEADER_CSS } from '/components/header.js';
 
@@ -66,16 +66,21 @@ export function viewFor(mine) {
 /** The pledge gates Create. Ticked, and the pledge's own words actually on
  *  screen - a box beside a sentence that did not load is a promise to nothing. */
 export function canCreate(form) {
-  return !!(form && form.pledged === true && typeof form.kindness === 'string' && form.kindness.trim());
+  return !!(form && form.pledged === true && typeof form.kindness === 'string' && form.kindness.trim()
+    && !(form.sport !== 'nfl' && form.scope === 'conference' && !String(form.scopeArg || '').trim()));
 }
 
-/** What Create sends. `pledge: true` is only ever sent from a ticked box. */
+/** What Create sends. `pledge: true` is only ever sent from a ticked box. A college
+ *  group also sends which games it picks from; an NFL group is all games. */
 export function createPayload(form) {
+  const college = !(form && form.sport === 'nfl');
+  const scope = form && (form.scope === 'top25' || form.scope === 'conference') ? form.scope : 'all';
   return {
     name: String((form && form.name) || ''),
-    sport: form && form.sport === 'nfl' ? 'nfl' : 'college-football',
+    sport: college ? 'college-football' : 'nfl',
     pledge: true,
-    ats: !!(form && form.ats)
+    ats: !!(form && form.ats),
+    ...(college ? { scope, scopeArg: scope === 'conference' ? String(form.scopeArg || '') : null } : {})
   };
 }
 
@@ -147,7 +152,7 @@ function chosenSport() {
 async function load(force) {
   let mine = await myGroups({ force: !!force });
   const base = { noSample: true, kindness: mine.kindness || '', prefill: prefillCode(readPending()),
-                 sportDefault: chosenSport() };
+                 sportDefault: chosenSport(), conferences: await collegeConferences() };
   let view = viewFor(mine);
   if (view !== 'ready') return Object.assign(base, { view });
 
@@ -343,7 +348,7 @@ function onboarding(host, data, mode) {
 
 function startForm(host, data) {
   const form = { name: '', sport: data.sportDefault === 'nfl' ? 'nfl' : 'college-football', ats: false,
-                 pledged: false, kindness: data.kindness || '' };
+                 scope: 'all', scopeArg: '', pledged: false, kindness: data.kindness || '' };
   const c = el('form', 'card g1-card g1-form');
   c.noValidate = true;
   c.appendChild(el('h2', 'g1-h', 'Start a group'));
@@ -368,7 +373,7 @@ function startForm(host, data) {
   seg.setAttribute('aria-label', 'Sport');
   const segBtns = [];
   for (const [v, t] of [['nfl', 'NFL'], ['college-football', 'College football']]) {
-    const b = btn('g1-seg-b', t, () => { form.sport = v; paintSeg(); });
+    const b = btn('g1-seg-b', t, () => { form.sport = v; paintSeg(); paintScope(); });
     b.setAttribute('role', 'radio');
     b.dataset.v = v;
     segBtns.push(b);
@@ -377,6 +382,43 @@ function startForm(host, data) {
   const paintSeg = () => { for (const b of segBtns) b.setAttribute('aria-checked', String(b.dataset.v === form.sport)); };
   paintSeg();
   c.appendChild(seg);
+
+  /* WHICH GAMES - a college group only. Jason, 2026-09-11: "All games is fine for
+   * NFL. But it is tough for NCAA. We need a toggle for when setting up the group." */
+  const scopeBox = el('div', 'g1-scope');
+  scopeBox.appendChild(el('span', 'g1-label', 'Which games'));
+  const scopeSeg = el('div', 'g1-seg g1-seg--3');
+  scopeSeg.setAttribute('role', 'radiogroup');
+  scopeSeg.setAttribute('aria-label', 'Which games');
+  const scopeBtns = SCOPE_CHOICES.map((o) => {
+    const b = btn('g1-seg-b', o.label, () => { form.scope = o.value; paintScope(); });
+    b.setAttribute('role', 'radio');
+    b.dataset.v = o.value;
+    scopeSeg.appendChild(b);
+    return b;
+  });
+  const confSel = el('select', 'g1-input g1-conf');
+  confSel.setAttribute('aria-label', 'Conference');
+  const confs = Array.isArray(data.conferences) ? data.conferences : [];
+  const ph = el('option', '', confs.length ? 'Choose a conference' : 'The conference list loads with this week’s games');
+  ph.value = '';
+  confSel.appendChild(ph);
+  for (const cf of confs) {
+    const o = el('option', '', cf.name + ' · ' + cf.count + (cf.count === 1 ? ' game' : ' games') + ' this week');
+    o.value = cf.name;
+    confSel.appendChild(o);
+  }
+  confSel.addEventListener('change', () => { form.scopeArg = confSel.value; paint(); });
+  const scopeLine = el('p', 'g1-note', '');
+  scopeBox.append(scopeSeg, confSel, scopeLine);
+  c.appendChild(scopeBox);
+  function paintScope() {
+    scopeBox.hidden = form.sport === 'nfl';
+    for (const b of scopeBtns) b.setAttribute('aria-checked', String(b.dataset.v === form.scope));
+    confSel.hidden = form.scope !== 'conference';
+    scopeLine.textContent = scopeNote(form.scope) + ' The commissioner can change it later.';
+    if (typeof paint === 'function') paint();
+  }
 
   /* Against the spread - optional, off by default. */
   const sw = el('div', 'g1-switch-row');
@@ -409,14 +451,15 @@ function startForm(host, data) {
   const why = el('p', 'g1-why');
   const err = el('p', 'g1-err');
   err.setAttribute('role', 'alert');
-  const paint = () => {
+  function paint() {
     create.disabled = !canCreate(form);
-    why.textContent = create.disabled
-      ? (form.kindness ? 'Tick the pledge to start the group. As commissioner, you keep it kind.' : '')
-      : '';
-  };
+    const needConf = form.sport !== 'nfl' && form.scope === 'conference' && !String(form.scopeArg || '').trim();
+    why.textContent = !create.disabled ? ''
+      : needConf ? 'Choose the conference.'
+      : (form.kindness ? 'Tick the pledge to start the group. As commissioner, you keep it kind.' : '');
+  }
   box.addEventListener('change', () => { form.pledged = box.checked; paint(); });
-  paint();
+  paintScope();
   c.append(create, why, err);
 
   c.addEventListener('submit', async (e) => {

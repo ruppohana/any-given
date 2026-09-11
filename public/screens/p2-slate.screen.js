@@ -728,6 +728,19 @@ async function realSlate(byId, sport, weekArg) {
   } catch { return null; }
 }
 
+/** Is this one of the group's games? A college group picks from all games, the Top
+ *  25 (a game with a ranked team) or one conference (a game with a team from it) -
+ *  the same test the All games chips apply. An NFL group is all games. Written here
+ *  rather than imported: the p2 tests load this module with its imports stripped. */
+function inGroupGames(game, group) {
+  const s = group && group.scope;
+  if (s === 'top25') return !!(game.rankHome || game.rankAway);
+  if (s === 'conference') {
+    return !!(group.scopeArg && Array.isArray(game.conferences) && game.conferences.includes(group.scopeArg));
+  }
+  return true;
+}
+
 /* 🔴 THE GROUP STATE'S DATA - the one place this screen asks the API about groups
  * (CONTRACT-GROUPS §3). The slate is the GROUP's sport and week, never the sport the
  * main app has selected: an NFL group and a college group are one dropdown apart,
@@ -762,7 +775,9 @@ async function groupData(fixtures) {
   const byId = {};
   const db = (fixtures && fixtures.teams && fixtures.teams.teams) || {};
   for (const k of Object.keys(db)) byId[db[k].id] = db[k];
-  const games = (await realSlate(byId, sport, week)) || [];
+  /* 🔴 ONLY THE GROUP'S GAMES. Jason, 2026-09-11: "When looking at the games for
+   * that group you should only see what is configured for the group." */
+  const games = ((await realSlate(byId, sport, week)) || []).filter((g) => inGroupGames(g, group));
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
   const tb = games.find((g) => g.status === 'scheduled') || games[games.length - 1];
   /* 🔴 THE SERVER'S COPY OF YOUR PICKS IN THIS GROUP, MERGED OVER THE PHONE'S.
@@ -792,7 +807,7 @@ async function groupData(fixtures) {
     games, picks: hydrate(local, games),
     pool: {
       id: group.id, name: group.name, commissionerId: null,
-      scope: 'all', scopeArg: null, rankingSource: null,
+      scope: group.scope || 'all', scopeArg: group.scopeArg || null, rankingSource: null,
       ats: !!group.ats, season: 2026, scopeLockedAt: null,
       memberCount: group.members || 0
     },

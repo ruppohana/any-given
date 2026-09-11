@@ -216,9 +216,11 @@ test('getting in: invite only, commissioner on create, code folded, handle requi
   assert.match(GROUPS, /error: 'email_required'/);
   assert.match(GROUPS, /error: 'profile_required'/);
   assert.match(GROUPS, /const code = normCode\(b\.code\)/);
-  /* The league is set on create and the settings route cannot change it. */
+  /* The league is set on create and the settings route cannot change it. It may
+   * READ it - which games a group picks from depends on the league (2026-09-11) -
+   * but nothing the request sends reaches the sport column. */
   const settings = GROUPS.slice(GROUPS.indexOf("'/api/group/settings'"), GROUPS.indexOf("'/api/group/remove'"));
-  assert.doesNotMatch(settings, /sport/);
+  assert.doesNotMatch(settings, /b\.sport|sport\s*=\s*\?|SET[^']*\bsport\b/);
   assert.match(settings, /name = COALESCE\(\?, name\), ats = COALESCE\(\?, ats\)/);
 });
 
