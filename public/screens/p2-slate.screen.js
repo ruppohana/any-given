@@ -1560,7 +1560,9 @@ function openInfo(game, ctx) {
   const A = game.away, H = game.home;
   line('Record', A.record, H.record);
   line('Last season', A.lastRecord, H.lastRecord);
-  line('AP rank', A.rank ? '#' + A.rank : null, H.rank ? '#' + H.rank : null);
+  /* The rank rides on the game as well as the team - the slate carries it there. */
+  const rankA = A.rank || game.rankAway, rankH = H.rank || game.rankHome;
+  line('AP rank', rankA ? '#' + rankA : null, rankH ? '#' + rankH : null);
   /* 🔴 FORM, NEWEST FIRST, AS FIVE LETTERS. Read left to right it is the last
    * five games in order, which is how every football table in the world prints
    * it. Not a sparkline and not a percentage - W L W W T is the whole fact and
@@ -1587,8 +1589,35 @@ function openInfo(game, ctx) {
       'Last meeting: ' + who + ' ' + m.score + (when ? ', ' + when : '')));
   }
 
-  d.appendChild(el('p', 'p2-dlg-n',
-    'The line is the market’s, not ours — read from the public feed.'));
+  /* 🔴 NO NOTE ABOUT THE LINE. Jason, 2026-09-11: "There is no line here so why the
+   * stupid note?" The card never shows the line - the row does - so the sentence
+   * about whose line it is sat under a table with no line in it. */
+
+  /* 🔴 A FUN OR ODD FACT FOR EACH SIDE. Jason, 2026-09-11: "Can we come up with
+   * better info?" and "the fun facts need to be Fun or Odd facts. Not just boring
+   * facts." These are the researched, sourced facts behind the stoppage tile - a
+   * `fact`-kind one never shows here. Filled after the card opens, in a slot per
+   * side so the order holds; a team with no fun or odd fact simply has no line. */
+  const facts = el('div', 'p2-facts');
+  d.appendChild(facts);
+  const lg = ctx && ctx.sport === 'nfl' ? 'nfl' : 'ncaa';
+  for (const side of [A, H]) {
+    if (!side || !side.id) continue;
+    const slot = el('div', 'p2-fact');
+    slot.hidden = true;
+    facts.appendChild(slot);
+    fetch('/nuggets/' + lg + '/' + encodeURIComponent(side.id) + '.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const pool = ((j && j.nuggets) || []).filter((n) => n && n.text && (n.kind === 'fun' || n.kind === 'odd'));
+        if (!pool.length) return;
+        const n = pool[Math.floor(Math.random() * pool.length)];
+        slot.appendChild(el('span', 'p2-fact-t', side.short || side.name || ''));
+        slot.appendChild(el('p', 'p2-fact-b', n.text));
+        slot.hidden = false;
+      })
+      .catch(() => { /* no facts file: no line */ });
+  }
 
   const close = el('button', 'p2-dlg-x', 'Close');
   close.onclick = () => d.close();

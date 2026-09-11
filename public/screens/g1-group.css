@@ -129,6 +129,8 @@
 /* Which games: three across, the conference list under them when it is chosen. */
 .scr-g1-group .g1-seg--3 { grid-template-columns: 1fr 1fr 1fr; }
 .scr-g1-group .g1-scope { display: grid; gap: 6px; }
+/* display: grid beats the browser's own [hidden], so an NFL group still showed it. */
+.scr-g1-group .g1-scope[hidden] { display: none; }
 .scr-g1-group .g1-conf { font-size: var(--t-body); }
 
 .scr-g1-group .g1-switch-row {
