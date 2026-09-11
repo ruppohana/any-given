@@ -4221,18 +4221,66 @@ function nuggets(state) {
    the end of a quarter, halftime. When a snap is coming, the question is the
    only thing that should be asking for attention. One at a time, rotating on
    a twelve-second clock the five-second repaint picks up. */
+/* 🔴 RESEARCHED NUGGETS COME FIRST. Jason, 2026-09-10: "grab 10 for each
+ * team, fun/odd nuggets and when all else fails, factual, should cover the
+ * entire game" - then "Current, and just before the game."
+ *
+ * Ten per team, researched from sources close to kickoff and written to
+ * /nuggets/<nfl|ncaa>/<teamId>.json, each carrying the URL it came from.
+ * Twenty a game covers every timeout, commercial and quarter break. The
+ * game-data nuggets above are the floor, used only once those run out.
+ *
+ * ONE PER STOPPAGE, NEVER REPEATED IN A GAME. A stoppage keeps the nugget it
+ * was given for as long as it lasts (the tile repaints every five seconds
+ * and must not flick between facts), and the next stoppage takes the next
+ * one - the moment of "oh, I didn't know that" does not survive a rerun. */
+const NUG_CACHE = {};
+function teamNuggets(sport, id) {
+  if (!id) return [];
+  const k = (sport === 'nfl' ? 'nfl' : 'ncaa') + '/' + id;
+  if (NUG_CACHE[k] === undefined) {
+    NUG_CACHE[k] = null;
+    fetch('/nuggets/' + k + '.json?v=' + (window.__BUILD__ || ''))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { NUG_CACHE[k] = d && Array.isArray(d.nuggets) ? d.nuggets : []; })
+      .catch(() => { NUG_CACHE[k] = []; });
+  }
+  return NUG_CACHE[k] || [];
+}
+const NUG_ORDER = { fun: 0, odd: 1, fact: 2 };
+function nuggetPool(state) {
+  const sp = leagueOf(state);
+  const sort = (xs) => xs.filter((x) => x && x.text)
+    .slice().sort((a, b) => (NUG_ORDER[a.kind] ?? 2) - (NUG_ORDER[b.kind] ?? 2));
+  const a = sort(teamNuggets(sp, state.awayTeamId)), h = sort(teamNuggets(sp, state.homeTeamId));
+  const pool = [];
+  for (let i = 0; i < Math.max(a.length, h.length); i++) {
+    if (a[i]) pool.push(a[i]);
+    if (h[i]) pool.push(h[i]);
+  }
+  for (const t of nuggets(state)) pool.push({ text: t, kind: 'game' });
+  return pool;
+}
+
 function nuggetCard(state, now) {
   if (!state || state.status !== 'live') return null;
   const lp = state.plays && state.plays[state.plays.length - 1];
   const st = stoppageOf(lp);
   if (!st || st.label === 'Final') return null;
-  const list = nuggets(state);
-  if (!list.length) return null;
-  const i = Math.floor(now / 12000) % list.length;
+  const pool = nuggetPool(state);
+  if (!pool.length) return null;
+  const mem = S.nugPick || (S.nugPick = {});
+  const g = mem[S.key] || (mem[S.key] = { byPlay: {}, used: 0 });
+  if (!(lp.id in g.byPlay)) g.byPlay[lp.id] = g.used++;
+  const n = pool[g.byPlay[lp.id] % pool.length];
   const card = el('div', 'card lg-nugget');
   card.appendChild(el('div', 'lg-nugget-h', st.label + ' · worth knowing'));
-  card.appendChild(el('p', 'lg-nugget-b', list[i]));
-  if (list.length > 1) card.appendChild(el('div', 'lg-nugget-n num', (i + 1) + ' of ' + list.length));
+  card.appendChild(el('p', 'lg-nugget-b', n.text));
+  if (n.source) {
+    let host = '';
+    try { host = new URL(n.source).hostname.replace(/^www\./, ''); } catch { /* no host, no line */ }
+    if (host) card.appendChild(el('div', 'lg-nugget-n', 'via ' + host));
+  }
   return card;
 }
 
