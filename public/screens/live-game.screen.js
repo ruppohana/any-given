@@ -3145,17 +3145,25 @@ function paint(wrap) {
      * keeps its own order (run first); only the card reorders, and the grid
      * flows by column so this list reads down the left, then down the right. */
     const SCRIPT_ORDER = ['pass_yes', 'pass_no', 'run_yes', 'run_no'];
+    const SCRIPT_SHORT = { pass_yes: 'First down', pass_no: 'Short', run_yes: 'First down', run_no: 'Short' };
     const isScript = type.id === 'script';
     const shown = isScript
       ? SCRIPT_ORDER.map((id) => priced.find((o) => o.choice.id === id)).filter(Boolean)
       : priced;
+    /* n-2 / n-3 drive the outer-edge text rule; is-fourth carries the figures. */
     const tiles = el('div', 'lg-tiles' + (isScript ? ' is-script' : priced.length > 3 ? ' is-4' : '')
-      + (type.id === 'direction' ? ' is-dir' : ''));
+      + ' n-' + priced.length + (type.id === 'fourth_down' ? ' is-fourth' : ''));
     for (const o of shown) {
       const b = el('button', 'lg-tile');
-      b.appendChild(el('span', 'lg-tile-label', o.choice.label));
+      const win = Math.round(S.stake * o.pays) - S.stake;
+      /* 🔴 THE FIGURE SAYS PASS OR RUN, SO THE TILE DOES NOT. Jason chose layout
+       * C, 2026-09-11 ("I am thinking C?"): the passer and the ball carrier name
+       * the column, and the tile keeps "First down" / "Short". A screen reader
+       * still hears the whole choice. */
+      b.appendChild(el('span', 'lg-tile-label', isScript ? SCRIPT_SHORT[o.choice.id] : o.choice.label));
+      if (isScript) b.setAttribute('aria-label', `${o.choice.label}, plus ${win} Marbles, pays ${o.pays} times`);
       /* 🔴 THE PRICE IS ON THE TILE, BEFORE THE TAP. */
-      b.appendChild(el('span', 'lg-tile-win num', '+' + (Math.round(S.stake * o.pays) - S.stake)));
+      b.appendChild(el('span', 'lg-tile-win num', '+' + win));
       b.appendChild(el('span', 'lg-tile-x num', o.pays + '× · ' + Math.round(o.p * 100) + '%'));
       b.onclick = () => makeCall(wrap, type, o, last, state);
       tiles.appendChild(b);
@@ -4883,12 +4891,11 @@ function bragButton(state, rows) {
  * arrival by the poller and published with the state, so there is one source
  * and not two copies of the same arithmetic. */
 
-/* The play diagrams behind the script card's two pills - see .lg-tiles.is-script
- * below. Drawn here as SVG and inlined as data URIs, so there is no file to fetch
- * and nothing to cache-bust. Stroke colour is irrelevant: they are used as masks. */
+/* Play-diagram lines for the call cards, drawn as SVG and inlined as data URIs, so
+ * there is no file to fetch. Stroke colour is irrelevant: they are used as masks.
+ * The script card's diagrams were replaced by Jason's own figures on 2026-09-11;
+ * the helper stays for the cards that get play lines. */
 const PLAY_ART = (paths) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 170" fill="none" stroke="#000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`)}")`;
-const PASS_ART = PLAY_ART('<circle cx="134" cy="152" r="7"/><path d="M131 143 C104 118 106 76 140 50" stroke-dasharray="7 7"/><polyline points="127,52 140,50 136,63"/>');
-const RUN_ART = PLAY_ART('<circle cx="134" cy="152" r="7"/><path d="M134 144 L134 118 L114 98 L114 56"/><polyline points="106,66 114,54 122,66"/>');
 
 const CSS = `
 .lg { display: grid; gap: 10px; }
@@ -5276,10 +5283,16 @@ const CSS = `
    split it evenly whatever the labels say. */
 .lg-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-/* LEFT, MIDDLE, RIGHT READ WHERE THEY POINT. Jason, 2026-09-11: "Have the center
-   card, center the text. The Right card right justify the text." */
-.lg-tiles.is-dir .lg-tile:nth-child(2) { text-align: center; justify-items: center; }
-.lg-tiles.is-dir .lg-tile:nth-child(3) { text-align: right; justify-items: end; }
+/* 🔴 THE TEXT SITS ON THE OUTER EDGE. Jason, 2026-09-11, on the direction card:
+   "Have the center card, center the text. The Right card right justify the
+   text", then "Yes" to making it the rule on every card. Two options: left, then
+   right. Three: left, center, right. Four: the left column left, the right
+   column right. Art, where a card has it, takes the inner edge. */
+.lg-tiles.n-2 .lg-tile:nth-child(2),
+.lg-tiles.n-3 .lg-tile:nth-child(3),
+.lg-tiles.is-4 .lg-tile:nth-child(even),
+.lg-tiles.is-script .lg-tile:nth-child(n+3) { text-align: right; justify-items: end; }
+.lg-tiles.n-3 .lg-tile:nth-child(2) { text-align: center; justify-items: center; }
 /* 🔴 SCRIPT: TWO TALL PILLS, FOUR TAPS. Jason, 2026-09-11: between the two pass
    options and between the two run options, "remove the radius so they look like
    1 tall pill. But they are still 4 clickable options." Each column's pair meets
@@ -5290,23 +5303,32 @@ const CSS = `
 .lg-tiles.is-script .lg-tile:nth-child(even) { border-top-left-radius: 0; border-top-right-radius: 0;
   margin-top: -1px; }
 .lg-tiles.is-script .lg-tile.is-mine { position: relative; z-index: 1; }
-/* 🔴 A PLAY DIAGRAM BEHIND EACH PILL. Jason, 2026-09-11: "Can I put a graphic in
-   the tall pill?", then "Option A." The pass pill carries the quarterback's O and
-   a dashed throw, the run pill the back's O and a cut upfield. ONE drawing spans
-   both tiles of a column: each tile shows half of it (mask 100% by 200%, the top
-   half on top, the bottom half below), so it reads as one picture over two taps.
-   It is a mask filled with --fg at .16, so it follows the theme, and it sits in
-   the right-hand third, clear of the words and the payout. */
-.lg-tiles.is-script .lg-tile { position: relative; overflow: hidden; }
-.lg-tiles.is-script .lg-tile > * { position: relative; }
-.lg-tiles.is-script .lg-tile::before { content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: var(--fg); opacity: .16;
-  -webkit-mask: var(--art) no-repeat; mask: var(--art) no-repeat;
-  -webkit-mask-size: 100% 200%; mask-size: 100% 200%; }
-.lg-tiles.is-script .lg-tile:nth-child(odd)::before { -webkit-mask-position: 0 0; mask-position: 0 0; }
-.lg-tiles.is-script .lg-tile:nth-child(even)::before { -webkit-mask-position: 0 100%; mask-position: 0 100%; }
-.lg-tiles.is-script .lg-tile:nth-child(-n+2) { --art: ${PASS_ART}; }
-.lg-tiles.is-script .lg-tile:nth-child(n+3) { --art: ${RUN_ART}; }
+/* 🔴 JASON'S OWN STICK FIGURES BEHIND THE CHOICES. He drew them (2026-09-11:
+   "I drew theses") and picked "the run/pass/kick on the left" of his sheet;
+   tools/figures.mjs cuts them into public/art/fig-*.png. Each file is a mask in
+   the shape of its tile or pill, the figure against the INNER edge, filled here
+   with --fg at .24 so it follows the theme. On the script card ONE figure spans
+   both tiles of a pill: each tile shows half (mask auto by 200%, top half on
+   top, bottom half below), so it reads as one picture over two taps. Both
+   figures on a card are drawn at one scale - "Helmets the same size on adjacent
+   cards." */
+.lg-tiles.is-script .lg-tile, .lg-tiles.is-fourth .lg-tile { position: relative; overflow: hidden; }
+.lg-tiles.is-script .lg-tile > *, .lg-tiles.is-fourth .lg-tile > * { position: relative; }
+.lg-tiles.is-script .lg-tile::before, .lg-tiles.is-fourth .lg-tile::before { content: ''; position: absolute;
+  inset: 0; pointer-events: none; background: var(--fg); opacity: .24;
+  -webkit-mask: var(--art) no-repeat; mask: var(--art) no-repeat; }
+.lg-tiles.is-script .lg-tile::before { -webkit-mask-size: auto 200%; mask-size: auto 200%; }
+.lg-tiles.is-script .lg-tile:nth-child(-n+2) { --art: url('/art/fig-pass.png'); }
+.lg-tiles.is-script .lg-tile:nth-child(n+3) { --art: url('/art/fig-run.png'); }
+.lg-tiles.is-script .lg-tile:nth-child(1)::before { -webkit-mask-position: right 0 top 0; mask-position: right 0 top 0; }
+.lg-tiles.is-script .lg-tile:nth-child(2)::before { -webkit-mask-position: right 0 bottom 0; mask-position: right 0 bottom 0; }
+.lg-tiles.is-script .lg-tile:nth-child(3)::before { -webkit-mask-position: left 0 top 0; mask-position: left 0 top 0; }
+.lg-tiles.is-script .lg-tile:nth-child(4)::before { -webkit-mask-position: left 0 bottom 0; mask-position: left 0 bottom 0; }
+.lg-tiles.is-fourth .lg-tile::before { -webkit-mask-size: auto 100%; mask-size: auto 100%; }
+.lg-tiles.is-fourth .lg-tile:nth-child(1) { --art: url('/art/fig-go.png'); }
+.lg-tiles.is-fourth .lg-tile:nth-child(2) { --art: url('/art/fig-kick.png'); }
+.lg-tiles.is-fourth .lg-tile:nth-child(1)::before { -webkit-mask-position: right 0 center; mask-position: right 0 center; }
+.lg-tiles.is-fourth .lg-tile:nth-child(2)::before { -webkit-mask-position: left 0 center; mask-position: left 0 center; }
 /* The stoppage nugget - one true thing, while nothing is happening. */
 .lg-nugget { display: grid; gap: 6px; }
 .lg-nugget-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
