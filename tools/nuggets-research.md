@@ -36,16 +36,24 @@ Work in `C:\Claude\Knowledge\anygiven`. It is its own git repo with a GitHub rem
    the last game on Monday, so Tuesday morning ... if it has a problem it can run Wednesday
    morning, and so on"*): a team is due for its next game inside 7 days once its previous game is
    over and its file was written on or before that game's day. It prints
-   `{now, days, teams:[{league, teamId, team, opponent, gameDate, prevDate, file, asOf}], urgent, errors}`
+   `{now, days, teams:[{league, teamId, team, opponent, gameDate, prevDate, file, asOf}], urgent, unshipped, errors}`
    — `urgent` is the due teams whose game is inside 48 hours; research those first. **If `errors` is
-   non-empty (exit code 2), report which, and research only the teams that did list.** **If `teams`
-   is empty and `errors` is empty, stop and report "nothing due".** A normal week: college teams
+   non-empty (exit code 2), report which, and research only the teams that did list.** **If `unshipped`
+   is non-empty, an earlier run wrote those files and never shipped them** (2026-09-11: all 27 NFL
+   files sat checked on disk while the site showed them missing) — do not research them again; take
+   them straight to step 3 and ship them with whatever is researched today. **If `teams`,
+   `unshipped` and `errors` are all empty, stop and report "nothing due".** A normal week: college teams
    come due Sunday morning, NFL teams Tuesday morning; most other mornings nothing is due.
 
 2. **Research in batches.** Four teams per subagent, keeping both teams of one game in the same
    batch where possible. Dispatch `general-purpose` subagents **in the background, at most 8 at a
    time**; when one finishes, dispatch the next batch. Give each the brief below with its teams
    filled in — every field, every time. **A subagent never spawns a subagent.**
+   **Ship as soon as every due team's file exists and passes the check — never wait on a batch's
+   report.** After each report arrives, run `node tools/nugget-check.mjs` over every due team's file;
+   once all of them exist and pass, go to step 4 even if batches are still out. On 2026-09-11 two
+   batches wrote their files and then sat forever on a permission prompt, their reports never came,
+   and the run idled with all 27 files done and nothing shipped until a person noticed.
 
 3. **Check every file written.**
    `node tools/nugget-check.mjs <each file>` — it fails on bad JSON, missing fields, over 140
@@ -114,8 +122,10 @@ Work in `C:\Claude\Knowledge\anygiven`. It is its own git repo with a GitHub rem
 > `{"league":"<nfl|ncaa>","teamId":"<id>","team":"<name>","asOf":"<today YYYY-MM-DD>","nuggets":[{"text":"...","kind":"fun","source":"https://..."}]}`
 > "kind" is exactly one of "fun", "odd", "fact". "source" is the URL you opened that states it.
 >
-> CONSTRAINTS: Write ONLY the files listed above - create, edit or delete nothing else, and do
-> not run git. If WebSearch or WebFetch are not loaded, load them with ToolSearch
+> CONSTRAINTS: Write ONLY the files listed above - create, edit or delete nothing else, and run
+> NO shell command at all - no Bash, no PowerShell, no git, not even to check your own JSON (Read
+> the file back instead). This run is unattended: a shell command waits on a permission prompt
+> nobody will answer, and your report never arrives. If WebSearch or WebFetch are not loaded, load them with ToolSearch
 > (query "select:WebSearch,WebFetch"). You are not being asked whether the feature is a good idea.
 >
 > RETURN (short): per team, nuggets written and the fun/odd/fact split; every claim dropped as

@@ -23,6 +23,7 @@
  * `errors` and the exit code is 2.
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { isFreshForNext } from '../src/lib/nuggets.ts';
@@ -42,6 +43,17 @@ try {
 } catch (e) { errors.push('due list: ' + e.message); }
 if (due && Array.isArray(due.errors)) errors.push(...due.errors);
 
+/* 🔴 FILES WRITTEN BUT NEVER SHIPPED (2026-09-11). A run that stalls after its
+ * research leaves checked files on disk that the site does not have - and those
+ * files make their teams look fresh below, so the next morning would say "nothing
+ * due" and never ship them. So they are listed, and the run ships them even when
+ * nothing is due. */
+let unshipped = [];
+try {
+  unshipped = execFileSync('git', ['status', '--porcelain', '--untracked-files=all', '--', 'public/nuggets'], { cwd: ROOT, encoding: 'utf8' })
+    .split('\n').map((l) => l.slice(3).trim()).filter((p) => p.endsWith('.json'));
+} catch (e) { errors.push('git status: ' + e.message); }
+
 const out = [];
 for (const t of (due && due.teams) || []) {
   const file = join(ROOT, 'public', 'nuggets', t.league, t.teamId + '.json');
@@ -57,6 +69,7 @@ out.sort((a, b) => a.kickoffUtc - b.kickoffUtc || a.team.localeCompare(b.team));
 const soon = Date.now() + 2 * 24 * 60 * 60 * 1000;
 const urgent = out.filter((t) => !t.fresh && t.kickoffUtc < soon);
 console.error(`next ${days} days: ${out.length} team(s) ${all ? 'playing' : 'due'}, ${urgent.length} inside 48 hours`
+  + (unshipped.length ? `, ${unshipped.length} file(s) written but never shipped` : '')
   + (errors.length ? ` - ${errors.length} error(s)` : ''));
-console.log(JSON.stringify({ now: new Date().toISOString(), days, teams: out, urgent, errors }, null, 2));
+console.log(JSON.stringify({ now: new Date().toISOString(), days, teams: out, urgent, unshipped, errors }, null, 2));
 if (errors.length) process.exitCode = 2;
