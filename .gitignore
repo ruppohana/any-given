@@ -25,3 +25,6 @@ dist/
 poll.log
 .poll.log
 .poll.err
+
+# personal Claude Code permissions (the 5 AM nuggets run) - never committed
+.claude/settings.local.json
