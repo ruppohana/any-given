@@ -275,10 +275,27 @@ export function readDrives(summary: any): LiveDrive[] {
  * offence's crest is the same class of error as naming the tackler as the
  * carrier — it looks right and it is backwards.
  */
+/* 🔴 A FORMATION IS NOT A PLAYER. Found 2026-09-10 on SF at LAR building the
+ * timeout nuggets: the NFL play text leads with the formation - "(No Huddle,
+ * Shotgun)", "No Huddle-Shotgun" - and the parser took "No Huddle" as the
+ * rusher and the passer; "field goal is No Good" made "No Good" the kicker.
+ * The play-by-play has been labelling rows "No Huddle · rusher" all night.
+ *
+ * So a star whose name is a formation or a result is re-read with the
+ * formation words taken out, and if that still yields no person the play
+ * has no star rather than a wrong one - 7.2's rule is that the parser says
+ * who the play was about, and "nobody" is an answer where "No Huddle" is a
+ * lie. */
+const NOT_A_PLAYER = /^(?:No Huddle|No Good|Shotgun|Pistol|Under Center|Good|Timeout|Penalty|End)\b/i;
+const FORMATION = /\(?\b(?:No Huddle|Shotgun|Pistol|Under Center)\b(?:[\s,-]*(?:No Huddle|Shotgun|Pistol|Under Center)\b)*\)?[\s,-]*/gi;
+
 function starOf(text: string, typeText: string, offenseTeamId: string) {
   try {
-    const r = roles(text, typeText);
-    if (!r.star || !r.star.name) return null;
+    let r = roles(text, typeText);
+    if (r.star && r.star.name && NOT_A_PLAYER.test(r.star.name)) {
+      r = roles(text.replace(FORMATION, ' ').replace(/\s+/g, ' ').trim(), typeText);
+    }
+    if (!r.star || !r.star.name || NOT_A_PLAYER.test(r.star.name)) return null;
     return {
       name: r.star.name,
       jersey: r.star.number ?? null,

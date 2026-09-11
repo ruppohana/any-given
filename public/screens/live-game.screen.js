@@ -432,9 +432,20 @@ function tvCard(state, wrap) {
   return c;
 }
 
-function waitingCard() {
+function waitingCard(state, now) {
   const c = el('div', 'card lg-call is-waiting');
   c.appendChild(el('div', 'lg-waiting', 'Waiting for the snap…'));
+  /* 🔴 THE NUGGET LIVES IN THIS TILE. Jason, 2026-09-10: "A time out is a
+   * great time for a nugget." / "In the waiting for the snap tile." / "Also 2
+   * min warning." The tile is already the thing on screen while nothing is
+   * happening, so it carries one true line during any stoppage - timeout,
+   * commercial, two-minute warning, end of a quarter, halftime - instead of
+   * a second card appearing beside it. */
+  const n = state ? nuggetCard(state, now || Date.now()) : null;
+  if (n) {
+    for (const k of [...n.childNodes]) c.appendChild(k);
+    c.classList.add('has-nugget');
+  }
   return c;
 }
 
@@ -3062,7 +3073,7 @@ function paint(wrap) {
      * the screen is still working and something is coming, which is exactly what
      * is true. It is a LINE, not a card: a panel here would be the "Sat this one
      * out" card again in quieter clothes. */
-    wrap.appendChild(waitingCard());
+    wrap.appendChild(waitingCard(state, now));
   } else if (type && last && !already) {
     const card = el('div', 'card lg-call');
     /* 🔴 THE SAME FOUR WORDS OVER EVERY QUESTION. Jason: "above the question,
@@ -3180,7 +3191,7 @@ function paint(wrap) {
      * So both paths end the same way: the question is gone and the line says
      * what is true. What you staked lives in the list below, which is where a
      * record belongs. */
-    wrap.appendChild(waitingCard());
+    wrap.appendChild(waitingCard(state, now));
   }
 
   /* ---- what just happened, in words ---- */
@@ -4116,6 +4127,108 @@ function pregame(state, now, wrap) {
   return box;
 }
 
+/* 🔴 A NUGGET WHEN NOTHING IS HAPPENING. Jason, 2026-09-10: "What happened to
+ * the AI interesting facts?" then "A time out is a great time for a nugget."
+ *
+ * The old laptop app's facts were bullets from a school's game-notes PDF,
+ * loaded by hand per game - nothing a feed carries. These are the same idea
+ * built from what this screen already holds, so every one is TRUE by
+ * construction: tonight's held plays (leaders, the longest play, the big
+ * plays) and the week's slate (records, ranks, form, the line and the total
+ * against the score). Nothing is invented and nothing is generated - a nugget
+ * this app cannot back with a number it has is a nugget it does not show.
+ *
+ * HELD PLAYS ONLY, like everything here: a leader line built from the raw
+ * feed would count a carry your television has not shown you yet.
+ *
+ * 🔴 PLAYER NAMES ARE FILTERED, because the NFL parser still reads formation
+ * words as the star - "No Huddle" as a rusher, "No Good" as a kicker. Only a
+ * name shaped like one ("B.Corum", "N.Thomas") is ever put in a sentence. */
+/* A person: "B.Corum" (live grammar) or "Bryce Young" (the 2024-25 grammar,
+   see BUILD-BRIEF 7.1) - and never a formation or a result word. */
+const REAL_NAME = /^(?!(?:No Huddle|No Good|Shotgun|Pistol|Under Center|Good|Timeout|Penalty|End)\b)[A-Z][A-Za-z'-]*(?:\.\s?|\s)[A-Z][A-Za-z'-]+/;
+function nuggets(state) {
+  const out = [];
+  const plays = (state && state.plays) || [];
+  const T = (state && state.teams) || {};
+  const nick = (id) => { const t = T[id]; return t ? (t.nick || t.short || t.abbrev) : null; };
+  const ab = (id) => (T[id] && T[id].abbrev) || '';
+  const clean = (n) => String(n || '').replace(/^#\d+\s*/, '').trim();
+
+  const rush = {}, rec = {};
+  const snaps = plays.filter((p) => (p.kind === 'run' || p.kind === 'pass') && !/no play/i.test(p.text || ''));
+  for (const p of snaps) {
+    const s = p.star; const n = s && clean(s.name);
+    if (!n || !REAL_NAME.test(n)) continue;
+    const y = Number(p.statYardage) || 0;
+    const k = n + '|' + s.teamId;
+    if (s.role === 'rusher' && p.kind === 'run') {
+      const r = rush[k] || (rush[k] = { n, t: s.teamId, y: 0, c: 0 }); r.y += y; r.c++;
+    }
+    if (s.role === 'receiver' && /pass complete|complete/i.test(p.text || '') && !/incomplete/i.test(p.text || '')) {
+      const r = rec[k] || (rec[k] = { n, t: s.teamId, y: 0, c: 0 }); r.y += y; r.c++;
+    }
+  }
+  const top = (o) => Object.values(o).sort((a, b) => b.y - a.y)[0];
+  const tr = top(rush), tc = top(rec);
+  if (tr && tr.c >= 3) out.push(`${tr.n} (${ab(tr.t)}) has ${tr.c} carries for ${tr.y} yards tonight.`);
+  if (tc && tc.c >= 2) out.push(`${tc.n} (${ab(tc.t)}) has ${tc.c} catches for ${tc.y} yards.`);
+
+  const longest = snaps.slice().sort((a, b) => (b.statYardage || 0) - (a.statYardage || 0))[0];
+  if (longest && (longest.statYardage || 0) >= 15) {
+    const who = longest.star && REAL_NAME.test(clean(longest.star.name)) ? ' - ' + clean(longest.star.name) : '';
+    out.push(`Longest play so far: ${longest.statYardage} yards${who} (${ab(longest.startTeamId)}), Q${longest.quarter}.`);
+  }
+  const big = {};
+  for (const p of snaps) if ((p.statYardage || 0) >= 20) big[p.startTeamId] = (big[p.startTeamId] || 0) + 1;
+  for (const [id, c] of Object.entries(big)) {
+    if (c >= 2 && nick(id)) out.push(`The ${nick(id)} have ${c} plays of 20+ yards.`);
+  }
+
+  /* The slate: what the week's capture knows about these two before kickoff. */
+  const [sp, gid] = String(S.key || '').split(':');
+  const g = S.also && S.also.sport === sp ? (S.also.games || []).find((x) => String(x.id) === gid) : null;
+  if (g) {
+    const byId = {};
+    for (const t of (g.teams || [])) byId[String(t.id)] = t;
+    const home = byId[String(g.homeTeamId)], away = byId[String(g.awayTeamId)];
+    const hn = nick(g.homeTeamId) || (home && home.short), an = nick(g.awayTeamId) || (away && away.short);
+    if (home && away && home.record && away.record) out.push(`They came in ${an} ${away.record}, ${hn} ${home.record}.`);
+    for (const [t, n] of [[away, an], [home, hn]]) {
+      if (t && t.rank) out.push(`${n} are ranked #${t.rank}${t.conference ? ' in the ' + t.conference + ' - and the country' : ''}.`.replace(' in the ' + (t.conference || '') + ' - and the country', ''));
+      if (t && t.form && /^[WLT]{3,}$/.test(t.form)) out.push(`${n}' last ${t.form.length}: ${t.form.split('').join(' ')}.`);
+    }
+    const hs = Number(state.homeScore) || 0, as = Number(state.awayScore) || 0;
+    if (typeof g.spread === 'number' && g.spread !== 0 && hn && an) {
+      const fav = g.spread < 0 ? hn : an;
+      const favBy = g.spread < 0 ? hs - as : as - hs;
+      const line = Math.abs(g.spread);
+      out.push(`The ${fav} were ${line}-point favorites. Right now they ${favBy >= 0 ? 'lead by ' + favBy : 'trail by ' + (-favBy)}.`);
+    }
+    if (typeof g.total === 'number') out.push(`The total was set at ${g.total}. There are ${hs + as} points on the board.`);
+  }
+  return out;
+}
+
+/* Only during a stoppage - a timeout, a commercial, the two-minute warning,
+   the end of a quarter, halftime. When a snap is coming, the question is the
+   only thing that should be asking for attention. One at a time, rotating on
+   a twelve-second clock the five-second repaint picks up. */
+function nuggetCard(state, now) {
+  if (!state || state.status !== 'live') return null;
+  const lp = state.plays && state.plays[state.plays.length - 1];
+  const st = stoppageOf(lp);
+  if (!st || st.label === 'Final') return null;
+  const list = nuggets(state);
+  if (!list.length) return null;
+  const i = Math.floor(now / 12000) % list.length;
+  const card = el('div', 'card lg-nugget');
+  card.appendChild(el('div', 'lg-nugget-h', st.label + ' · worth knowing'));
+  card.appendChild(el('p', 'lg-nugget-b', list[i]));
+  if (list.length > 1) card.appendChild(el('div', 'lg-nugget-n num', (i + 1) + ' of ' + list.length));
+  return card;
+}
+
 /**
  * 🔴 THE CALL IS THE GAME; THE COMMENTARY IS WHY IT WAS A GAME.
  *
@@ -4828,6 +4941,12 @@ const CSS = `
    split it evenly whatever the labels say. */
 .lg-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
 .lg-tiles.is-4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+/* The stoppage nugget - one true thing, while nothing is happening. */
+.lg-nugget { display: grid; gap: 6px; }
+.lg-nugget-h { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--accent); }
+.lg-nugget-b { margin: 0; font-size: var(--t-emph); font-weight: 700; line-height: 1.3; color: var(--fg); }
+.lg-nugget-n { font-size: var(--t-micro); color: var(--dim); }
 /* 🔴 THE TILE HAD NO RADIUS AT ALL. Jason: "maybe round the corners?" It went
    unnoticed while the tiles were borderless — with nothing drawn at the edge
    there were no corners to see. The moment the taken one got a 2px accent
