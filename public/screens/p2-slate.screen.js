@@ -1683,41 +1683,11 @@ export function render(root, data, state) {
 
   const shown = data.games.filter((g) => gamePasses(g, filter));
   const groups = groupsOf(shown);
-  const days = daysOf(groups);
-
-  /* THE JUMP STRIP. 131 games is roughly 8,000px of scroll and Sunday is unreachable
-   * without it. This is GROUPING MADE NAVIGABLE and it is NOT a search box and NOT a
-   * filter: it changes where you are, never which games exist. */
-  if (days.length > 1 && data.games.length >= JUMP_STRIP_MIN) {
-    const strip = el('div', 'p2-days ag-scroll-x');
-    strip.setAttribute('role', 'group');
-    strip.setAttribute('aria-label', 'Jump to a day');
-    for (const d of days) {
-      /* 🔴 `p2-daychip`, NOT `p2-day`. Two different things carried the same
-       * class name - this pill in the jump strip, and the day CARD further down
-       * that Jason's screenshot showed broken. Both had a full rule block, the
-       * later one won every property it named, and each element got half of the
-       * other's design: the chips picked up `display: grid` and a card shadow,
-       * the card picked up a pill's min-height.
-       *
-       * Same bug shape as the two `.p2-mkt` rules noted in the CSS, and the same
-       * fix: two rules for one selector is the defect, whichever one wins. */
-      const b = el('button', 'p2-daychip');
-      b.type = 'button';
-      b.append(el('span', 'p2-daychip-l', d.label), el('span', 'p2-daychip-n num', String(d.count)));
-      b.addEventListener('click', () => {
-        const t = root.querySelector('.p2-grp[data-key="' + cssEsc(d.anchor) + '"]');
-        if (!t) return;
-        /* A jump into a rolled-up day opens it first. Scrolling somebody to a
-         * closed section is a jump that appears to do nothing. */
-        const sec = t.closest('details');
-        if (sec) sec.open = true;
-        t.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      });
-      strip.appendChild(b);
-    }
-    root.appendChild(strip);
-  }
+  /* 🔴 THE DAY JUMP STRIP IS GONE. Jason, 2026-09-11, circling "Thu 10 · Fri 11 ·
+   * Sat 12" under the filter pills: "i dont need the date/date on this page." The
+   * day sections below already carry their own headers and roll up, so the strip
+   * was a second row of pills saying what the list says. daysOf() stays - it is
+   * the grouping, and it is tested on its own. */
 
   /* CBS's `AWAY / 0-of-15 Picks / HOME` - ONE element doing column labels and progress at
    * the same time. Sticky, so progress is visible without leaving the screen. */

@@ -16,16 +16,6 @@
 .scr-p2-slate .p2-h { font-size: var(--t-section); font-weight: 650; margin: 0 0 2px; }
 .scr-p2-slate .p2-sub { margin: 0 0 10px; font-size: var(--t-micro); color: var(--dim); }
 
-/* ---- the day jump strip. Grouping made navigable. Not a filter, not a search box. */
-.scr-p2-slate .p2-days { display: flex; gap: 6px; padding-bottom: 10px; }
-.scr-p2-slate .p2-daychip {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-  min-height: var(--tap-min); padding: 0 12px;
-  border: 1px solid var(--line); border-radius: var(--radius-pill);
-  background: var(--card); color: var(--fg); font-size: var(--t-body); font-weight: 600;
-}
-.scr-p2-slate .p2-daychip-n { font-size: var(--t-micro); color: var(--dim); font-weight: 500; }
-
 /* ---- CBS's one element doing column labels and progress at once. Sticky: progress is
  * visible without leaving the screen, which is the whole requirement. */
 /* 🔴 IT STICKS FLUSH TO THE TOP, NOT INSIDE THE PADDING. Jason, 2026-09-09:

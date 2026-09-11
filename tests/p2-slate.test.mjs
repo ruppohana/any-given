@@ -252,7 +252,8 @@ test('§5 - every number is tabular', () => {
    * does not have, and the shared page header replaced it. Its rule - figures
    * are tabular so a header cannot jitter - moved to the template and is
    * asserted below rather than dropped. */
-  for (const cls of ['p2-spread', 'p2-crowd', 'p2-center', 'p2-bar-p', 'p2-tb-in', 'p2-daychip-n', 'p2-grp-n']) {
+  /* `p2-daychip-n` left with the day jump strip on 2026-09-11. */
+  for (const cls of ['p2-spread', 'p2-crowd', 'p2-center', 'p2-bar-p', 'p2-tb-in', 'p2-grp-n']) {
     const re = new RegExp(`['"\`]${cls}[^'"\`]*num`);
     assert.ok(re.test(CODE), `${cls} is not marked .num`);
   }
@@ -322,9 +323,9 @@ test('§5 - tap targets. Nothing a thumb hits is under 44px', () => {
   const zoneH = (CSSCODE.match(/\.p2-zone[^}]*min-height:\s*(\d+)px/s) || [])[1];
   assert.ok(zoneH && Number(zoneH) >= 44,
     `the pick target is ${zoneH}px - one-handed, at night, the floor is 44`);
-  assert.ok(/\.p2-daychip\b[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
-  // The filter pills match the day chips (Jason, 2026-09-10: "can these pills be
-  // the same size(ish), height") - at the 44px floor, not below it.
+  // The filter pills sit at the 44px floor (Jason, 2026-09-10: "can these pills be
+  // the same size(ish), height" - asked of them and the day chips, which went on
+  // 2026-09-11).
   assert.ok(/\.p2-filter \{[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE), 'filter pills sit at --tap-min');
   assert.ok(/\.p2-tb-in[^}]*min-height:\s*var\(--tap-min\)/s.test(CSSCODE));
 });
