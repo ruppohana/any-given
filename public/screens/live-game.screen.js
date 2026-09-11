@@ -1104,6 +1104,14 @@ function drawField(wrap, state, ball, cam) {
   const lastTxt = lastVis ? ((lastVis.typeText || '') + ' ' + (lastVis.text || '')) : '';
   const scored = !!(lastVis && lastVis.scoringPlay) && /touchdown/i.test(lastTxt);
   const scoredBy = scored && lastVis.offenseTeamId && teams[lastVis.offenseTeamId];
+  /* 🔴 NO BALL AT A BREAK. Jason, 2026-09-10, on SF at LAR's final: "At
+     final, halftime, etc remove the ball and arrows." A ball and a direction
+     say "this is where play is and which way it goes" - at the end of a
+     quarter, at halftime and at the final, neither is true. The flash word
+     is the whole picture then; the field underneath is just the field. */
+  const brk = stoppageOf(lastVis);
+  const atBreak = state.status === 'final'
+    || !!(brk && (brk.label === 'Half time' || brk.label === 'End of the quarter' || brk.label === 'Final'));
 
   const cap = el('div', 'lg-fieldcap');
   const leftTxt = scored
@@ -1269,7 +1277,7 @@ function drawField(wrap, state, ball, cam) {
   /* The first-down line in the color every broadcast has used for thirty
      years, and the line of scrimmage in white. */
   const fdYard = si.down && typeof si.distance === 'number' ? ball + dir * si.distance : null;
-  if (!scored && fdYard != null && fdYard > lo && fdYard < hi && fdYard >= 0 && fdYard <= 100) {
+  if (!scored && !atBreak && fdYard != null && fdYard > lo && fdYard < hi && fdYard >= 0 && fdYard <= 100) {
     svg.appendChild(line(fdYard, 'lg-f-fd', 2.4));
   }
   /* 🔴 NO LINE OF SCRIMMAGE IN THE END ZONE. Jason: "what happened here?" -
@@ -1286,7 +1294,7 @@ function drawField(wrap, state, ball, cam) {
    * about -4 and the line went straight through it. `scored` is the play
    * saying so, which is the real condition; the yard range is the backstop
    * for any spot past either goal line. */
-  if (!scored && ball >= 0 && ball <= 100) svg.appendChild(line(ball, 'lg-f-los', 2.2));
+  if (!scored && !atBreak && ball >= 0 && ball <= 100) svg.appendChild(line(ball, 'lg-f-los', 2.2));
 
   /* The ball, sat on the near hash where a spot actually is. */
   /* 🔴 BETWEEN THE HASH ROWS, NOT ON ONE. Jason: "move the ball up 10ish pixels
@@ -1315,10 +1323,12 @@ function drawField(wrap, state, ball, cam) {
      the graphic and it was the smallest mark on it - smaller than a yard
      number, on a field 400 units wide. The lace scales with it or the shape
      stops reading as a football and becomes a brown pill. */
-  svg.appendChild(mk('ellipse', { cx: bp[0].toFixed(2), cy: bp[1].toFixed(2), rx: 12.8, ry: 8,
-    class: 'lg-f-ball' }));
-  svg.appendChild(mk('line', { x1: (bp[0] - 5.2).toFixed(2), y1: bp[1].toFixed(2),
-    x2: (bp[0] + 5.2).toFixed(2), y2: bp[1].toFixed(2), class: 'lg-f-lace' }));
+  if (!atBreak) {
+    svg.appendChild(mk('ellipse', { cx: bp[0].toFixed(2), cy: bp[1].toFixed(2), rx: 12.8, ry: 8,
+      class: 'lg-f-ball' }));
+    svg.appendChild(mk('line', { x1: (bp[0] - 5.2).toFixed(2), y1: bp[1].toFixed(2),
+      x2: (bp[0] + 5.2).toFixed(2), y2: bp[1].toFixed(2), class: 'lg-f-lace' }));
+  }
 
   /* 🔴 CHEVRONS AT THE EDGE. Jason answered the direction question with a
    * picture of three nested chevrons, which is the right answer and beats
@@ -1390,7 +1400,7 @@ function drawField(wrap, state, ball, cam) {
     top.setAttribute('stroke', chevColor);
     chev.appendChild(top);
   }
-  svg.appendChild(chev);
+  if (!atBreak) svg.appendChild(chev);
 
   wrap.appendChild(svg);
   /* 🔴 NO CAPTION. Jason: "remove this now", of the line under the field.
