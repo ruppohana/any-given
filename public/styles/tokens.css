@@ -398,8 +398,11 @@
    its width out of the page only on pages tall enough to scroll, so the menu and
    the fixed nav moved left by that much every time you went from a short page to
    a long one. `stable` keeps the gutter on every page; the bar itself still only
-   appears where it is needed. Phones use overlay scrollbars and are unaffected. */
-html { scrollbar-gutter: stable; }
+   appears where it is needed. `both-edges` reserves the same width on the left,
+   so the column always sits dead center - Jason, same night: "can we put the same
+   gutter on the left so it always looks centered?" Phones use overlay scrollbars
+   and are unaffected. */
+html { scrollbar-gutter: stable both-edges; }
 
 body {
   margin: 0;
