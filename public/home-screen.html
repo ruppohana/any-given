@@ -1,0 +1,355 @@
+<!doctype html>
+<!-- Home screen guide. Steps checked 2026-09-11 against the official pages:
+  Apple, iPhone User Guide (iOS 26), "Bookmark a website in Safari on iPhone",
+    section "Add a website icon to your Home Screen":
+    https://support.apple.com/guide/iphone/bookmark-a-website-iph42ab2f3a7/ios
+  Apple, "Turn a website into an app in Safari on iPhone":
+    https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios
+  Apple, "Change the layout in Safari on iPhone" (Compact / Bottom / Top):
+    https://support.apple.com/guide/iphone/change-the-layout-ipha9ffea1a3/ios
+  Google Chrome Help, Android, "Use web apps":
+    https://support.google.com/chrome/answer/9658361?hl=en&co=GENIE.Platform%3DAndroid
+  Google Chrome Help, Android, "Change the address bar's position":
+    https://support.google.com/chrome/answer/14181646?hl=en&co=GENIE.Platform%3DAndroid
+  NOT stated on those pages, so recheck on a real phone: that the More (...) button is on the
+  RIGHT in Safari's Compact layout, and that Add sits at the TOP RIGHT of the Add to Home Screen card.
+  Pictures are schematic inline SVGs; each carries a SCREENSHOT SLOT comment.
+  Self-contained: no external requests. The only images are this site's own icon. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Put Any Given on your home screen</title>
+<style>
+  body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; background: #15171c; color: #e9ebef; }
+  main { max-width: 640px; margin: 0 auto; padding: 20px 20px 60px; }
+  a { color: #8fa8ff; }
+  .back { display: inline-block; font-size: 15px; text-decoration: none; margin-bottom: 18px; }
+  h1 { font-size: 26px; line-height: 1.2; margin: 0 0 8px; }
+  .lede { color: #c9ccd3; margin: 0 0 18px; }
+  .jump { display: flex; gap: 10px; margin: 0 0 16px; }
+  .jump a { flex: 1; text-align: center; padding: 12px; border-radius: 12px; background: #232734; border: 1px solid #333a4a; color: #e9ebef; text-decoration: none; font-weight: 600; }
+  .first { background: #1f2440; border: 1px solid #3a4390; border-radius: 12px; padding: 12px 14px; color: #c9ccd3; margin: 0; }
+  .go { display: inline-block; margin-top: 8px; background: #5b6cf2; color: #fff; padding: 8px 14px; border-radius: 10px; text-decoration: none; font-weight: 600; }
+  h2 { font-size: 22px; margin: 40px 0 2px; scroll-margin-top: 12px; }
+  .sub { color: #8a8f99; margin: 0 0 6px; }
+  ol.steps { list-style: none; padding: 0; margin: 0; }
+  .step { display: grid; grid-template-columns: 1fr 150px; gap: 16px; align-items: center; background: #1c1f27; border: 1px solid #2a2f3a; border-radius: 16px; padding: 16px; margin: 12px 0; }
+  .step p { margin: 0 0 6px; color: #c9ccd3; }
+  .step p.do { font-size: 19px; font-weight: 700; color: #fff; display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .n { flex: none; display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #5b6cf2; color: #fff; font-size: 16px; }
+  .step p.see { color: #a9dcb9; margin: 0; }
+  .see b { color: #d7f5e1; }
+  .alt { margin-top: 10px !important; padding: 10px 12px; border-left: 3px solid #5b6cf2; background: #20243a; border-radius: 0 10px 10px 0; }
+  figure.shot { margin: 0; }
+  .shot svg, .shot img { display: block; width: 100%; height: auto; max-width: 150px; margin: 0 auto; }
+  .g { width: 1.15em; height: 1.15em; vertical-align: -0.2em; color: #8fa8ff; }
+  .help { background: #1c1f27; border: 1px dashed #3a4050; border-radius: 14px; padding: 12px 16px; margin: 16px 0 0; }
+  .help h3 { font-size: 16px; margin: 0 0 4px; }
+  .help p { margin: 0 0 6px; color: #c9ccd3; }
+  .done { display: flex; gap: 18px; align-items: center; background: #1c1f27; border: 1px solid #2a2f3a; border-radius: 16px; padding: 16px; margin-top: 10px; }
+  .done p { margin: 0 0 6px; color: #c9ccd3; }
+  .tile { flex: none; width: 104px; padding: 16px 6px 10px; border-radius: 18px; background: #2d3a63; text-align: center; }
+  .tile img { display: block; width: 64px; height: 64px; border-radius: 15px; margin: 0 auto 6px; }
+  .tile span { font-size: 12px; color: #fff; }
+  .bottom { margin-top: 36px; }
+  .ring { fill: none; stroke: #5b6cf2; stroke-width: 4; }
+  .halo { fill: none; stroke: #fff; stroke-opacity: 0.9; stroke-width: 9; }
+  .defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+  @media (max-width: 520px) {
+    .step { grid-template-columns: 1fr; }
+    .shot svg, .shot img { max-width: 180px; }
+    .done { flex-direction: column; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Shared drawing parts for the pictures below. Not shown on its own. -->
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <pattern id="apps" x="27" y="52" width="40" height="52" patternUnits="userSpaceOnUse"><rect width="30" height="30" rx="8" fill="#fff" fill-opacity=".22"/></pattern>
+    <pattern id="appr" x="27" y="52" width="40" height="52" patternUnits="userSpaceOnUse"><circle cx="15" cy="15" r="15" fill="#fff" fill-opacity=".22"/></pattern>
+    <g id="frame"><rect x="3" y="3" width="194" height="394" rx="32" fill="#0b0d11" stroke="#5a606c" stroke-width="2"/><rect x="11" y="11" width="178" height="378" rx="25" fill="#f3f4f7"/></g>
+    <rect id="wall" x="11" y="11" width="178" height="378" rx="25"/>
+    <rect id="island" x="80" y="19" width="40" height="11" rx="5.5" fill="#0b0d11"/>
+    <circle id="hole" cx="100" cy="23" r="5" fill="#0b0d11"/>
+    <g id="pg"><rect x="11" y="70" width="178" height="30" fill="#15171c"/><text x="24" y="90" font-size="12" font-weight="700" fill="#fff">Any Given</text><g fill="#dfe2e9"><rect x="24" y="112" width="152" height="40" rx="8"/><rect x="24" y="162" width="152" height="40" rx="8"/><rect x="24" y="212" width="152" height="40" rx="8"/><rect x="24" y="262" width="152" height="40" rx="8"/></g></g>
+    <g id="share" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 6.5H3.5v8.5h9V6.5h-2M8 1.5v8.5M5 4.5l3-3 3 3"/></g>
+    <g id="iosbar"><g fill="#fff" stroke="#d3d6de"><circle cx="34" cy="356" r="15"/><rect x="55" y="341" width="90" height="30" rx="15"/><circle cx="166" cy="356" r="15"/></g><path d="M37 349l-7 7 7 7" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><text x="100" y="360" font-size="10" text-anchor="middle" fill="#222">anygiven.app</text><g fill="#222"><circle cx="160" cy="356" r="1.8"/><circle cx="166" cy="356" r="1.8"/><circle cx="172" cy="356" r="1.8"/></g></g>
+    <g id="crbar"><rect x="11" y="34" width="178" height="32" fill="#f3f4f7"/><rect x="20" y="37" width="124" height="26" rx="13" fill="#e3e6ec"/><text x="82" y="54" font-size="10" text-anchor="middle" fill="#222">anygiven.app</text><rect x="151" y="42" width="15" height="15" rx="3" fill="none" stroke="#444" stroke-width="1.6"/><g fill="#222"><circle cx="178" cy="44" r="1.8"/><circle cx="178" cy="50" r="1.8"/><circle cx="178" cy="56" r="1.8"/></g></g>
+    <g id="addsheet"><rect x="22" y="44" width="30" height="22" rx="11" fill="#dfe2e9"/><text x="172" y="60" font-size="13" font-weight="700" fill="#0a64e0" text-anchor="end">Add</text><rect x="22" y="84" width="156" height="70" rx="12" fill="#fff"/><image href="icons/apple-touch-icon.png?v=stadium1" x="32" y="97" width="44" height="44"/><text x="86" y="115" font-size="12" font-weight="600" fill="#111">Any Given</text><text x="86" y="131" font-size="9" fill="#777">anygiven.app</text><rect x="22" y="166" width="156" height="40" rx="12" fill="#fff"/><text x="32" y="190" font-size="10.5" fill="#111">Open as Web App</text><rect x="138" y="177" width="32" height="19" rx="9.5" fill="#34c759"/><circle cx="160.5" cy="186.5" r="7.5" fill="#fff"/></g>
+  </defs>
+</svg>
+
+<main>
+  <a class="back" href="/">&larr; Back to Any Given</a>
+
+  <h1>Put Any Given on your home screen</h1>
+  <p class="lede">Then it opens like an app: full screen, no browser bars, one tap away on game day.</p>
+
+  <nav class="jump" aria-label="Pick your phone">
+    <a href="#iphone">iPhone</a>
+    <a href="#android">Android</a>
+  </nav>
+
+  <p class="first"><strong>One thing first.</strong> Do these steps on the main Any Given page, not on this help page. If you add this help page, the icon will open this help page. Read the steps, then go:<br>
+    <a class="go" href="/">Open Any Given</a></p>
+
+  <!-- ============================== iPhone ============================== -->
+  <h2 id="iphone">iPhone</h2>
+  <p class="sub">Use the Safari app. It takes about a minute.</p>
+
+  <ol class="steps">
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">1</span>Open Safari.</p>
+        <p>Find the Safari app on your Home Screen and tap it. It is usually in the row at the very bottom of the screen.</p>
+        <p class="see"><b>You will see:</b> Safari opens.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of an iPhone Home Screen with the Safari app circled -->
+        <svg role="img" aria-labelledby="ti1" viewBox="0 0 200 400"><title id="ti1">An iPhone Home Screen. The Safari app in the bottom row is circled.</title>
+          <use href="#frame"/><use href="#wall" fill="#2d3a63"/><use href="#island"/>
+          <rect x="27" y="52" width="150" height="200" fill="url(#apps)"/>
+          <rect x="16" y="322" width="168" height="54" rx="20" fill="#fff" fill-opacity=".16"/>
+          <g fill="#fff" fill-opacity=".3"><rect x="27" y="334" width="30" height="30" rx="8"/><rect x="67" y="334" width="30" height="30" rx="8"/><rect x="147" y="334" width="30" height="30" rx="8"/></g>
+          <rect x="107" y="334" width="30" height="30" rx="8" fill="#2f7cf6"/>
+          <g fill="none" stroke="#fff" stroke-width="1.4"><circle cx="122" cy="349" r="9"/><ellipse cx="122" cy="349" rx="4" ry="9"/><path d="M113 349h18"/></g>
+          <text x="122" y="312" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Safari</text>
+          <rect class="halo" x="100" y="327" width="44" height="44" rx="13"/><rect class="ring" x="100" y="327" width="44" height="44" rx="13"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">2</span>Go to anygiven.app.</p>
+        <p>Type <strong>anygiven.app</strong> in the address bar. That is the long bar that shows the web address. Or tap the blue <strong>Open Any Given</strong> button near the top of this page.</p>
+        <p class="see"><b>You will see:</b> the Any Given page.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of Safari on iPhone showing anygiven.app, address bar circled -->
+        <svg role="img" aria-labelledby="ti2" viewBox="0 0 200 400"><title id="ti2">Safari showing the Any Given page. The address bar at the bottom of the screen is circled.</title>
+          <use href="#frame"/><use href="#island"/><use href="#pg" y="-30"/><use href="#iosbar"/>
+          <rect class="halo" x="50" y="336" width="100" height="40" rx="20"/><rect class="ring" x="50" y="336" width="100" height="40" rx="20"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">3</span>Tap the three dots.</p>
+        <p>Look at the very bottom of the screen, on the right. Tap the round button with three dots in it (&middot;&middot;&middot;).</p>
+        <p class="see"><b>You will see:</b> a small menu pops up.</p>
+        <p class="alt">Do you see a square with an arrow pointing up <svg class="g" viewBox="0 0 16 16" aria-hidden="true"><use href="#share"/></svg> at the bottom of the screen instead? Tap that square, then skip to step 5.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of Safari's bottom bar on iPhone with the More (...) button circled -->
+        <svg role="img" aria-labelledby="ti3" viewBox="0 0 200 400"><title id="ti3">The round button with three dots, at the bottom right of Safari, is circled.</title>
+          <use href="#frame"/><use href="#island"/><use href="#pg" y="-30"/><use href="#iosbar"/>
+          <circle class="halo" cx="166" cy="356" r="20"/><circle class="ring" cx="166" cy="356" r="20"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">4</span>Tap Share.</p>
+        <p>In the menu, find the word <strong>Share</strong> and tap it.</p>
+        <p class="see"><b>You will see:</b> a list of choices slides up from the bottom of the screen.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of Safari's More menu on iPhone with Share circled -->
+        <svg role="img" aria-labelledby="ti4" viewBox="0 0 200 400"><title id="ti4">A menu is open. The Share choice is circled.</title>
+          <use href="#frame"/><use href="#island"/><use href="#pg" y="-30"/><use href="#iosbar"/><use href="#wall" fill="#000" fill-opacity=".3"/>
+          <rect x="62" y="196" width="120" height="134" rx="16" fill="#fff"/>
+          <use href="#share" x="76" y="207" style="color:#111"/>
+          <text x="100" y="220" font-size="12" fill="#111">Share</text>
+          <g fill="#dfe2e9"><rect x="76" y="247" width="92" height="9" rx="4.5"/><rect x="76" y="273" width="92" height="9" rx="4.5"/><rect x="76" y="299" width="92" height="9" rx="4.5"/></g>
+          <rect class="halo" x="66" y="200" width="112" height="30" rx="10"/><rect class="ring" x="66" y="200" width="112" height="30" rx="10"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">5</span>Tap Add to Home Screen.</p>
+        <p>Slide the list up with your finger to see more choices. Tap <strong>Add to Home Screen</strong>.</p>
+        <p class="see"><b>You will see:</b> a card with the Any Given icon and the name Any Given.</p>
+        <p class="alt">Not in the list? Go all the way to the bottom of the list and tap <strong>Edit Actions</strong>. Then tap <strong>Add to Home Screen</strong>.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of the iPhone share list with Add to Home Screen circled -->
+        <svg role="img" aria-labelledby="ti5" viewBox="0 0 200 400"><title id="ti5">The share list is open. Add to Home Screen, near the bottom of the list, is circled.</title>
+          <use href="#frame"/><use href="#island"/><use href="#pg" y="-30"/><use href="#wall" fill="#000" fill-opacity=".3"/>
+          <rect x="11" y="138" width="178" height="251" rx="24" fill="#fff"/>
+          <rect x="88" y="145" width="24" height="4" rx="2" fill="#c9ccd3"/>
+          <image href="icons/apple-touch-icon.png?v=stadium1" x="24" y="158" width="28" height="28"/>
+          <text x="60" y="170" font-size="11" font-weight="600" fill="#111">Any Given</text><text x="60" y="183" font-size="8.5" fill="#777">anygiven.app</text>
+          <g fill="#e6e8ee"><circle cx="40" cy="214" r="14"/><circle cx="80" cy="214" r="14"/><circle cx="120" cy="214" r="14"/><circle cx="160" cy="214" r="14"/></g>
+          <rect x="22" y="240" width="156" height="126" rx="12" fill="#f1f2f5"/>
+          <g fill="#dcdfe6"><rect x="34" y="252" width="100" height="9" rx="4.5"/><rect x="34" y="278" width="100" height="9" rx="4.5"/><rect x="34" y="304" width="100" height="9" rx="4.5"/></g>
+          <text x="34" y="344" font-size="11" fill="#111">Add to Home Screen</text>
+          <g fill="none" stroke="#111" stroke-width="1.5"><rect x="154" y="332" width="14" height="14" rx="3.5"/><path d="M161 335.5v7M157.5 339h7"/></g>
+          <rect class="halo" x="26" y="325" width="148" height="28" rx="10"/><rect class="ring" x="26" y="325" width="148" height="28" rx="10"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">6</span>Turn on Open as Web App.</p>
+        <p>Find the switch next to <strong>Open as Web App</strong>. If it is gray, tap it. If it is already green, leave it. Leave the name as Any Given.</p>
+        <p class="see"><b>You will see:</b> the switch is green.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of the iPhone Add to Home Screen card with the Open as Web App switch circled -->
+        <svg role="img" aria-labelledby="ti6" viewBox="0 0 200 400"><title id="ti6">The Add to Home Screen card. The Open as Web App switch is circled and turned on, so it is green.</title>
+          <use href="#frame"/><use href="#island"/><use href="#addsheet"/>
+          <rect class="halo" x="132" y="171" width="44" height="31" rx="15.5"/><rect class="ring" x="132" y="171" width="44" height="31" rx="15.5"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">7</span>Tap Add.</p>
+        <p>Tap <strong>Add</strong>, at the top right of the card.</p>
+        <p class="see"><b>You will see:</b> the card goes away, and the Any Given icon is on your Home Screen.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of the iPhone Add to Home Screen card with the Add button circled -->
+        <svg role="img" aria-labelledby="ti7" viewBox="0 0 200 400"><title id="ti7">The same card. The Add button at the top right is circled.</title>
+          <use href="#frame"/><use href="#island"/><use href="#addsheet"/>
+          <rect class="halo" x="138" y="41" width="40" height="28" rx="14"/><rect class="ring" x="138" y="41" width="40" height="28" rx="14"/>
+        </svg>
+      </figure>
+    </li>
+  </ol>
+
+  <div class="help">
+    <h3>Can't find it on iPhone?</h3>
+    <p>Use the Safari app. If Any Given opened inside another app, like Instagram, Facebook or a text message, or in a different browser like Chrome, open <strong>anygiven.app</strong> in Safari. Then start again at step 1.</p>
+  </div>
+
+  <!-- ============================== Android ============================== -->
+  <h2 id="android">Android</h2>
+  <p class="sub">Use the Chrome app. It takes about a minute.</p>
+
+  <ol class="steps">
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">1</span>Open Chrome.</p>
+        <p>Find the Chrome app on your home screen and tap it. It is often in the row at the bottom of the screen.</p>
+        <p class="see"><b>You will see:</b> Chrome opens.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of an Android home screen with the Chrome app circled -->
+        <svg role="img" aria-labelledby="ta1" viewBox="0 0 200 400"><title id="ta1">An Android home screen. The Chrome app in the bottom row is circled.</title>
+          <use href="#frame"/><use href="#wall" fill="#283a52"/><use href="#hole"/>
+          <rect x="27" y="52" width="150" height="200" fill="url(#appr)"/>
+          <g fill="#fff" fill-opacity=".3"><circle cx="42" cy="349" r="15"/><circle cx="82" cy="349" r="15"/><circle cx="162" cy="349" r="15"/></g>
+          <circle cx="122" cy="349" r="15" fill="#fff"/>
+          <g fill="none" stroke="#1a73e8" stroke-width="1.4"><circle cx="122" cy="349" r="9"/><ellipse cx="122" cy="349" rx="4" ry="9"/><path d="M113 349h18"/></g>
+          <text x="122" y="316" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Chrome</text>
+          <circle class="halo" cx="122" cy="349" r="21"/><circle class="ring" cx="122" cy="349" r="21"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">2</span>Go to anygiven.app.</p>
+        <p>Type <strong>anygiven.app</strong> in the address bar at the top of the screen. Or tap the blue <strong>Open Any Given</strong> button near the top of this page.</p>
+        <p class="see"><b>You will see:</b> the Any Given page.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of Chrome on Android showing anygiven.app, address bar circled -->
+        <svg role="img" aria-labelledby="ta2" viewBox="0 0 200 400"><title id="ta2">Chrome showing the Any Given page. The address bar at the top is circled.</title>
+          <use href="#frame"/><use href="#hole"/><use href="#crbar"/><use href="#pg"/>
+          <rect class="halo" x="16" y="33" width="132" height="34" rx="17"/><rect class="ring" x="16" y="33" width="132" height="34" rx="17"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">3</span>Tap the three dots.</p>
+        <p>Look at the top right, just to the right of the address bar. Tap the three dots stacked on top of each other (&#8942;).</p>
+        <p class="see"><b>You will see:</b> a menu drops down.</p>
+        <p class="alt">Is your address bar at the bottom of the screen? Then the three dots are at the bottom right.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of Chrome on Android with the More (three dots) button circled -->
+        <svg role="img" aria-labelledby="ta3" viewBox="0 0 200 400"><title id="ta3">The three dots at the top right of Chrome are circled.</title>
+          <use href="#frame"/><use href="#hole"/><use href="#crbar"/><use href="#pg"/>
+          <circle class="halo" cx="178" cy="50" r="13"/><circle class="ring" cx="178" cy="50" r="13"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">4</span>Tap Install and create shortcut.</p>
+        <p>In the menu, find <strong>Install and create shortcut</strong> and tap it.</p>
+        <p class="see"><b>You will see:</b> a small box pops up with an <strong>Install</strong> button.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of Chrome's menu on Android with Install and create shortcut circled -->
+        <svg role="img" aria-labelledby="ta4" viewBox="0 0 200 400"><title id="ta4">The Chrome menu is open. Install and create shortcut is circled.</title>
+          <use href="#frame"/><use href="#hole"/><use href="#crbar"/><use href="#pg"/>
+          <rect x="44" y="38" width="142" height="194" rx="12" fill="#fff" stroke="#d3d6de"/>
+          <g fill="#e3e6ec"><circle cx="62" cy="58" r="8"/><circle cx="90" cy="58" r="8"/><circle cx="118" cy="58" r="8"/><circle cx="146" cy="58" r="8"/></g>
+          <g fill="#dfe2e9"><rect x="56" y="82" width="96" height="9" rx="4.5"/><rect x="56" y="106" width="96" height="9" rx="4.5"/><rect x="56" y="130" width="96" height="9" rx="4.5"/><rect x="56" y="154" width="96" height="9" rx="4.5"/><rect x="56" y="210" width="96" height="9" rx="4.5"/></g>
+          <text x="56" y="188" font-size="8.4" fill="#111">Install and create shortcut</text>
+          <rect class="halo" x="49" y="173" width="134" height="24" rx="9"/><rect class="ring" x="49" y="173" width="134" height="24" rx="9"/>
+        </svg>
+      </figure>
+    </li>
+
+    <li class="step">
+      <div>
+        <p class="do"><span class="n" aria-hidden="true">5</span>Tap Install.</p>
+        <p>In the box, tap <strong>Install</strong>. If your phone asks anything else, follow what it says on the screen.</p>
+        <p class="see"><b>You will see:</b> Any Given is added to your home screen.</p>
+      </div>
+      <figure class="shot">
+        <!-- SCREENSHOT SLOT: replace this SVG with a real screenshot of Chrome's install box on Android with the Install button circled -->
+        <svg role="img" aria-labelledby="ta5" viewBox="0 0 200 400"><title id="ta5">A box asks to install Any Given. The Install button is circled.</title>
+          <use href="#frame"/><use href="#hole"/><use href="#crbar"/><use href="#pg"/><use href="#wall" fill="#000" fill-opacity=".35"/>
+          <rect x="24" y="140" width="152" height="118" rx="18" fill="#fff"/>
+          <image href="icons/apple-touch-icon.png?v=stadium1" x="36" y="156" width="36" height="36"/>
+          <text x="80" y="172" font-size="11" font-weight="600" fill="#111">Any Given</text><text x="80" y="186" font-size="8.5" fill="#777">anygiven.app</text>
+          <rect x="60" y="222" width="44" height="22" rx="11" fill="#e3e6ec"/>
+          <rect x="112" y="222" width="54" height="22" rx="11" fill="#1a62d6"/>
+          <text x="139" y="237" font-size="10" font-weight="600" fill="#fff" text-anchor="middle">Install</text>
+          <rect class="halo" x="107" y="217" width="64" height="32" rx="16"/><rect class="ring" x="107" y="217" width="64" height="32" rx="16"/>
+        </svg>
+      </figure>
+    </li>
+  </ol>
+
+  <div class="help">
+    <h3>Can't find it on Android?</h3>
+    <p>Use the Chrome app. If Any Given opened inside another app, like Instagram or a text message, open <strong>anygiven.app</strong> in Chrome. Still no <strong>Install and create shortcut</strong>? Update Chrome in the Play Store, then try again.</p>
+  </div>
+
+  <!-- ============================== Done ============================== -->
+  <h2 id="done">You did it</h2>
+  <div class="done">
+    <div class="tile">
+      <img src="icons/apple-touch-icon.png?v=stadium1" width="64" height="64" alt="The Any Given icon: a stadium with red flags on top">
+      <span>Any Given</span>
+    </div>
+    <div>
+      <p>Look on your home screen for a stadium with little red flags on top, and the name <strong>Any Given</strong> under it.</p>
+      <p>Tap it any time. Any Given opens full screen, just like an app.</p>
+      <p>Don't see it? Swipe left through your home screen pages. It may be on the last one.</p>
+    </div>
+  </div>
+
+  <p class="bottom"><a href="/">&larr; Back to Any Given</a></p>
+</main>
+</body>
+</html>

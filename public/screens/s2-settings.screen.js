@@ -590,6 +590,21 @@ function rulesSection() {
   return c;
 }
 
+/* 🔴 THE HOME SCREEN WALKTHROUGH. Jason, 2026-09-11: "where is the 'share
+ * menu'?" then "we need our own page for this, with screen shots, walk them
+ * thru it like they are 10." The only mention before this was one line on the
+ * notifications screen that assumed you already knew where Share was. */
+function homeScreenSection() {
+  const c = card('On your phone');
+  const a = el('a', 's2-rules-link', 'Put Any Given on your home screen');
+  a.href = '/home-screen.html';
+  a.appendChild(el('span', 's2-rules-chev', '›'));
+  c.appendChild(a);
+  c.appendChild(el('p', 's2-note',
+    'Step by step, with pictures. It opens full screen, like an app.'));
+  return c;
+}
+
 export function render(root, data, state) {
   root.innerHTML = '';
   root.classList.add('scr-s2-settings');
@@ -660,5 +675,6 @@ export function render(root, data, state) {
   root.appendChild(densitySection(data));
   root.appendChild(alertsSection(data));
   root.appendChild(balanceSection());
+  root.appendChild(homeScreenSection());
   root.appendChild(rulesSection());
 }
