@@ -1,77 +1,62 @@
-/* WHICH TEAMS NEED NUGGETS BEFORE THEIR NEXT GAME.
+/* WHICH TEAMS NEED NUGGETS - ONCE A WEEK, AFTER THEIR LAST GAME.
  *
- * Jason, 2026-09-10: "grab 10 for each team ... Current, and just before the
- * game" - then "1 day earlier?" So the research runs the day before a game
- * day, for every team playing that day whose file is missing or stale.
+ * Jason, 2026-09-11: "It only has to run once. So for the NFL it can run after
+ * the last game on Monday, so Tuesday morning it can schedule to run. Then if it
+ * has a problem it can run Wednesday morning, and so on."
  *
- * Reads the live slates (both leagues, the current week and the next, since
- * "tomorrow" can sit on the far side of a week boundary) and prints JSON:
+ * A team is DUE for its next game (within the next 7 days) once its previous
+ * game is over and its nugget file was written on or before that game's day.
+ * The daily 5 AM run researches whatever is due; a missed or failed morning is
+ * picked up by the next one. With no previous game on record, written within 7
+ * days of the game counts as fresh. The rule is isFreshForNext in
+ * src/lib/nuggets.ts - the same one the Worker's alert uses.
  *
- *   node tools/nugget-teams.mjs                 teams playing tomorrow (Pacific)
- *   node tools/nugget-teams.mjs --date 2026-09-12
- *   node tools/nugget-teams.mjs --all           include teams already fresh
+ * The Worker supplies each team's next game and previous game day
+ * (GET /api/nuggets/due, from the D1 game table); this reads the LOCAL files,
+ * because they are what this run is about to write and ship. Prints JSON:
  *
- * A file counts as fresh when its asOf is no more than one day before the
- * game date - which is exactly what a day-before run writes.
+ *   node tools/nugget-teams.mjs            teams due in the next 7 days
+ *   node tools/nugget-teams.mjs --all      include teams already fresh
+ *   node tools/nugget-teams.mjs --days 3
+ *
+ * 🔴 A FAILED FETCH IS NOT "NOTHING DUE" (2026-09-10): every failure is named in
+ * `errors` and the exit code is 2.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { isFreshForNext } from '../src/lib/nuggets.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const arg = (n, d) => { const i = process.argv.indexOf('--' + n); return i < 0 ? d : process.argv[i + 1]; };
 const base = arg('base', 'https://anygiven.app');
-const season = arg('season', '2026');
+const days = Number(arg('days', 7)) || 7;
 const all = process.argv.includes('--all');
 
-const pacific = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-const date = arg('date', pacific(Date.now() + 24 * 60 * 60 * 1000));
-const dayBefore = pacific(Date.parse(date + 'T12:00:00Z') - 24 * 60 * 60 * 1000);
-
-/* 🔴 A FAILED FETCH IS NOT AN EMPTY DAY. These used to `continue` silently, so
- * "no games tomorrow", "all fresh" and "the slate did not load" all printed the
- * same empty list - flagged by the first dry run, 2026-09-10. Every failure is
- * now named in `errors` and the exit code is 2, so a run can tell them apart.
- * A 404 on week+1 is normal (not published yet) and is not an error. */
-const out = [];
 const errors = [];
-for (const sport of ['nfl', 'college-football']) {
-  const lg = sport === 'nfl' ? 'nfl' : 'ncaa';
-  let wk;
-  try {
-    const r = await fetch(`${base}/api/state/slate:${sport}:current`);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    wk = Number((await r.text()).trim());
-  } catch (e) { errors.push(`${sport} current week: ${e.message}`); continue; }
-  if (!wk) { errors.push(`${sport} current week: empty`); continue; }
-  const seen = new Set();
-  for (const w of [wk, wk + 1]) {
-    let slate;
-    try {
-      const r = await fetch(`${base}/api/state/slate:${sport}:${season}:${w}`);
-      if (r.status === 404 && w === wk + 1) continue;
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      slate = await r.json();
-    } catch (e) { errors.push(`${sport} week ${w}: ${e.message}`); continue; }
-    for (const g of slate.games || []) {
-      if (!g.kickoffUtc || g.status === 'final' || pacific(g.kickoffUtc) !== date) continue;
-      for (const t of g.teams || []) {
-        const id = String(t.id);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const file = join(ROOT, 'public', 'nuggets', lg, id + '.json');
-        let asOf = null;
-        if (existsSync(file)) { try { asOf = JSON.parse(readFileSync(file, 'utf8')).asOf || null; } catch { asOf = null; } }
-        const fresh = !!asOf && asOf >= dayBefore;
-        if (fresh && !all) continue;
-        out.push({ league: lg, teamId: id, team: t.name || t.short || t.abbrev, abbrev: t.abbrev,
-                   opponent: g.shortName, kickoffUtc: g.kickoffUtc, file, asOf, fresh });
-      }
-    }
-  }
+let due = null;
+try {
+  const r = await fetch(`${base}/api/nuggets/due?days=${days}&x=${Date.now()}`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  due = await r.json();
+} catch (e) { errors.push('due list: ' + e.message); }
+if (due && Array.isArray(due.errors)) errors.push(...due.errors);
+
+const out = [];
+for (const t of (due && due.teams) || []) {
+  const file = join(ROOT, 'public', 'nuggets', t.league, t.teamId + '.json');
+  let asOf = null;
+  if (existsSync(file)) { try { asOf = JSON.parse(readFileSync(file, 'utf8')).asOf || null; } catch { asOf = null; } }
+  /* A team the Cloudflare desk already covered in KV counts as fresh too. */
+  const fresh = isFreshForNext(asOf, t) || (t.by === 'kv' && t.fresh);
+  if (fresh && !all) continue;
+  out.push({ league: t.league, teamId: t.teamId, team: t.team, opponent: t.opponent,
+             kickoffUtc: t.kickoffUtc, gameDate: t.gameDate, prevDate: t.prevDate, file, asOf, fresh });
 }
 out.sort((a, b) => a.kickoffUtc - b.kickoffUtc || a.team.localeCompare(b.team));
-console.error(`${date}: ${out.length} team(s) ${all ? 'playing' : 'need research'}`
-  + (errors.length ? ` - ${errors.length} slate fetch(es) FAILED` : ''));
-console.log(JSON.stringify({ date, dayBefore, teams: out, errors }, null, 2));
+const soon = Date.now() + 2 * 24 * 60 * 60 * 1000;
+const urgent = out.filter((t) => !t.fresh && t.kickoffUtc < soon);
+console.error(`next ${days} days: ${out.length} team(s) ${all ? 'playing' : 'due'}, ${urgent.length} inside 48 hours`
+  + (errors.length ? ` - ${errors.length} error(s)` : ''));
+console.log(JSON.stringify({ now: new Date().toISOString(), days, teams: out, urgent, errors }, null, 2));
 if (errors.length) process.exitCode = 2;

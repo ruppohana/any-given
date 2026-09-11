@@ -85,6 +85,13 @@ REQUIRE_EMAIL = "1"
 # it can change without a code change.
 NUGGET_ENABLED = "0"
 NUGGET_MODEL = "claude-sonnet-5"
+# 🔴 THE GAME-FACTS ALERT (src/nugget-due.ts). Jason, 2026-09-11: "How will I know
+# if there is a problem?" Once a day at most, after 10 AM Pacific, and only when a
+# game inside 48 hours has a team without current nuggets. His own address - the
+# one /privacy.html already publishes.
+ALERT_EMAIL = "ruppohana@gmail.com"
+# One test email, once, on the next ten-minute tick. Remove after it arrives.
+NUGGET_ALERT_TEST = "first"
 
 # ------------------------------------------------------------------
 # NOT DECLARED YET, AND ON PURPOSE

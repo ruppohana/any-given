@@ -3,6 +3,7 @@ import { captureSlate } from './slate-cron.ts';
 export { LivePoller } from './poller-do.ts';
 export { NuggetDesk } from './nugget-desk.ts';
 import { tomorrowPacific, teamsPlaying, isFresh, pacificDate, type TeamJob } from './lib/nuggets.ts';
+import { computeDue, nuggetAlertTick } from './nugget-due.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
  *
  * That sentence is the whole reason the original exists and it is not negotiable
@@ -226,6 +227,11 @@ export default {
       }
       return;
     }
+    /* The game-facts alert: an hourly look from 10 AM, one email a day at most,
+     * only when a game inside 48 hours has a team without current nuggets. */
+    ctx.waitUntil(nuggetAlertTick(env).then(
+      (r) => { if (!r || !(r as any).skipped) console.log('nuggets alert', JSON.stringify(r)); },
+      (e) => console.log('nuggets alert FAILED', String(e?.message || e))));
     /* 🔴 A ONE-TIME TEST RUN, BY CONFIGURATION. NUGGET_TEST = "<date>:<teams>"
      * (first use "2026-09-13:2" - two of Sunday's NFL teams) seeds that many teams
      * for that date ONCE, on the next ten-minute tick, and writes its done-record
@@ -288,6 +294,12 @@ export default {
         if (kv) return new Response(kv, { headers: {
           'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
         return env.ASSETS.fetch(req);
+      }
+      /* Which teams are due for nuggets, and which play inside 48 hours without
+       * them (src/nugget-due.ts). Read-only; the laptop run and the alert use it. */
+      if (p === '/api/nuggets/due' && req.method === 'GET') {
+        const days = Math.min(14, Math.max(1, Number(url.searchParams.get('days')) || 7));
+        return json(await computeDue(env, Date.now(), days));
       }
       /* The desk's controls - behind the push token, like every other write. */
       if (p === '/api/nuggets/run' || p === '/api/nuggets/status' || p === '/api/nuggets/stop') {

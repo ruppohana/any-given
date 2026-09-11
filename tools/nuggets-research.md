@@ -1,9 +1,18 @@
-# Nuggets — the day-before research run
+# Nuggets — the weekly research run
 
-**Runs every day at 5:00 AM Pacific** (Jason moved it from 9 AM on 2026-09-10) from the Claude desktop scheduled task
-`anygiven-nuggets-day-before`. It researches every team that plays **tomorrow** (Pacific) and
-ships their nugget files before kickoff. A day with no games tomorrow is a no-op. Friday's run
-covers Saturday's college slate (~160 teams); Saturday's covers Sunday's NFL.
+**Runs every day at 5:00 AM Pacific** from the Claude desktop scheduled task
+`anygiven-nuggets-day-before` (titled *Any Given: weekly nuggets research*). **Since 2026-09-11 it
+researches each team ONCE A WEEK, after its last game** (Jason: *"It only has to run once. So for the
+NFL it can run after the last game on Monday, so Tuesday morning it can schedule to run. Then if it has
+a problem it can run Wednesday morning, and so on."*). College teams come due Sunday morning, NFL teams
+Tuesday morning; most other mornings nothing is due and the run stops at step 1. **A failed or missed
+morning is simply picked up by the next one.**
+
+**How Jason hears about a problem:** the run sends one PushNotification if anything fails (step 8 of
+the task), and — independent of the laptop — the Worker emails him (`ALERT_EMAIL`) once a day after
+10 AM if any game inside 48 hours still has a team without current nuggets (`src/nugget-due.ts`,
+`GET /api/nuggets/due`). It ran day-before until 2026-09-11; the Cloudflare research desk exists but
+is off (Jason: *"Laptop."*, at $2.29 a team).
 
 **Why it exists** — Jason, 2026-09-10: *"grab 10 for each team, fun/odd nuggets and when all else
 fails, factual, should cover the entire game"*, *"Current, and just before the game"*, *"1 day
@@ -19,15 +28,19 @@ the "Waiting for the snap…" tile, fun → odd → fact, never repeating in a g
 
 Work in `C:\Claude\Knowledge\anygiven`. It is its own git repo with a GitHub remote.
 
-1. **List the teams.**
+1. **List the teams that are due.**
    `node tools/nugget-teams.mjs` — read its output directly. **Never redirect it to a file**
    (`> "$TEMP/..."`): a write outside the repo is a permission prompt, and a prompt in an
    unattended run waits for a human who is asleep — it stalled the first dry run on 2026-09-10.
-   It prints `{date, dayBefore, teams:[{league, teamId, team, abbrev, opponent, file, asOf}]}` —
-   only teams whose file is missing or older than the day before the game. **If `errors` is
-   non-empty (exit code 2), a slate did not load: report which, and research only the teams that
-   did list.** **If `teams` is empty and `errors` is empty, stop and report "no games tomorrow"
-   (or "all fresh").**
+   **Once a week per team, after its last game** (Jason, 2026-09-11: *"for the NFL it can run after
+   the last game on Monday, so Tuesday morning ... if it has a problem it can run Wednesday
+   morning, and so on"*): a team is due for its next game inside 7 days once its previous game is
+   over and its file was written on or before that game's day. It prints
+   `{now, days, teams:[{league, teamId, team, opponent, gameDate, prevDate, file, asOf}], urgent, errors}`
+   — `urgent` is the due teams whose game is inside 48 hours; research those first. **If `errors` is
+   non-empty (exit code 2), report which, and research only the teams that did list.** **If `teams`
+   is empty and `errors` is empty, stop and report "nothing due".** A normal week: college teams
+   come due Sunday morning, NFL teams Tuesday morning; most other mornings nothing is due.
 
 2. **Research in batches.** Four teams per subagent, keeping both teams of one game in the same
    batch where possible. Dispatch `general-purpose` subagents **in the background, at most 8 at a
