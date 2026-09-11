@@ -5110,12 +5110,20 @@ const CSS = `
    text". The stadiums are cut out of their white now (transparent WebP), so the
    space above each one is the page's own ground, the way Deuce's court sits on
    its page, in either theme. */
-.lg-hero { position: relative; height: 300px; margin: -10px -10px 0; overflow: hidden; }
+/* 🔴 CRISP, 25% LARGER, AND BLEEDING UNDER THE TEXT. Jason, 2026-09-11: "Yes crisp
+   edge" (the fade below is gone) and "make the image 25% larger. Hold the top so
+   the bottom will bleed under the text more." The box stays 300px for the layout;
+   the picture is drawn at 125% from the top edge, so its bottom runs 75px down
+   under the front door's first lines (.lg-hero + * sits above it). overflow-x
+   CLIPS the sides so the wider picture cannot scroll the page sideways, while
+   overflow-y stays visible so the bottom is the stadium's own cut-out edge. */
+.lg-hero { position: relative; z-index: 0; height: 300px; margin: -10px -10px 0;
+  overflow-x: clip; overflow-y: visible; }
 /* Pinned to the TOP of the picture: the crops start at the top of Jason's renders
    so there is white above the stadium ("can you lower them so there is white
-   above the stadium", 2026-09-11), and the hero's own wider box trims the bottom. */
-.lg-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  object-position: 50% 0%; opacity: 0; transform-origin: 50% 40%;
+   above the stadium", 2026-09-11). The zoom holds the top edge too. */
+.lg-hero-img { position: absolute; top: 0; left: -12.5%; width: 125%; height: 125%;
+  object-fit: cover; object-position: 50% 0%; opacity: 0; transform-origin: 50% 0%;
   transition: opacity 1.2s ease; }
 /* 🔴 THE KEN BURNS DRIFT, AS AN ANIMATION. Jason, 2026-09-11: "what is it called
    when you pan across the image and/or zoom in/out?" / "i was thinking about
@@ -5139,8 +5147,9 @@ const CSS = `
 @keyframes lg-kb-a { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.09) translate(-2.5%, 1%); } }
 @keyframes lg-kb-b { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.09) translate(2.5%, 1%); } }
 @keyframes lg-kb-c { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.08) translate(0, 2%); } }
-.lg-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(to bottom, transparent 72%, var(--bg) 100%); }
+/* The fade that ran the bottom of the picture into the page is gone - Jason,
+   2026-09-11, asked what "the fuzz" was, then "Yes crisp edge". The cut-outs have
+   clean edges of their own; the fade only hid a crop that no longer exists. */
 .lg-hero + * { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) { .lg-hero-img { transition: none; }
   .lg-hero-img.is-on, .lg-hero-img.is-off { animation: none; transform: none; } }

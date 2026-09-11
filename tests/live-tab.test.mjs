@@ -70,3 +70,18 @@ test('a poll reply about a game the screen has left is thrown away', () => {
   assert.ok((body.match(/if \(key !== S\.key\) return;/g) || []).length >= 3,
     'and drops the reply after each await if the screen has moved on');
 });
+
+test('the home hero is crisp, 25% larger from the top, and bleeds under the text', () => {
+  // Jason, 2026-09-11: "Yes crisp edge", then "make the image 25% larger. Hold the
+  // top so the bottom will bleed under the text more."
+  assert.equal(/\.lg-hero::after\s*\{[^}]*linear-gradient/.test(SRC), false, 'no fade over the bottom');
+  const hero = SRC.match(/\.lg-hero \{[^}]*\}/)[0];
+  assert.match(hero, /overflow-x: clip/, 'the wider picture cannot scroll the page sideways');
+  assert.match(hero, /overflow-y: visible/, 'the bottom bleeds out of the 300px box');
+  const img = SRC.match(/\.lg-hero-img \{[^}]*\}/)[0];
+  assert.match(img, /width: 125%/);
+  assert.match(img, /height: 125%/);
+  assert.match(img, /top: 0/, 'held at the top');
+  assert.match(img, /transform-origin: 50% 0%/, 'the zoom holds the top edge too');
+  assert.match(SRC, /\.lg-hero \+ \* \{ position: relative; z-index: 1; \}/, 'the text stays above the picture');
+});
