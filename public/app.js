@@ -22,6 +22,15 @@ import { STATES_CSS } from '/components/states.js';
 import { TEAM_CHIP_CSS } from '/components/team-chip.js';
 import { adSlot, AD_CSS } from '/components/ad.js';
 import { HEADER_CSS } from '/components/header.js';
+import { apiFetch, openSignIn } from '/components/signin.js';
+
+/* 🔴 SIGN-IN, EXPOSED ONCE FOR EVERY SCREEN. Screens call
+ * `(window.agApiFetch || fetch)(...)` rather than importing it, because the
+ * p2 tests evaluate the screen module with its import lines stripped - an
+ * import there would be a ReferenceError in the suite. The server decides
+ * whether a person must sign in (REQUIRE_EMAIL); apiFetch just answers it. */
+window.agApiFetch = apiFetch;
+window.agOpenSignIn = openSignIn;
 
 /* Every route is a screen module and one of its own declared states. Nothing here
  * invents a screen; if a piece was never built, the route says so out loud. */

@@ -497,7 +497,7 @@ function joinPendingPool() {
   try { localStorage.removeItem('ag.pendingPool'); } catch { /* private window */ }
   const restore = () => { try { localStorage.setItem('ag.pendingPool', JSON.stringify(pend)); } catch { /* gone */ } };
   try {
-    fetch('/api/pool/join', {
+    (window.agApiFetch || fetch)('/api/pool/join', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ deviceId: deviceId(), code: pend.id,
@@ -514,7 +514,10 @@ function joinPendingPool() {
 function postPick(sport, week, game, side) {
   joinPendingPool();
   try {
-    fetch('/api/pool/pick', {
+    /* Through the sign-in sheet's fetch: it sends the session when there is
+       one, and if the server says an email is required it asks for it and
+       retries. See components/signin.js. */
+    (window.agApiFetch || fetch)('/api/pool/pick', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

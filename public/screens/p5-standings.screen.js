@@ -355,7 +355,7 @@ export async function previewData(fixtures, state) {
     let mine = [];
     let rows = [];
     try {
-      const r = await fetch('/api/pool/mine?device=' + encodeURIComponent(device));
+      const r = await (window.agApiFetch || fetch)('/api/pool/mine?device=' + encodeURIComponent(device));
       mine = ((await r.json()).pools) || [];
     } catch (e) { mine = []; }
     /* A remembered group scope with no group left is not an error - it is
@@ -534,7 +534,7 @@ function poolStart(data) {
     if (!code) { inp.focus(); return; }
     go.disabled = true; go.textContent = 'Joining...';
     try {
-      const r = await fetch('/api/pool/join', {
+      const r = await (window.agApiFetch || fetch)('/api/pool/join', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ deviceId: data.deviceId, code })
       });
@@ -556,7 +556,7 @@ async function startFlow(data) {
   const name = prompt('Name your group', 'Our group');
   if (name === null) return;
   try {
-    const r = await fetch('/api/pool/create', {
+    const r = await (window.agApiFetch || fetch)('/api/pool/create', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ deviceId: data.deviceId, poolName: name || 'Our group',
                              sport: data.sport })
