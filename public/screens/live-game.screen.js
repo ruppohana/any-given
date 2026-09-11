@@ -3610,7 +3610,9 @@ function sportCard(wrap) {
     const img = document.createElement('img');
     img.className = 'lg-sport-logo';
     img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
-    img.alt = ''; img.width = 44; img.height = 44;
+    /* 64, up from 44 - the mark is the whole button now. Jason, 2026-09-11:
+     * "make the nfl and ncaa logos larger". */
+    img.alt = ''; img.width = 64; img.height = 64;
     b.appendChild(img);
     /* The mark alone - Jason, 2026-09-11: "remove the word NFL and College". The
      * shield IS the word. The name stays as the button's accessible label, so a
@@ -3774,8 +3776,9 @@ function modeCard(wrap, compact) {
       img.className = 'lg-sportpick-logo';
       img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
       /* Mark only, here as on the sport card - "remove the word NFL and College"
-       * (2026-09-11). 28px, up from 22, now that the shield carries it alone. */
-      img.alt = ''; img.width = 28; img.height = 28;
+       * (2026-09-11). 36px, up from 22, now that the shield carries it alone
+       * ("make the nfl and ncaa logos larger", same night). */
+      img.alt = ''; img.width = 36; img.height = 36;
       b.appendChild(img);
       b.setAttribute('aria-label', SPORT_LABEL[id]);
       b.onclick = () => {
