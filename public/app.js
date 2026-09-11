@@ -150,6 +150,26 @@ function watchRoot() {
   } catch { /* no storage - the defaults below are 30 anyway */ }
 })();
 
+/* 🔴 WHO IS SIGNED IN, IN THE TOP BAR. Jason, 2026-09-10: "on the header, can we
+ * add the handle they enter, right justified." Painted from storage at once (so
+ * it is there on the first frame), then again whenever sign-in state moves: the
+ * sheet fires `ag:auth`, the settings row calls this after sign-out, delete and
+ * a handle change, the boot check calls it after the server answers, and
+ * `storage` covers another tab. No session or no handle - nothing shows. */
+function paintWho() {
+  const w = document.getElementById('topbar-who');
+  if (!w) return;
+  let tok = '', h = '';
+  try { tok = localStorage.getItem('ag.session') || ''; h = localStorage.getItem('ag.handle') || ''; } catch { /* private */ }
+  const on = !!(tok && h);
+  w.hidden = !on;
+  w.textContent = on ? '@' + h : '';
+  if (on) w.setAttribute('aria-label', 'Signed in as @' + h); else w.removeAttribute('aria-label');
+}
+window.addEventListener('ag:auth', paintWho);
+window.addEventListener('storage', (e) => { if (!e.key || /^ag\.(session|handle)$/.test(e.key)) paintWho(); });
+paintWho();
+
 function wireTopbarTitle() {
   watchRoot();
   const tb = document.getElementById('topbar-title');
@@ -434,6 +454,7 @@ async function boot() {
         window.agAuthRequired = !!(j && j.required);
         if (!ok && tok) { try { localStorage.removeItem('ag.session'); } catch { /* private */ } }
         if (ok && j.handle) { try { localStorage.setItem('ag.handle', j.handle); } catch { /* private */ } }
+        paintWho();
       })
       .catch(() => { /* offline: the server still decides on each request */ });
   } catch { /* no storage */ }
@@ -572,6 +593,7 @@ function buildSettings() {
   const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
   const paintAccount = () => {
     accRow.textContent = '';
+    paintWho();   /* sign-out, delete and a handle change all land here */
     const token = lsGet('ag.session'), email = lsGet('ag.email'), handle = lsGet('ag.handle');
     const who = document.createElement('span');
     who.textContent = token && email ? (handle ? '@' + handle + ' · ' + email : email) : 'Not signed in';

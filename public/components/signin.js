@@ -101,6 +101,8 @@ export async function apiFetch(url, opts) {
 function rememberProfile(p) {
   if (!p) return;
   if (p.handle) { put('ag.handle', p.handle); put('ag.name', JSON.stringify(p.handle)); }
+  /* The top bar shows the handle; tell it (app.js paintWho). */
+  try { window.dispatchEvent(new Event('ag:auth')); } catch { /* old browser */ }
 }
 
 let OPEN = null;

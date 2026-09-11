@@ -61,3 +61,18 @@ test('a signed-in person is named by their handle on every pool board, never by 
   const auth = readFileSync(new URL('../src/auth.ts', import.meta.url), 'utf8');
   assert.ok(auth.includes('handle: s.handle'), 'requireIdentity carries the handle');
 });
+
+test('the top bar shows the signed-in handle, right-justified before the menu', () => {
+  // Jason, 2026-09-10: "on the header, can we add the handle they enter, right justified."
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const bar = html.slice(html.indexOf('<header class="ag-topbar">'), html.indexOf('</header>', html.indexOf('<header class="ag-topbar">')));
+  const spacer = bar.indexOf('class="spacer"'), who = bar.indexOf('id="topbar-who"'), gear = bar.indexOf('id="gear"');
+  assert.ok(spacer > 0 && who > spacer && gear > who, 'order in the bar: title, spacer, handle, menu');
+  assert.ok(/id="topbar-who" hidden/.test(bar), 'hidden until somebody is signed in');
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.ok(app.includes('function paintWho()') && app.includes("addEventListener('ag:auth', paintWho)"), 'repaints on sign-in');
+  const acct = app.slice(app.indexOf('const paintAccount = () => {'), app.indexOf('const paintAccount = () => {') + 200);
+  assert.ok(acct.includes('paintWho()'), 'sign-out, delete and a handle change repaint the bar');
+  const si = readFileSync(new URL('../public/components/signin.js', import.meta.url), 'utf8');
+  assert.ok(si.includes("new Event('ag:auth')"), 'the sheet announces a sign-in');
+});
