@@ -244,7 +244,10 @@
   if (new URLSearchParams(location.search).has('smoke')) {
     const ROUTES = ['home','live','allgames','buildparlay','slate','slate131',
       'picks','parlay','standings','create','invite','rules','now','landed',
-      'missed','game','board','delay','cold','alerts','share','settings','offline'];
+      'missed','game','board','delay','cold','alerts','share','settings','offline',
+      /* The group section, 2026-09-11. Headless is signed out, so these walk each
+       * screen's signed-out state - the one a stranger's invite link meets. */
+      'gpicks','gstandings','g','gcommish','grules'];
     const errs = [];
     addEventListener('error', (e) => errs.push(String(e.message || e)));
     addEventListener('unhandledrejection', (e) => errs.push(String(e.reason)));
