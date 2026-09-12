@@ -39,6 +39,12 @@ test('The slate reads basketball a day at a time, from the day route', () => {
   assert.ok(P6.includes("if (isDaySport(fsport)) await refreshDay(inPlay, fsport, ctx.week);"), 'live refresh re-reads the day');
 });
 
+test('a tip time ESPN has not set says TBD and never locks the game by its placeholder', () => {
+  assert.ok(P6.includes("if (game.tbd === true) return false;"), 'locks on the feed, not the placeholder clock');
+  assert.ok(P6.includes("game.tbd === true ? 'TBD' : timeLabel(game.kickoffUtc)"), 'says TBD');
+  assert.ok(P6.includes("window: 'Time TBD',"), 'in a group of its own, on its real day, last');
+});
+
 test('a basketball card offers winner, spread and total only, with no live link or football facts yet', () => {
   assert.ok(P6.includes("const DAY_MARKETS = ['winner', 'spread', 'total'];"));
   assert.ok(P6.includes("if (isDaySport(sport) && !DAY_MARKETS.includes(m.id)) return false;"), 'halves and quarters are football\'s clock');

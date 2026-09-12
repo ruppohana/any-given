@@ -337,6 +337,9 @@ export function spreadText(spread, side) {
 export function isLocked(game, now) {
   if (!game) return true;
   if (game.status === 'in_progress' || game.status === 'final') return true;
+  /* A tip time ESPN has not set is a placeholder, not a kickoff: it locks when
+     the feed says the game started, never by that clock. */
+  if (game.tbd === true) return false;
   return num(game.kickoffUtc) && num(now) && now >= game.kickoffUtc;
 }
 
@@ -380,7 +383,11 @@ export const WINDOW_SPLIT_MIN = 6;
 
 export function groupsOf(games) {
   const days = new Map();
-  for (const g of (games || []).slice().sort((a, b) => a.kickoffUtc - b.kickoffUtc)) {
+  /* TBD tip times get a group of their own, last. Their kickoff is ESPN's
+     midnight-Eastern placeholder, which would file them under the night
+     before; the group is labelled with the day they are actually on. */
+  const tbd = (games || []).filter((g) => g && g.tbd === true);
+  for (const g of (games || []).filter((x) => !(x && x.tbd === true)).sort((a, b) => a.kickoffUtc - b.kickoffUtc)) {
     const dk = dayKeyOf(g.kickoffUtc);
     if (!days.has(dk)) days.set(dk, []);
     days.get(dk).push(g);
@@ -403,7 +410,17 @@ export function groupsOf(games) {
     }
     for (const grp of byWin.values()) out.push(grp);
   }
-  return out.sort((a, b) => a.first - b.first);
+  out.sort((a, b) => a.first - b.first);
+  if (tbd.length) {
+    const ymd = String(tbd[0].day || '');
+    /* Noon Eastern on that day, so the date label is right in every US zone. */
+    const at = isDay(ymd)
+      ? Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)), 17)
+      : tbd[0].kickoffUtc;
+    out.push({ key: 'tbd', dayKey: 'tbd', day: dayLabel(at), window: 'Time TBD',
+               first: Number.MAX_SAFE_INTEGER, games: tbd });
+  }
+  return out;
 }
 
 export function groupLabel(g) {
@@ -1348,7 +1365,7 @@ function gameCard(ctx, game) {
   if (Object.keys(staked0).length) card.open = true;
 
   const top = el('summary', 'p6a-top');
-  top.appendChild(el('span', 'p6a-time num', timeLabel(game.kickoffUtc)));
+  top.appendChild(el('span', 'p6a-time num', game.tbd === true ? 'TBD' : timeLabel(game.kickoffUtc)));
   if (game.broadcast) top.appendChild(el('span', 'p6a-chan', game.broadcast));
   /* Only the states the card cannot show by itself. There is no chip for "open"
    * - an open card is what a card without one IS. */

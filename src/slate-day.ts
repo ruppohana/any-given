@@ -105,6 +105,11 @@ export function parseDay(payload: any, sport: string, day: string): any[] {
       id: String(ev.id), sport, day,
       season: Number(ev.season?.year) || null, week: 0,
       kickoffUtc: kickoff,
+      /* 🔴 A TIP TIME ESPN HAS NOT SET. 64 of the 78 games on the 2026-27
+       * opener carry timeValid:false and a placeholder of midnight Eastern
+       * (05:00Z) - which read as "9:00 PM the night before" and would have
+       * locked every one of them before its day began. */
+      tbd: comp.timeValid === false,
       name: ev.name, shortName: ev.shortName,
       status, statusName, period,
       clock: typeof comp.status?.displayClock === 'string' ? comp.status.displayClock : null,

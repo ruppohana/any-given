@@ -57,6 +57,8 @@ test('the opener reads as scheduled, unscored, and with no line offers no line',
   assert.equal(g.length, 78);
   assert.ok(g.every((x) => x.status === 'scheduled' && x.homeScore === null && x.awayScore === null));
   assert.ok(g.every((x) => x.spread === null), 'no line posted yet, none invented');
+  assert.equal(g.filter((x) => x.tbd === true).length, 64, 'ESPN has not set 64 of the 78 tip times');
+  assert.equal(parseDay(FINAL, SPORT, '20260307').filter((x) => x.tbd).length, 0, 'a played day has none');
   assert.ok(g.every((x) => x.teams.length === 2 && x.teams.every((t) => t.id && t.name)), 'identity travels with the game');
 });
 
