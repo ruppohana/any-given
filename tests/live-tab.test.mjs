@@ -127,10 +127,12 @@ test('All games: a live game opens live from over its score, and every card has 
     /\.p6a-teams > \.p6a-clock \{\s*grid-column: 2; grid-row: 2;[^}]*width: 0;/, 'the clock sits on the name row at zero width, so the middle column stays narrow');
 });
 
-test('Home has two doors, Betting and Pools, and the third tab looks like where it goes', () => {
+test('Home has two doors, Games and Pools, and the third tab looks like where it goes', () => {
   // Jason, 2026-09-11: "Only 2 options. Betting or pools." / "all games is
   // removed from the home page" / "it highlighted the slate".
-  assert.ok(SRC.includes("{ id: 'allgames', h: 'Betting',"), 'Betting lands on All games');
+  // Then, 2026-09-12: "Rename the home page betting to Games."
+  assert.ok(SRC.includes("{ id: 'allgames', h: 'Games',"), 'Games lands on All games');
+  assert.equal(SRC.includes("h: 'Betting'"), false, 'the door is no longer called Betting');
   assert.ok(SRC.includes("{ id: 'pool', h: 'Pools',"), 'Pools');
   assert.equal(SRC.includes("h: 'All games'") || SRC.includes("h: 'Live games'"), false, 'no third door');
   const NAV = readFileSync(new URL('../public/components/nav.js', import.meta.url), 'utf8');

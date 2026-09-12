@@ -3784,8 +3784,9 @@ function modeCard(wrap, compact) {
      * bet or we are in the group pool", "all games is removed from the home
      * page", "Only 2 options. Betting or pools." Betting lands on All games -
      * the one-stop list where a game is bet, parlayed, or opened live - and
-     * the Live tab still goes straight to the games on now. */
-    { id: 'allgames', h: 'Betting', b: 'Every game this week - bet it, parlay it, or open a live one and call it snap by snap. A price before every tap.' },
+     * the Live tab still goes straight to the games on now.
+     * Then, 2026-09-12: "Rename the home page betting to Games." */
+    { id: 'allgames', h: 'Games', b: 'Every game this week - bet it, parlay it, or open a live one and call it snap by snap. A price before every tap.' },
     { id: 'pool', h: 'Pools', b: 'People you know, a week at a time, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
