@@ -55,6 +55,7 @@ import { pageHeader } from '/components/header.js';
  * about settlement living in the presentation layer, which is how two halves of
  * one app come to disagree about whether you won. */
 import { GAME_MARKETS, settleMarket } from '/src/markets.js';
+import { openInfo } from '/screens/p2-slate.screen.js';
 import { priceMarket, marketIsOpen, MIN_PRICE, trueCeiling, MAX_PRICE,
   gameWinnerProbs, priceFromP } from '/src/lib/price-model.js';
 /* 🔴 IMPORTED, NOT TYPED. The first version of the line below said "Up to
@@ -685,7 +686,12 @@ export async function previewData(fixtures, state) {
   let games = [];
   try { games = await fetchSlate(sport, week, byId); } catch { games = []; }
 
-  return { now: Date.now(), sport, week, games, store, markets: GAME_MARKETS || [] };
+  /* 🔴 THE WEEK IS REAL, SO THE BANNER GOES. Jason's screenshot, 2026-09-11:
+   * "Sample data - these games, spreads and scores are made up" over 86 real
+   * games. The shell shows that banner unless a screen says its rows came off
+   * the wire (app.js, fromFeed), and this one never said. */
+  return { now: Date.now(), sport, week, games, store, markets: GAME_MARKETS || [],
+           fromFeed: games.length > 0 };
 }
 
 /* ------------------------------------------------------------------ render */
@@ -1218,6 +1224,43 @@ function lessRow(card) {
  * Same pattern the parlay screen already uses, which renders the same 86
  * games comfortably - so this is adopting a solved problem rather than
  * inventing one. */
+/** "3rd 4:36", "Halftime", "End 3rd", "OT 2:10" - the held play's clock, in
+ *  the same words the Live now cards use. */
+function liveClock(game) {
+  const q = num(game.heldQuarter) ? game.heldQuarter : 0;
+  if (!q || !game.clock) return '';
+  const ord = q > 4 ? 'OT' : ['1st', '2nd', '3rd', '4th'][q - 1];
+  if (game.clock === '0:00') return q === 2 ? 'Halftime' : 'End ' + ord;
+  return ord + ' ' + game.clock;
+}
+
+/** The Live tab's icon (components/nav.js ICONS.live, plus its dot), small. */
+function liveIcon() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const s = document.createElementNS(NS, 'svg');
+  for (const [k, v] of [['viewBox', '0 0 24 24'], ['width', '18'], ['height', '18'], ['fill', 'none'],
+    ['stroke', 'currentColor'], ['stroke-width', '2'], ['stroke-linecap', 'round'], ['aria-hidden', 'true']]) s.setAttribute(k, v);
+  const dot = document.createElementNS(NS, 'circle');
+  dot.setAttribute('cx', '12'); dot.setAttribute('cy', '12'); dot.setAttribute('r', '1.8');
+  dot.setAttribute('fill', 'currentColor');
+  s.appendChild(dot);
+  const arcs = document.createElementNS(NS, 'path');
+  arcs.setAttribute('d', 'M8.6 8.6a4.8 4.8 0 0 0 0 6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8M5.7 5.7a8.9 8.9 0 0 0 0 12.6M18.3 5.7a8.9 8.9 0 0 1 0 12.6');
+  s.appendChild(arcs);
+  return s;
+}
+
+/** The pick'em slate's info card, with its stylesheet loaded on first use - on
+ *  a cold open of All games the slate's CSS has never been fetched. */
+function infoFor(game, ctx) {
+  if (!document.querySelector('link[href="/screens/p2-slate.css"]')) {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = '/screens/p2-slate.css';
+    document.head.appendChild(l);
+  }
+  openInfo(game, { sport: ctx.sport });
+}
+
 function gameCard(ctx, game) {
   const card = el('details', 'p6a-game');
   card.dataset.gameId = game.id;
@@ -1316,6 +1359,14 @@ function gameCard(ctx, game) {
     top.appendChild(el('span', 'p6a-sprd num',
       abbr + ' ' + spreadText(game.spread, game.spread <= 0 ? 'home' : 'away')));
   }
+  /* 🔴 "info" ON EVERY CARD. Jason, 2026-09-11: "...and an info word." The
+   * same card the pick'em slate opens - records, form, the last meeting and a
+   * fun or odd fact for each side. Inside a <summary>, so no fold. */
+  const info = el('button', 'p6a-info', 'info');
+  info.type = 'button';
+  info.setAttribute('aria-label', 'Records and facts for this game');
+  info.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); infoFor(game, ctx); });
+  top.appendChild(info);
   card.appendChild(top);
 
   /* The matchup sits inside the summary so the closed row shows who is
@@ -1334,6 +1385,24 @@ function gameCard(ctx, game) {
    * through on its way from one side to the other. */
   const teams = el('div', 'p6a-teams');
   const mid = el('div', 'p6a-mid');
+  /* 🔴 THE WAY INTO A LIVE GAME SITS OVER ITS SCORE. Jason, 2026-09-11: "the
+   * live games can come from the slate as well" - "one stop for the list of the
+   * games: open something up live, bet, parlay and or nuance bet" - then "put
+   * the live icon above the score if it is live." The Live tab's own icon, over
+   * the @ between the two scores, and the same ?game= link the Live now cards
+   * use. Inside a <summary>, so the tap must not also fold the card. */
+  if (game.status === 'in_progress') {
+    const golive = el('a', 'p6a-golive');
+    golive.href = '/?game=' + encodeURIComponent(ctx.sport + ':' + game.id).replace(/%3A/g, ':');
+    golive.setAttribute('aria-label', 'Open this game live');
+    golive.appendChild(liveIcon());
+    /* The best part of the Live now card (Jason: "and then the best parts of
+     * the live..."): the clock, as of the play your delay lets you see. */
+    const clk = liveClock(game);
+    if (clk) golive.appendChild(el('span', 'p6a-clock num', clk));
+    golive.addEventListener('click', (e) => e.stopPropagation());
+    mid.appendChild(golive);
+  }
   mid.appendChild(el('span', 'p6a-at', '@'));
   /* 🔴 THE WORD SWAPS, IT DOES NOT DISAPPEAR. First pass hid "MORE" on open
      and kept its width, so an open card showed two carets floating either

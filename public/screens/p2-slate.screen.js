@@ -1532,7 +1532,9 @@ function row(ctx, game) {
  * the test to apply before adding a line here, and it is the one this card
  * failed the first time.
  */
-function openInfo(game, ctx) {
+/* Exported: All games opens the same card (Jason, 2026-09-11: "and an info
+ * word"), so the two lists of the week say the same things about a game. */
+export function openInfo(game, ctx) {
   const old = document.getElementById('p2-info-dlg');
   if (old) old.remove();
 

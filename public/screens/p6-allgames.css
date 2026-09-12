@@ -55,12 +55,15 @@
    The GROUND does the containing, exactly as it does in the reference: the gap
    between two cards is the surface behind them showing through, never a band of
    a lighter color, which reads as a seam rather than as space. */
-.scr-p6-allgames .p6a-list { display: grid; gap: 16px; margin-top: 12px; }
+/* Tighter, not tight (Jason, 2026-09-11: "dont love the day of the week, to
+   much room" / "tight cards. but not to tight."): 16px gaps became 12 and 10,
+   the day heading dropped a size, and the header keeps its 44px tap height. */
+.scr-p6-allgames .p6a-list { display: grid; gap: 12px; margin-top: 10px; }
 
 /* L1 - the day card. Its padding IS the nest inset; --radius-l2 is derived from
    that inset, so the two must not drift or the corners stop being concentric. */
 .scr-p6-allgames .p6a-day {
-  display: grid; gap: 16px; padding: var(--nest-inset);
+  display: grid; gap: 10px; padding: var(--nest-inset);
   background: var(--surface-1); border: 1px solid var(--line);
   border-radius: var(--radius-l1);
 }
@@ -85,7 +88,7 @@
 }
 .scr-p6-allgames .p6a-grp::-webkit-details-marker { display: none; }
 .scr-p6-allgames .p6a-grp:hover { background: var(--track); }
-.scr-p6-allgames .p6a-grp-d { font-size: var(--t-section); font-weight: 700; color: var(--fg); }
+.scr-p6-allgames .p6a-grp-d { font-size: var(--t-emph); font-weight: 700; color: var(--fg); }
 .scr-p6-allgames .p6a-grp-r { display: inline-flex; align-items: center; gap: 6px; }
 .scr-p6-allgames .p6a-grp-n { font-size: var(--t-micro); font-weight: 700; color: var(--fg); }
 .scr-p6-allgames .p6a-chev {
@@ -97,7 +100,7 @@
 /* The games need a real wrapper: a <details> slots everything after its summary
    into ONE anonymous box, so a gap on the day card separates the header from the
    block of games and separates nothing inside it. */
-.scr-p6-allgames .p6a-games { display: grid; gap: 16px; }
+.scr-p6-allgames .p6a-games { display: grid; gap: 12px; }
 
 /* ---- L2, the game card. White on the day card's grey, no shadow but --lift.
    Uniform inset on all four sides: concentricity is an all-four-sides property,
@@ -137,6 +140,21 @@
 .scr-p6-allgames .p6a-pill[data-state="in_progress"] {
   background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
 }
+/* 🔴 THE WAY INTO A LIVE GAME (2026-09-11) - the Live tab's icon over the @
+   between the two scores, drawn at its own size with a 44px reach. */
+.scr-p6-allgames .p6a-golive {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px; position: relative;
+  color: var(--accent); text-decoration: none;
+}
+.scr-p6-allgames .p6a-golive::after { content: ''; position: absolute; inset: -14px -8px; }
+.scr-p6-allgames .p6a-clock { font-size: 11px; font-weight: 700; white-space: nowrap; }
+/* "info" on every card - a word, as on the pick'em slate, reaching 44px. */
+.scr-p6-allgames .p6a-info {
+  flex: 0 0 auto; position: relative; min-height: 0; padding: 0 2px;
+  font: inherit; font-size: 11px; font-weight: 700; color: var(--fg);
+  text-decoration: underline; background: none; border: 0; cursor: pointer;
+}
+.scr-p6-allgames .p6a-info::after { content: ''; position: absolute; inset: -16px -10px; }
 
 /* THE MATCHUP. Away, then "@", then home - the order is the meaning. Football is
    not neutral: every game is played at somebody's place, the spread is quoted on
@@ -536,7 +554,7 @@
    inherits the text colour and weight like any other character. On open it
    flips to the up arrowhead via a rotation, which keeps one element
    authoritative about the state instead of two glyphs that can disagree. */
-.scr-p6-allgames .p6a-mid { flex: 0 0 auto; }
+.scr-p6-allgames .p6a-mid { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 /* Its own full-width row under the teams. The @ is centred in the grid
    above, so a centred control here lands directly beneath it and costs the
    two names no width at all. */

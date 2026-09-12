@@ -88,6 +88,22 @@ test('the Slate tab opens the betting board on the betting side', () => {
   assert.ok(APP.includes("slateTab.setAttribute('href', slateHref());"), 'and decides again at the tap');
 });
 
+test('All games: a live game opens live from over its score, and every card has info', () => {
+  // Jason, 2026-09-11: "the live games can come from the slate as well", "put
+  // the live icon above the score if it is live", "and an info word".
+  const P6 = readFileSync(new URL('../public/screens/p6-allgames.screen.js', import.meta.url), 'utf8');
+  const P2 = readFileSync(new URL('../public/screens/p2-slate.screen.js', import.meta.url), 'utf8');
+  assert.ok(P6.includes("const golive = el('a', 'p6a-golive');"), 'a go-live link');
+  assert.ok(P6.indexOf('mid.appendChild(golive);') < P6.indexOf("mid.appendChild(el('span', 'p6a-at', '@'));"),
+    'placed over the @ between the scores');
+  assert.ok(P6.includes("const info = el('button', 'p6a-info', 'info');"), 'an info word on the card');
+  assert.ok(P2.includes('export function openInfo(game, ctx)'), 'the same info card as the pick\'em slate');
+  // "Sample data - these games are made up" over 86 real games: the screen must say its rows are real.
+  assert.ok(P6.includes('fromFeed: games.length > 0'), 'All games reports that its week came off the feed');
+  // "the best parts of the live": the clock beside the go-live icon.
+  assert.ok(P6.includes('const clk = liveClock(game);'), 'the live clock sits with the go-live icon');
+});
+
 test('a game link mounts once, on the game it names', () => {
   // Jason, 2026-09-11: "Selecting Norfolk Virginia takes me to Villanova still."
   // The no-hash redirect used location.replace, whose hashchange arrived after
