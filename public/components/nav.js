@@ -221,7 +221,7 @@ export function navBar(active, opts) {
      * highlighted the slate." - then "Ok for now." The clapperboard means the
      * pool's pick'em; lit over All games it said you were on the other slate. */
     const allGames = d.id === 'slate' && !!opts.slateIsAllGames;
-    const label = allGames ? 'All games' : d.label;
+    const label = allGames ? 'The slate' : d.label;   /* "Rename to the slate." */
     a.appendChild(navIcon(allGames ? 'allgames' : d.id));
     /* 🔴 THE LABEL BECOMES THE ACCESSIBLE NAME, NOT VISIBLE TEXT. Jason,
      * 2026-09-09: "remove the words under the icons."

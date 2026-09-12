@@ -1486,9 +1486,14 @@ function gameCard(ctx, game) {
 function head(root, data) {
   const sport = (data && data.sport) || 'college-football';
   const week = (data && data.week) || 1;
+  /* 🔴 "THE SLATE", IN THE TOP BAR, AND NO LEAGUE MARK. Jason, 2026-09-11:
+   * "Remove the ncaa logo on all games." / "Rename to the slate. And put the
+   * text in the top." noTitle leaves the big h1 off the page, so the top bar
+   * shows the name from the start (TITLES.allgames) and the games begin
+   * higher; the week line stays. */
   root.appendChild(pageHeader({
-    title: 'All games',
-    league: sport === 'nfl' ? 'nfl' : 'ncaa',
+    title: 'The slate',
+    noTitle: true,
     /* 🔴 THE SUB LINE STATES THE RULE. THE PINNED BAR CARRIES THE TALLY.
      *
      * The first render printed "3 picks · 75 Marbles staked" here AND

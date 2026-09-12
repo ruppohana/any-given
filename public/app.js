@@ -203,7 +203,7 @@ function wireTopbarTitle() {
 const TITLES = {
   home: 'Any Given…',
   live: 'Call it live',
-  allgames: 'All games',
+  allgames: 'The slate',      /* "Rename to the slate." - Jason, 2026-09-11 */
   buildparlay: 'Build a parlay',
   slate: 'The slate',
   slate131: 'The slate',

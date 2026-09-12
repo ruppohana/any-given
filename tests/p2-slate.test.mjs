@@ -650,7 +650,9 @@ test('every product screen uses the shared header, and it carries the league mar
    * the ncaa logo off this page" / "as well as the slate below the ncaa logo",
    * then My picks, then "standings does the same think, clean it up as well".
    * The top bar names the screen; the page header carries only the sub line. */
-  for (const f of ['p2-slate.screen.js', 'p4-picks.screen.js', 'p5-standings.screen.js']) {
+  /* And the betting slate, 2026-09-11: "Remove the ncaa logo on all games." /
+   * "Rename to the slate. And put the text in the top." */
+  for (const f of ['p2-slate.screen.js', 'p4-picks.screen.js', 'p5-standings.screen.js', 'p6-allgames.screen.js']) {
     const src = readFileSync(new URL(f, dir), 'utf8');
     const at = src.indexOf('.appendChild(pageHeader({');
     assert.ok(at > 0, f + ' does not use the shared header');
