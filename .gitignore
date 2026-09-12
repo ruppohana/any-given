@@ -12,6 +12,11 @@ tendency.json
 # Competitor captures and anything pulled from a CDN.
 captures/
 
+# Whole seasons pulled by tools/capture-season.mjs - about 6,000 games, hundreds
+# of MB even gzipped. Re-runnable from the feed, so never committed; a game a
+# test needs is captured whole into fixtures/ with capture-fixture.mjs instead.
+data/
+
 dist/
 
 # The captured feed payloads ARE evidence and are committed. A directory

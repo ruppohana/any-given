@@ -18,23 +18,35 @@
  * machine - which is why this is a host tool and why the fixtures are committed
  * rather than fetched at test time.
  */
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 const id = args.find((a) => !a.startsWith('--'));
 const flag = (n, d) => { const i = args.indexOf('--' + n); return i < 0 ? d : args[i + 1]; };
-const sport = flag('sport', 'nfl') === 'nfl' ? 'nfl' : 'college-football';
-const name = flag('name', `real-${sport}-${id}`);
+/* Basketball's summary sits under another path and carries its plays flat, not
+ * in drives. `--sport mbb` is men's college basketball, filed under fixtures/mbb/. */
+const PATHS = {
+  nfl: 'football/nfl',
+  'college-football': 'football/college-football',
+  'mens-college-basketball': 'basketball/mens-college-basketball'
+};
+const want = flag('sport', 'nfl');
+const sport = want === 'nfl' ? 'nfl'
+  : (want === 'mbb' || want === 'mens-college-basketball') ? 'mens-college-basketball'
+  : 'college-football';
+const hoops = sport === 'mens-college-basketball';
+const name = flag('name', hoops ? `mbb/real-mbb-${id}` : `real-${sport}-${id}`);
 
 if (!id) {
-  console.error('usage: node tools/capture-fixture.mjs <espnGameId> [--sport nfl] [--name x]');
+  console.error('usage: node tools/capture-fixture.mjs <espnGameId> [--sport nfl|college-football|mbb] [--name x]');
   process.exit(1);
 }
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
   + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
-const url = `https://site.api.espn.com/apis/site/v2/sports/football/${sport}/summary?event=${id}`;
+const url = `https://site.api.espn.com/apis/site/v2/sports/${PATHS[sport]}/summary?event=${id}`;
 
 const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' } });
 if (!res.ok) { console.error(`espn ${res.status}`); process.exit(1); }
@@ -46,11 +58,13 @@ const doc = await res.json();
  * would look like a fixture and quietly test nothing at the end of it. */
 const comp = doc.header?.competitions?.[0];
 const done = comp?.status?.type?.completed === true;
-const plays = (doc.drives?.previous || []).reduce((n, d) => n + (d.plays?.length || 0), 0);
+const plays = hoops ? (doc.plays || []).length
+  : (doc.drives?.previous || []).reduce((n, d) => n + (d.plays?.length || 0), 0);
 if (!done) { console.error(`that game is not final (${comp?.status?.type?.name}) - not capturing`); process.exit(1); }
 if (plays < 100) { console.error(`only ${plays} plays - that is not a whole game`); process.exit(1); }
 
 const out = fileURLToPath(new URL(`../fixtures/${name}.json`, import.meta.url));
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(doc));
 const c = comp.competitors || [];
 console.log(`${name}.json  ${plays} plays  ${c.map((x) => (x.team?.abbreviation || '?') + ' ' + x.score).join(' - ')}`);
