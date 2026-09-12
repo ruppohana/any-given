@@ -50,6 +50,27 @@ test('the picker repaints on a change, never on the clock', () => {
   assert.ok(SRC.includes('if (changed) { S.lastSig = null; paint(wrap); }'), 'and so does the slate copy');
 });
 
+test('the live screen repaints when what it shows changes, not every poll', () => {
+  // Jason, 2026-09-11, on Missouri at Kansas: "The logos blink here to." The
+  // poll repainted the live screen every five seconds; every repaint rebuilds
+  // every crest.
+  assert.ok(SRC.includes("const sig = quiet ? homeSignature() : 'live:' + liveSignature(Date.now());"),
+    'the live screen has a signature, like Home');
+  assert.ok(SRC.includes('if (sig === S.lastSig) { patchFoot(wrap); return; }'),
+    'an unchanged screen is not repainted - only its feed age is written in place');
+  assert.equal(/\} else \{\s*S\.lastSig = null;\s*\}\s*paint\(wrap\);/.test(SRC), false,
+    'the unconditional live repaint is gone');
+});
+
+test('a repaint keeps the crests it already had', () => {
+  // Measured 2026-09-11: 510 images rebuilt in 25s with 170 on screen. A new
+  // play must repaint, so the fix is to reuse the decoded <img> elements.
+  assert.ok(SRC.includes('paintScreen(wrap);'), 'paint() wraps the rebuild');
+  assert.ok(SRC.includes('im.replaceWith(old);'), 'each new crest is swapped for the one already on screen');
+  assert.ok(SRC.includes('if (old.getAttribute(a.name) !== a.value) old.setAttribute(a.name, a.value);'),
+    'and an identical src is never re-set');
+});
+
 test('the end of a quarter retires the question', () => {
   // Jason, 2026-09-11: "End of the first quarter should retire the choice below."
   assert.ok(SRC.includes('function atQuarterEnd(state)'), 'a quarter end is recognized');

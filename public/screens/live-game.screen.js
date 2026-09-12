@@ -2064,6 +2064,36 @@ const BOARD_ORDER = (a, b) => b.profit - a.profit || (b.won + b.lost) - (a.won +
 /* What Home actually shows: which game, its status, the score, and the countdown
  * rounded to the minute it displays. Anything not in here cannot change a pixel
  * on that screen, and anything in here forces a redraw. */
+/* 🔴 THE LIVE SCREEN REPAINTS WHEN WHAT IT SHOWS CHANGES, NOT ON THE CLOCK.
+ * Jason, 2026-09-11, on Missouri at Kansas: "The logos blink here to." Every
+ * repaint rebuilds every crest, and the poll repainted this screen every five
+ * seconds whether or not anything had changed. This is everything the screen
+ * reads that can change without a tap: the play the delay lets you see and how
+ * many it is holding, the score and the situation, the board, the stale banner
+ * and the score flash. A tap repaints on its own; the footer's feed age is
+ * written in place (patchFoot). */
+function liveSignature(now) {
+  const v = held(S.raw, S.delayMs, now);
+  if (!v) return 'none:' + String(S.key) + ':' + String(S.noGame);
+  const lp = v.plays && v.plays[v.plays.length - 1];
+  const st = staleness(S.raw, now);
+  const flash = !!(lp && lp.wallclockMs && now - (S.delayMs || 0) - lp.wallclockMs <= FLASH_SCORE_MS);
+  const sit = v.situation || {};
+  return [S.key, v.status, lp && lp.id, v.holding, v.awayScore, v.homeScore,
+          sit.down, sit.distance, sit.clock, (S.board || []).length,
+          st ? Math.round(st.age / 10000) : 'ok', flash, S.delayMs].join('|');
+}
+
+/** The footer's "feed Ns old", brought up to date without a repaint. */
+function patchFoot(wrap) {
+  const f = wrap.querySelector('.lg-foot');
+  if (!f || !S.raw) return;
+  const age = Math.round((Date.now() - (S.raw.pushedAt || Date.now())) / 1000);
+  const t = f.textContent;
+  const cut = t.indexOf(' \u00b7');
+  f.textContent = 'feed ' + age + 's old' + (cut >= 0 ? t.slice(cut) : '');
+}
+
 function homeSignature() {
   const r = S.raw;
   if (!r) return 'none:' + String(S.key) + ':' + String(S.noGame);
@@ -2232,13 +2262,9 @@ async function poll(wrap) {
      * actually changed. */
     if (S.pick) { pickerTick(wrap); return; }
     const quiet = S.isHome || (S.raw && S.raw.status === 'pre');
-    if (quiet) {
-      const sig = homeSignature();
-      if (sig === S.lastSig) return;
-      S.lastSig = sig;
-    } else {
-      S.lastSig = null;
-    }
+    const sig = quiet ? homeSignature() : 'live:' + liveSignature(Date.now());
+    if (sig === S.lastSig) { patchFoot(wrap); return; }
+    S.lastSig = sig;
     paint(wrap);
   } catch { /* offline is a state the screen draws, not an exception */ }
 }
@@ -2267,7 +2293,37 @@ function wireDelay(wrap) {
   });
 }
 
+/* 🔴 A REPAINT KEEPS THE CRESTS IT ALREADY HAD. Jason, 2026-09-11, on Missouri
+ * at Kansas: "The logos blink here to." paint() rebuilds the screen from
+ * nothing, and a brand-new <img> - bytes in the cache or not - is blank until it
+ * decodes, so every crest blinked on every play (measured: 510 images rebuilt in
+ * 25 seconds with 170 on screen). Fewer repaints cannot fix it - a new play IS a
+ * repaint. So the old elements are kept: pooled by src before the rebuild, and
+ * after it each new <img> is swapped for a pooled one with the same src, which
+ * is already decoded and draws on the first frame. */
 function paint(wrap) {
+  const pool = new Map();
+  for (const im of wrap.querySelectorAll('img')) {
+    const k = im.getAttribute('src');
+    if (!k) continue;
+    if (!pool.has(k)) pool.set(k, []);
+    pool.get(k).push(im);
+  }
+  paintScreen(wrap);
+  for (const im of [...wrap.querySelectorAll('img')]) {
+    const list = pool.get(im.getAttribute('src'));
+    const old = list && list.pop();
+    if (!old || old === im) continue;
+    for (const a of [...old.attributes]) if (!im.hasAttribute(a.name)) old.removeAttribute(a.name);
+    for (const a of [...im.attributes]) {
+      /* Never re-set an identical src - that asks the browser to load it again. */
+      if (old.getAttribute(a.name) !== a.value) old.setAttribute(a.name, a.value);
+    }
+    im.replaceWith(old);
+  }
+}
+
+function paintScreen(wrap) {
   S.delayMs = store.get('delayMs', 30000);
   wireDelay(wrap);
   wrap.innerHTML = '';
