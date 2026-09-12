@@ -121,7 +121,7 @@ const GAME_FOR = {
   'college-football': 'college-football:401858213'
 };
 
-const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', 'nba': 'NBA' };
+const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', 'nba': 'NBA', 'f1': 'Formula 1' };
 
 /* 🔴 BASKETBALL IS ON THE SLATE ONLY. Page 2 of Home offers it (Jason,
  * 2026-09-12) and sends it to The slate; the live board, GAME_FOR, the catalog
@@ -3657,8 +3657,8 @@ function sportCard(wrap) {
   const stored = store.get('sport', null);
   const game = S.homeGame || (DAY_ONLY.has(stored) ? 'basketball' : stored ? 'football' : null);
   const games = el('div', 'lg-mode-row lg-gamerow');
-  for (const [gid, label] of [['football', 'Football'], ['basketball', 'Basketball']]) {
-    if (gid === 'basketball' && S.mode === 'live') continue;
+  for (const [gid, label] of [['football', 'Football'], ['basketball', 'Basketball'], ['racing', 'Racing']]) {
+    if (gid !== 'football' && S.mode === 'live') continue;
     const g = el('button', 'lg-mode lg-game' + (gid === game ? ' is-on' : ''));
     g.appendChild(el('span', 'lg-mode-h', label));
     g.onclick = () => { S.homeGame = gid; paint(wrap); };
@@ -3667,7 +3667,8 @@ function sportCard(wrap) {
   c.appendChild(games);
   if (!game) return c;
   /* Pro or college - for both sports now (the NBA, Jason 2026-09-12: "Yes"). */
-  const ids = game === 'basketball' ? ['nba', HOOPS] : ['nfl', 'college-football'];
+  /* Racing is F1 for now (Jason, 2026-09-12: "F1, pick qualifying in p1, p2 and p3"). */
+  const ids = game === 'basketball' ? ['nba', HOOPS] : game === 'racing' ? ['f1'] : ['nfl', 'college-football'];
   const row = el('div', 'lg-sport-row' + (ids.length === 1 ? ' is-one' : ''));
   for (const id of ids) {
     const b = el('button', 'lg-sport-pick');
@@ -3682,13 +3683,18 @@ function sportCard(wrap) {
     /* 64, up from 44 - the mark is the whole button now. Jason, 2026-09-11:
      * "make the nfl and ncaa logos larger". */
     img.alt = ''; img.width = 64; img.height = 64;
-    b.appendChild(img);
+    /* 🔴 NO F1 MARK. Formula 1's guidelines allow the name "to inform or report
+       and not to brand", and no logo at all - so its tile is the words. */
+    if (id === 'f1') b.appendChild(el('span', 'lg-sport-word', 'Formula 1'));
+    else b.appendChild(img);
     /* The mark alone - Jason, 2026-09-11: "remove the word NFL and College". The
      * shield IS the word. The name stays as the button's accessible label, so a
      * screen reader still says which league it is. */
     b.setAttribute('aria-label', SPORT_LABEL[id]);
     b.onclick = () => {
       /* Basketball goes to The slate and never becomes the live board's sport. */
+      /* F1 is its own picks screen; it is never a stored sport. */
+      if (id === 'f1') { location.hash = '#/f1'; return; }
       if (DAY_ONLY.has(id)) { store.set('sport', id); location.hash = '#/allgames'; return; }
       S.sport = id; store.set('sport', id);
       S.key = GAME_FOR[id];
@@ -5534,9 +5540,10 @@ const CSS = `
 .lg-mode-b { font-size: var(--t-micro); color: var(--dim); line-height: 1.45; }
 .lg-sport-logo { display: block; margin: 0 auto; object-fit: contain; }
 /* Page 2: the sport in words, then pro or college as the shields. */
-.lg-gamerow { grid-template-columns: 1fr 1fr; margin-top: 0; }
+.lg-gamerow { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin-top: 0; }
 .lg-mode.lg-game { justify-items: center; text-align: center; min-height: 52px; align-content: center; }
 .lg-sport-row.is-one { grid-template-columns: minmax(0, calc(50% - 5px)); justify-content: center; }
+.lg-sport-word { display: block; padding: 20px 0; font-weight: 800; font-size: var(--t-emph); }
 .lg-how { margin-top: 12px; }
 .lg-how-s { list-style: none; cursor: pointer; text-align: center; font-weight: 700;
   color: var(--accent); padding: 12px 0; min-height: 44px; }

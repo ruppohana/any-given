@@ -1,0 +1,40 @@
+/* F1 picks - Home > The Games > Racing > F1. One card per question, a 44px
+   reach on every control, the running total pinned. */
+.scr-f1 { display: grid; gap: 12px; padding-bottom: 96px; }
+.scr-f1 .f1-total {
+  position: sticky; top: 0; z-index: 2; text-align: center;
+  font-weight: 800; font-size: var(--t-emph); color: var(--accent);
+  padding: 10px 8px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.scr-f1 .f1-rule { margin: 0 4px; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.scr-f1 .f1-card { display: grid; gap: 8px; padding: 12px; }
+.scr-f1 .f1-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.scr-f1 .f1-title { font-weight: 800; font-size: var(--t-emph); }
+.scr-f1 .f1-when { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.scr-f1 .f1-row {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 8px; min-height: 44px;
+}
+.scr-f1 .f1-row-one { grid-template-columns: minmax(0, 1fr) auto auto; }
+.scr-f1 .f1-pos { font-weight: 800; color: var(--dim); }
+.scr-f1 .f1-sel {
+  font: inherit; width: 100%; min-height: 44px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-f1 .f1-drv { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; min-width: 0; }
+.scr-f1 .f1-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: 0 0 auto; }
+.scr-f1 .f1-actual { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.scr-f1 .f1-pts { font-weight: 800; min-width: 28px; text-align: right; color: var(--dim); }
+.scr-f1 .f1-pts[data-hit="true"] { color: var(--accent); }
+.scr-f1 .f1-choices { display: flex; gap: 8px; }
+.scr-f1 .f1-choice {
+  flex: 1; font: inherit; font-weight: 700; min-height: 44px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-f1 .f1-choice[data-on="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.scr-f1 .f1-choice:disabled { opacity: .7; }
+.scr-f1 .f1-choice[data-on="true"]:disabled { opacity: 1; }
+.scr-f1 .f1-note { font-size: 12px; color: var(--dim); margin: 0; }
+.scr-f1 .f1-foot { margin: 4px; }

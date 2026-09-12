@@ -2,6 +2,7 @@ import { pollDecision } from './lib/poll-window.ts';
 import { captureSlate } from './slate-cron.ts';
 import { captureDay, serveDay } from './slate-day.ts';
 import { DAY_SPORTS, isDaySport, dayOf, addDays } from './lib/day.ts';
+import { serveF1 } from './f1-feed.ts';
 export { LivePoller } from './poller-do.ts';
 import { computeDue, nuggetAlertTick } from './nugget-due.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
@@ -457,6 +458,14 @@ export default {
         }
         const doc = await serveDay(env, sport, which);
         if (!doc) return new Response(JSON.stringify({ error: 'nothing captured for that day', sport, day: which }), { status: 404, headers: head });
+        return new Response(JSON.stringify(doc), { headers: head });
+      }
+
+      /* ---- F1: the current Grand Prix, its sessions and results (src/f1-feed.ts) ---- */
+      if (p === '/api/f1/current') {
+        const doc = await serveF1(env);
+        const head = { 'content-type': 'application/json', 'cache-control': 'no-store' };
+        if (!doc) return new Response(JSON.stringify({ error: 'no F1 event on the feed' }), { status: 404, headers: head });
         return new Response(JSON.stringify(doc), { headers: head });
       }
 

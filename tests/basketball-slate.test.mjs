@@ -13,10 +13,12 @@ const LG = readFileSync(new URL('../public/screens/live-game.screen.js', import.
 const P6 = readFileSync(new URL('../public/screens/p6-allgames.screen.js', import.meta.url), 'utf8');
 
 test('page 2 asks the sport in words first, then pro or college with the shields', () => {
-  assert.ok(LG.includes("for (const [gid, label] of [['football', 'Football'], ['basketball', 'Basketball']]) {"),
-    'Football and Basketball, in words');
-  assert.ok(LG.includes("const ids = game === 'basketball' ? ['nba', HOOPS] : ['nfl', 'college-football'];"),
-    'then the shields: pro and college, for both sports');
+  assert.ok(LG.includes("for (const [gid, label] of [['football', 'Football'], ['basketball', 'Basketball'], ['racing', 'Racing']]) {"),
+    'Football, Basketball and Racing, in words');
+  assert.ok(LG.includes("if (id === 'f1') { location.hash = '#/f1'; return; }"), 'Racing > F1 opens the F1 picks');
+  assert.ok(LG.includes("const ids = game === 'basketball' ? ['nba', HOOPS] : game === 'racing' ? ['f1'] : ['nfl', 'college-football'];"),
+    'then the shields: pro and college for both ball sports, Formula 1 for racing');
+  assert.ok(LG.includes("if (id === 'f1') b.appendChild(el('span', 'lg-sport-word', 'Formula 1'));"), 'F1 is words, never a mark');
   assert.ok(LG.includes("if (!game) return c;"), 'the shields wait for the sport');
 });
 

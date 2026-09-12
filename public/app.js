@@ -41,6 +41,8 @@ const ROUTES = [
    * spread, total, halves, quarters, team totals, first to score and margin,
    * on every game of the week. Reached at #/allgames from the front door. */
   { id: 'allgames',  dest: 'slate',     screen: 'p6-allgames',     state: 'ready',       label: 'All games' },
+  /* F1 picks - Home > The Games > Racing > F1 (Jason, 2026-09-12). */
+  { id: 'f1',        dest: 'slate',     screen: 'f1-picks',        state: 'ready',       label: 'F1 picks' },
   { id: 'picks',     dest: 'picks',     screen: 'p4-picks',        state: 'ready',       label: 'My picks' },
   { id: 'parlay',    dest: 'picks',      screen: 'p3-parlay',       state: 'valid',       label: 'The parlay (pool, points)' },
   /* 🔴 TWO PARLAYS, TWO ROUTES, AND THEY ARE NOT THE SAME PRODUCT. p3 is the
@@ -204,6 +206,7 @@ const TITLES = {
   home: 'Any Given…',
   live: 'Call it live',
   allgames: 'The slate',      /* "Rename to the slate." - Jason, 2026-09-11 */
+  f1: 'Race weekend',   /* F1's guidelines: the name may inform, never brand */
   buildparlay: 'Build a parlay',
   slate: 'The slate',
   slate131: 'The slate',
