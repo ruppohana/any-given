@@ -484,6 +484,8 @@
 
 /* ── THE HEADLINE PICK ────────────────────────────────────────────────
    One control for the board, under the filters. */
+/* Basketball's day switch - Today / Tomorrow, the filter row's chips. */
+.scr-p6-allgames .p6a-days { display: flex; gap: 6px; padding: 0 2px 10px; }
 .scr-p6-allgames .p6a-headline {
   display: flex; align-items: center; gap: 6px; padding: 0 2px 8px;
 }

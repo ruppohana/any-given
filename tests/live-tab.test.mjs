@@ -112,7 +112,8 @@ test('All games: a live game opens live from over its score, and every card has 
   // Then: "Move the time in line with the school name."
   assert.ok(P6.includes("if (clk) teams.appendChild(el('span', 'p6a-clock num', clk));"),
     'the live clock sits in the teams grid, on the name row');
-  assert.ok(P6.includes("if (word && game.status !== 'in_progress') {"), 'a live game has no pill');
+  // A live FOOTBALL game has no pill; basketball keeps it until it has a live board.
+  assert.ok(P6.includes("if (word && (game.status !== 'in_progress' || isDaySport(ctx.sport))) {"), 'a live game has no pill');
   // The stacked team: the home side must restate its rows, or older, more
   // specific home rules put the name in the crest's row (measured 2026-09-11:
   // every home crest on top of its name).

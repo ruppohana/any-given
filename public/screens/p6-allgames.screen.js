@@ -55,6 +55,9 @@ import { pageHeader } from '/components/header.js';
  * about settlement living in the presentation layer, which is how two halves of
  * one app come to disagree about whether you won. */
 import { GAME_MARKETS, settleMarket } from '/src/markets.js';
+/* `dayName`, not `dayLabel` - this file already exports a dayLabel of its own
+   (a kickoff's weekday), and two bindings of one name do not parse. */
+import { isDaySport, isDay, dayOf, addDays, dayLabel as dayName, hoopsClock } from '/src/lib/day.js';
 import { openInfo } from '/screens/p2-slate.screen.js';
 import { priceMarket, marketIsOpen, MIN_PRICE, trueCeiling, MAX_PRICE,
   gameWinnerProbs, priceFromP } from '/src/lib/price-model.js';
@@ -143,10 +146,18 @@ export function hasLine(game, needsLine) {
  * and attribute to a book". A total we invented would look exactly like a total
  * a market posted, and nothing on the card could tell them apart.
  */
+const DAY_MARKETS = ['winner', 'spread', 'total'];
+
 export function marketsFor(game, list, now = Date.now(), sport = chosenSport()) {
   const all = Array.isArray(list) ? list : [];
   return all.filter((m) => {
     if (!m || !m.id || !Array.isArray(m.choices) || !m.choices.length) return false;
+    /* 🔴 BASKETBALL OFFERS THE GAME'S OWN THREE MARKETS FOR NOW. The halves and
+       quarters in the catalogue run on football's clock - period 2 is halftime
+       there and the END OF REGULATION here - and the margin buckets and first
+       to score are sized for football scoring. Here, so the parlay slip obeys it
+       too. */
+    if (isDaySport(sport) && !DAY_MARKETS.includes(m.id)) return false;
     if (!hasLine(game, m.needsLine)) return false;
     /* 🔴 A MARKET CLOSES ON ITS OWN CLOCK, NOT THE GAME'S. Jason: "So I can
        only bet on who wins the second half until kick?" He could, and it was
@@ -469,7 +480,9 @@ export function stakeForGame(store, gameId) {
 export function chosenSport() {
   try {
     const v = JSON.parse(localStorage.getItem('ag.sport'));
-    return v === 'nfl' ? 'nfl' : 'college-football';
+    /* Basketball too, on this board only - page 2 of Home sends it here and
+       nowhere else (Jason, 2026-09-12). */
+    return v === 'nfl' ? 'nfl' : isDaySport(v) ? v : 'college-football';
   } catch { return 'college-football'; }
 }
 
@@ -520,7 +533,30 @@ function saveStore(sport, week, store) {
  * placing a real parlay and finding it saved to `ag.parlay.college-football.1`
  * against a week-2 board.
  */
+/* 🔴 A DAY SPORT'S "WEEK" IS A DAY. Basketball plays every day - 170 games in
+ * an opening week, 300-450 later - so The slate shows one day at a time (Jason,
+ * 2026-09-12). Everything keyed by week here (the stakes, the headline choice,
+ * the parlay slip) is keyed by the day string instead, which is why the day
+ * resolves through the same function the week does. */
+export async function dayChoices(sport) {
+  let today = null, days = [];
+  try {
+    const r = await fetch('/api/day/' + sport + '/current', { cache: 'no-store' });
+    if (r.ok) { const d = await r.json(); today = d.today; days = Array.isArray(d.days) ? d.days : []; }
+  } catch { /* worked out here instead */ }
+  if (!isDay(today)) today = dayOf(Date.now());
+  if (!days.length) days = [today, addDays(today, 1)];
+  return { today, days };
+}
+
+export function pickDay(sport, choices) {
+  let want = null;
+  try { want = JSON.parse(localStorage.getItem('ag.day.' + sport)); } catch { /* none */ }
+  return choices.days.includes(want) ? want : choices.today;
+}
+
 export async function resolveWeek(sport, fallback) {
+  if (isDaySport(sport)) return isDay(fallback) ? fallback : pickDay(sport, await dayChoices(sport));
   try {
     const cur = await fetch(`/api/state/slate:${sport}:current`);
     if (cur.ok) {
@@ -593,9 +629,36 @@ export async function overlayLive(games, sport, now = Date.now()) {
   return games;
 }
 
+/** A day sport's live refresh: the day again (the Worker refetches it after
+ *  45 seconds while a game is on), copied onto the games in play. No held
+ *  delay: the scoreboard carries no per-play clock to hold to. */
+export async function refreshDay(games, sport, day) {
+  try {
+    const r = await fetch('/api/day/' + sport + '/' + day, { cache: 'no-store' });
+    if (!r.ok) return games;
+    const d = await r.json();
+    const byId = new Map((d.games || []).map((g) => [String(g.id), g]));
+    for (const g of games || []) {
+      const n = byId.get(String(g.id));
+      if (!n) continue;
+      g.status = n.status === 'final' ? 'final' : n.status === 'in_progress' ? 'in_progress' : 'scheduled';
+      if (num(n.period)) g.period = n.period;
+      if (typeof n.clock === 'string') g.clock = n.clock;
+      if (n.statusName) g.statusName = n.statusName;
+      if (num(n.homeScore)) g.homeScore = n.homeScore;
+      if (num(n.awayScore)) g.awayScore = n.awayScore;
+      if (n.periodsHome) g.periodsHome = n.periodsHome;
+      if (n.periodsAway) g.periodsAway = n.periodsAway;
+    }
+  } catch { /* the board's own values stand */ }
+  return games;
+}
+
 export async function fetchSlate(sport, week, byId) {
   const wk = await resolveWeek(sport, week);
-  const res = await fetch(`/api/state/slate:${sport}:${SEASON}:${wk}`);
+  const res = isDaySport(sport)
+    ? await fetch('/api/day/' + sport + '/' + wk, { cache: 'no-store' })
+    : await fetch(`/api/state/slate:${sport}:${SEASON}:${wk}`);
   /* The mapped list is overlaid with the live feed before anybody sees it -
      see overlayLive for why the score is held and the period is not. */
   if (!res.ok) throw new Error('slate ' + res.status);
@@ -664,19 +727,21 @@ export async function fetchSlate(sport, week, byId) {
       away: byId[g.awayTeamId] || null
     };
   }).filter((g) => g.home && g.away && num(g.kickoffUtc));
-  return overlayLive(mapped, sport);
+  /* A day sport's scoreboard IS its live feed - there is no poller to overlay. */
+  return isDaySport(sport) ? mapped : overlayLive(mapped, sport);
 }
 
 export async function previewData(fixtures, state) {
   const sport = chosenSport();
-  const week = await resolveWeek(chosenSport(), chosenWeek());
+  const days = isDaySport(sport) ? await dayChoices(sport) : null;
+  const week = days ? pickDay(sport, days) : await resolveWeek(sport, chosenWeek());
   const store = loadStore(sport, week);
 
   /* The four non-ready routes draw a state block over a header. Fetching for
    * them would be a request whose answer is discarded, and on the `offline`
    * route it would be a request that contradicts the screen it is drawing. */
   if (state && state !== 'ready') {
-    return { now: Date.now(), sport, week, games: [], store, markets: GAME_MARKETS || [] };
+    return { now: Date.now(), sport, week, days, games: [], store, markets: GAME_MARKETS || [] };
   }
 
   const byId = {};
@@ -690,7 +755,7 @@ export async function previewData(fixtures, state) {
    * "Sample data - these games, spreads and scores are made up" over 86 real
    * games. The shell shows that banner unless a screen says its rows came off
    * the wire (app.js, fromFeed), and this one never said. */
-  return { now: Date.now(), sport, week, games, store, markets: GAME_MARKETS || [],
+  return { now: Date.now(), sport, week, days, games, store, markets: GAME_MARKETS || [],
            fromFeed: games.length > 0 };
 }
 
@@ -1229,6 +1294,8 @@ function lessRow(card) {
 /** "3rd 4:36", "Halftime", "End 3rd", "OT 2:10" - the held play's clock, in
  *  the same words the Live now cards use. */
 function liveClock(game) {
+  /* Basketball: two halves, straight off the scoreboard (src/lib/day.ts). */
+  if (isDaySport(game.sport)) return hoopsClock(game.period, game.clock, game.statusName);
   const q = num(game.heldQuarter) ? game.heldQuarter : 0;
   if (!q || !game.clock) return '';
   const ord = q > 4 ? 'OT' : ['1st', '2nd', '3rd', '4th'][q - 1];
@@ -1293,7 +1360,8 @@ function gameCard(ctx, game) {
   /* A live game needs no pill: the Live icon over its score and the clock under
    * it say it (Jason, 2026-09-11: "Move the time centered, below the score and
    * above more."). Final and Closed keep theirs. */
-  if (word && game.status !== 'in_progress') {
+  /* Basketball has no Live icon yet (no live board for it), so its pill stays. */
+  if (word && (game.status !== 'in_progress' || isDaySport(ctx.sport))) {
     const p = el('span', 'p6a-pill', word);
     p.dataset.state = game.status === 'scheduled' ? 'locked' : game.status;
     top.appendChild(p);
@@ -1383,11 +1451,14 @@ function gameCard(ctx, game) {
   /* 🔴 "info" ON EVERY CARD. Jason, 2026-09-11: "...and an info word." The
    * same card the pick'em slate opens - records, form, the last meeting and a
    * fun or odd fact for each side. Inside a <summary>, so no fold. */
-  const info = el('button', 'p6a-info', 'info');
-  info.type = 'button';
-  info.setAttribute('aria-label', 'Records and facts for this game');
-  info.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); infoFor(game, ctx); });
-  top.appendChild(info);
+  /* Not on basketball yet: the facts behind it are football's nuggets. */
+  if (!isDaySport(ctx.sport)) {
+    const info = el('button', 'p6a-info', 'info');
+    info.type = 'button';
+    info.setAttribute('aria-label', 'Records and facts for this game');
+    info.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); infoFor(game, ctx); });
+    top.appendChild(info);
+  }
   card.appendChild(top);
 
   /* The matchup sits inside the summary so the closed row shows who is
@@ -1412,7 +1483,7 @@ function gameCard(ctx, game) {
    * the live icon above the score if it is live." The Live tab's own icon, over
    * the @ between the two scores, and the same ?game= link the Live now cards
    * use. Inside a <summary>, so the tap must not also fold the card. */
-  if (game.status === 'in_progress') {
+  if (game.status === 'in_progress' && !isDaySport(ctx.sport)) {
     const golive = el('a', 'p6a-golive');
     golive.href = '/?game=' + encodeURIComponent(ctx.sport + ':' + game.id).replace(/%3A/g, ':');
     golive.setAttribute('aria-label', 'Open this game live');
@@ -1533,8 +1604,27 @@ function head(root, data) {
      *
      * 🔴 AND IT SELLS NOTHING. No balance, because this screen does not own
      * the bank. No top-up, because there is nothing here to buy. */
-    sub: 'Week ' + week + ' · every market priced before you tap'
+    sub: (isDaySport(sport) && data && data.days && isDay(String(week))
+      ? dayName(String(week), data.days.today) : 'Week ' + week) + ' · every market priced before you tap'
   }));
+  /* 🔴 ONE DAY AT A TIME, TOMORROW A TAP AWAY - basketball (Jason, 2026-09-12).
+   * The same chips as the filter row; a tap re-runs the screen for that day. */
+  if (isDaySport(sport) && data && data.days && Array.isArray(data.days.days)) {
+    const sw = el('div', 'p6a-days');
+    sw.setAttribute('role', 'group');
+    sw.setAttribute('aria-label', 'Which day');
+    for (const dd of data.days.days) {
+      const b = el('button', 'p6a-filter', dayName(dd, data.days.today));
+      b.type = 'button';
+      if (dd === String(week)) b.dataset.on = 'true';
+      b.addEventListener('click', () => {
+        try { localStorage.setItem('ag.day.' + sport, JSON.stringify(dd)); } catch { /* private mode */ }
+        window.dispatchEvent(new Event('hashchange'));
+      });
+      sw.appendChild(b);
+    }
+    root.appendChild(sw);
+  }
   /* 🔴 THE DOOR TO THE PARLAY, AND IT WAS MISSING ENTIRELY. p7 shipped
    * built, tested and DEAD - the only thing in the app that mentioned
    * `#/buildparlay` was the route table that defines it. A screen nobody can
@@ -1600,7 +1690,7 @@ export function render(root, data, state) {
   if (state === 'empty' || !games.length) {
     head(root, d);
     root.appendChild(stateBlock('empty', {
-      title: 'No markets this week',
+      title: isDaySport(d.sport) ? 'No games on this day' : 'No markets this week',
       /* NOT a dead end. The captured week is what this screen is for; the way
        * forward is the other destinations, never a filter invented here. */
       body: 'This week\u2019s slate has not been captured yet, so there are no lines to price and nothing to stake. Every market on this screen comes off a posted line \u2014 when there is none, there is no market, and we never post a number of our own.',
@@ -1778,7 +1868,8 @@ export function render(root, data, state) {
       if (!document.body.contains(root) || !root.classList.contains('scr-p6-allgames')) {
         clearInterval(window.__agLiveTimer); window.__agLiveTimer = null; return;
       }
-      await overlayLive(inPlay, fsport);
+      if (isDaySport(fsport)) await refreshDay(inPlay, fsport, ctx.week);
+      else await overlayLive(inPlay, fsport);
       for (const g of inPlay) ctx.repaint(g.id);
     }, 30000);
   }

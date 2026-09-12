@@ -121,7 +121,14 @@ const GAME_FOR = {
   'college-football': 'college-football:401858213'
 };
 
-const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College' };
+const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball' };
+
+/* 🔴 BASKETBALL IS ON THE SLATE ONLY. Page 2 of Home offers it (Jason,
+ * 2026-09-12) and sends it to The slate; the live board, GAME_FOR, the catalog
+ * and every settler here are football's, so a stored basketball choice is never
+ * this screen's sport. */
+const HOOPS = 'mens-college-basketball';
+function liveSport(v) { return v === 'nfl' || v === 'college-football' ? v : null; }
 
 /* ------------------------------------------------------------------ */
 
@@ -188,7 +195,7 @@ const S = {
    * here: the tendency model is 697,997 COLLEGE plays and the sack rule is
    * graded the opposite way by league. Guessing wrong grades calls wrong.
    * `null` means the choice has not been made, and the screen asks. */
-  sport: store.get('sport', null),
+  sport: liveSport(store.get('sport', null)),
   /* 'call' = the live layer, 'pool' = the weekly picks. Null until asked. */
   /* 🔴 MIGRATED, NOT READ RAW. The first card has been re-cut twice today and
    * every phone that opened the app in between is holding a value this build no
@@ -2010,6 +2017,7 @@ export function render(root, _data, screenState) {
   S.fieldNode = null; FIELD_CAM = null;
   if (FIELD_RAF) { cancelAnimationFrame(FIELD_RAF); FIELD_RAF = null; }
   S.homeStep = 'mode';
+  S.homeGame = null;
   /* 🔴 AND THE REPAINT SIGNATURE, WHICH IS A HARD BLOCKER IF IT SURVIVES A MOUNT.
    *
    * Home -> marbles -> College left the app stuck on "Waiting for the first push
@@ -3637,9 +3645,29 @@ function sportCard(wrap) {
    * and the paragraph about sacks and pricing sat over the stadium art; a screen
    * reader still hears the question, as the group's label. */
   c.setAttribute('role', 'group');
-  c.setAttribute('aria-label', 'Which are you watching?');
-  const row = el('div', 'lg-sport-row');
-  for (const id of ['nfl', 'college-football']) {
+  c.setAttribute('aria-label', 'Which sport?');
+  /* 🔴 THE SPORT FIRST, THEN PRO OR COLLEGE. Jason, 2026-09-12: "On page 2. We
+   * need select a sport, the pro or college." With basketball on The slate the
+   * NCAA shield would be one mark for two sports, so the sport is asked in
+   * words and the shields answer the second question, where they are
+   * unambiguous again. The stored choice pre-selects the first row, so a
+   * returning person is still two taps from the games. */
+  const stored = store.get('sport', null);
+  const game = S.homeGame || (stored === HOOPS ? 'basketball' : stored ? 'football' : null);
+  const games = el('div', 'lg-mode-row lg-gamerow');
+  for (const [gid, label] of [['football', 'Football'], ['basketball', 'Basketball']]) {
+    if (gid === 'basketball' && S.mode === 'live') continue;
+    const g = el('button', 'lg-mode lg-game' + (gid === game ? ' is-on' : ''));
+    g.appendChild(el('span', 'lg-mode-h', label));
+    g.onclick = () => { S.homeGame = gid; paint(wrap); };
+    games.appendChild(g);
+  }
+  c.appendChild(games);
+  if (!game) return c;
+  /* Pro or college. Basketball is college only for now - no NBA yet. */
+  const ids = game === 'basketball' ? [HOOPS] : ['nfl', 'college-football'];
+  const row = el('div', 'lg-sport-row' + (ids.length === 1 ? ' is-one' : ''));
+  for (const id of ids) {
     const b = el('button', 'lg-sport-pick');
     /* The league's own mark, self-hosted like the club crests. Jason:
      * "use the nfl logo and the ncaa logo." */
@@ -3655,6 +3683,8 @@ function sportCard(wrap) {
      * screen reader still says which league it is. */
     b.setAttribute('aria-label', SPORT_LABEL[id]);
     b.onclick = () => {
+      /* Basketball goes to The slate and never becomes the live board's sport. */
+      if (id === HOOPS) { store.set('sport', id); location.hash = '#/allgames'; return; }
       S.sport = id; store.set('sport', id);
       S.key = GAME_FOR[id];
       S.raw = null; S.board = [];
@@ -4050,7 +4080,15 @@ function homeScreen(wrap) {
     /* The rules of the thing they just chose, under the question that follows
      * it. Marbles only - the group pool has no bank and no price, and showing
      * it here would be explaining a product they did not pick. */
-    if (S.mode === 'live' || S.mode === 'allgames') wrap.appendChild(marblesCard());
+    /* 🔴 THE 200 MARBLES CARD IS A BUTTON NOW. Jason, 2026-09-12: "the 200
+     * marbles thing moves or is a button to open". Page 2 is two questions; the
+     * rules open under them when asked for. */
+    if (S.mode === 'live' || S.mode === 'allgames') {
+      const how = el('details', 'lg-how');
+      how.appendChild(el('summary', 'lg-how-s', 'How Marbles work'));
+      how.appendChild(marblesCard());
+      wrap.appendChild(how);
+    }
     return;
   }
   wrap.appendChild(modeCard(wrap));
@@ -5490,6 +5528,15 @@ const CSS = `
 .lg-mode.is-on .lg-mode-h { color: var(--accent); }
 .lg-mode-b { font-size: var(--t-micro); color: var(--dim); line-height: 1.45; }
 .lg-sport-logo { display: block; margin: 0 auto; object-fit: contain; }
+/* Page 2: the sport in words, then pro or college as the shields. */
+.lg-gamerow { grid-template-columns: 1fr 1fr; margin-top: 0; }
+.lg-mode.lg-game { justify-items: center; text-align: center; min-height: 52px; align-content: center; }
+.lg-sport-row.is-one { grid-template-columns: minmax(0, calc(50% - 5px)); justify-content: center; }
+.lg-how { margin-top: 12px; }
+.lg-how-s { list-style: none; cursor: pointer; text-align: center; font-weight: 700;
+  color: var(--accent); padding: 12px 0; min-height: 44px; }
+.lg-how-s::-webkit-details-marker { display: none; }
+.lg-how[open] .lg-how-s { padding-bottom: 8px; }
 .lg-sport-name { display: block; font-size: var(--t-body); }
 .lg-sport-pick { font: inherit; font-size: var(--t-emph); font-weight: 800; min-height: 52px;
   border: 1px solid var(--line); border-radius: var(--radius-card);
