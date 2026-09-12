@@ -649,9 +649,16 @@
   padding: 0 0 0 8px; font-size: 20px; font-weight: 800;
 }
 .scr-p6-allgames .p6a-team[data-side="home"] > .tchip { grid-column: 2; grid-row: 1; }
-.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tname,
+/* 🔴 THE HOME ROWS ARE RESTATED, NOT INHERITED. The older home rules above
+   place the name in row 1 and the meta in row 2 at a higher specificity than
+   `.p6a-team > .p6a-tname`, so leaving grid-row out here let them win: every
+   home crest sat on top of its name, 31px deep, on all 86 home teams (measured
+   in the verification render of c1361896). */
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tname {
+  grid-column: 2; grid-row: 2; text-align: center;
+}
 .scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tmeta {
-  grid-column: 2; text-align: center; justify-content: center;
+  grid-column: 2; grid-row: 3; text-align: center; justify-content: center;
 }
 .scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc { grid-column: 1; padding: 0 8px 0 0; }
 /* The clock row: centred under the score, above MORE, in the live accent. */

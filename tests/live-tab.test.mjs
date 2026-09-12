@@ -111,6 +111,14 @@ test('All games: a live game opens live from over its score, and every card has 
   assert.ok(P6.includes("if (clk) top.appendChild(el('div', 'p6a-clockrow num', clk));"),
     'the live clock sits centred under the score, above MORE');
   assert.ok(P6.includes("if (word && game.status !== 'in_progress') {"), 'a live game has no pill');
+  // The stacked team: the home side must restate its rows, or older, more
+  // specific home rules put the name in the crest's row (measured 2026-09-11:
+  // every home crest on top of its name).
+  const P6CSS = readFileSync(new URL('../public/screens/p6-allgames.css', import.meta.url), 'utf8');
+  assert.match(P6CSS, /\.p6a-team\[data-side="home"\] > \.p6a-tname \{\s*grid-column: 2; grid-row: 2;/,
+    'the home name sits in row 2, under its crest');
+  assert.match(P6CSS, /\.p6a-team\[data-side="home"\] > \.p6a-tmeta \{\s*grid-column: 2; grid-row: 3;/,
+    'and the home rank and record in row 3');
   assert.equal(P6.includes("'p6a-clock num'"), false, 'nothing but the icon widens the middle column');
 });
 
