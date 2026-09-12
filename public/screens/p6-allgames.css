@@ -538,6 +538,11 @@
 }
 /* A blowout offers the spread alone: one segment, shown as the chosen one. */
 .scr-p6-allgames .p6a-seg.is-one .p6a-segb { display: inline-flex; align-items: center; }
+/* 🔴 ROOM UNDER THE SELECTOR. Jason, 2026-09-12: "Spread... needs space." The
+   selector is 28px tall centred on an 18px time line, so it hangs 5px into the
+   row below - and a staked team's tinted box reaches up 3px to meet it. The
+   teams drop 15px on any card that carries one: 10 measured only a 3px gap. */
+.scr-p6-allgames .p6a-game > .p6a-top:has(> .p6a-seg) > .p6a-teams { margin-top: 15px; }
 .scr-p6-allgames .p6a-segb {
   font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .02em;
   min-height: 24px; padding: 0 9px; border: 0;
