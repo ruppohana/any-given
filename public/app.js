@@ -416,7 +416,8 @@ function drawNav(active, which) {
     destinations: which === 'group' ? GROUP_DESTINATIONS : undefined,
     hrefFor: which === 'group'
       ? (d) => '#/' + d.route
-      : (d) => '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id)
+      : (d) => (d.id === 'slate' ? slateHref()
+        : '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id))
   });
   /* 🔴 THE LIVE TAB OPENS THE GAME PICKER. Jason, 2026-09-11, with three games
    * on at once: "Selecting live games immediately take me to Villanova only, no
@@ -430,7 +431,21 @@ function drawNav(active, which) {
     window.__agPick = true;
     if (location.hash === '#/live') mount();
   });
+  const slateTab = nav.querySelector('[data-dest="slate"]');
+  if (slateTab) slateTab.addEventListener('click', () => { slateTab.setAttribute('href', slateHref()); });
   document.querySelector('.ag-shell').appendChild(nav);
+}
+
+/* 🔴 THE SLATE TAB FOLLOWS THE SIDE YOU ARE ON. Jason, 2026-09-11: "in the
+ * betting side, not the pool side, we should be able to bet in the slate." On
+ * the betting side - Live games or All games, chosen on Home - the Slate tab
+ * opens the week's betting board: every game, every market, the parlay builder.
+ * On the pool side, and before any side is chosen (the pool leads), it is the
+ * pick'em. The All games route already lights the Slate tab (dest: 'slate'). */
+function slateHref() {
+  let mode = null;
+  try { mode = JSON.parse(localStorage.getItem('ag.mode') || 'null'); } catch { /* private mode */ }
+  return mode === 'live' || mode === 'allgames' ? '#/allgames' : '#/slate';
 }
 
 /* MARKS. Persisted per device, like every other preference: there is no account. */

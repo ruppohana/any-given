@@ -78,6 +78,16 @@ test('the end of a quarter retires the question', () => {
     'and no question is offered across it');
 });
 
+test('the Slate tab opens the betting board on the betting side', () => {
+  // Jason, 2026-09-11: "in the betting side, not the pool side, we should be
+  // able to bet in the slate."
+  const APP = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.ok(APP.includes("return mode === 'live' || mode === 'allgames' ? '#/allgames' : '#/slate';"),
+    'betting side -> All games; pool side and no side -> the pick\'em');
+  assert.ok(APP.includes("(d.id === 'slate' ? slateHref()"), 'the bar uses it');
+  assert.ok(APP.includes("slateTab.setAttribute('href', slateHref());"), 'and decides again at the tap');
+});
+
 test('a game link mounts once, on the game it names', () => {
   // Jason, 2026-09-11: "Selecting Norfolk Virginia takes me to Villanova still."
   // The no-hash redirect used location.replace, whose hashchange arrived after
