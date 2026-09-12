@@ -163,7 +163,10 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
   const gid = normCode(post ? b.id : url.searchParams.get('id'));
   if (!gid) return json({ error: 'id_required' }, 400);
   const g = await env.DB.prepare(
-    `SELECT id, name, sport, week, ats, scope, scope_arg, created_at, pledge_at FROM pool
+    /* SELECT *, deliberately: the sponsor columns (migrations/0008) may not be
+       on the live database yet, and naming a missing column would fail every
+       group request. With *, an absent column is simply undefined -> no banner. */
+    `SELECT * FROM pool
       WHERE id = ? AND id NOT LIKE 'world-%'`
   ).bind(gid).first() as any;
   if (!g) return json({ error: 'no_group', message: 'That group is gone.' }, 404);
@@ -193,7 +196,14 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     return json({
       group: { id: g.id, name: g.name, sport: g.sport, week: g.week ?? null, ats: !!g.ats,
                scope: g.scope || 'all', scopeArg: g.scope_arg || null,
-               createdAt: g.created_at, pledged: !!g.pledge_at },
+               createdAt: g.created_at, pledged: !!g.pledge_at,
+               /* A business's banner on this private pool, set only by us
+                  (tools/sponsor.mjs) after approval - branding, never play.
+                  An image outside /sponsors/ is never passed on. */
+               sponsor: g.sponsor_name && typeof g.sponsor_image === 'string' && g.sponsor_image.startsWith('/sponsors/')
+                 ? { name: g.sponsor_name, image: g.sponsor_image,
+                     url: typeof g.sponsor_url === 'string' && g.sponsor_url.startsWith('https://') ? g.sponsor_url : null }
+                 : null },
       you: { role: mine.role, muted: !!mine.muted },
       commissioner: c ? c.name : null,
       members,

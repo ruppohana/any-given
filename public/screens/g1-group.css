@@ -191,3 +191,16 @@
   border: 1px solid var(--down); border-radius: var(--radius-button); background: var(--card);
 }
 .scr-g1-group .g1-confirm-q { margin: 0; font-size: var(--t-body); line-height: 1.45; }
+
+/* A sponsor's banner on a private pool - a business's, set by us after approval
+   (tools/sponsor.mjs). Wide and short, marked "Sponsored", a 44px reach when it
+   links out. */
+.scr-g1-group .g1-sponsor {
+  display: grid; gap: 6px; padding: 10px; text-decoration: none; color: var(--dim);
+  min-height: 44px;
+}
+.scr-g1-group .g1-sponsor-img {
+  display: block; width: 100%; height: auto; max-height: 160px; object-fit: contain;
+  border-radius: calc(var(--radius-card) - 4px);
+}
+.scr-g1-group .g1-sponsor-l { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-align: center; }

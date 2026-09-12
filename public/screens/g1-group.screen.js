@@ -561,6 +561,26 @@ function drawGroup(host, data) {
     isCommish ? 'You are the commissioner.' : 'Commissioner: @' + (d.commissioner || 'nobody')));
   host.appendChild(head);
 
+  /* 🔴 A SPONSOR'S BANNER, WHEN A BUSINESS HAS PUT ONE ON THIS POOL. Jason,
+   * 2026-09-12: "send a banner and we can put it on your private pool." Set
+   * only by us after approval (tools/sponsor.mjs); branding only - the pool
+   * stays free and nothing here touches play. Marked "Sponsored" so nobody
+   * mistakes it for the app, and only an image we host under /sponsors/ is
+   * ever drawn. */
+  const sp = g.sponsor;
+  if (sp && sp.image && String(sp.image).startsWith('/sponsors/')) {
+    const box = el(sp.url ? 'a' : 'div', 'card g1-sponsor');
+    if (sp.url) { box.href = sp.url; box.target = '_blank'; box.rel = 'noopener sponsored'; }
+    const img = document.createElement('img');
+    img.className = 'g1-sponsor-img';
+    img.src = sp.image;
+    img.alt = sp.name || 'Sponsor';
+    img.loading = 'lazy';
+    box.appendChild(img);
+    box.appendChild(el('span', 'g1-sponsor-l', 'Sponsored by ' + (sp.name || 'a sponsor')));
+    host.appendChild(box);
+  }
+
   /* The invite - the commissioner's to share. Right after Create it leads. */
   let created = null;
   try { created = host.dataset.created ? JSON.parse(host.dataset.created) : null; } catch { created = null; }
