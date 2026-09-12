@@ -1,5 +1,7 @@
 import { pollDecision } from './lib/poll-window.ts';
 import { captureSlate } from './slate-cron.ts';
+import { captureDay, serveDay } from './slate-day.ts';
+import { DAY_SPORTS, isDaySport, dayOf, addDays } from './lib/day.ts';
 export { LivePoller } from './poller-do.ts';
 import { computeDue, nuggetAlertTick } from './nugget-due.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
@@ -195,6 +197,19 @@ export default {
         } catch (e: any) {
           /* One league failing must not cost the other. */
           console.log('cron', sport, 'FAILED', String(e?.message || e));
+        }
+      }
+      /* A sport that plays every day is captured a day at a time - today and
+         tomorrow, one request each (src/slate-day.ts). */
+      for (const sport of Object.keys(DAY_SPORTS)) {
+        const today = dayOf(Date.now());
+        for (const day of [today, addDays(today, 1)]) {
+          try {
+            const r = await captureDay(env, sport, day);
+            console.log('cron', sport, day, r.wrote, (r as any).skipped || '');
+          } catch (e: any) {
+            console.log('cron', sport, day, 'FAILED', String(e?.message || e));
+          }
         }
       }
     })());
@@ -426,6 +441,23 @@ export default {
         const sport = u.searchParams.get('sport') || 'nfl';
         const out = await captureSlate(env, sport, Number(env.SEASON) || 2026);
         return json(out);
+      }
+
+      /* ---- a sport that plays every day, one day at a time ----
+         /api/day/<sport>/current  -> which day is today, and tomorrow
+         /api/day/<sport>/YYYYMMDD -> that day's games, refreshed when stale */
+      const dm = p.match(/^\/api\/day\/([a-z-]+)\/(current|\d{8})$/);
+      if (dm) {
+        const sport = dm[1], which = dm[2];
+        const head = { 'content-type': 'application/json', 'cache-control': 'no-store' };
+        if (!isDaySport(sport)) return new Response(JSON.stringify({ error: 'not a day sport', sport }), { status: 404, headers: head });
+        if (which === 'current') {
+          const today = dayOf(Date.now());
+          return new Response(JSON.stringify({ sport, today, days: [today, addDays(today, 1)] }), { headers: head });
+        }
+        const doc = await serveDay(env, sport, which);
+        if (!doc) return new Response(JSON.stringify({ error: 'nothing captured for that day', sport, day: which }), { status: 404, headers: head });
+        return new Response(JSON.stringify(doc), { headers: head });
       }
 
       /* ---- what the poller last pushed ---- */

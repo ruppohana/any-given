@@ -52,6 +52,10 @@
 const SD_MARGIN: Record<string, number> = {
   nfl: 13.5,
   'college-football': 16.5,
+  /* MEASURED, not a standard figure: 4,426 real 2025-26 Division I games with a
+   * DraftKings spread (tools/capture-season.mjs), final home margin plus the
+   * spread - mean -0.18, sd 11.18. Favourites won 70.9%. */
+  'mens-college-basketball': 11.2,
 };
 
 /* 🔴 HOW THE GAME'S SCORING IS SPREAD ACROSS IT, and the quarters are NOT
