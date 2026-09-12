@@ -82,7 +82,11 @@ const PILL = { W: 330, H: 352, pill: true }, TILE = { W: 330, H: 200 }, WIDE = {
 const LOW = 0.66;
 const CARDS = [
   ['script', PILL, [['passer', false, 'right', 'fig-pass.png'], ['runner', true, 'left', 'fig-run.png']]],
-  ['fourth_down', TILE, [['runner', false, 'right', 'fig-go.png'], ['kicker', true, 'left', 'fig-kick.png']]],
+  /* LOW now too - Jason, 2026-09-11, on Go for it / Kick: "Scale and head cut
+   * off problem." At the old 84% cap the upright kicker stood 168px of a 200px
+   * tile, head 22px from the top edge and a size bigger than every other card's
+   * figures. At LOW it matches them and clears the top. */
+  ['fourth_down', TILE, [['runner', false, 'right', 'fig-go.png'], ['kicker', true, 'left', 'fig-kick.png']], LOW],
   ['explosive', TILE, [['run2', false, 'right'], ['tackle', true, 'left']], LOW],
   ['first_down', TILE, [['chainCrew', false, 'right'], ['tackle', true, 'left']], LOW],
   /* "They are stopped": the sack figure read as a runner, and the tackle did not
