@@ -2042,7 +2042,10 @@ export function render(root, _data, screenState) {
     /* Re-checked on a slow cycle so a card left open through a kickoff moves on
      * to the next game by itself rather than counting down past zero. */
     if (S.keyTimer) clearInterval(S.keyTimer);
-    S.keyTimer = setInterval(() => { if (!S.forced && S.sport) refreshKey(wrap, S.sport); }, 300000);
+    S.keyTimer = setInterval(() => {
+      if (!wrap.isConnected) { clearInterval(S.keyTimer); S.keyTimer = null; return; }
+      if (!S.forced && S.sport) refreshKey(wrap, S.sport);
+    }, 300000);
   }
 }
 
@@ -2174,6 +2177,13 @@ function preFromSlate(key) {
 }
 
 async function poll(wrap) {
+  /* 🔴 A POLL FOR A SCREEN THAT IS GONE STOPS ITSELF, AND NEVER ASKS ABOUT NO
+   * GAME. Found by the full sweep, 2026-09-11 (Jason: "Check everything."): the
+   * timer set on render was only cleared by the NEXT render of this screen, so
+   * after leaving it every other screen kept asking /api/state every 5s - and
+   * Home, with no game chosen, asked about /api/state/null and /api/board/null. */
+  if (!wrap.isConnected) { clearInterval(S.timer); S.timer = null; return; }
+  if (!S.key) return;
   /* 🔴 AN ANSWER ABOUT A GAME WE HAVE ALREADY LEFT IS THROWN AWAY. Jason,
    * 2026-09-10: "it flashes villanova then shows the florida game over then
    * after about 30 seconds goes back to villanova." On arrival the first poll

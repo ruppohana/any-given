@@ -135,6 +135,9 @@ export async function previewData(fixtures, state) {
     : (teams.find(function (t) { return t.abbrev === 'ASU'; }) || null);
 
   return {
+    /* Nothing made up here - the example row is a real captured game - so the
+     * shell's "Sample data" banner stays off (full sweep, 2026-09-11). */
+    noSample: true,
     teams: teams,
     total: all.length,
     example: example,

@@ -412,7 +412,9 @@ export async function previewData() {
   const week = await resolveWeek(sport, chosenWeek());
   const byId = {};
   const games = await fetchSlate(sport, week, byId);
-  return { sport, week, games };
+  /* The week is real, so the shell's "Sample data" banner must not say it is
+   * made up (found by the full sweep, 2026-09-11 - "Check everything."). */
+  return { sport, week, games, fromFeed: games.length > 0 };
 }
 
 function head(root, d) {
