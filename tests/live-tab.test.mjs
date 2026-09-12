@@ -99,8 +99,8 @@ test('All games: a live game opens live from over its score, and every card has 
   const P6 = readFileSync(new URL('../public/screens/p6-allgames.screen.js', import.meta.url), 'utf8');
   const P2 = readFileSync(new URL('../public/screens/p2-slate.screen.js', import.meta.url), 'utf8');
   assert.ok(P6.includes("const golive = el('a', 'p6a-golive');"), 'a go-live link');
-  assert.ok(P6.indexOf('mid.appendChild(golive);') < P6.indexOf("mid.appendChild(el('span', 'p6a-at', '@'));"),
-    'placed over the @ between the scores');
+  // Then: "Move the live icon to the top of the card. In line with 4:00."
+  assert.ok(P6.includes('top.appendChild(golive);'), 'the go-live icon sits on the top row');
   assert.ok(P6.includes("const info = el('button', 'p6a-info', 'info');"), 'an info word on the card');
   assert.ok(P2.includes('export function openInfo(game, ctx)'), 'the same info card as the pick\'em slate');
   // "Sample data - these games are made up" over 86 real games: the screen must say its rows are real.
@@ -108,8 +108,9 @@ test('All games: a live game opens live from over its score, and every card has 
   // "the best parts of the live": the held clock, in the Live pill - beside the
   // go-live icon it widened the middle column and cut the names to "Villan...".
   // Then, 2026-09-11: "Move the time centered, below the score and above more."
-  assert.ok(P6.includes("if (clk) top.appendChild(el('div', 'p6a-clockrow num', clk));"),
-    'the live clock sits centred under the score, above MORE');
+  // And then: "Move up the time" - under the @, between the two scores.
+  assert.ok(P6.includes("if (clk) mid.appendChild(el('span', 'p6a-clock num', clk));"),
+    'the live clock sits under the @, between the scores');
   assert.ok(P6.includes("if (word && game.status !== 'in_progress') {"), 'a live game has no pill');
   // The stacked team: the home side must restate its rows, or older, more
   // specific home rules put the name in the crest's row (measured 2026-09-11:
@@ -119,7 +120,10 @@ test('All games: a live game opens live from over its score, and every card has 
     'the home name sits in row 2, under its crest');
   assert.match(P6CSS, /\.p6a-team\[data-side="home"\] > \.p6a-tmeta \{\s*grid-column: 2; grid-row: 3;/,
     'and the home rank and record in row 3');
-  assert.equal(P6.includes("'p6a-clock num'"), false, 'nothing but the icon widens the middle column');
+  // The clock is in the middle column now, but out of flow - its width in that
+  // column is what once cut every name to "Villan...".
+  assert.match(readFileSync(new URL('../public/screens/p6-allgames.css', import.meta.url), 'utf8'),
+    /\.p6a-mid > \.p6a-clock \{\s*position: absolute;/, 'the clock floats, so the middle column stays narrow');
 });
 
 test('Home has two doors, Betting and Pools, and the third tab looks like where it goes', () => {

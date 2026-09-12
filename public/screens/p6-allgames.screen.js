@@ -748,8 +748,9 @@ function teamBlock(ctx, game, side) {
    * games and ~260 teams on one scroll. */
   applyTeamVars(b, team);
   b.appendChild(teamChip(team, {
-    /* 1.25x, 26 -> 32 - Jason, 2026-09-11: "Make the logos 1.25x larger". */
-    size: 32,
+    /* 26 -> 32 -> 48 - Jason, 2026-09-11: "Make the logos 1.25x larger",
+     * then "Make the logos 1.5 larger." */
+    size: 48,
     league: ctx.sport === 'nfl' ? 'nfl' : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
@@ -1239,7 +1240,7 @@ function liveClock(game) {
 function liveIcon() {
   const NS = 'http://www.w3.org/2000/svg';
   const s = document.createElementNS(NS, 'svg');
-  for (const [k, v] of [['viewBox', '0 0 24 24'], ['width', '22'], ['height', '22'], ['fill', 'none'],
+  for (const [k, v] of [['viewBox', '0 0 24 24'], ['width', '33'], ['height', '33'], ['fill', 'none'],
     ['stroke', 'currentColor'], ['stroke-width', '2'], ['stroke-linecap', 'round'], ['aria-hidden', 'true']]) s.setAttribute(k, v);
   const dot = document.createElementNS(NS, 'circle');
   dot.setAttribute('cx', '12'); dot.setAttribute('cy', '12'); dot.setAttribute('r', '1.8');
@@ -1401,9 +1402,19 @@ function gameCard(ctx, game) {
     golive.setAttribute('aria-label', 'Open this game live');
     golive.appendChild(liveIcon());
     golive.addEventListener('click', (e) => e.stopPropagation());
-    mid.appendChild(golive);
+    /* Then: "Move the live icon to the top of the card. In line with 4:00 and
+     * make it 1.5 larger." It is placed on the top row, centred on the card;
+     * the CSS floats it so the row does not grow to its height. */
+    top.appendChild(golive);
   }
   mid.appendChild(el('span', 'p6a-at', '@'));
+  /* "Move up the time": under the @, between the two scores. Absolutely placed
+   * (see .p6a-mid > .p6a-clock), so it takes no width from the names - its own
+   * width in the middle column is what cut them to "Villan..." once before. */
+  if (game.status === 'in_progress') {
+    const clk = liveClock(game);
+    if (clk) mid.appendChild(el('span', 'p6a-clock num', clk));
+  }
   /* 🔴 THE WORD SWAPS, IT DOES NOT DISAPPEAR. First pass hid "MORE" on open
      and kept its width, so an open card showed two carets floating either
      side of a gap - which reads as a rendering fault rather than a control.
@@ -1422,13 +1433,6 @@ function gameCard(ctx, game) {
   more.appendChild(el('span', 'p6a-more-c', '⌄'));
   teams.append(teamBlock(ctx, game, 'away'), mid, teamBlock(ctx, game, 'home'));
   top.appendChild(teams);
-  /* 🔴 THE CLOCK, CENTRED UNDER THE SCORE AND ABOVE MORE. Jason, 2026-09-11:
-   * "Move the time centered, below the score and above more." Its own row, so
-   * it takes no width from the names - beside the go-live icon it cut them. */
-  if (game.status === 'in_progress') {
-    const clk = liveClock(game);
-    if (clk) top.appendChild(el('div', 'p6a-clockrow num', clk));
-  }
   /* 🔴 ITS OWN ROW, NOT THE MIDDLE COLUMN. First pass put it under the @
      inside the three-column teams grid, where it took ~64px of horizontal
      space away from the two names and then overflowed its own cell anyway -

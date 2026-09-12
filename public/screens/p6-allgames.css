@@ -541,7 +541,15 @@
    sized by its content with no room around it, which reads as cramped on a
    card that is now the primary tap target for a pick. The height comes from
    padding rather than a fixed min-height so a row that wraps still fits. */
-.scr-p6-allgames .p6a-game > .p6a-top { padding: 9px 4px 0; row-gap: 7px; }
+/* "Take the gap out above the 4:00" and "move up ... the more tag" (Jason,
+   2026-09-11): no top padding, 4px between rows. Relative, so the go-live icon
+   can sit on the first row without making it taller. */
+.scr-p6-allgames .p6a-game > .p6a-top { padding: 0 4px; row-gap: 4px; position: relative; }
+/* The Live icon on the 4:00 line, centred on the card. The first row is 18px,
+   so its middle is 9px down. */
+.scr-p6-allgames .p6a-top > .p6a-golive {
+  position: absolute; top: 9px; left: 50%; transform: translate(-50%, -50%); z-index: 1;
+}
 .scr-p6-allgames .p6a-game { padding: calc(var(--nest-inset) + 2px); }
 
 /* ── THE DISCLOSURE, UNDER THE @ ──────────────────────────────────────
@@ -553,7 +561,13 @@
    inherits the text colour and weight like any other character. On open it
    flips to the up arrowhead via a rotation, which keeps one element
    authoritative about the state instead of two glyphs that can disagree. */
-.scr-p6-allgames .p6a-mid { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.scr-p6-allgames .p6a-mid { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative; }
+/* The clock, just under the @ and centred on it, out of flow - so the middle
+   column stays as narrow as the @ and the names keep their room. */
+.scr-p6-allgames .p6a-mid > .p6a-clock {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap;
+}
 /* Its own full-width row under the teams. The @ is centred in the grid
    above, so a centred control here lands directly beneath it and costs the
    two names no width at all. */
@@ -661,8 +675,4 @@
   grid-column: 2; grid-row: 3; text-align: center; justify-content: center;
 }
 .scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc { grid-column: 1; padding: 0 8px 0 0; }
-/* The clock row: centred under the score, above MORE, in the live accent. */
-.scr-p6-allgames .p6a-clockrow {
-  flex: 1 0 100%; order: 4; text-align: center;
-  font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap;
-}
+
