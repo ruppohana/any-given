@@ -461,6 +461,26 @@ export default {
         return new Response(JSON.stringify(doc), { headers: head });
       }
 
+      /* ---- WHICH SECRETS ARE SET, AND HOW LONG - NEVER A VALUE ----
+         wrangler's hidden prompt showed a single "*" for every secret Jason set
+         on 2026-09-12, and a single "*" once meant a one-character paste (the
+         Anthropic key, 2026-09-11). This answers it without anybody seeing a
+         key: set or not, the length, and whether a known public prefix is
+         there. Lengths and prefixes are not secrets; values never leave. */
+      if (p === '/api/health/secrets') {
+        const e = env as any;
+        const one = (k: string, prefix?: string) => {
+          const v = typeof e[k] === 'string' ? e[k] : '';
+          return { set: v.length > 0, length: v.length, ...(prefix ? { prefixOk: v.startsWith(prefix) } : {}) };
+        };
+        return new Response(JSON.stringify({
+          PUSH_TOKEN: one('PUSH_TOKEN'),
+          RESEND_API_KEY: one('RESEND_API_KEY', 're_'),
+          MAILERSEND_API_KEY: one('MAILERSEND_API_KEY', 'mlsn.'),
+          CFBD_API_KEY: one('CFBD_API_KEY')
+        }), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+      }
+
       /* ---- F1: the current Grand Prix, its sessions and results (src/f1-feed.ts) ---- */
       if (p === '/api/f1/current') {
         const doc = await serveF1(env);
