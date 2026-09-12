@@ -100,8 +100,11 @@ test('All games: a live game opens live from over its score, and every card has 
   assert.ok(P2.includes('export function openInfo(game, ctx)'), 'the same info card as the pick\'em slate');
   // "Sample data - these games are made up" over 86 real games: the screen must say its rows are real.
   assert.ok(P6.includes('fromFeed: games.length > 0'), 'All games reports that its week came off the feed');
-  // "the best parts of the live": the clock beside the go-live icon.
-  assert.ok(P6.includes('const clk = liveClock(game);'), 'the live clock sits with the go-live icon');
+  // "the best parts of the live": the held clock, in the Live pill - beside the
+  // go-live icon it widened the middle column and cut the names to "Villan...".
+  assert.ok(P6.includes("const clockWord = game.status === 'in_progress' ? liveClock(game) : '';"),
+    'the live clock rides in the Live pill');
+  assert.equal(P6.includes("'p6a-clock num'"), false, 'nothing but the icon widens the middle column');
 });
 
 test('a game link mounts once, on the game it names', () => {

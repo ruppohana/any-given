@@ -1289,7 +1289,14 @@ function gameCard(ctx, game) {
          kickoff read Closed while its second half and Q2-Q4 were open. */
       : locked && !openHere.length ? PILL.locked : null;
   if (word) {
-    const p = el('span', 'p6a-pill', word);
+    /* 🔴 THE CLOCK RIDES IN THE LIVE PILL, NOT OVER THE SCORE. The best part of
+     * the Live now card (Jason: "and then the best parts of the live...") - but
+     * beside the go-live icon it widened the middle column and cut every name to
+     * "Villan..." (seen in the verification render, 2026-09-11). The pill already
+     * said Live; the held clock ("3rd 3:42", "Halftime") says more, in space the
+     * card already had. */
+    const clockWord = game.status === 'in_progress' ? liveClock(game) : '';
+    const p = el('span', 'p6a-pill', clockWord || word);
     p.dataset.state = game.status === 'scheduled' ? 'locked' : game.status;
     top.appendChild(p);
   }
@@ -1396,10 +1403,6 @@ function gameCard(ctx, game) {
     golive.href = '/?game=' + encodeURIComponent(ctx.sport + ':' + game.id).replace(/%3A/g, ':');
     golive.setAttribute('aria-label', 'Open this game live');
     golive.appendChild(liveIcon());
-    /* The best part of the Live now card (Jason: "and then the best parts of
-     * the live..."): the clock, as of the play your delay lets you see. */
-    const clk = liveClock(game);
-    if (clk) golive.appendChild(el('span', 'p6a-clock num', clk));
     golive.addEventListener('click', (e) => e.stopPropagation());
     mid.appendChild(golive);
   }
