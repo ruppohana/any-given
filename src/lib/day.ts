@@ -9,10 +9,13 @@
  * can never disagree about which day "today" is.
  */
 
-export const DAY_SPORTS: Record<string, { path: string; groups: string; label: string }> = {
+export const DAY_SPORTS: Record<string, { path: string; groups: string; label: string; periods: number }> = {
   /* groups=50 is Division I - without it ESPN returns a featured handful
-     (15 of 92 games on 2026-03-07). */
-  'mens-college-basketball': { path: 'basketball/mens-college-basketball', groups: '50', label: 'College basketball' }
+     (15 of 92 games on 2026-03-07). Two halves. */
+  'mens-college-basketball': { path: 'basketball/mens-college-basketball', groups: '50', label: 'College basketball', periods: 2 },
+  /* The NBA - Jason, 2026-09-12: "Yes" to "pro" on page 2 for opening night,
+     Oct 20. 30 teams, no filter; four quarters. */
+  nba: { path: 'basketball/nba', groups: '', label: 'NBA', periods: 4 }
 };
 
 export function isDaySport(sport: unknown): boolean {
@@ -68,15 +71,34 @@ export const CONF_SHORT: Record<string, string> = {
   '49': 'Summit', '62': 'American'
 };
 
-/** "1st 12:34", "Halftime", "2nd 0:45", "OT 2:10", "2OT 1:00". Men's college
- *  basketball plays two halves, so period 2 is the end of regulation and
- *  period 3 is overtime - the football words ("3rd", "Q4") would be wrong. */
-export function hoopsClock(period: number, clock: string | null, statusName?: string | null): string {
+/* 🔴 EAST OR WEST, BY ESPN TEAM ID - read off ESPN's own NBA groups list
+ * (/basketball/nba/groups, 2026-09-12: two conferences, three divisions of five
+ * each). The scoreboard gives an NBA team no conferenceId at all. */
+export const NBA_CONF: Record<string, string> = {
+  '1': 'East', '2': 'East', '3': 'West', '4': 'East', '5': 'East', '6': 'West', '7': 'West',
+  '8': 'East', '9': 'West', '10': 'West', '11': 'East', '12': 'West', '13': 'West', '14': 'East',
+  '15': 'East', '16': 'West', '17': 'East', '18': 'East', '19': 'East', '20': 'East', '21': 'West',
+  '22': 'West', '23': 'West', '24': 'West', '25': 'West', '26': 'West', '27': 'East', '28': 'East',
+  '29': 'West', '30': 'East'
+};
+
+/** The live clock in the sport's own periods. Men's college basketball plays two
+ *  halves - period 2 is the end of regulation, period 3 overtime; the NBA plays
+ *  four quarters, halftime after the 2nd. "1st 12:34", "Halftime", "End 3rd",
+ *  "OT 2:10", "2OT 1:00". */
+export function dayClock(sport: string, period: number, clock: string | null, statusName?: string | null): string {
+  const reg = (DAY_SPORTS[sport] && DAY_SPORTS[sport].periods) || 2;
   if (statusName === 'STATUS_HALFTIME') return 'Halftime';
   const p = Number(period);
   if (!Number.isFinite(p) || p < 1) return '';
-  const ord = p === 1 ? '1st' : p === 2 ? '2nd' : p === 3 ? 'OT' : (p - 2) + 'OT';
+  const ORD = ['1st', '2nd', '3rd', '4th'];
+  const ord = p <= reg ? ORD[p - 1] : (p - reg === 1 ? 'OT' : (p - reg) + 'OT');
   if (!clock) return ord;
-  if (clock === '0:00' || clock === '0.0') return p === 1 ? 'Halftime' : 'End ' + ord;
+  if (clock === '0:00' || clock === '0.0') return p === reg / 2 ? 'Halftime' : 'End ' + ord;
   return ord + ' ' + clock;
+}
+
+/** College basketball's clock - kept for the callers written before the NBA. */
+export function hoopsClock(period: number, clock: string | null, statusName?: string | null): string {
+  return dayClock('mens-college-basketball', period, clock, statusName);
 }

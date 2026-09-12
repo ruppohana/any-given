@@ -15,13 +15,14 @@ const P6 = readFileSync(new URL('../public/screens/p6-allgames.screen.js', impor
 test('page 2 asks the sport in words first, then pro or college with the shields', () => {
   assert.ok(LG.includes("for (const [gid, label] of [['football', 'Football'], ['basketball', 'Basketball']]) {"),
     'Football and Basketball, in words');
-  assert.ok(LG.includes("const ids = game === 'basketball' ? [HOOPS] : ['nfl', 'college-football'];"),
-    'then the shields: NFL and college for football, college for basketball');
+  assert.ok(LG.includes("const ids = game === 'basketball' ? ['nba', HOOPS] : ['nfl', 'college-football'];"),
+    'then the shields: pro and college, for both sports');
   assert.ok(LG.includes("if (!game) return c;"), 'the shields wait for the sport');
 });
 
 test('basketball goes to The slate and never becomes the live board\'s sport', () => {
-  assert.ok(LG.includes("if (id === HOOPS) { store.set('sport', id); location.hash = '#/allgames'; return; }"));
+  assert.ok(LG.includes("if (DAY_ONLY.has(id)) { store.set('sport', id); location.hash = '#/allgames'; return; }"));
+  assert.ok(LG.includes("const DAY_ONLY = new Set(['nba', HOOPS]);"), 'the NBA too');
   assert.ok(LG.includes("sport: liveSport(store.get('sport', null)),"), 'a stored basketball choice is not the live sport');
   assert.ok(LG.includes("function liveSport(v) { return v === 'nfl' || v === 'college-football' ? v : null; }"));
 });
@@ -57,5 +58,12 @@ test('a basketball card offers winner, spread and total only, with no live link 
   assert.ok(P6.includes("if (game.status === 'in_progress' && !isDaySport(ctx.sport)) {"), 'no live board link');
   assert.ok(P6.includes("if (!isDaySport(ctx.sport)) {\n    const info = el('button', 'p6a-info', 'info');")
     || P6.includes("if (!isDaySport(ctx.sport)) {\r\n    const info = el('button', 'p6a-info', 'info');"), 'no football nuggets');
-  assert.ok(P6.includes("if (isDaySport(game.sport)) return hoopsClock(game.period, game.clock, game.statusName);"), 'halves on the clock');
+  assert.ok(P6.includes("if (isDaySport(game.sport)) return dayClock(game.sport, game.period, game.clock, game.statusName);"), 'the sport\'s own periods on the clock');
+  assert.ok(P6.includes("league: ctx.sport === 'nfl' ? 'nfl' : ctx.sport === 'nba' ? 'nba' : 'college-football',"), 'an NBA row asks for NBA crests');
+});
+
+test('an NBA crest is built from the abbreviation, never the id (5 is Cleveland and a school)', () => {
+  const TC = readFileSync(new URL('../public/components/team-chip.js', import.meta.url), 'utf8');
+  assert.ok(TC.includes("if ((league || team.league) === 'nba') return nbaLogo(team, variant);"), 'both the local and CDN paths');
+  assert.ok(TC.includes("return `https://a.espncdn.com/i/teamlogos/nba/${variant === '500-dark' ? '500-dark' : '500'}/${ab}.png`;"));
 });

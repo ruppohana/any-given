@@ -16,7 +16,7 @@
  * The game shape is the football slate's (src/slate-cron.ts), so The slate
  * draws a basketball card with the code that draws a football one.
  */
-import { DAY_SPORTS, CONF_SHORT, dayOf, addDays } from './lib/day.ts';
+import { DAY_SPORTS, CONF_SHORT, NBA_CONF, dayOf, addDays } from './lib/day.ts';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
   + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
@@ -82,7 +82,13 @@ export function parseDay(payload: any, sport: string, day: string): any[] {
         short: t.shortDisplayName || t.name || '',
         primary: col(t.color), secondary: col(t.alternateColor),
         rank: Number.isFinite(rk) && rk >= 1 && rk <= 25 ? rk : null,
-        conference: gameConf || CONF_SHORT[String(t.conferenceId)] || null,
+        conference: sport === 'nba'
+          ? (NBA_CONF[String(t.id)] || null)
+          : (gameConf || CONF_SHORT[String(t.conferenceId)] || null),
+        /* The feed's own crest URL. An NBA team's ESPN id is a different team
+           in college (5 is Cleveland here and a school there), so the chip
+           must never build an NBA crest from the id. */
+        logo: typeof t.logo === 'string' ? t.logo : null,
         record: total?.summary || null,
         form: null,
         score: started ? numOrNull(c.score) : null,
@@ -141,7 +147,7 @@ export async function captureDay(env: any, sport: string, day: string, fetchImpl
   const cfg = DAY_SPORTS[sport];
   if (!cfg) throw new Error('not a day sport: ' + sport);
   const url = `https://site.web.api.espn.com/apis/site/v2/sports/${cfg.path}/scoreboard`
-    + `?dates=${day}&groups=${cfg.groups}&limit=400`;
+    + `?dates=${day}${cfg.groups ? '&groups=' + cfg.groups : ''}&limit=400`;
   const res = await fetchImpl(url, { headers: { 'user-agent': UA, accept: 'application/json' } });
   if (!res.ok) throw new Error(`espn ${res.status}`);
   const games = parseDay(await res.json(), sport, day);

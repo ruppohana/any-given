@@ -57,7 +57,7 @@ import { pageHeader } from '/components/header.js';
 import { GAME_MARKETS, settleMarket } from '/src/markets.js';
 /* `dayName`, not `dayLabel` - this file already exports a dayLabel of its own
    (a kickoff's weekday), and two bindings of one name do not parse. */
-import { isDaySport, isDay, dayOf, addDays, dayLabel as dayName, hoopsClock } from '/src/lib/day.js';
+import { isDaySport, isDay, dayOf, addDays, dayLabel as dayName, dayClock } from '/src/lib/day.js';
 import { openInfo } from '/screens/p2-slate.screen.js';
 import { priceMarket, marketIsOpen, MIN_PRICE, trueCeiling, MAX_PRICE,
   gameWinnerProbs, priceFromP } from '/src/lib/price-model.js';
@@ -836,7 +836,7 @@ function teamBlock(ctx, game, side) {
     /* 26 -> 32 -> 48 - Jason, 2026-09-11: "Make the logos 1.25x larger",
      * then "Make the logos 1.5 larger." */
     size: 48,
-    league: ctx.sport === 'nfl' ? 'nfl' : 'college-football',
+    league: ctx.sport === 'nfl' ? 'nfl' : ctx.sport === 'nba' ? 'nba' : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
   b.appendChild(el('span', 'p6a-tname', (team && (team.short || team.name)) || '\u2014'));
@@ -1314,8 +1314,8 @@ function lessRow(card) {
 /** "3rd 4:36", "Halftime", "End 3rd", "OT 2:10" - the held play's clock, in
  *  the same words the Live now cards use. */
 function liveClock(game) {
-  /* Basketball: two halves, straight off the scoreboard (src/lib/day.ts). */
-  if (isDaySport(game.sport)) return hoopsClock(game.period, game.clock, game.statusName);
+  /* Basketball: college halves, NBA quarters, straight off the scoreboard. */
+  if (isDaySport(game.sport)) return dayClock(game.sport, game.period, game.clock, game.statusName);
   const q = num(game.heldQuarter) ? game.heldQuarter : 0;
   if (!q || !game.clock) return '';
   const ord = q > 4 ? 'OT' : ['1st', '2nd', '3rd', '4th'][q - 1];

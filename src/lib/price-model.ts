@@ -56,6 +56,9 @@ const SD_MARGIN: Record<string, number> = {
    * DraftKings spread (tools/capture-season.mjs), final home margin plus the
    * spread - mean -0.18, sd 11.18. Favourites won 70.9%. */
   'mens-college-basketball': 11.2,
+  /* MEASURED the same way: 1,070 real 2025-26 NBA games with a DraftKings
+   * spread - mean -0.36, sd 14.29. Favourites won 68.1%. */
+  nba: 14.3,
 };
 
 /* 🔴 HOW THE GAME'S SCORING IS SPREAD ACROSS IT, and the quarters are NOT

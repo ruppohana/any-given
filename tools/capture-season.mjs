@@ -25,7 +25,9 @@ import { fileURLToPath } from 'node:url';
 
 const LEAGUES = {
   // groups=50 is Division I; without it the scoreboard returns only a featured handful
-  'mens-college-basketball': { path: 'basketball/mens-college-basketball', groups: '50' }
+  'mens-college-basketball': { path: 'basketball/mens-college-basketball', groups: '50' },
+  // 30 teams, no divisions to filter
+  nba: { path: 'basketball/nba', groups: '' }
 };
 
 const args = process.argv.slice(2);
@@ -98,7 +100,7 @@ let total = 0, notFinal = 0, noPlays = 0, bytes = 0;
 const failed = [];
 for (const day of days) {
   let sb;
-  try { sb = await getJson(`${BASE}/scoreboard?dates=${day}&groups=${L.groups}&limit=400`); }
+  try { sb = await getJson(`${BASE}/scoreboard?dates=${day}${L.groups ? '&groups=' + L.groups : ''}&limit=400`); }
   catch (e) { console.log(`${day}  scoreboard failed: ${e.message}`); failed.push('day ' + day); continue; }
   const all = sb.events || [];
   // A postponed game comes back under the same id on a later day, so it is left for then.

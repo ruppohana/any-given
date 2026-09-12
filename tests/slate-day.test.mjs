@@ -118,9 +118,41 @@ test('a fresh day is served from KV; a stale live day is refetched', async () =>
   assert.equal(far, null); assert.equal(calls, 1, 'a far-off day is never fetched on demand');
 });
 
+test('the NBA reads a day the same way: finals in quarters, East and West, the feed\'s own crest', () => {
+  const NBA_FINAL = feed('espn-nba-scoreboard-260301.json');
+  const NBA_OPEN = feed('espn-nba-scoreboard-261021.json');
+  const g = parseDay(NBA_FINAL, 'nba', '20260301');
+  assert.equal(g.length, 11);
+  assert.ok(g.every((x) => x.status === 'final'));
+  assert.ok(g.every((x) => x.periodsHome && x.periodsHome.length >= 4), 'four quarters (or more)');
+  assert.ok(g.every((x) => x.periodsHome.reduce((a, b) => a + b, 0) === x.homeScore), 'quarters add up to the final');
+  assert.ok(g.every((x) => x.conferences.every((c) => c === 'East' || c === 'West') && x.conferences.length >= 1), 'East / West');
+  assert.ok(g.every((x) => x.teams.every((t) => /^https:\/\/a\.espncdn\.com\/i\/teamlogos\/nba\//.test(t.logo))), 'crest URL from the feed');
+  assert.ok(g.every((x) => x.rankHome === null && x.rankAway === null), 'no ranks in the NBA');
+  const o = parseDay(NBA_OPEN, 'nba', '20261021');
+  assert.equal(o.length, 11);
+  assert.ok(o.every((x) => x.status === 'scheduled' && x.tbd === false), 'every opening-night tip time is set');
+  assert.ok(o.filter((x) => x.spread !== null).length >= 1, 'lines already posted for opening night');
+  assert.equal(isDaySport('nba'), true);
+});
+
+test('the NBA clock counts quarters: halftime after the 2nd, overtime after the 4th', async () => {
+  const { dayClock } = await import('../src/lib/day.ts');
+  assert.equal(dayClock('nba', 1, '5:32'), '1st 5:32');
+  assert.equal(dayClock('nba', 1, '0:00'), 'End 1st');
+  assert.equal(dayClock('nba', 2, '0:00'), 'Halftime');
+  assert.equal(dayClock('nba', 3, '0:00'), 'End 3rd');
+  assert.equal(dayClock('nba', 4, '1:10'), '4th 1:10');
+  assert.equal(dayClock('nba', 5, '3:00'), 'OT 3:00');
+  assert.equal(dayClock('nba', 6, '0:30'), '2OT 0:30');
+  assert.equal(dayClock('mens-college-basketball', 3, '2:10'), 'OT 2:10', 'college unchanged');
+});
+
 test('the win price uses basketball\'s measured spread of outcomes, not football\'s', () => {
   const hoops = gameWinnerProbs(-10, SPORT).home;
   const cfb = gameWinnerProbs(-10, 'college-football').home;
   assert.ok(hoops > 0.8 && hoops < 0.83, 'a 10-point favourite wins ~81% at sd 11.2, got ' + hoops.toFixed(3));
   assert.ok(hoops > cfb + 0.05, 'narrower than football');
+  const nba = gameWinnerProbs(-10, 'nba').home;
+  assert.ok(nba > 0.74 && nba < 0.78, 'the NBA\'s measured sd 14.3: a 10-point favourite ~76%, got ' + nba.toFixed(3));
 });

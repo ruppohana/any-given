@@ -30,14 +30,16 @@ const flag = (n, d) => { const i = args.indexOf('--' + n); return i < 0 ? d : ar
 const PATHS = {
   nfl: 'football/nfl',
   'college-football': 'football/college-football',
-  'mens-college-basketball': 'basketball/mens-college-basketball'
+  'mens-college-basketball': 'basketball/mens-college-basketball',
+  nba: 'basketball/nba'
 };
 const want = flag('sport', 'nfl');
 const sport = want === 'nfl' ? 'nfl'
   : (want === 'mbb' || want === 'mens-college-basketball') ? 'mens-college-basketball'
+  : want === 'nba' ? 'nba'
   : 'college-football';
-const hoops = sport === 'mens-college-basketball';
-const name = flag('name', hoops ? `mbb/real-mbb-${id}` : `real-${sport}-${id}`);
+const hoops = sport === 'mens-college-basketball' || sport === 'nba';
+const name = flag('name', sport === 'nba' ? `nba/real-nba-${id}` : hoops ? `mbb/real-mbb-${id}` : `real-${sport}-${id}`);
 
 if (!id) {
   console.error('usage: node tools/capture-fixture.mjs <espnGameId> [--sport nfl|college-football|mbb] [--name x]');

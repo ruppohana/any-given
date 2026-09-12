@@ -121,13 +121,15 @@ const GAME_FOR = {
   'college-football': 'college-football:401858213'
 };
 
-const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball' };
+const SPORT_LABEL = { 'nfl': 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', 'nba': 'NBA' };
 
 /* 🔴 BASKETBALL IS ON THE SLATE ONLY. Page 2 of Home offers it (Jason,
  * 2026-09-12) and sends it to The slate; the live board, GAME_FOR, the catalog
  * and every settler here are football's, so a stored basketball choice is never
  * this screen's sport. */
 const HOOPS = 'mens-college-basketball';
+/* Every sport that lives on The slate only - college basketball and the NBA. */
+const DAY_ONLY = new Set(['nba', HOOPS]);
 function liveSport(v) { return v === 'nfl' || v === 'college-football' ? v : null; }
 
 /* ------------------------------------------------------------------ */
@@ -3653,7 +3655,7 @@ function sportCard(wrap) {
    * unambiguous again. The stored choice pre-selects the first row, so a
    * returning person is still two taps from the games. */
   const stored = store.get('sport', null);
-  const game = S.homeGame || (stored === HOOPS ? 'basketball' : stored ? 'football' : null);
+  const game = S.homeGame || (DAY_ONLY.has(stored) ? 'basketball' : stored ? 'football' : null);
   const games = el('div', 'lg-mode-row lg-gamerow');
   for (const [gid, label] of [['football', 'Football'], ['basketball', 'Basketball']]) {
     if (gid === 'basketball' && S.mode === 'live') continue;
@@ -3664,8 +3666,8 @@ function sportCard(wrap) {
   }
   c.appendChild(games);
   if (!game) return c;
-  /* Pro or college. Basketball is college only for now - no NBA yet. */
-  const ids = game === 'basketball' ? [HOOPS] : ['nfl', 'college-football'];
+  /* Pro or college - for both sports now (the NBA, Jason 2026-09-12: "Yes"). */
+  const ids = game === 'basketball' ? ['nba', HOOPS] : ['nfl', 'college-football'];
   const row = el('div', 'lg-sport-row' + (ids.length === 1 ? ' is-one' : ''));
   for (const id of ids) {
     const b = el('button', 'lg-sport-pick');
@@ -3673,7 +3675,10 @@ function sportCard(wrap) {
      * "use the nfl logo and the ncaa logo." */
     const img = document.createElement('img');
     img.className = 'lg-sport-logo';
-    img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
+    /* The NBA's mark is not self-hosted yet - ESPN's league logo, the host the
+       crest fallback already uses. */
+    img.src = id === 'nba' ? 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png'
+      : `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
     /* 64, up from 44 - the mark is the whole button now. Jason, 2026-09-11:
      * "make the nfl and ncaa logos larger". */
     img.alt = ''; img.width = 64; img.height = 64;
@@ -3684,7 +3689,7 @@ function sportCard(wrap) {
     b.setAttribute('aria-label', SPORT_LABEL[id]);
     b.onclick = () => {
       /* Basketball goes to The slate and never becomes the live board's sport. */
-      if (id === HOOPS) { store.set('sport', id); location.hash = '#/allgames'; return; }
+      if (DAY_ONLY.has(id)) { store.set('sport', id); location.hash = '#/allgames'; return; }
       S.sport = id; store.set('sport', id);
       S.key = GAME_FOR[id];
       S.raw = null; S.board = [];
