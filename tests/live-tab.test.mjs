@@ -107,8 +107,10 @@ test('All games: a live game opens live from over its score, and every card has 
   assert.ok(P6.includes('fromFeed: games.length > 0'), 'All games reports that its week came off the feed');
   // "the best parts of the live": the held clock, in the Live pill - beside the
   // go-live icon it widened the middle column and cut the names to "Villan...".
-  assert.ok(P6.includes("const clockWord = game.status === 'in_progress' ? liveClock(game) : '';"),
-    'the live clock rides in the Live pill');
+  // Then, 2026-09-11: "Move the time centered, below the score and above more."
+  assert.ok(P6.includes("if (clk) top.appendChild(el('div', 'p6a-clockrow num', clk));"),
+    'the live clock sits centred under the score, above MORE');
+  assert.ok(P6.includes("if (word && game.status !== 'in_progress') {"), 'a live game has no pill');
   assert.equal(P6.includes("'p6a-clock num'"), false, 'nothing but the icon widens the middle column');
 });
 

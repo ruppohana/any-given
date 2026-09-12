@@ -748,7 +748,8 @@ function teamBlock(ctx, game, side) {
    * games and ~260 teams on one scroll. */
   applyTeamVars(b, team);
   b.appendChild(teamChip(team, {
-    size: 26,
+    /* 1.25x, 26 -> 32 - Jason, 2026-09-11: "Make the logos 1.25x larger". */
+    size: 32,
     league: ctx.sport === 'nfl' ? 'nfl' : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
@@ -1238,7 +1239,7 @@ function liveClock(game) {
 function liveIcon() {
   const NS = 'http://www.w3.org/2000/svg';
   const s = document.createElementNS(NS, 'svg');
-  for (const [k, v] of [['viewBox', '0 0 24 24'], ['width', '18'], ['height', '18'], ['fill', 'none'],
+  for (const [k, v] of [['viewBox', '0 0 24 24'], ['width', '22'], ['height', '22'], ['fill', 'none'],
     ['stroke', 'currentColor'], ['stroke-width', '2'], ['stroke-linecap', 'round'], ['aria-hidden', 'true']]) s.setAttribute(k, v);
   const dot = document.createElementNS(NS, 'circle');
   dot.setAttribute('cx', '12'); dot.setAttribute('cy', '12'); dot.setAttribute('r', '1.8');
@@ -1288,15 +1289,11 @@ function gameCard(ctx, game) {
       /* 🔴 "Closed" only when nothing is left to take. SF at LAR past its
          kickoff read Closed while its second half and Q2-Q4 were open. */
       : locked && !openHere.length ? PILL.locked : null;
-  if (word) {
-    /* 🔴 THE CLOCK RIDES IN THE LIVE PILL, NOT OVER THE SCORE. The best part of
-     * the Live now card (Jason: "and then the best parts of the live...") - but
-     * beside the go-live icon it widened the middle column and cut every name to
-     * "Villan..." (seen in the verification render, 2026-09-11). The pill already
-     * said Live; the held clock ("3rd 3:42", "Halftime") says more, in space the
-     * card already had. */
-    const clockWord = game.status === 'in_progress' ? liveClock(game) : '';
-    const p = el('span', 'p6a-pill', clockWord || word);
+  /* A live game needs no pill: the Live icon over its score and the clock under
+   * it say it (Jason, 2026-09-11: "Move the time centered, below the score and
+   * above more."). Final and Closed keep theirs. */
+  if (word && game.status !== 'in_progress') {
+    const p = el('span', 'p6a-pill', word);
     p.dataset.state = game.status === 'scheduled' ? 'locked' : game.status;
     top.appendChild(p);
   }
@@ -1425,6 +1422,13 @@ function gameCard(ctx, game) {
   more.appendChild(el('span', 'p6a-more-c', '⌄'));
   teams.append(teamBlock(ctx, game, 'away'), mid, teamBlock(ctx, game, 'home'));
   top.appendChild(teams);
+  /* 🔴 THE CLOCK, CENTRED UNDER THE SCORE AND ABOVE MORE. Jason, 2026-09-11:
+   * "Move the time centered, below the score and above more." Its own row, so
+   * it takes no width from the names - beside the go-live icon it cut them. */
+  if (game.status === 'in_progress') {
+    const clk = liveClock(game);
+    if (clk) top.appendChild(el('div', 'p6a-clockrow num', clk));
+  }
   /* 🔴 ITS OWN ROW, NOT THE MIDDLE COLUMN. First pass put it under the @
      inside the three-column teams grid, where it took ~64px of horizontal
      space away from the two names and then overflowed its own cell anyway -

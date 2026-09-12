@@ -623,15 +623,39 @@
    live row the score is the subject, so it gets a third column on the
    INNER edge of each block - beside the @, where a scoreboard puts it - and
    spans both rows so it sits level with the name. */
-.scr-p6-allgames .p6a-team { grid-template-columns: auto minmax(0, 1fr) auto; }
-.scr-p6-allgames .p6a-team[data-side="home"] { grid-template-columns: auto minmax(0, 1fr) auto; }
-.scr-p6-allgames .p6a-team > .p6a-tsc {
-  grid-column: 3; grid-row: 1 / span 2; align-self: center; justify-self: end;
-  padding-left: 8px; font-size: 20px; font-weight: 800;
+/* 🔴 THE TEAM IS A STACK: CREST, NAME, THEN RANK AND RECORD, CENTRED ON THE
+   CREST. Jason, 2026-09-11: "Make the logos 1.25x larger and put the school name
+   and other info below the logo, centered on the logo." The score keeps its own
+   column on the inner side, beside the stack, so the two scores still read
+   across the middle. The name gets the column's whole width - "Boston C..." was
+   a name sharing its row with the crest. These are the last .p6a-team rules in
+   the file and they restate every placement, so the older ones above cannot win
+   a property by being the only rule that names it. */
+.scr-p6-allgames .p6a-team {
+  grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto;
+  justify-items: center; row-gap: 2px;
 }
-.scr-p6-allgames .p6a-team[data-side="home"] > .tchip { grid-column: 3; }
+.scr-p6-allgames .p6a-team[data-side="home"] { grid-template-columns: auto minmax(0, 1fr); }
+.scr-p6-allgames .p6a-team > .tchip { grid-column: 1; grid-row: 1; align-self: end; }
+.scr-p6-allgames .p6a-team > .p6a-tname {
+  grid-column: 1; grid-row: 2; max-width: 100%; text-align: center; align-self: auto;
+}
+.scr-p6-allgames .p6a-team:not(:has(.p6a-tmeta)) > .p6a-tname { grid-row: 2; align-self: auto; }
+.scr-p6-allgames .p6a-team > .p6a-tmeta {
+  grid-column: 1; grid-row: 3; justify-content: center; text-align: center; flex-wrap: wrap;
+}
+.scr-p6-allgames .p6a-team > .p6a-tsc {
+  grid-column: 2; grid-row: 1 / span 3; align-self: center; justify-self: center;
+  padding: 0 0 0 8px; font-size: 20px; font-weight: 800;
+}
+.scr-p6-allgames .p6a-team[data-side="home"] > .tchip { grid-column: 2; grid-row: 1; }
 .scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tname,
-.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tmeta { grid-column: 2; }
-.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc {
-  grid-column: 1; justify-self: start; padding-left: 0; padding-right: 8px;
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tmeta {
+  grid-column: 2; text-align: center; justify-content: center;
+}
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc { grid-column: 1; padding: 0 8px 0 0; }
+/* The clock row: centred under the score, above MORE, in the live accent. */
+.scr-p6-allgames .p6a-clockrow {
+  flex: 1 0 100%; order: 4; text-align: center;
+  font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap;
 }
