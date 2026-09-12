@@ -2225,6 +2225,12 @@ async function poll(wrap) {
      * this must never be the reason a called snap is late on screen. The
      * signature includes the status, so the first push that says the game has
      * started forces a paint and the guard stops applying by itself. */
+    /* 🔴 THE PICKER DOES NOT REPAINT ON THE POLL. Jason, 2026-09-11: "All the
+     * icons are blinking." paint() rebuilds every crest, and the picker was
+     * rebuilt every five seconds for a game it is not even showing. The poll
+     * only nudges its two caches, and they repaint when a score or the slate
+     * actually changed. */
+    if (S.pick) { pickerTick(wrap); return; }
     const quiet = S.isHome || (S.raw && S.raw.status === 'pre');
     if (quiet) {
       const sig = homeSignature();
@@ -4155,8 +4161,12 @@ function liveScore(wrap, sport, g) {
     fetch('/api/state/' + k)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
+        const was = LIVE_SCORE[k] || {};
         LIVE_SCORE[k] = d ? { at: Date.now(), a: d.awayScore, h: d.homeScore, status: d.status } : { at: Date.now() };
-        if (d) { S.lastSig = null; paint(wrap); }
+        /* Only on a change - a repaint rebuilds every crest on screen. */
+        if (d && (was.a !== d.awayScore || was.h !== d.homeScore || was.status !== d.status)) {
+          S.lastSig = null; paint(wrap);
+        }
       })
       .catch(() => { LIVE_SCORE[k] = { at: Date.now() }; });
   }
@@ -4173,9 +4183,11 @@ function alsoFor(wrap, now) {
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
           if (!d) return;
+          const sig = (xs) => (xs || []).map((g) => [g.id, g.status, g.awayScore, g.homeScore, g.kickoffUtc].join(':')).join('|');
+          const changed = !cached || cached.sport !== sport || sig(cached.games) !== sig(d.games);
           S.also = { sport, at: Date.now(), games: d.games || [] };
-          S.lastSig = null;
-          paint(wrap);
+          /* Only on a change - the minute refresh must not blink the crests. */
+          if (changed) { S.lastSig = null; paint(wrap); }
         })
         .catch(() => {})
         .then(() => { S.alsoBusy = false; });
@@ -4231,6 +4243,15 @@ function bellLink(title, startMs, key, venue) {
  *
  * The slate comes from alsoFor(), which fetches it in the background and
  * repaints when it lands; until then there is simply no list. */
+/** The poll's turn on the picker: refresh the slate copy and each live score.
+ *  Each repaints only if what it holds changed. */
+function pickerTick(wrap) {
+  const now = Date.now();
+  const also = alsoFor(wrap, now);
+  if (!also) return;
+  for (const g of also.games || []) if (isLive(g, now)) liveScore(wrap, also.sport, g);
+}
+
 /** The Live tab's game picker: the Live now and Next lists and nothing else. */
 function gamePicker(wrap, now) {
   const before = wrap.childElementCount;
