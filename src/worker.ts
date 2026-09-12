@@ -469,16 +469,18 @@ export default {
          there. Lengths and prefixes are not secrets; values never leave. */
       if (p === '/api/health/secrets') {
         const e = env as any;
-        const one = (k: string, prefix?: string) => {
+        /* Every secret-shaped binding the Worker holds, by name - so a key set
+           that nothing reads shows up too. Length only; a known public prefix
+           where there is one. */
+        const PREFIX: Record<string, string> = { RESEND_API_KEY: 're_', MAILERSEND_API_KEY: 'mlsn.' };
+        const out: Record<string, any> = {};
+        for (const k of Object.keys(e).sort()) {
+          if (!/(_KEY|_TOKEN|_SECRET)$/.test(k)) continue;
           const v = typeof e[k] === 'string' ? e[k] : '';
-          return { set: v.length > 0, length: v.length, ...(prefix ? { prefixOk: v.startsWith(prefix) } : {}) };
-        };
-        return new Response(JSON.stringify({
-          PUSH_TOKEN: one('PUSH_TOKEN'),
-          RESEND_API_KEY: one('RESEND_API_KEY', 're_'),
-          MAILERSEND_API_KEY: one('MAILERSEND_API_KEY', 'mlsn.'),
-          CFBD_API_KEY: one('CFBD_API_KEY')
-        }), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+          out[k] = { set: v.length > 0, length: v.length,
+                     ...(PREFIX[k] ? { prefixOk: v.startsWith(PREFIX[k]) } : {}) };
+        }
+        return new Response(JSON.stringify(out), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
       }
 
       /* ---- F1: the current Grand Prix, its sessions and results (src/f1-feed.ts) ---- */
