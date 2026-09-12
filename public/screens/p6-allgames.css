@@ -160,6 +160,7 @@
    the home team, and "NE @ SEA" is how the sport writes it. */
 .scr-p6-allgames .p6a-teams {
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   align-items: center; gap: 6px; min-width: 0; padding: 0 2px;
 }
 .scr-p6-allgames .p6a-team {
@@ -551,6 +552,10 @@
   position: absolute; top: 9px; left: 50%; transform: translate(-50%, -50%); z-index: 1;
 }
 .scr-p6-allgames .p6a-game { padding: calc(var(--nest-inset) + 2px); }
+/* A closed card ends at MORE - "remove the padding below more". 3px, not 0, so
+   the arrowheads do not sit on the border; an open card keeps its inset, since
+   its markets follow. */
+.scr-p6-allgames .p6a-game:not([open]) { padding-bottom: 3px; }
 
 /* ── THE DISCLOSURE, UNDER THE @ ──────────────────────────────────────
    Jason: "Move the more bets carrot, to below the @. Use '^ MORE ^' but
@@ -561,18 +566,19 @@
    inherits the text colour and weight like any other character. On open it
    flips to the up arrowhead via a rotation, which keeps one element
    authoritative about the state instead of two glyphs that can disagree. */
-.scr-p6-allgames .p6a-mid { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative; }
-/* The clock under the @ (14px - Jason: "Move the time down a little"), out of flow - so the middle
+.scr-p6-allgames .p6a-mid { grid-column: 2; grid-row: 1; align-self: center; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+/* The clock on the name row (Jason: "Move the time in line with the school name"), at zero width - so the middle
    column stays as narrow as the @ and the names keep their room. */
-.scr-p6-allgames .p6a-mid > .p6a-clock {
-  position: absolute; top: calc(100% + 14px); left: 50%; transform: translateX(-50%);
+.scr-p6-allgames .p6a-teams > .p6a-clock {
+  grid-column: 2; grid-row: 2; align-self: center; justify-self: center;
+  width: 0; display: flex; justify-content: center;
   font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap;
 }
 /* Its own full-width row under the teams. The @ is centred in the grid
    above, so a centred control here lands directly beneath it and costs the
    two names no width at all. */
 .scr-p6-allgames .p6a-more {
-  flex: 1 0 100%; order: 4; margin-top: -8px;
+  flex: 1 0 100%; order: 4; margin-top: 0;
   display: flex; align-items: center; justify-content: center; gap: 4px;
   font-size: 9px; font-weight: 800; letter-spacing: .08em; color: var(--dim);
   line-height: 1; white-space: nowrap;
@@ -587,7 +593,9 @@
      child would break the radius that sits on it - so the control is moved
      by its OWN top padding and the summary's bottom padding goes to zero.
      Measured after: ~18px above, ~14px below, which is the card's inset. */
-  padding: 18px 0 0;
+  /* Then, 2026-09-11: "Move up 'more' and remove the padding below more." -
+     4px above it, and a closed card keeps only 3px under it (see below). */
+  padding: 4px 0 0;
 }
 .scr-p6-allgames .p6a-more-c {
   font-size: 11px; line-height: 1; transition: transform .15s ease;
@@ -646,7 +654,10 @@
    the file and they restate every placement, so the older ones above cannot win
    a property by being the only rule that names it. */
 .scr-p6-allgames .p6a-team {
-  grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  /* The teams grid's three rows, shared (subgrid), so the name row lines up
+     across both teams and the clock can sit on it. */
+  grid-row: 1 / span 3; grid-template-rows: subgrid;
   justify-items: center; row-gap: 2px;
 }
 .scr-p6-allgames .p6a-team[data-side="home"] { grid-template-columns: auto minmax(0, 1fr); }
@@ -658,8 +669,10 @@
 .scr-p6-allgames .p6a-team > .p6a-tmeta {
   grid-column: 1; grid-row: 3; justify-content: center; text-align: center; flex-wrap: wrap;
 }
+/* The score in the middle of the crest - its row, not the whole stack. Jason,
+   2026-09-11: "Move the score up to be in the middle of the logo." */
 .scr-p6-allgames .p6a-team > .p6a-tsc {
-  grid-column: 2; grid-row: 1 / span 3; align-self: center; justify-self: center;
+  grid-column: 2; grid-row: 1; align-self: center; justify-self: center;
   padding: 0 0 0 8px; font-size: 20px; font-weight: 800;
 }
 .scr-p6-allgames .p6a-team[data-side="home"] > .tchip { grid-column: 2; grid-row: 1; }
@@ -674,5 +687,5 @@
 .scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tmeta {
   grid-column: 2; grid-row: 3; text-align: center; justify-content: center;
 }
-.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc { grid-column: 1; padding: 0 8px 0 0; }
+.scr-p6-allgames .p6a-team[data-side="home"] > .p6a-tsc { grid-column: 1; grid-row: 1; padding: 0 8px 0 0; }
 

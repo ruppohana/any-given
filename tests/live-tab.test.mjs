@@ -109,8 +109,9 @@ test('All games: a live game opens live from over its score, and every card has 
   // go-live icon it widened the middle column and cut the names to "Villan...".
   // Then, 2026-09-11: "Move the time centered, below the score and above more."
   // And then: "Move up the time" - under the @, between the two scores.
-  assert.ok(P6.includes("if (clk) mid.appendChild(el('span', 'p6a-clock num', clk));"),
-    'the live clock sits under the @, between the scores');
+  // Then: "Move the time in line with the school name."
+  assert.ok(P6.includes("if (clk) teams.appendChild(el('span', 'p6a-clock num', clk));"),
+    'the live clock sits in the teams grid, on the name row');
   assert.ok(P6.includes("if (word && game.status !== 'in_progress') {"), 'a live game has no pill');
   // The stacked team: the home side must restate its rows, or older, more
   // specific home rules put the name in the crest's row (measured 2026-09-11:
@@ -123,7 +124,7 @@ test('All games: a live game opens live from over its score, and every card has 
   // The clock is in the middle column now, but out of flow - its width in that
   // column is what once cut every name to "Villan...".
   assert.match(readFileSync(new URL('../public/screens/p6-allgames.css', import.meta.url), 'utf8'),
-    /\.p6a-mid > \.p6a-clock \{\s*position: absolute;/, 'the clock floats, so the middle column stays narrow');
+    /\.p6a-teams > \.p6a-clock \{\s*grid-column: 2; grid-row: 2;[^}]*width: 0;/, 'the clock sits on the name row at zero width, so the middle column stays narrow');
 });
 
 test('Home has two doors, Betting and Pools, and the third tab looks like where it goes', () => {

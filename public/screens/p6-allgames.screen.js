@@ -1408,13 +1408,6 @@ function gameCard(ctx, game) {
     top.appendChild(golive);
   }
   mid.appendChild(el('span', 'p6a-at', '@'));
-  /* "Move up the time": under the @, between the two scores. Absolutely placed
-   * (see .p6a-mid > .p6a-clock), so it takes no width from the names - its own
-   * width in the middle column is what cut them to "Villan..." once before. */
-  if (game.status === 'in_progress') {
-    const clk = liveClock(game);
-    if (clk) mid.appendChild(el('span', 'p6a-clock num', clk));
-  }
   /* 🔴 THE WORD SWAPS, IT DOES NOT DISAPPEAR. First pass hid "MORE" on open
      and kept its width, so an open card showed two carets floating either
      side of a gap - which reads as a rendering fault rather than a control.
@@ -1432,6 +1425,16 @@ function gameCard(ctx, game) {
   more.appendChild(moreWord);
   more.appendChild(el('span', 'p6a-more-c', '⌄'));
   teams.append(teamBlock(ctx, game, 'away'), mid, teamBlock(ctx, game, 'home'));
+  /* 🔴 THE CLOCK ON THE NAME LINE. Jason, 2026-09-11: "Move the time in line
+   * with the school name." A direct child of the teams grid, in the middle
+   * column's name row - the two teams share the grid's rows through subgrid,
+   * so that row IS the name row on both sides - and drawn at zero width, so the
+   * names keep their room (a clock with width there once cut them to
+   * "Villan..."). */
+  if (game.status === 'in_progress') {
+    const clk = liveClock(game);
+    if (clk) teams.appendChild(el('span', 'p6a-clock num', clk));
+  }
   top.appendChild(teams);
   /* 🔴 ITS OWN ROW, NOT THE MIDDLE COLUMN. First pass put it under the @
      inside the three-column teams grid, where it took ~64px of horizontal
