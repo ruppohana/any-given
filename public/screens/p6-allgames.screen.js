@@ -181,8 +181,7 @@ export function marketsFor(game, list, now = Date.now(), sport = chosenSport()) 
 }
 
 /** Both sides of the moneyline inside the same band every other market obeys.
- *  No moneyline at all is fine - the market then prices at 2.00x both ways
- *  and says so honestly, which is a different thing from a 1.02x tile. */
+ *  With no moneyline the spread prices it; with neither, it is not offered. */
 export function winnerInBand(game) {
   const ceiling = trueCeiling(MAX_PRICE);
   const both = [game && game.moneylineHome, game && game.moneylineAway]
@@ -192,7 +191,11 @@ export function winnerInBand(game) {
      was falling through to 2.00x a side, which says Miami and Florida A&M are
      equally likely. The spread is still there, so the model answers instead. */
   if (both.some((d) => d == null)) {
-    if (!num(game && game.spread)) return true;      // no opinion at all: 2.00x is honest
+    /* 🔴 NO LINE AT ALL, NO WINNER BET. This used to offer 2.00x both ways as
+       "honest" - and on basketball's opener, with no lines posted yet, it
+       priced LIU at FAU as a coin flip on all 78 cards. Jason, 2026-09-12: yes,
+       hide it until a line posts. An even price on a mismatch is a free pick. */
+    if (!num(game && game.spread)) return false;
     const p = gameWinnerProbs(game.spread, chosenSport());
     for (const v of [p.home, p.away]) {
       const t = 1 / v;

@@ -45,6 +45,12 @@ test('a tip time ESPN has not set says TBD and never locks the game by its place
   assert.ok(P6.includes("window: 'Time TBD',"), 'in a group of its own, on its real day, last');
 });
 
+test('a game with no line at all offers no winner bet - never a coin flip on a mismatch', () => {
+  // Jason, 2026-09-12: "Yes" - hide it until a line posts.
+  assert.ok(P6.includes('if (!num(game && game.spread)) return false;'), 'no spread and no moneyline: not offered');
+  assert.equal(P6.includes('if (!num(game && game.spread)) return true;'), false, 'the 2.00x fallback is gone');
+});
+
 test('a basketball card offers winner, spread and total only, with no live link or football facts yet', () => {
   assert.ok(P6.includes("const DAY_MARKETS = ['winner', 'spread', 'total'];"));
   assert.ok(P6.includes("if (isDaySport(sport) && !DAY_MARKETS.includes(m.id)) return false;"), 'halves and quarters are football\'s clock');
