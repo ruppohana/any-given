@@ -1316,7 +1316,19 @@ function gameCard(ctx, game) {
      see. */
   const avail = marketsFor(game, ctx.markets, ctx.now, ctx.sport);
   const canHeadline = avail.some((m) => m.id === 'spread' || m.id === 'winner');
-  if (canHeadline && !locked) {
+  /* 🔴 A BLOWOUT SHOWS THE SPREAD ALONE. Jason, 2026-09-12: "If the game is a
+   * blowout only show the spread." The one row that drew a disabled ML button
+   * (below) was exactly this row - a moneyline outside the price band - so it
+   * now shows its one market as a label in the selector's place, and there is
+   * nothing to tap that does nothing. */
+  const hlAvail = HEADLINE_MARKETS.filter((m) => avail.some((o) => o.id === m.id));
+  if (canHeadline && !locked && hlAvail.length === 1) {
+    const seg = el('div', 'p6a-seg is-one');
+    const only = el('span', 'p6a-segb', hlAvail[0].label);
+    only.dataset.on = 'true';
+    seg.appendChild(only);
+    top.appendChild(seg);
+  } else if (canHeadline && !locked) {
     const seg = el('div', 'p6a-seg');
     seg.setAttribute('role', 'group');
     seg.setAttribute('aria-label', 'What this row lets you pick');
@@ -1358,7 +1370,11 @@ function gameCard(ctx, game) {
       seg.appendChild(b);
     }
     top.appendChild(seg);
-  } else if (num(game.spread)) {
+  } else if (num(game.spread) && game.status !== 'in_progress') {
+    /* Not on a live game: nothing can be switched once it tips, and the Live
+       icon takes this spot - Jason, 2026-09-12: "If the game has started, you
+       cannot switch, right? If so remove it so we can replace it with the live
+       icon." */
     const fav = game.spread <= 0 ? game.home : game.away;
     const abbr = (fav && fav.abbrev) || '';
     top.appendChild(el('span', 'p6a-sprd num',

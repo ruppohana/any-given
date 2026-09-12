@@ -167,8 +167,10 @@
   display: flex; align-items: center; gap: 6px; min-width: 0;
 }
 .scr-p6-allgames .p6a-team[data-side="home"] { justify-content: flex-end; }
+/* Up a size - Jason, 2026-09-12: "Bump the text font up for the school and the
+   line below." */
 .scr-p6-allgames .p6a-tname {
-  font-size: var(--t-body); font-weight: 700; min-width: 0;
+  font-size: calc(var(--t-body) + 2px); font-weight: 700; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .scr-p6-allgames .p6a-tsc { font-size: var(--t-emph); font-weight: 800; flex: 0 0 auto; }
@@ -429,10 +431,10 @@
    games have one - and the record is --dim because every row has one and a
    column of equally loud numbers is a column nobody reads. */
 .scr-p6-allgames .p6a-trank {
-  font-size: 10px; font-weight: 800; color: var(--accent); flex: 0 0 auto;
+  font-size: 12px; font-weight: 800; color: var(--accent); flex: 0 0 auto;
 }
 .scr-p6-allgames .p6a-trec {
-  font-size: 10px; color: var(--dim); flex: 0 0 auto; white-space: nowrap;
+  font-size: 12px; color: var(--dim); flex: 0 0 auto; white-space: nowrap;
 }
 
 /* 🔴 THE RANK AND RECORD GO UNDER THE NAME, NOT BESIDE IT.
@@ -517,17 +519,23 @@
 .scr-p6-allgames button.p6a-team:disabled { opacity: .5; }
 /* The line and the price sit with the record on the meta row. The price is
    the accent because it is the thing being offered; the line is a fact. */
-.scr-p6-allgames .p6a-tline { font-size: 10px; font-weight: 700; color: var(--fg); flex: 0 0 auto; }
-.scr-p6-allgames .p6a-tprice { font-size: 10px; font-weight: 800; color: var(--accent); flex: 0 0 auto; }
+.scr-p6-allgames .p6a-tline { font-size: 12px; font-weight: 700; color: var(--fg); flex: 0 0 auto; }
+.scr-p6-allgames .p6a-tprice { font-size: 12px; font-weight: 800; color: var(--accent); flex: 0 0 auto; }
 
 /* ── THE PER-CARD SELECTOR ────────────────────────────────────────────
    Spread or moneyline, on the row, where the decision is. It takes the
    place the spread label used to hold: with the inline tiles on, that label
    was the same number twice. */
+/* CENTRED ON THE CARD, on the time's line - Jason, 2026-09-12: "Center the
+   spread/moneyline (so shift left.)". Out of flow like the Live icon, which
+   takes this same spot once a game starts and the selector is gone. */
 .scr-p6-allgames .p6a-seg {
-  margin-left: auto; flex: 0 0 auto; display: flex; gap: 2px;
+  position: absolute; top: 9px; left: 50%; transform: translate(-50%, -50%); z-index: 1;
+  display: flex; gap: 2px;
   padding: 2px; border-radius: var(--radius-chip); background: var(--track);
 }
+/* A blowout offers the spread alone: one segment, shown as the chosen one. */
+.scr-p6-allgames .p6a-seg.is-one .p6a-segb { display: inline-flex; align-items: center; }
 .scr-p6-allgames .p6a-segb {
   font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .02em;
   min-height: 24px; padding: 0 9px; border: 0;
@@ -537,7 +545,14 @@
 .scr-p6-allgames .p6a-segb[data-on="true"] { background: var(--card); color: var(--accent); }
 /* A pill and a selector both want the right-hand end; the pill is state and
    outranks a control, same rule the spread label follows. */
-.scr-p6-allgames .p6a-game > .p6a-top:has(.p6a-pill) .p6a-seg { margin-left: 0; }
+/* With the selector centred, "info" holds the right-hand end itself - unless a
+   pill or the spread label already does. And the channel stops short of the
+   selector rather than running under it. */
+.scr-p6-allgames .p6a-top:not(:has(> .p6a-pill, > .p6a-sprd)) > .p6a-info { margin-left: auto; }
+.scr-p6-allgames .p6a-top:has(> .p6a-seg) > .p6a-chan {
+  min-width: 0; max-width: calc(50% - 104px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* 🔴 A LITTLE TALLER. Jason: "I would like the cards to be a little taller."
    At 89px the two lines were touching their own edges - the summary was
@@ -560,7 +575,8 @@
 /* And no gap: a closed <details> still lays out its (empty) content slot as a
    grid item, so the card's 10px row gap sat under MORE - measured 14px there
    with padding-bottom already at 3px. */
-.scr-p6-allgames .p6a-game:not([open]) { padding-bottom: 3px; gap: 0; }
+/* Then, 2026-09-12: "Give me 1 line of gap below the more." */
+.scr-p6-allgames .p6a-game:not([open]) { padding-bottom: 16px; gap: 0; }
 
 /* ── THE DISCLOSURE, UNDER THE @ ──────────────────────────────────────
    Jason: "Move the more bets carrot, to below the @. Use '^ MORE ^' but
