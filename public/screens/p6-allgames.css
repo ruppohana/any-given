@@ -555,7 +555,10 @@
 /* A closed card ends at MORE - "remove the padding below more". 3px, not 0, so
    the arrowheads do not sit on the border; an open card keeps its inset, since
    its markets follow. */
-.scr-p6-allgames .p6a-game:not([open]) { padding-bottom: 3px; }
+/* And no gap: a closed <details> still lays out its (empty) content slot as a
+   grid item, so the card's 10px row gap sat under MORE - measured 14px there
+   with padding-bottom already at 3px. */
+.scr-p6-allgames .p6a-game:not([open]) { padding-bottom: 3px; gap: 0; }
 
 /* ── THE DISCLOSURE, UNDER THE @ ──────────────────────────────────────
    Jason: "Move the more bets carrot, to below the @. Use '^ MORE ^' but
