@@ -73,7 +73,9 @@ const ROUTES = [
    * the live screen instead of building the thing he was pointing at. A landing
    * that scrolls straight into the game IS the game. */
   { id: 'home',      dest: 'home',      screen: 'live-game',       state: 'home',        label: 'Home' },
-  { id: 'live',      dest: 'live',      screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
+  /* No Live tab (2026-09-11): a live game is opened from its All games card,
+   * so while you watch one the All games tab is the lit one. */
+  { id: 'live',      dest: 'slate',     screen: 'live-game',       state: 'live',        label: '🔴 LIVE — the real game' },
   { id: 'now',       dest: 'live',      screen: 'l4-now',          state: 'open',        label: 'The call (fixtures)' },
   { id: 'landed',    dest: 'live',      screen: 'l7-result',       state: 'landed',      label: 'Result — landed' },
   { id: 'missed',    dest: 'live',      screen: 'l7-result',       state: 'missed',      label: 'Result — missed' },
@@ -413,24 +415,15 @@ function drawNav(active, which) {
      * the app had a real one, and nothing caught it because both screens look
      * almost identical — which is precisely why the mock was built. */
     /* The group section draws its own bar; each of its tabs names its route. */
+    /* On the betting side the third tab is All games - icon and name too. */
+    slateIsAllGames: which !== 'group' && slateHref() === '#/allgames',
     destinations: which === 'group' ? GROUP_DESTINATIONS : undefined,
     hrefFor: which === 'group'
       ? (d) => '#/' + d.route
       : (d) => (d.id === 'slate' ? slateHref()
         : '#/' + ({ home: 'home', slate: 'slate', picks: 'picks', standings: 'standings', live: 'live' }[d.id] || d.id))
   });
-  /* 🔴 THE LIVE TAB OPENS THE GAME PICKER. Jason, 2026-09-11, with three games
-   * on at once: "Selecting live games immediately take me to Villanova only, no
-   * choice on the other two games" - then "remove the return to the last game.
-   * Go to the selector." This replaces 2026-09-10's "open the last game you had
-   * up". Still a flag keyed to a tap on THIS tab, not a URL parameter (which
-   * would outlive the navigation - the ?game= bug), and a tap on the tab you
-   * are already on changes no hash, so it re-mounts by hand. */
-  const liveTab = nav.querySelector('[data-dest="live"]');
-  if (liveTab) liveTab.addEventListener('click', () => {
-    window.__agPick = true;
-    if (location.hash === '#/live') mount();
-  });
+  /* (No Live tab since 2026-09-11 - a live game opens from its All games card.) */
   const slateTab = nav.querySelector('[data-dest="slate"]');
   if (slateTab) slateTab.addEventListener('click', () => { slateTab.setAttribute('href', slateHref()); });
   document.querySelector('.ag-shell').appendChild(nav);

@@ -41,16 +41,12 @@ export const DESTINATIONS = [
    * and left somebody who had wandered off with no obvious way back to the thing
    * they came for. */
   { id: 'home',      label: 'Home',      href: '/live/:game' },
-  /* 🔴 FIVE NOW, AND LIVE IS BACK. Jason, 2026-09-10: "Let's add a live button
-   * to the bottom nav. Have it go directly to the last live game you had up."
-   *
-   * The "four, not five" note below was right when it was written and both of
-   * its reasons have since gone: the bar showed WORDS, and five of them wrapped
-   * to two rows at 375px - the words are gone, and five 24px icons fit the
-   * pill with room to spare. And Home WAS the game, so Live duplicated it -
-   * Home is now the front door with three doors, and getting back to the game
-   * you were watching took three taps. This is one. */
-  { id: 'live',      label: 'Live',      href: '/live/:game' },
+  /* 🔴 NO LIVE TAB. Jason, 2026-09-11: "And live goes away on the nav bar and
+   * becomes an icon in the card you can hit." A live game is opened from the
+   * Live icon over its score on All games (the one-stop list), so the bar does
+   * not need a second way in. This reverses 2026-09-10's "add a live button to
+   * the bottom nav" - the reason it existed (three taps back to your game) is
+   * now one tap on the card. */
   { id: 'slate',     label: 'Slate',     href: '/p/:pool/week/:week' },
   /* 🔴 FOUR, NOT FIVE. Home and Live both led to the live game once Home was
    * added, so the bar carried a duplicate AND wrapped to two rows at 375px —
@@ -220,7 +216,13 @@ export function navBar(active, opts) {
     a.className = 'ag-nav-item';
     a.dataset.dest = d.id;
     a.href = opts.hrefFor ? opts.hrefFor(d) : '#' + d.id;
-    a.appendChild(navIcon(d.id));
+    /* 🔴 ON THE BETTING SIDE THE THIRD TAB IS ALL GAMES, AND LOOKS IT. Jason,
+     * 2026-09-11: "I came in from the home page to all games. But it
+     * highlighted the slate." - then "Ok for now." The clapperboard means the
+     * pool's pick'em; lit over All games it said you were on the other slate. */
+    const allGames = d.id === 'slate' && !!opts.slateIsAllGames;
+    const label = allGames ? 'All games' : d.label;
+    a.appendChild(navIcon(allGames ? 'allgames' : d.id));
     /* 🔴 THE LABEL BECOMES THE ACCESSIBLE NAME, NOT VISIBLE TEXT. Jason,
      * 2026-09-09: "remove the words under the icons."
      *
@@ -231,8 +233,8 @@ export function navBar(active, opts) {
      * where four 10px words were the least legible thing on the screen, and
      * shows it again on the desktop rail, where a sidebar with room for words
      * should use them. */
-    a.setAttribute('aria-label', d.label);
-    a.appendChild(document.createElement('span')).textContent = d.label;
+    a.setAttribute('aria-label', label);
+    a.appendChild(document.createElement('span')).textContent = label;
     if (d.id === active) a.setAttribute('aria-current', 'page');
     /* Unavailable, never hidden. A tab that vanishes reads as a broken build. */
     if (d.id === 'live' && !opts.liveAvailable) {

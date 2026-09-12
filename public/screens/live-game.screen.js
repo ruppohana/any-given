@@ -3770,9 +3770,13 @@ function modeCard(wrap, compact) {
      * They divide by WHEN you are, which is the only division a person
      * actually feels: something is happening right now, something is
      * happening this week, or your group is keeping score. */
-    { id: 'live', h: 'Live games', b: 'Call it snap by snap while you watch. A price before every tap.' },
-    { id: 'allgames', h: 'All games', b: 'The whole week. Winner, spread, total, halves, quarters and parlays.' },
-    { id: 'pool', h: 'Group pools', b: 'People you know, a week at a time, scored in points. Nothing staked.' }
+    /* 🔴 TWO DOORS, NOT THREE. Jason, 2026-09-11: "on the cover page we either
+     * bet or we are in the group pool", "all games is removed from the home
+     * page", "Only 2 options. Betting or pools." Betting lands on All games -
+     * the one-stop list where a game is bet, parlayed, or opened live - and
+     * the Live tab still goes straight to the games on now. */
+    { id: 'allgames', h: 'Betting', b: 'Every game this week - bet it, parlay it, or open a live one and call it snap by snap. A price before every tap.' },
+    { id: 'pool', h: 'Pools', b: 'People you know, a week at a time, scored in points. Nothing staked.' }
   ];
   for (const o of opts) {
     const b = el('button', 'lg-mode');

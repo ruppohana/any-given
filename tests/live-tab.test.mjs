@@ -30,7 +30,12 @@ test('the Live tab opens the game picker, not the last game', () => {
   // remove the return to the last game. Go to the selector." Replaces 09-10's
   // return-to-the-last-game.
   const APP = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.ok(APP.includes('window.__agPick = true;'), 'a tap on the tab asks for the picker');
+  // Then, 2026-09-11: "live goes away on the nav bar and becomes an icon in
+  // the card you can hit." No Live tab; a live game lights the All games tab.
+  const NAVSRC = readFileSync(new URL('../public/components/nav.js', import.meta.url), 'utf8');
+  assert.equal(NAVSRC.includes("{ id: 'live',"), false, 'the bar has no Live tab');
+  assert.equal(APP.includes(`querySelector('[data-dest="live"]')`), false, 'and nothing listens for one');
+  assert.ok(APP.includes("{ id: 'live',      dest: 'slate',"), 'a live game lights the All games tab');
   assert.ok(SRC.includes('S.pick = !forced && !S.isHome && window.__agPick === true;'),
     'only from the tab - an invite link still opens its own game');
   assert.ok(SRC.includes('if (S.pick) { gamePicker(wrap, now); return; }'), 'the picker draws instead of a game');
@@ -105,6 +110,18 @@ test('All games: a live game opens live from over its score, and every card has 
   assert.ok(P6.includes("const clockWord = game.status === 'in_progress' ? liveClock(game) : '';"),
     'the live clock rides in the Live pill');
   assert.equal(P6.includes("'p6a-clock num'"), false, 'nothing but the icon widens the middle column');
+});
+
+test('Home has two doors, Betting and Pools, and the third tab looks like where it goes', () => {
+  // Jason, 2026-09-11: "Only 2 options. Betting or pools." / "all games is
+  // removed from the home page" / "it highlighted the slate".
+  assert.ok(SRC.includes("{ id: 'allgames', h: 'Betting',"), 'Betting lands on All games');
+  assert.ok(SRC.includes("{ id: 'pool', h: 'Pools',"), 'Pools');
+  assert.equal(SRC.includes("h: 'All games'") || SRC.includes("h: 'Live games'"), false, 'no third door');
+  const NAV = readFileSync(new URL('../public/components/nav.js', import.meta.url), 'utf8');
+  const APP = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.ok(NAV.includes("a.appendChild(navIcon(allGames ? 'allgames' : d.id));"), 'the All games icon on the betting side');
+  assert.ok(APP.includes("slateIsAllGames: which !== 'group' && slateHref() === '#/allgames',"), 'switched by the side you are on');
 });
 
 test('a game link mounts once, on the game it names', () => {
