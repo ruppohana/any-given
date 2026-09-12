@@ -3622,6 +3622,10 @@ function sportCard(wrap) {
        * all. Both now go to step 3 and let the person choose live or the week,
        * which is the question the front door exists to ask. */
       if (S.isHome) {
+        /* 🔴 THE LEAGUE BUTTON OPENS THE PICKER TOO. Jason, 2026-09-11: "Live
+         * games, then ncaa, should take you to the picker, but it goes straight to
+         * Villanova." Same flag as the Live tab (render reads it once). */
+        if (S.mode !== 'pool' && S.mode !== 'allgames') window.__agPick = true;
         location.hash = S.mode === 'pool' ? '#/slate'
           : S.mode === 'allgames' ? '#/allgames'
           : '#/live';
@@ -3777,6 +3781,7 @@ function modeCard(wrap, compact) {
            * goCard was for. With three, that question WAS the first card, and
            * asking it again a page later would be the wizard this front door
            * was built to stop being. Pick a half, pick a league, arrive. */
+          if (S.mode !== 'pool' && S.mode !== 'allgames') window.__agPick = true;
           location.hash = S.mode === 'pool' ? '#/slate'
             : S.mode === 'allgames' ? '#/allgames'
             : '#/live';
@@ -4162,15 +4167,41 @@ function liveScore(wrap, sport, g) {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const was = LIVE_SCORE[k] || {};
-        LIVE_SCORE[k] = d ? { at: Date.now(), a: d.awayScore, h: d.homeScore, status: d.status } : { at: Date.now() };
-        /* Only on a change - a repaint rebuilds every crest on screen. */
-        if (d && (was.a !== d.awayScore || was.h !== d.homeScore || was.status !== d.status)) {
-          S.lastSig = null; paint(wrap);
-        }
+        const sit = (d && d.situation) || {};
+        LIVE_SCORE[k] = d ? { at: Date.now(), a: d.awayScore, h: d.homeScore, status: d.status,
+                              q: sit.quarter, clock: sit.clock } : { at: Date.now() };
+        if (!d) return;
+        /* A game that ended leaves Live now - a different list, so a repaint.
+         * Anything else - a score, the clock - is written into the card where it
+         * stands: a repaint rebuilds every crest on screen, and the clock moves
+         * every play. */
+        if (d.status === 'final' && was.status !== 'final') { S.lastSig = null; paint(wrap); return; }
+        patchLiveCard(k);
       })
       .catch(() => { LIVE_SCORE[k] = { at: Date.now() }; });
   }
   return c && c.a != null ? c : null;
+}
+
+/** "2nd 5:32", "Halftime", "End 1st", "OT 3:10" - what a live card leads with. */
+function clockText(ls) {
+  const q = Number(ls.q) || 0;
+  if (!q) return '';
+  const ord = q > 4 ? 'OT' : ['1st', '2nd', '3rd', '4th'][q - 1];
+  if (ls.clock === '0:00') return q === 2 ? 'Halftime' : 'End ' + ord;
+  return ls.clock ? ord + ' ' + ls.clock : ord;
+}
+
+/** Write a live game's score and clock into its card(s) where they stand. */
+function patchLiveCard(k) {
+  const c = LIVE_SCORE[k];
+  if (!c) return;
+  for (const card of document.querySelectorAll('.lg-next-c[data-key="' + k + '"]')) {
+    const when = card.querySelector('.lg-next-when');
+    if (when && c.a != null) when.textContent = c.a + '–' + c.h;
+    const clk = card.querySelector('.lg-next-clock');
+    if (clk) clk.textContent = clockText(c);
+  }
 }
 
 function alsoFor(wrap, now) {
@@ -4324,21 +4355,33 @@ function nextCard(box, g, sport, dayOf, dayLabel, wrap, now) {
     go.href = '/?game=' + encodeURIComponent(sport + ':' + g.id).replace(/%3A/g, ':');
     go.setAttribute('aria-label', title + (live ? ', live now' : ', ' + dayOf(g.kickoffUtc)));
     card.appendChild(go);
-    const side = (id, t) => {
+    /* The key lets a new score or clock be written into this card in place
+     * (patchLiveCard) instead of repainting the list. */
+    card.dataset.key = sport + ':' + g.id;
+    const side = (id, t, rank) => {
       const s = el('span', 'lg-next-side');
       if (t) s.appendChild(teamChip({ id, ...t }, { size: 28, league: sport }));
-      s.appendChild(el('span', 'lg-next-name', (t && (t.short || t.abbrev || t.name)) || '?'));
+      const n = el('span', 'lg-next-name');
+      /* The AP rank in front of the name, as on the slate row: "#24 Louisville". */
+      if (rank) n.appendChild(el('span', 'lg-next-rank', '#' + rank));
+      n.appendChild(document.createTextNode((t && (t.short || t.abbrev || t.name)) || '?'));
+      s.appendChild(n);
       return s;
     };
-    card.appendChild(side(g.awayTeamId, a));
+    card.appendChild(side(g.awayTeamId, a, g.rankAway));
+    /* 🔴 THE CLOCK, THE RANK AND THE CHANNEL. Jason, 2026-09-11: "Yes" to the
+     * three things CBS showed and these cards did not - the quarter and clock
+     * over the score, the rank before the name, and where the game is on. */
     const mid = el('span', 'lg-next-mid');
+    if (live) mid.appendChild(el('span', 'lg-next-clock num', ls ? clockText(ls) : ''));
     mid.appendChild(el('span', 'lg-next-when num', live
       ? ((ls ? ls.a : g.awayScore) ?? 0) + '–' + ((ls ? ls.h : g.homeScore) ?? 0)
       : new Date(g.kickoffUtc).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })));
+    if (g.broadcast) mid.appendChild(el('span', 'lg-next-tv', g.broadcast));
     /* No bell on a game already under way - nothing is left to be reminded of. */
     if (!live) mid.appendChild(bellLink(title, g.kickoffUtc, sport + ':' + g.id, g.venue));
     card.appendChild(mid);
-    card.appendChild(side(g.homeTeamId, hm));
+    card.appendChild(side(g.homeTeamId, hm, g.rankHome));
     box.appendChild(card);
   }
 }
@@ -5276,6 +5319,10 @@ const CSS = `
 .lg-next-when { font-size: var(--t-micro); color: var(--dim); white-space: nowrap; }
 .lg-next-c.is-live { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 .lg-next-c.is-live .lg-next-when { font-size: var(--t-body); font-weight: 800; color: var(--accent); }
+.lg-next-clock { font-size: var(--t-micro); font-weight: 700; color: var(--accent); white-space: nowrap; }
+.lg-next-tv { max-width: 110px; font-size: var(--t-micro); color: var(--dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-next-rank { margin-right: 4px; font-size: var(--t-micro); font-weight: 700; color: var(--dim); }
 /* The bell: a 32px round target above the card's link, quiet until touched. */
 .lg-bell { position: relative; z-index: 2; display: inline-flex; align-items: center;
   justify-content: center; width: 32px; height: 32px; border-radius: 50%; color: var(--dim); }

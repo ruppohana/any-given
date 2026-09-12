@@ -35,14 +35,18 @@ test('the Live tab opens the game picker, not the last game', () => {
     'only from the tab - an invite link still opens its own game');
   assert.ok(SRC.includes('if (S.pick) { gamePicker(wrap, now); return; }'), 'the picker draws instead of a game');
   assert.equal(/lastLive|__agGoLast|lastKey/.test(SRC + APP), false, 'the return to the last game is gone');
+  // "Live games, then ncaa, should take you to the picker" - both league buttons.
+  assert.equal((SRC.match(/if \(S\.mode !== 'pool' && S\.mode !== 'allgames'\) window\.__agPick = true;/g) || []).length, 2,
+    'the front door\'s league buttons open the picker too');
 });
 
 test('the picker repaints on a change, never on the clock', () => {
   // Jason, 2026-09-11: "All the icons are blinking." Every repaint rebuilds
   // every crest; the picker was being rebuilt every five seconds.
   assert.ok(SRC.includes('if (S.pick) { pickerTick(wrap); return; }'), 'the poll does not repaint the picker');
-  assert.ok(SRC.includes('was.a !== d.awayScore || was.h !== d.homeScore || was.status !== d.status'),
-    'a live score repaints only when it changed');
+  assert.ok(SRC.includes("if (d.status === 'final' && was.status !== 'final') { S.lastSig = null; paint(wrap); return; }"),
+    'a live answer repaints only when the game ended');
+  assert.ok(SRC.includes('patchLiveCard(k);'), 'a score or clock is written into the card in place');
   assert.ok(SRC.includes('if (changed) { S.lastSig = null; paint(wrap); }'), 'and so does the slate copy');
 });
 
