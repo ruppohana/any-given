@@ -73,9 +73,13 @@ export type SlateGame = {
   status: GameStatus;
   homeScore: number | null;
   awayScore: number | null;
+  /** The league, when the slate is not college football. Only soccer ('epl',
+   *  'mls') changes the grading: a level final there is a draw, not a void. */
+  sport?: string;
 };
 
-export type PickSide = 'home' | 'away';
+/** 'draw' exists only in soccer - the one pool where a level final is a result. */
+export type PickSide = 'home' | 'away' | 'draw';
 export type PickState =
   | 'unpicked' | 'picked' | 'locked' | 'in_progress'
   | 'won' | 'lost' | 'void';
@@ -196,7 +200,11 @@ export type CrowdSuppression = 'not_locked' | 'small_n' | 'lone_dissenter' | nul
  * 🔴 THE ONE VOID PATH
  * ------------------------------------------------------------------ */
 
-export type GameOutcome = 'home' | 'away' | 'void' | null;
+export type GameOutcome = 'home' | 'away' | 'draw' | 'void' | null;
+
+/* Soccer - kept inline rather than imported, because this module is shipped to
+   the browser on its own (src/lib/groups.ts isSoccerSport says the same). */
+const isSoccer = (s: unknown) => s === 'epl' || s === 'mls';
 
 export type VoidReason =
   | 'status_void'      // cancelled or postponed. Same thing, deliberately.
@@ -216,6 +224,12 @@ export function resolveGame(game: SlateGame, ats: boolean): GameOutcome {
   if (game.status === 'void') return 'void';
   if (game.status !== 'final') return null;
   if (game.homeScore === null || game.awayScore === null) return null;
+
+  /* 🔴 SOCCER: A LEVEL FINAL IS A DRAW, A RESULT SOMEBODY CAN PICK - not the
+     void path. No spread either way (a soccer group never stores one). */
+  if (isSoccer(game.sport)) {
+    return game.homeScore === game.awayScore ? 'draw' : game.homeScore > game.awayScore ? 'home' : 'away';
+  }
 
   if (ats) {
     // No spread on an ATS pool's game is a data gap, not a void: fall through to the

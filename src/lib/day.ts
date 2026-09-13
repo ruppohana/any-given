@@ -22,8 +22,21 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
      games that day, the WNBA in its playoffs, the NHL from Sep 19. */
   mlb: { path: 'baseball/mlb', groups: '', label: 'MLB', periods: 9 },
   nhl: { path: 'hockey/nhl', groups: '', label: 'NHL', periods: 3 },
-  wnba: { path: 'basketball/wnba', groups: '', label: 'WNBA', periods: 4 }
+  wnba: { path: 'basketball/wnba', groups: '', label: 'WNBA', periods: 4 },
+  /* 🔴 SOCCER - THE ONE POOL WHERE A DRAW IS A PICK. Captured 2026-09-12: four of
+     seven Premier League matches and four of twelve MLS matches were draws, so a
+     draw cannot be the void path it is everywhere else - it is a result, and a
+     person can call it (src/lib/groups.ts isSoccerSport). Matches end
+     STATUS_FULL_TIME (src/slate-day.ts statusOf). Two halves; the clock is
+     ESPN's own minute ("67'", "90'+6'"). */
+  epl: { path: 'soccer/eng.1', groups: '', label: 'Premier League', periods: 2 },
+  mls: { path: 'soccer/usa.1', groups: '', label: 'MLS', periods: 2 }
 };
+
+/** Soccer counts minutes, not a countdown - see dayClock. */
+export function isSoccerDay(sport: unknown): boolean {
+  return sport === 'epl' || sport === 'mls';
+}
 
 export function isDaySport(sport: unknown): boolean {
   return typeof sport === 'string' && Object.prototype.hasOwnProperty.call(DAY_SPORTS, sport);
@@ -96,6 +109,8 @@ export const NBA_CONF: Record<string, string> = {
 export function dayClock(sport: string, period: number, clock: string | null, statusName?: string | null): string {
   const reg = (DAY_SPORTS[sport] && DAY_SPORTS[sport].periods) || 2;
   if (statusName === 'STATUS_HALFTIME') return 'Halftime';
+  /* A soccer clock counts UP and already says what it is - "67'", "45'+2'". */
+  if (isSoccerDay(sport)) return clock || '';
   const p = Number(period);
   if (!Number.isFinite(p) || p < 1) return '';
   const ORD = ['1st', '2nd', '3rd', '4th'];

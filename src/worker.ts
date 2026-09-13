@@ -30,7 +30,7 @@ import { handleContact } from './contact.ts';
 import { handleGroups } from './groups.ts';
 import { handleF1Pool, racingStandings, RACING } from './f1-pool.ts';
 import { serveNascar, NASCAR_SERIES } from './nascar-feed.ts';
-import { poolSport, worldPoolId } from './lib/groups.ts';
+import { poolSport, worldPoolId, pickSides, gradeSql } from './lib/groups.ts';
 
 export interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
@@ -783,7 +783,8 @@ export default {
           side?: string; sport?: string; week?: number; spread?: number | null;
           kickoffUtc?: number;
         };
-        if (!b.gameId || (b.side !== 'home' && b.side !== 'away')) {
+        /* A draw is a side only in soccer (src/lib/groups.ts pickSides). */
+        if (!b.gameId || !pickSides(poolSport(b.sport)).includes(String(b.side))) {
           return json({ error: 'gameId and a side are required' }, 400);
         }
         /* 🔴 WHO, DECIDED BY THE SERVER. A session's account whenever one is
@@ -1111,24 +1112,22 @@ export default {
          *
          * A margin of exactly zero is a push, and a push is the one void path: it
          * counts for nobody - not a win, not a loss, not played. Straight up, zero
-         * is a tie and voids the same way. The fragment is a constant chosen here,
-         * never built from the request. */
-        const margin = ats
-          ? '(g.home_score + COALESCE(p.spread_at, g.spread, 0) - g.away_score)'
-          : '(g.home_score - g.away_score)';
+         * is a tie and voids the same way - except in soccer, where a level final
+         * is a draw, a result somebody can call (src/lib/groups.ts gradeSql). The
+         * fragments are constants chosen there, never built from the request. */
+        const G = gradeSql(sport, ats);
         const rows = await env.DB.prepare(
           `SELECT m.user_id AS id,
                   m.display_name AS name,
                   COUNT(p.game_id) AS picks,
                   SUM(CASE WHEN g.status = 'final' AND g.void = 0
                             AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-                            AND ${margin} <> 0
-                            AND p.side = CASE WHEN ${margin} > 0
-                                              THEN 'home' ELSE 'away' END
+                            AND ${G.counted}
+                            AND p.side = ${G.result}
                        THEN 1 ELSE 0 END) AS wins,
                   SUM(CASE WHEN g.status = 'final' AND g.void = 0
                             AND g.home_score IS NOT NULL AND g.away_score IS NOT NULL
-                            AND ${margin} <> 0
+                            AND ${G.counted}
                        THEN 1 ELSE 0 END) AS played
              FROM member m
              LEFT JOIN pick p

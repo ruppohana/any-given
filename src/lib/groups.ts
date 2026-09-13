@@ -64,7 +64,10 @@ export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball'
   'mlb', 'nhl', 'wnba',
   /* 2026-09-13, "add the O'Reilly and Truck series too": NASCAR's other two national
      series, race day like the Cup (src/nascar-feed.ts NASCAR_SERIES). */
-  'nascar-oreilly', 'nascar-truck'] as const;
+  'nascar-oreilly', 'nascar-truck',
+  /* 2026-09-13, "do all the sports for the pool": the Premier League and MLS, a day
+     at a time, and the one pool where a draw is a pick (isSoccerSport below). */
+  'epl', 'mls'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
@@ -72,6 +75,32 @@ export function poolSport(s: unknown): PoolSport {
 /** A racing sport is scored in points over each race and never carries a spread:
  *  F1, and every NASCAR national series (Cup, O'Reilly, Truck - src/nascar-feed.ts). */
 export const isRacingSport = (s: unknown) => s === 'f1' || String(s).startsWith('nascar');
+
+/* 🔴 SOCCER: A DRAW IS A RESULT, NOT THE VOID PATH. Everywhere else a level
+ * final is a tie and voids for everybody. On 2026-09-12 four of seven Premier
+ * League matches ended level - voiding those would throw away most of a day.
+ * So a soccer pick has three sides, a level final grades the draw pickers right
+ * and everyone else wrong, and it counts as played. No spread: a three-way
+ * result has no single line. */
+export const isSoccerSport = (s: unknown) => s === 'epl' || s === 'mls';
+/** A race or a soccer match never picks against a spread. */
+export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s);
+/** The sides a pick may take. */
+export const pickSides = (s: unknown): string[] => isSoccerSport(s) ? ['home', 'away', 'draw'] : ['home', 'away'];
+
+/** The SQL that grades a pick against a final: `counted` says whether a final
+ *  game counts as played, `result` names the winning side. Constants chosen
+ *  here, never built from a request. Straight up a margin of zero is a tie and
+ *  voids; against the spread it is a push and voids; in soccer it is a draw. */
+export function gradeSql(sport: unknown, ats: boolean): { counted: string; result: string } {
+  const margin = ats && !hasNoSpread(sport)
+    ? '(g.home_score + COALESCE(p.spread_at, g.spread, 0) - g.away_score)'
+    : '(g.home_score - g.away_score)';
+  if (isSoccerSport(sport)) {
+    return { counted: '1 = 1', result: `CASE WHEN ${margin} > 0 THEN 'home' WHEN ${margin} < 0 THEN 'away' ELSE 'draw' END` };
+  }
+  return { counted: `${margin} <> 0`, result: `CASE WHEN ${margin} > 0 THEN 'home' ELSE 'away' END` };
+}
 /** A college sport chooses its games; a pro league and F1 play everything. */
 export const isCollegeSport = (s: string) => s === 'college-football' || s === 'mens-college-basketball';
 /** The world board of a sport, for picks made outside any group. */
