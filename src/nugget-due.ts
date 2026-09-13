@@ -28,8 +28,9 @@ export async function computeDue(env: any, now = Date.now(), days = 7) {
   const errors: string[] = [];
   let rows: GameRow[] = [];
   try {
+    /* Football only - the game table holds every sport. nextGames filters too. */
     const r = await env.DB.prepare(
-      'SELECT id, sport, kickoff_utc, status, home_team_id, away_team_id FROM game WHERE kickoff_utc > ? AND kickoff_utc < ?'
+      "SELECT id, sport, kickoff_utc, status, home_team_id, away_team_id FROM game WHERE sport IN ('nfl', 'college-football') AND kickoff_utc > ? AND kickoff_utc < ?"
     ).bind(now - 45 * DAY, now + days * DAY).all();
     rows = ((r && r.results) || []) as GameRow[];
   } catch (e: any) { errors.push('game table: ' + String(e?.message || e)); }

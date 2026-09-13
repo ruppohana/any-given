@@ -31,6 +31,14 @@ export interface TeamNext {
   kickoffUtc: number; gameDate: string; prevDate: string | null;
 }
 
+/* 🔴 FOOTBALL ONLY, BY NAME (2026-09-13). The game table holds every sport since
+ * the multi-sport commits of 2026-09-12/13, and the league was `sport === 'nfl' ?
+ * 'nfl' : 'ncaa'` - so MLB, Premier League and MLS rows came out as college
+ * football, and their ESPN ids collided with real files: MLB team 30 (Rays)
+ * resolved to nuggets/ncaa/30.json, which is USC. A sport not in this map is
+ * skipped, never defaulted. */
+export const NUGGET_LEAGUE: Record<string, 'nfl' | 'ncaa'> = { nfl: 'nfl', 'college-football': 'ncaa' };
+
 /** Each team's NEXT game - its earliest game not final with kickoff after `now`,
  *  within `days` - and the Pacific date of the game before it. A team with a game
  *  in progress has that game as its previous one, so it is not due until the day
@@ -38,6 +46,7 @@ export interface TeamNext {
 export function nextGames(rows: GameRow[], now: number, days = 7): TeamNext[] {
   const byTeam = new Map<string, GameRow[]>();
   for (const r of rows || []) {
+    if (!NUGGET_LEAGUE[r.sport]) continue;
     for (const side of ['home', 'away'] as const) {
       const id = String(side === 'home' ? r.home_team_id : r.away_team_id);
       const key = r.sport + ':' + id;
@@ -58,7 +67,7 @@ export function nextGames(rows: GameRow[], now: number, days = 7): TeamNext[] {
     const awayAb = next.away_abbrev || next.away_name || String(next.away_team_id);
     const homeAb = next.home_abbrev || next.home_name || String(next.home_team_id);
     out.push({
-      league: sport === 'nfl' ? 'nfl' : 'ncaa', teamId, team: name,
+      league: NUGGET_LEAGUE[sport], teamId, team: name,
       opponent: `${awayAb} @ ${homeAb}`,
       kickoffUtc: next.kickoff_utc, gameDate: pacificDate(next.kickoff_utc),
       prevDate: prev ? pacificDate(prev.kickoff_utc) : null

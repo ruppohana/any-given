@@ -106,6 +106,27 @@ test('alert: computeDue marks a team without a current file as due, and inside 4
   assert.deepEqual(d.urgent.map((t) => t.teamId), ['1'], 'team 1 has no file; team 2 is fresh');
 });
 
+test('due: an MLB or soccer game row never produces a due team (2026-09-13)', async () => {
+  // The game table holds every sport. MLB team 30 (Rays) came out as ncaa/30 -
+  // USC's file - and 41 non-football teams were listed as college football.
+  const other = [
+    { id: 'm1', sport: 'mlb', kickoff_utc: T('2026-09-13T20:00:00Z'), status: 'scheduled', home_team_id: '30', away_team_id: '10' },
+    { id: 'e1', sport: 'epl', kickoff_utc: T('2026-09-13T14:00:00Z'), status: 'scheduled', home_team_id: '331', away_team_id: '388' },
+    { id: 's1', sport: 'mls', kickoff_utc: T('2026-09-13T23:00:00Z'), status: 'scheduled', home_team_id: '20906', away_team_id: '9727' },
+    { id: 'c1', sport: 'college-football', kickoff_utc: T('2026-09-13T19:00:00Z'), status: 'scheduled', home_team_id: '30', away_team_id: '26' }
+  ];
+  const n = nextGames([...other, ...soonRows], T('2026-09-12T17:00:00Z'), 7);
+  assert.deepEqual(n.map((t) => t.league + '/' + t.teamId).sort(), ['ncaa/26', 'ncaa/30', 'nfl/1', 'nfl/2']);
+  assert.ok(n.every((t) => t.opponent !== '10 @ 30'), 'the Rays game is not listed');
+
+  const sql = [];
+  const env = fakeEnv({ rows: other });
+  env.DB = { prepare: (q) => { sql.push(q); return { bind: () => ({ all: async () => ({ results: other }) }) }; } };
+  const d = await computeDue(env, T('2026-09-12T17:00:00Z'));
+  assert.equal(d.total, 2, 'only the college game\'s two teams, even when D1 hands back every sport');
+  assert.match(sql[0], /sport IN \('nfl', 'college-football'\)/, 'and the query asks D1 for football only');
+});
+
 test('alert: one email when a game inside 48 hours is uncovered, and never twice a day', async () => {
   const env = fakeEnv({ rows: soonRows });
   const at10 = T('2026-09-12T17:05:00Z');            // 10:05 AM Pacific, first tick of the hour
