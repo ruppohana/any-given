@@ -19,7 +19,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { KINDNESS, LIMITS } from '../src/lib/groups.ts';
+import { KINDNESS, LIMITS, POOL_SPORTS } from '../src/lib/groups.ts';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const JS = read('../public/screens/g3-group-rules.screen.js');
@@ -297,4 +297,79 @@ test('limits: full is refused at the cap, a day is a rolling 24 hours', () => {
   assert.match(GROUPS, /if \(!already && n && n\.n >= LIMITS\.membersMax\)/);
   assert.match(GROUPS, /const since = Date\.now\(\) - DAY;/);
   assert.match(GROUPS, /const DAY = 86_400_000;/);
+});
+
+/* ------------------------------------------------------------ 4 · five sports
+ * Jason, 2026-09-12: "complete the pool revision, but do all the sports for the
+ * pool". The group card names the five; an F1 group reads the race weekend in
+ * points with no spread anywhere; a basketball group locks at tip-off, a day at
+ * a time. There is no DOM here, so each branch is read out of the source. */
+
+/** The body of `if (<cond>) { ... return box; }` inside function `fn`. */
+function branch(fn, cond) {
+  const body = CJS.slice(CJS.indexOf('function ' + fn + '('));
+  const at = body.indexOf('if (' + cond + ') {');
+  assert.ok(at >= 0, fn + ' has no ' + cond + ' branch');
+  return body.slice(at, body.indexOf('return box;', at));
+}
+const lits = (src) => (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((s) => s.slice(1, -1)).join('');
+
+test('the League row shows the five labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
+  const m = CJS.match(/const LEAGUES = \{([^}]*)\}/);
+  assert.ok(m, 'no LEAGUES map');
+  const pairs = [...m[1].matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((x) => [x[1], x[2]]);
+  assert.deepEqual(pairs.map((p) => p[0]), [...POOL_SPORTS]);
+  assert.deepEqual(pairs.map((p) => p[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1']);
+  assert.match(CJS, /\['League', LEAGUES\[sport\]\]/);
+  /* How a group starts says all five too. */
+  assert.ok(FLAT.includes('A group plays one sport - college football, the NFL, college basketball, the NBA or Formula 1 - chosen when it starts.'));
+  assert.doesNotMatch(FLAT, /NFL or college football, chosen/);
+});
+
+test('the rules follow the current group\'s sport; with no group they read as football', () => {
+  assert.match(CJS, /const sport = view === 'group' \? leagueOf\(currentGroup\(data\)\.sport\) : '';/);
+  assert.match(CJS, /SECTIONS\.forEach\(function \(s\) \{ root\.appendChild\(sectionCard\(s, sport\)\); \}\);/);
+  assert.match(CJS, /c\.appendChild\(s\.build\(sport\)\)/);
+});
+
+test('🔴 F1: scored in points over each race weekend, and nothing about spreads', () => {
+  const card = CJS.slice(CJS.indexOf('function groupCard'), CJS.indexOf('function doorLine'));
+  assert.match(card, /sport === 'f1' \? 'Points, each race weekend' : g\.ats/);
+  assert.match(lits(card), /scored in points over each race weekend/);
+  const pick = lits(branch('sPicking', "sport === 'f1'"));
+  const score = lits(branch('sScoring', "sport === 'f1'"));
+  assert.match(score, /scored in points over each race weekend/);
+  for (const [name, s] of [['picking', pick], ['scoring', score]]) {
+    assert.doesNotMatch(s, /spread|kickoff|kicks off/i, 'the F1 ' + name + ' section talks football');
+  }
+  assert.match(CJS, /sport === 'f1' \? 'Rename the group\.' : 'Rename the group, and switch against the spread on or off\.'/);
+  /* No point value is typed (the 1 in "F1" is a name, not a number): the words
+   * say which pick scores more, and the code holds that true. */
+  assert.doesNotMatch(score, /\b\d/);
+  const F1 = read('../src/lib/f1.ts');
+  const pts = F1.match(/export const POINTS = \{ exact: (\d+), inTop3: (\d+)/);
+  assert.ok(pts && Number(pts[1]) > Number(pts[2]), 'the exact spot no longer scores more than the wrong spot');
+  /* Each pick locks with its own session: qualifying, sprint, and the race for the rest. */
+  assert.match(F1, /const kind: F1Kind = key === 'qual' \? 'qual' : key === 'sprint' \? 'sprint' : 'race';/);
+  assert.match(pick, /Qualifying picks lock when qualifying starts, sprint picks when the sprint starts, and the rest when the race starts\./);
+  /* The season board is every member, ranked by points. */
+  const POOL = read('../src/f1-pool.ts');
+  assert.match(POOL, /\.sort\(\(a, b\) => b\.points - a\.points/);
+  assert.match(POOL, /The season board of an F1 group: every member/);
+});
+
+test('basketball: picks lock at tip-off, a day at a time', () => {
+  assert.match(CJS, /function isHoops\(s\) \{ return s === 'nba' \|\| s === 'mens-college-basketball'; \}/);
+  const pick = lits(branch('sPicking', 'isHoops(sport)'));
+  assert.match(pick, /locks at tip-off/);
+  assert.match(pick, /a day at a time/);
+  assert.doesNotMatch(pick, /kickoff|kicks off/i);
+  const card = lits(CJS.slice(CJS.indexOf('function groupCard'), CJS.indexOf('function doorLine')));
+  assert.match(card, /This group picks a day at a time\. Every pick locks at tip-off\./);
+});
+
+test('football keeps its card note and its rules word for word', () => {
+  assert.ok(FLAT.includes('Everything below is the same in every group. Only this card changes.'));
+  assert.ok(FLAT.includes('Rename the group, and switch against the spread on or off.'));
+  assert.ok(FLAT.includes('Every right pick is a point.'));
 });

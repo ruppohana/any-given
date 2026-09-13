@@ -82,6 +82,18 @@ export async function captureF1(env: any, f: typeof fetch = fetch, now = Date.no
 
   const out = { schema: 1, event, extras, fetchedAt: now };
   await env.LIVE.put('f1:current', JSON.stringify(out), { expirationTtl: 14 * DAY });
+  /* A FINISHED WEEKEND IS KEPT for the group season board (src/f1-pool.ts),
+     which has to score it after the scoreboard has moved to the next race.
+     Written once, when the race and its extras are both in. */
+  const raceFinal = !!event && event.sessions.some((s) => s.kind === 'race' && s.state === 'final');
+  if (event && raceFinal && extras) {
+    const aKey = `f1:event:${event.id}`;
+    try {
+      if (!(await env.LIVE.get(aKey))) {
+        await env.LIVE.put(aKey, JSON.stringify({ event, extras }), { expirationTtl: 400 * DAY });
+      }
+    } catch { /* the next capture tries again */ }
+  }
   return out;
 }
 

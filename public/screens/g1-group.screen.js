@@ -63,29 +63,84 @@ export function viewFor(mine) {
   return 'ready';
 }
 
+/* 🔴 FIVE SPORTS, IN THIS ORDER. Jason, 2026-09-12: "complete the pool revision,
+ * but do all the sports for the pool". The ids are src/lib/groups.ts POOL_SPORTS;
+ * anything else is a college football group, as the server reads it. */
+export const SPORTS = [
+  ['college-football', 'College football'],
+  ['nfl', 'NFL'],
+  ['mens-college-basketball', 'College basketball'],
+  ['nba', 'NBA'],
+  ['f1', 'Formula 1']
+];
+const SPORT_IDS = SPORTS.map((s) => s[0]);
+
+export function poolSport(s) {
+  return SPORT_IDS.includes(s) ? s : 'college-football';
+}
+
+/** Which-games choices a sport offers. College basketball has no conference
+ *  choice - the conference list this screen loads is football's. The pro leagues
+ *  and F1 play everything. */
+export function scopeValues(sport) {
+  const s = poolSport(sport);
+  if (s === 'college-football') return ['all', 'top25', 'conference'];
+  if (s === 'mens-college-basketball') return ['all', 'top25'];
+  return [];
+}
+
+/** A college basketball day can have 150 games, so it starts at the Top 25. */
+export function defaultScope(sport) {
+  return poolSport(sport) === 'mens-college-basketball' ? 'top25' : 'all';
+}
+
 /** The pledge gates Create. Ticked, and the pledge's own words actually on
  *  screen - a box beside a sentence that did not load is a promise to nothing. */
 export function canCreate(form) {
   return !!(form && form.pledged === true && typeof form.kindness === 'string' && form.kindness.trim()
-    && !(form.sport !== 'nfl' && form.scope === 'conference' && !String(form.scopeArg || '').trim()));
+    && !(poolSport(form.sport) === 'college-football' && form.scope === 'conference'
+         && !String(form.scopeArg || '').trim()));
 }
 
 /** What Create sends. `pledge: true` is only ever sent from a ticked box. A college
- *  group also sends which games it picks from; an NFL group is all games. */
+ *  group also sends which games it picks from; NFL, NBA and F1 are all games. An
+ *  F1 group is scored in points, so against the spread is never sent on for one. */
 export function createPayload(form) {
-  const college = !(form && form.sport === 'nfl');
-  const scope = form && (form.scope === 'top25' || form.scope === 'conference') ? form.scope : 'all';
+  const sport = poolSport(form && form.sport);
+  const choices = scopeValues(sport);
+  const scope = form && choices.includes(form.scope) ? form.scope : defaultScope(sport);
   return {
     name: String((form && form.name) || ''),
-    sport: college ? 'college-football' : 'nfl',
+    sport,
     pledge: true,
-    ats: !!(form && form.ats),
-    ...(college ? { scope, scopeArg: scope === 'conference' ? String(form.scopeArg || '') : null } : {})
+    ats: sport !== 'f1' && !!(form && form.ats),
+    ...(choices.length ? { scope, scopeArg: scope === 'conference' ? String(form.scopeArg || '') : null } : {})
   };
 }
 
 export function sportLabel(s) {
-  return s === 'nfl' ? 'NFL' : 'College football';
+  return SPORTS[SPORT_IDS.indexOf(poolSport(s))][1];
+}
+
+/** The one line under Which games for a college basketball group. */
+export function basketballScopeNote(scope) {
+  return (scope === 'top25' ? 'Any game with a ranked team in it.' : 'Every college basketball game that day.')
+    + ' A college basketball day can have 150 games.';
+}
+
+/** The middle of the group's meta line. A basketball group's `week` is the day
+ *  (YYYYMMDD), so it is never printed as a week number. */
+export function periodLabel(sport, week) {
+  const s = poolSport(sport);
+  if (s === 'f1') return 'Race weekends';
+  if (s === 'nba' || s === 'mens-college-basketball') return 'A day at a time';
+  return week != null ? 'Week ' + week : 'Week not set';
+}
+
+/** How the group's picks count, in one line. */
+export function picksLine(g) {
+  if (g && poolSport(g.sport) === 'f1') return 'Race weekend picks, scored in points';
+  return g && g.ats ? 'Picks against the spread' : 'Picks straight up - who wins';
 }
 
 /** A member count, pluralized. */
@@ -124,8 +179,12 @@ export function prefillCode(pending) {
   return String(pending.id || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
 }
 
-export function shareText(groupName, code) {
-  return 'Join my group ' + groupName + ' on Any Given. Pick the winners each week, scored in points. Code ' + code;
+export function shareText(groupName, code, sport) {
+  const s = poolSport(sport);
+  const how = s === 'f1' ? 'Pick the race weekend, scored in points.'
+    : s === 'nba' || s === 'mens-college-basketball' ? 'Pick the winners each day, scored in points.'
+    : 'Pick the winners each week, scored in points.';
+  return 'Join my group ' + groupName + ' on Any Given. ' + how + ' Code ' + code;
 }
 
 /* ------------------------------------------------------------------ *
@@ -144,7 +203,7 @@ function readPending() {
 }
 
 function chosenSport() {
-  try { return JSON.parse(localStorage.getItem('ag.sport')) === 'nfl' ? 'nfl' : 'college-football'; }
+  try { return poolSport(JSON.parse(localStorage.getItem('ag.sport'))); }
   catch { return 'college-football'; }
 }
 
@@ -347,8 +406,9 @@ function onboarding(host, data, mode) {
 }
 
 function startForm(host, data) {
-  const form = { name: '', sport: data.sportDefault === 'nfl' ? 'nfl' : 'college-football', ats: false,
-                 scope: 'all', scopeArg: '', pledged: false, kindness: data.kindness || '' };
+  const sport0 = poolSport(data.sportDefault);
+  const form = { name: '', sport: sport0, ats: false,
+                 scope: defaultScope(sport0), scopeArg: '', pledged: false, kindness: data.kindness || '' };
   const c = el('form', 'card g1-card g1-form');
   c.noValidate = true;
   c.appendChild(el('h2', 'g1-h', 'Start a group'));
@@ -366,14 +426,21 @@ function startForm(host, data) {
   name.addEventListener('input', () => { form.name = name.value; nameCount.textContent = counterText(name.value.length, NAME_MAX); });
   c.append(nameRow, name);
 
-  /* The sport. Two, and only two, because the schedule is two feeds. */
+  /* The sport - all five (Jason, 2026-09-12). Two across, football then
+   * basketball, Formula 1 the full width under them. */
   c.appendChild(el('span', 'g1-label', 'Sport'));
-  const seg = el('div', 'g1-seg');
+  const seg = el('div', 'g1-seg g1-seg--sport');
   seg.setAttribute('role', 'radiogroup');
   seg.setAttribute('aria-label', 'Sport');
   const segBtns = [];
-  for (const [v, t] of [['nfl', 'NFL'], ['college-football', 'College football']]) {
-    const b = btn('g1-seg-b', t, () => { form.sport = v; paintSeg(); paintScope(); });
+  /* Each college sport keeps its own which-games choice while you look around. */
+  const scopeBy = { [form.sport]: form.scope };
+  for (const [v, t] of SPORTS) {
+    const b = btn('g1-seg-b', t, () => {
+      form.sport = v;
+      form.scope = scopeBy[v] || defaultScope(v);
+      paintSeg(); paintScope(); paintAts();
+    });
     b.setAttribute('role', 'radio');
     b.dataset.v = v;
     segBtns.push(b);
@@ -391,7 +458,7 @@ function startForm(host, data) {
   scopeSeg.setAttribute('role', 'radiogroup');
   scopeSeg.setAttribute('aria-label', 'Which games');
   const scopeBtns = SCOPE_CHOICES.map((o) => {
-    const b = btn('g1-seg-b', o.label, () => { form.scope = o.value; paintScope(); });
+    const b = btn('g1-seg-b', o.label, () => { form.scope = o.value; scopeBy[form.sport] = o.value; paintScope(); });
     b.setAttribute('role', 'radio');
     b.dataset.v = o.value;
     scopeSeg.appendChild(b);
@@ -413,10 +480,18 @@ function startForm(host, data) {
   scopeBox.append(scopeSeg, confSel, scopeLine);
   c.appendChild(scopeBox);
   function paintScope() {
-    scopeBox.hidden = form.sport === 'nfl';
-    for (const b of scopeBtns) b.setAttribute('aria-checked', String(b.dataset.v === form.scope));
-    confSel.hidden = form.scope !== 'conference';
-    scopeLine.textContent = scopeNote(form.scope) + ' The commissioner can change it later.';
+    const offered = scopeValues(form.sport);
+    scopeBox.hidden = offered.length === 0;
+    /* Three across for college football; two for college basketball, which has no
+     * conference choice. */
+    scopeSeg.className = offered.length === 3 ? 'g1-seg g1-seg--3' : 'g1-seg';
+    for (const b of scopeBtns) {
+      b.hidden = !offered.includes(b.dataset.v);
+      b.setAttribute('aria-checked', String(b.dataset.v === form.scope));
+    }
+    confSel.hidden = !(form.sport === 'college-football' && form.scope === 'conference');
+    scopeLine.textContent = (form.sport === 'mens-college-basketball' ? basketballScopeNote(form.scope)
+      : scopeNote(form.scope)) + ' The commissioner can change it later.';
     if (typeof paint === 'function') paint();
   }
 
@@ -436,6 +511,9 @@ function startForm(host, data) {
   swB.appendChild(el('span', 'g1-knob'));
   sw.append(swText, swB);
   c.appendChild(sw);
+  /* F1 is scored in points - there is no spread to pick against. */
+  function paintAts() { sw.hidden = form.sport === 'f1'; }
+  paintAts();
 
   /* THE KINDNESS PLEDGE. The API's own sentence, never a paraphrase of it. */
   const pl = el('label', 'g1-pledge');
@@ -453,7 +531,7 @@ function startForm(host, data) {
   err.setAttribute('role', 'alert');
   function paint() {
     create.disabled = !canCreate(form);
-    const needConf = form.sport !== 'nfl' && form.scope === 'conference' && !String(form.scopeArg || '').trim();
+    const needConf = form.sport === 'college-football' && form.scope === 'conference' && !String(form.scopeArg || '').trim();
     why.textContent = !create.disabled ? ''
       : needConf ? 'Choose the conference.'
       : (form.kindness ? 'Tick the pledge to start the group. As commissioner, you keep it kind.' : '');
@@ -554,9 +632,9 @@ function drawGroup(host, data) {
   sw.classList.add('g1-switcher');
   head.appendChild(sw);
   head.appendChild(el('p', 'g1-meta num',
-    sportLabel(g.sport) + ' · ' + (g.week != null ? 'Week ' + g.week : 'Week not set') + ' · '
+    sportLabel(g.sport) + ' · ' + periodLabel(g.sport, g.week) + ' · '
     + membersLine((d.members || []).length)));
-  head.appendChild(el('p', 'g1-ats', g.ats ? 'Picks against the spread' : 'Picks straight up - who wins'));
+  head.appendChild(el('p', 'g1-ats', picksLine(g)));
   head.appendChild(el('p', 'g1-role',
     isCommish ? 'You are the commissioner.' : 'Commissioner: @' + (d.commissioner || 'nobody')));
   host.appendChild(head);
@@ -609,7 +687,7 @@ function inviteCard(g, invite, fresh) {
   const done = el('p', 'g1-ok');
   done.setAttribute('role', 'status');
   const share = btn('g1-primary', 'Share invite', async () => {
-    const text = shareText(g.name, invite.code);
+    const text = shareText(g.name, invite.code, g.sport);
     if (navigator.share) {
       try { await navigator.share({ title: 'Any Given', text, url: invite.link }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; /* else fall through to copy */ }

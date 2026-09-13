@@ -44,6 +44,9 @@ const CSS = `
   border-radius: var(--radius-button, 10px); background: var(--accent); color: var(--on-accent); }
 .ag-si-go:disabled { background: var(--track); color: var(--dim); }
 .ag-si-err { margin: 0; font-size: var(--t-micro); font-weight: 700; color: var(--down); }
+.ag-si-consent { display: grid; gap: 8px; margin-top: 4px; }
+.ag-si-check { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; font-size: var(--t-micro); line-height: 1.4; color: var(--dim); }
+.ag-si-check input { width: 20px; height: 20px; margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--accent); }
 .ag-si-alt { justify-self: center; border: 0; background: none; font: inherit; font-size: var(--t-micro);
   color: var(--dim); text-decoration: underline; padding: 4px 8px; }
 .ag-si-fine { margin: 0; font-size: var(--t-micro); color: var(--dim); text-align: center; }
@@ -64,6 +67,14 @@ const put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private w
 export function sessionToken() { return get('ag.session'); }
 export function signedInEmail() { return get('ag.email'); }
 export function signedInHandle() { return get('ag.handle'); }
+
+/* The opt-in words, as src/lib/contact.ts has them (a browser module cannot
+   import the Worker's .ts here). tests/reminders-contact.test.mjs fails the
+   day these two drift apart - what a person ticked must be what we stored. */
+export const EMAIL_CONSENT_TEXT =
+  'Email me a reminder before my picks lock, and news from Any Given. Unsubscribe any time.';
+export const SMS_CONSENT_TEXT =
+  'Text me reminders from Any Given at this number. Up to 4 a week. Msg & data rates may apply. Reply STOP to stop. Not needed to play.';
 
 function deviceId() {
   let v = get('ag.device');
@@ -270,10 +281,36 @@ export function openSignIn(reason, opts = {}) {
             return;
           }
           rememberProfile(j);
+          await saveContact();
           close(true);
         } catch { go.textContent = 'Save'; err.textContent = 'No connection. Try again in a moment.'; refresh(); }
       };
-      box.append(two, hl, avail, go, err);
+      /* 🔴 THE OPT-INS. Jason, 2026-09-12: "we need to collect emails", "grab their
+         phone number as well", "opt in to texts". Unticked, optional, never a
+         condition of playing - the words are src/lib/contact.ts's, word for word
+         (tests/reminders-contact.test.mjs holds them together). Saved after the
+         profile; a failure here never blocks it. Nothing sends a text yet. */
+      const consent = el('div', 'ag-si-consent');
+      const mkBox = (text) => {
+        const l = el('label', 'ag-si-check');
+        const c = el('input', '');
+        c.type = 'checkbox';
+        l.append(c, el('span', '', text));
+        return [l, c];
+      };
+      const [emailL, emailBox] = mkBox(EMAIL_CONSENT_TEXT);
+      const [phoneL, phone] = mk('Mobile number (optional)', { type: 'tel', autocomplete: 'tel', inputMode: 'tel', placeholder: '(555) 234-5678' });
+      const [smsL, smsBox] = mkBox(SMS_CONSENT_TEXT);
+      consent.append(emailL, phoneL, smsL);
+      const saveContact = async () => {
+        const body = { emailOptIn: emailBox.checked };
+        if (phone.value.trim()) { body.phone = phone.value.trim(); body.smsOptIn = smsBox.checked; }
+        try {
+          await fetch('/api/contact', { method: 'POST',
+            headers: authHeaders({ 'content-type': 'application/json' }), body: JSON.stringify(body) });
+        } catch { /* the profile is saved; the opt-ins can be changed in Settings */ }
+      };
+      box.append(two, hl, avail, consent, go, err);
       if (handle.value) check();
       setTimeout(() => first.focus(), 50);
     };

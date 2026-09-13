@@ -11,8 +11,11 @@
  *   THE PROMISE   the kindness line the commissioner accepted, shown first,
  *                 because every control below it is how the promise is kept
  *   THE NAME      rename, 40 characters (src/lib/groups.ts LIMITS.nameMax)
- *   THE SPREAD    the group's against-the-spread setting
- *   INVITES       the code and link to share, and an email box
+ *   THE SPREAD    the group's against-the-spread setting (never for F1, which
+ *                 is scored in points)
+ *   WHICH GAMES   college football and college basketball only; conferences are
+ *                 football's alone
+ *   INVITES      the code and link to share, and an email box
  *   MEMBERS       mute and remove, per member, never on yourself
  *
  * WHAT EACH CONTROL ACTUALLY DOES, read off src/groups.ts rather than assumed:
@@ -70,7 +73,21 @@ function el(tag, cls, text) {
 }
 
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
-const sportName = (s) => (s === 'nfl' ? 'NFL' : 'College football');
+
+/* THE FIVE SPORTS a group can play (Jason, 2026-09-12: "do all the sports for the
+ * pool"). A sport the server does not name is a college football group, as
+ * src/lib/groups.ts poolSport reads it. */
+const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
+  'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1' };
+const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
+export const sportName = (s) => SPORT_NAMES[poolSport(s)];
+/** Which-games choices a sport offers: conferences are football's only; the pro
+ *  leagues and F1 play every game. */
+export const scopeValues = (s) => {
+  const p = poolSport(s);
+  return p === 'college-football' ? ['all', 'top25', 'conference']
+    : p === 'mens-college-basketball' ? ['all', 'top25'] : [];
+};
 const at = (name) => '@' + String(name || '');
 
 /** One API call. Never throws; `offline` is a network failure, not a status. */
@@ -103,7 +120,7 @@ async function load(opts) {
 
   const g = pickCurrent(groups);
   const out = { ...base, groups, currentId: g.id, kindness: mine.kindness || '',
-                conferences: g.sport === 'nfl' ? [] : await collegeConferences() };
+                conferences: poolSport(g.sport) === 'college-football' ? await collegeConferences() : [] };
   const r = await call('/api/group/detail?id=' + encodeURIComponent(g.id));
   if (r.offline) return { ...out, view: 'offline' };
   if (r.status === 401) return { ...out, view: 'signed-out' };
@@ -302,8 +319,9 @@ export function render(root, data, state) {
     }
 
     host.appendChild(nameSection(group, flashFor('name')));
-    host.appendChild(atsSection(group, flashFor('ats')));
-    if (group.sport !== 'nfl') host.appendChild(scopeSection(group, d.conferences || [], flashFor('scope')));
+    /* An F1 group is scored in points - there is no spread to switch. */
+    if (poolSport(group.sport) !== 'f1') host.appendChild(atsSection(group, flashFor('ats')));
+    if (scopeValues(group.sport).length) host.appendChild(scopeSection(group, d.conferences || [], flashFor('scope')));
     if (detail.invite) host.appendChild(inviteSection(group, detail.invite));
     host.appendChild(membersSection(group, members, flashFor('members')));
     host.appendChild(doors());
@@ -420,10 +438,14 @@ export function render(root, data, state) {
     const card = el('div', 'g2-card');
     const cur = { scope: group.scope || 'all', arg: group.scopeArg || '' };
     let pick = cur.scope, arg = cur.arg;
+    const offered = scopeValues(group.sport);
+    const hoops = poolSport(group.sport) === 'mens-college-basketball';
     const seg = el('div', 'g2-seg');
     seg.setAttribute('role', 'radiogroup');
     seg.setAttribute('aria-labelledby', 'g2-scope-l');
-    const btns = SCOPE_CHOICES.map((o) => {
+    /* College basketball: All games and Top 25 only, two across. */
+    if (offered.length === 2) seg.style.gridTemplateColumns = '1fr 1fr';
+    const btns = SCOPE_CHOICES.filter((o) => offered.includes(o.value)).map((o) => {
       const b = el('button', 'g2-seg-b', o.label);
       b.type = 'button';
       b.setAttribute('role', 'radio');
@@ -455,7 +477,11 @@ export function render(root, data, state) {
     function paint() {
       for (const b of btns) b.setAttribute('aria-checked', String(b.dataset.v === pick));
       sel.hidden = pick !== 'conference';
-      note.textContent = scopeNote(pick) + ' Changing it changes the games everyone in the group sees, '
+      const what = hoops
+        ? (pick === 'top25' ? 'Any game with a ranked team in it.' : 'Every college basketball game that day.')
+          + ' A college basketball day can have 150 games.'
+        : scopeNote(pick);
+      note.textContent = what + ' Changing it changes the games everyone in the group sees, '
         + 'starting now. Picks already made still count.';
       const same = pick === cur.scope && (pick !== 'conference' || arg === cur.arg);
       save.disabled = same || (pick === 'conference' && !arg);
@@ -476,7 +502,9 @@ export function render(root, data, state) {
       paint();
       say(m, r.j.message || (r.offline ? 'No connection. Nothing was changed.' : 'That did not save.'), 'bad');
     });
-    card.append(seg, sel, note, save, m);
+    /* The conference list is football's; a basketball group never gets one. */
+    if (offered.includes('conference')) card.append(seg, sel, note, save, m);
+    else card.append(seg, note, save, m);
     if (flash) card.appendChild(flash);
     s.appendChild(card);
     return s;

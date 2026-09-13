@@ -75,12 +75,14 @@ test('18+ is a rating, never a wall - there is no date-of-birth field', () => {
 test('no account wall - nothing asks for an email, a password or a sign-in', () => {
   assert.equal(/type\s*=\s*["'](password|email)["']/.test(CJS), false);
   assert.equal(/\bSign\s?up\b|\bSign\s?in\b|\bLog\s?in\b|\bCreate account\b/i.test(CJS), false);
-  // A person is a display name and a device. Three data inputs ship and that is
-  // all: the name, the school search, and the delay slider. Everything else that
-  // sets .type is a <button>.
+  // A person is a display name and a device. The data inputs that ship: the name,
+  // the school search, the delay slider - and, since Jason's 2026-09-12 "grab their
+  // phone number as well" / "opt in to texts", the Reminders card's two unticked
+  // opt-in boxes and its optional phone number. None of them stands in front of
+  // anything; everything else that sets .type is a <button>.
   const inputs = [...new Set((CJS.match(/\.type = '[a-z]+'/g) || []))].sort();
   assert.deepEqual(inputs,
-    [".type = 'button'", ".type = 'range'", ".type = 'search'", ".type = 'text'"]);
+    [".type = 'button'", ".type = 'checkbox'", ".type = 'range'", ".type = 'search'", ".type = 'tel'", ".type = 'text'"]);
 });
 
 test('Skip exists, is a real control, and is honored', () => {

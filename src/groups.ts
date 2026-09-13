@@ -23,7 +23,7 @@
  */
 import { sessionAccount } from './auth.ts';
 import { sendMail, mailerReady } from './mail.ts';
-import { newCode, normCode, cleanName, cleanScope, parseEmails, cleanBody, inviteMail, messageMail, LIMITS, KINDNESS } from './lib/groups.ts';
+import { newCode, normCode, cleanName, cleanScope, parseEmails, cleanBody, inviteMail, messageMail, LIMITS, KINDNESS, poolSport } from './lib/groups.ts';
 
 type Json = (body: unknown, status?: number, ttl?: number) => Response;
 
@@ -98,7 +98,8 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     if (b.pledge !== true) return json({ error: 'pledge_required', message: KINDNESS }, 400);
     const name = cleanName(b.name);
     if (!name) return json({ error: 'name_required', message: 'Give the group a name.' }, 400);
-    const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
+    /* Every sport the pool plays - src/lib/groups.ts POOL_SPORTS. */
+    const sport = poolSport(b.sport);
     const ats = b.ats ? 1 : 0;
     /* Which games - college groups choose, an NFL group is all games. */
     const sc = cleanScope(sport, b.scope, b.scopeArg);
@@ -246,6 +247,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     }
     await env.DB.batch([
       env.DB.prepare('DELETE FROM pick WHERE pool_id = ? AND user_id = ?').bind(gid, t.user_id),
+      env.DB.prepare('DELETE FROM f1_pick WHERE pool_id = ? AND user_id = ?').bind(gid, t.user_id),
       env.DB.prepare('DELETE FROM member WHERE pool_id = ? AND user_id = ?').bind(gid, t.user_id),
       env.DB.prepare(
         `INSERT INTO pool_removed (pool_id, user_id, removed_at) VALUES (?, ?, ?)
@@ -275,6 +277,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
       if (!next) {
         await env.DB.batch([
           env.DB.prepare('DELETE FROM pick WHERE pool_id = ?').bind(gid),
+          env.DB.prepare('DELETE FROM f1_pick WHERE pool_id = ?').bind(gid),
           env.DB.prepare('DELETE FROM member WHERE pool_id = ?').bind(gid),
           env.DB.prepare('DELETE FROM pool_removed WHERE pool_id = ?').bind(gid),
           env.DB.prepare('DELETE FROM pool_mail WHERE pool_id = ?').bind(gid),
@@ -290,6 +293,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     }
     await env.DB.batch([
       env.DB.prepare('DELETE FROM pick WHERE pool_id = ? AND user_id = ?').bind(gid, uid),
+      env.DB.prepare('DELETE FROM f1_pick WHERE pool_id = ? AND user_id = ?').bind(gid, uid),
       env.DB.prepare('DELETE FROM member WHERE pool_id = ? AND user_id = ?').bind(gid, uid)
     ]);
     return json({ ok: true, closed: false });

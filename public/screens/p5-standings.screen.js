@@ -443,6 +443,74 @@ export async function previewData(fixtures, state) {
  *  under the slate's week, so a board on any other week would read none. */
 const GROUP_WEEK = { nfl: 1, 'college-football': 2 };
 
+/* 🔴 ALL FIVE SPORTS. Jason, 2026-09-12: "complete the pool revision, but do all
+ * the sports for the pool". This used to force every group to nfl or college
+ * football, so a basketball or F1 group read a football board with nobody's
+ * picks on it. The keys are the server's (src/lib/groups.ts POOL_SPORTS). */
+const SPORT_LABEL = {
+  'college-football': 'College football',
+  nfl: 'NFL',
+  'mens-college-basketball': 'College basketball',
+  nba: 'NBA',
+  f1: 'Formula 1'
+};
+
+/** A group's sport as one of the five; anything else is college football, as before. */
+function groupSport(s) {
+  return Object.prototype.hasOwnProperty.call(SPORT_LABEL, s) ? s : 'college-football';
+}
+
+function sportLabel(s) { return SPORT_LABEL[groupSport(s)]; }
+
+/** Which board a sport gets. Football: week and season. Basketball picks a day
+ *  at a time and its "week" is a date, so it gets the SEASON board only. F1 is
+ *  scored in points over the weekends entered - one board, no week. */
+function boardKind(s) {
+  const k = groupSport(s);
+  if (k === 'f1') return 'points';
+  if (k === 'mens-college-basketball' || k === 'nba') return 'season';
+  return 'week';
+}
+
+/** An F1 group's rows -> the one table drawn. The API has already ordered them
+ *  by points; the rank is competition ranking on points, the same rule as
+ *  football's wins. Until somebody has a point nothing has scored, so nobody has
+ *  a rank and every figure is a dash - a weekend entered is not a weekend scored. */
+function shapeF1Rows(api, youName, commishName) {
+  const you = String(youName || '').toLowerCase();
+  const boss = String(commishName || '').toLowerCase();
+  const list = (api || []).map((r) => {
+    const name = safeName(r && r.name);
+    return {
+      userId: String(r && r.id),
+      displayName: name,
+      points: Number(r && (r.points != null ? r.points : r.wins)) || 0,
+      events: Number(r && (r.events != null ? r.events : r.played)) || 0,
+      weekRec: null,
+      seasonRec: null,
+      parlayPoints: 0,
+      movement: 0,
+      rank: 0,
+      isSelf: !!you && name.toLowerCase() === you,
+      isCommish: !!boss && name.toLowerCase() === boss
+    };
+  });
+  const scored = list.some((r) => r.points > 0);
+  for (const r of list) {
+    r.seasonPoints = scored && r.events ? r.points : null;
+    r.weekPoints = r.seasonPoints;
+  }
+  if (!scored) return list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  for (const r of list) r.rank = 1 + list.filter((o) => o.points > r.points).length;
+  return list.sort((a, b) => a.rank - b.rank);
+}
+
+/** An F1 row's second line: weekends entered, never a W-L record. */
+function weekendsText(n) {
+  if (!n) return 'No weekends yet';
+  return n + (n === 1 ? ' weekend' : ' weekends') + ' entered';
+}
+
 function safeName(n) {
   const s = String(n == null ? '' : n).trim();
   if (!s || /\S+@\S+\.\S+/.test(s)) return 'Someone';
@@ -526,28 +594,39 @@ async function loadGroupBoard(opts) {
   const g = pickCurrent(out.groups);
   if (!g) return Object.assign(out, { groupPhase: 'no-group' });
 
-  const sport = g.sport === 'nfl' ? 'nfl' : 'college-football';
-  const week = Number.isInteger(g.week) && g.week > 0 ? g.week : GROUP_WEEK[sport];
+  const sport = groupSport(g.sport);
+  const kind = boardKind(sport);
+  /* Basketball's week is a day and F1 has none: both read the season board only. */
+  const seasonOnly = kind !== 'week';
+  const week = seasonOnly ? 0
+    : (Number.isInteger(g.week) && g.week > 0 ? g.week : GROUP_WEEK[sport]);
   out.current = g;
   out.sport = sport;
+  out.board = kind;
   out.pool = { name: g.name, week, memberCount: Number(g.members) || 0, scope: 'All games' };
 
   const q = '/api/pool/standings?sport=' + sport + '&pool=' + encodeURIComponent(g.id);
   let wk, ss, detail = null;
   try {
-    const [a, b, c] = await Promise.all([
-      fetch(q + '&week=' + week),
+    const [a0, b, c] = await Promise.all([
+      seasonOnly ? null : fetch(q + '&week=' + week),
       /* week=0 is the API's whole season: every week of this sport in this group. */
       fetch(q + '&week=0'),
       (window.agApiFetch || fetch)('/api/group/detail?id=' + encodeURIComponent(g.id)).catch(() => null)
     ]);
+    const a = a0 || b;
     if (!a.ok || !b.ok) {
       let msg = '';
       try { msg = (await (a.ok ? b : a).json()).message || ''; } catch { /* not JSON */ }
       return Object.assign(out, { groupPhase: 'error', message: msg });
     }
-    wk = await a.json();
+    /* 🔴 A SEASON-ONLY BOARD FETCHES ONCE, SO IT IS READ ONCE. `a` IS `b` for
+       F1 and basketball, and a response body cannot be read twice - the second
+       .json() threw, the catch below called a working board "offline". Found at
+       393px against the local Worker, 2026-09-12; the tests' fake fetch handed
+       back objects that could be read any number of times. */
     ss = await b.json();
+    wk = a0 ? await a0.json() : ss;
     if (c && c.ok) { try { detail = await c.json(); } catch { detail = null; } }
   } catch (e) {
     return Object.assign(out, { groupPhase: 'offline' });
@@ -560,12 +639,24 @@ async function loadGroupBoard(opts) {
   const commish = detail && detail.commissioner ? detail.commissioner
     : (g.role === 'commissioner' ? youName : null);
 
+  /* F1 comes back in points, and the response says so. */
+  if (ss.unit === 'points' || kind === 'points') {
+    out.board = 'points';
+    const rows = shapeF1Rows(ss.rows || [], youName, commish);
+    out.weekRows = rows;
+    out.seasonRows = rows;
+    out.weekPicks = rows.reduce((n, r) => n + r.events, 0);
+    out.pool.week = 0;
+    out.pool.memberCount = rows.length || out.pool.memberCount;
+    return out;
+  }
+
   const shaped = shapeGroupRows(wk.rows || [], ss.rows || [], youName, commish);
   out.weekRows = shaped.weekRows;
   out.seasonRows = shaped.seasonRows;
   out.weekPicks = (wk.rows || []).reduce((n, r) => n + (Number(r.picks) || 0), 0);
   /* The server forces a one-week group onto its own week; say the week it used. */
-  out.pool.week = Number(wk.week) || week;
+  out.pool.week = seasonOnly ? 0 : (Number(wk.week) || week);
   out.pool.memberCount = shaped.weekRows.length || out.pool.memberCount;
   return out;
 }
@@ -874,7 +965,7 @@ export function render(root, data, state) {
   function groupSub(d) {
     if (!d || !d.current) return 'Group pools';
     const p = d.pool;
-    return (d.sport === 'nfl' ? 'NFL' : 'College football') + ' · Week ' + p.week + ' · '
+    return sportLabel(d.sport) + (d.board && d.board !== 'week' ? ' · Season · ' : ' · Week ' + p.week + ' · ')
       + p.memberCount + (p.memberCount === 1 ? ' member' : ' members');
   }
 
@@ -944,28 +1035,73 @@ export function render(root, data, state) {
     const sw = el('div', 'p5-gsw');
     sw.appendChild(groupSwitcher(d.groups, d.current.id, () => reloadGroup()));
     host.appendChild(sw);
-    host.appendChild(toggle(pool));
+    /* One board, no toggle: basketball and F1 read the season only. */
+    const kind = d.board || 'week';
+    const f1 = kind === 'points';
+    if (kind === 'week') host.appendChild(toggle(pool));
+    else basis = 'season';
 
     if (!d.weekPicks) {
       host.appendChild(stateBlock('empty', {
-        title: 'No picks in yet for week ' + pool.week,
-        body: 'Nobody in ' + d.current.name + ' has picked this week. The table fills as the picks come in.',
+        title: kind === 'week' ? 'No picks in yet for week ' + pool.week
+          : (f1 ? 'No weekends entered yet' : 'No picks in yet this season'),
+        body: 'Nobody in ' + d.current.name + (kind === 'week' ? ' has picked this week.' : ' has picked yet.')
+          + ' The table fills as the picks come in.',
         action: { label: 'Make your picks', onClick: () => { location.hash = '#/gpicks'; } }
       }));
     }
 
     const rows = (basis === 'week' ? d.weekRows : d.seasonRows) || [];
     const key = basis === 'week' ? 'weekRec' : 'seasonRec';
-    if (!rows.some((r) => r[key] && r[key].played > 0)) {
-      host.appendChild(note((basis === 'week' ? 'No game this week' : 'No game this season')
-        + ' has gone final yet. Nobody has scored — a dash is not a zero.'));
+    const anyScore = f1 ? rows.some((r) => r.seasonPoints != null)
+      : rows.some((r) => r[key] && r[key].played > 0);
+    if (!anyScore) {
+      host.appendChild(note((f1 ? 'No weekend has scored yet'
+        : (basis === 'week' ? 'No game this week' : 'No game this season') + ' has gone final yet')
+        + '. Nobody has scored — a dash is not a zero.'));
     }
     host.appendChild(selfCard(rows, pool));
+    const brag = boastFor(rows, pool, d.current, location.origin);
+    if (brag) host.appendChild(boastRow(brag));
     host.appendChild(table(rows));
     const foot = el('div', 'p5-foot');
-    foot.appendChild(el('p', 'p5-footline',
-      'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
+    foot.appendChild(el('p', 'p5-footline', f1
+      /* The numbers are src/lib/f1.ts POINTS and scoreTop3, read, not chosen. */
+      ? 'Points from every Grand Prix weekend you enter. In qualifying, the sprint and the race: 3 for a driver '
+        + 'in the exact spot, 1 for the right driver in the wrong spot. 3 for the fastest lap, 1 for the pole call, '
+        + '2 for the retirements. Scored as each session finishes.'
+      : 'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
     host.appendChild(foot);
+  }
+
+  /* 🔴 BOAST. Jason, 2026-09-12: "ability to boast via x and text". The same
+   * three routes as the live game's invite - the native sheet, X's compose
+   * window, a new text - and the same rule: the app fills in the words and the
+   * person presses send. Only once you have a rank: a brag with no standing
+   * behind it is an advert. */
+  function boastRow(b) {
+    const wrap = el('div', 'p5-boast');
+    wrap.setAttribute('aria-label', 'Tell people where you stand');
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      const s = el('button', 'p5-boast-go', 'Share');
+      s.type = 'button';
+      s.onclick = async () => {
+        try { await navigator.share({ title: 'Any Given', text: b.text, url: b.url }); }
+        catch { /* they closed the sheet; that is not a failure */ }
+      };
+      wrap.appendChild(s);
+    }
+    const x = el('a', 'p5-boast-go');
+    x.href = b.x;
+    x.target = '_blank';
+    x.rel = 'noopener noreferrer';
+    x.setAttribute('aria-label', 'Post it on X');
+    x.append(el('span', 'p5-boast-mark', '𝕏'), el('span', null, 'Post it'));
+    const t = el('a', 'p5-boast-go', 'Text it');
+    t.href = b.sms;
+    t.setAttribute('aria-label', 'Text it to a friend');
+    wrap.append(x, t);
+    return wrap;
   }
 
   function toggle(pool) {
@@ -1032,19 +1168,27 @@ export function render(root, data, state) {
     return card;
   }
 
+  /* The board has one figure, not two: a basketball or F1 group. */
+  function oneCol() { return state === 'group' && !!data && !!data.board && data.board !== 'week'; }
+
   function table(rows) {
-    const card = el('div', 'p5-table');
+    const card = el('div', 'p5-table' + (oneCol() ? ' p5-table--one' : ''));
 
     /* Sofascore's header treatment: short caps, --dim, over the NUMERIC columns
      * only. Rank and name are unlabelled because they need no label. */
     const head = el('div', 'p5-head');
     head.append(el('span', null, ''), el('span', null, ''), el('span', null, ''), el('span', null, ''));
+    if (oneCol()) {
+      head.appendChild(el('span', 'p5-col p5-col--on', data.board === 'points' ? 'Points' : 'Season'));
+      card.appendChild(head);
+    } else {
     /* Spelled out. Jason, 2026-09-11: "go ahead and spell out season. i read
      * Seattle when i see SEA." In a football app a three-letter cap is a team. */
     const wk = el('span', 'p5-col' + (basis === 'week' ? ' p5-col--on' : ''), 'Week');
     const sea = el('span', 'p5-col' + (basis === 'season' ? ' p5-col--on' : ''), 'Season');
     head.append(wk, sea);
     card.appendChild(head);
+    }
 
     const list = el('ol', 'p5-rows');
     /* `prevTeam` is gone with the chip. It existed so navy-against-navy and
@@ -1120,7 +1264,9 @@ export function render(root, data, state) {
         c.title = r.displayName + ' is the commissioner';
         top.appendChild(c);
       }
-      nameCell.append(top, el('span', 'p5-rec num', recordText(basis === 'week' ? r.weekRec : r.seasonRec)));
+      /* F1 has no wins and losses: the second line is weekends entered. */
+      nameCell.append(top, el('span', 'p5-rec num', data.board === 'points' ? weekendsText(r.events)
+        : recordText(basis === 'week' ? r.weekRec : r.seasonRec)));
     } else {
       nameCell.appendChild(el('span', 'p5-name', r.displayName));
     }
@@ -1143,12 +1289,15 @@ export function render(root, data, state) {
     const w = el('span', 'p5-num num' + (basis === 'week' ? ' p5-num--on' : ''), dash(r.weekPoints));
     const s = el('span', 'p5-num num' + (basis === 'season' ? ' p5-num--on' : ''), dash(r.seasonPoints));
 
+    const one = oneCol();
     a.setAttribute('aria-label',
       (r.rank ? (tied ? 'Tied ' : '') + 'Rank ' + r.rank + ', ' : 'Unranked, ') + r.displayName +
-      (r.isSelf ? ' (you)' : '') + (r.isCommish ? ', commissioner' : '') + ', ' + dash(r.weekPoints) + ' points this week, ' +
-      dash(r.seasonPoints) + ' this season');
+      (r.isSelf ? ' (you)' : '') + (r.isCommish ? ', commissioner' : '') + ', ' +
+      (one ? dash(r.seasonPoints) + ' points this season'
+        : dash(r.weekPoints) + ' points this week, ' + dash(r.seasonPoints) + ' this season'));
 
-    a.append(rank, mv, chipSlot, nameCell, w, s);
+    if (one) a.append(rank, mv, chipSlot, nameCell, s);
+    else a.append(rank, mv, chipSlot, nameCell, w, s);
     li.appendChild(a);
     return li;
   }
@@ -1196,6 +1345,34 @@ function ordinal(n) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+/** The brag: "I'm 2nd of 6 in The Fourth Floor on Any Given". A shared rank
+ *  says so - a tie claimed as a clean 2nd is the one boast somebody will check. */
+function boastText(rank, of, groupName, tied) {
+  return "I'm " + (tied ? 'tied for ' : '') + ordinal(rank) + ' of ' + of
+    + ' in ' + (String(groupName || '').trim() || 'my group') + ' on Any Given';
+}
+
+/** X's web intent and a new text, built the way live-game.screen.js builds its
+ *  own: URLSearchParams for X, and `sms:?&body=` - the one form iOS and Android
+ *  both read. The link carries the code, so a friend who taps it can join. */
+function boastLinks(text, url) {
+  return {
+    x: 'https://twitter.com/intent/tweet?' + new URLSearchParams({ text, url }),
+    sms: 'sms:?&body=' + encodeURIComponent(text + '\n' + url)
+  };
+}
+
+/** Everything the boast row draws, or null with no rank to boast about. */
+function boastFor(rows, pool, group, origin) {
+  const me = (rows || []).find((r) => r.isSelf) || null;
+  if (!me || !me.rank || !group || !group.id) return null;
+  const tied = rows.filter((r) => r.rank === me.rank).length > 1;
+  const of = (pool && pool.memberCount) || rows.length;
+  const text = boastText(me.rank, of, group.name, tied);
+  const url = origin + '/?pool=' + encodeURIComponent(group.id);
+  return Object.assign({ text, url }, boastLinks(text, url));
 }
 
 function movementText(m) {

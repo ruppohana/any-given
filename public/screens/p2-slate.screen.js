@@ -80,6 +80,10 @@ export const GROUP_COPY = {
   sub: ' · pick the winners · scored in points',
   subAts: ' · against the spread · scored in points',
   subNoWeek: 'Pick the winners · scored in points',
+  /* Every sport the pool plays (Jason, 2026-09-12). An F1 group plays the race
+   * weekend on its own screen; a basketball group picks a day at a time. */
+  f1: { title: 'This group plays Formula 1', body: 'Qualifying, the race, the fastest lap and more, picked each race weekend and scored in points.', cta: 'Pick this weekend', href: '#/f1' },
+  emptyDay: { title: 'No games on this day', body: 'Pick another day above. Games show up as soon as they are scheduled.' },
   rules: { label: 'How it’s scored', href: '#/grules' },
   door: { label: 'Group info ›', href: '#/g' },
   signedOut: {
@@ -683,14 +687,49 @@ export function priceFromSpread(spread, side, sport) {
  * one of them on an empty key. */
 const WEEK = { 'college-football': 2, nfl: 1 };
 
-async function realSlate(byId, sport, weekArg) {
+/* 🔴 A BASKETBALL GROUP PICKS A DAY AT A TIME. Jason, 2026-09-12: "do all the
+ * sports for the pool". Its "week" is the day as a number (20261103), exactly as
+ * the server stores the game (src/slate-day.ts writeDayGames). The day turns over
+ * at 6 AM Eastern, as in src/lib/day.ts - restated here, not imported, because the
+ * p2 tests load this module with its imports stripped. */
+const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1'];
+export function poolDayOf(ms) {
+  const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(ms - 6 * 3600000));
+  return s.split('-').join('');
+}
+export function poolAddDays(ymd, n) {
+  const t = Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8))) + n * 86400000;
+  const d = new Date(t);
+  return String(d.getUTCFullYear()) + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
+}
+export function poolDayName(ymd, today) {
+  if (ymd === today) return 'Today';
+  if (ymd === poolAddDays(today, 1)) return 'Tomorrow';
+  if (ymd === poolAddDays(today, -1)) return 'Yesterday';
+  const d = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)), 12));
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+/** The day this phone last chose for a sport, if it is still on the bar. */
+export function chosenPoolDay(sport, today) {
+  let v = '';
+  try { v = localStorage.getItem('ag.poolday.' + sport) || ''; } catch { v = ''; }
+  const ok = v.length === 8 && [...v].every((c) => c >= '0' && c <= '9');
+  return ok && v >= poolAddDays(today, -1) && v <= poolAddDays(today, 6) ? v : today;
+}
+
+async function realSlate(byId, sport, weekArg, dayUrl) {
   const season = 2026, week = weekArg || WEEK[sport] || 1;
   try {
-    const res = await fetch(`/api/state/slate:${sport}:${season}:${week}`);
+    /* A basketball day comes from /api/day - the same game shape (src/slate-day.ts). */
+    const res = await fetch(dayUrl || `/api/state/slate:${sport}:${season}:${week}`);
     if (!res.ok) return null;
     const d = await res.json();
     if (!Array.isArray(d.games) || !d.games.length) return null;
-    const list = d.games.map((g) => {
+    /* A day game with no tip time yet, or postponed, is not pickable - the server
+       has no lock time for it. */
+    const list = d.games.filter((g) => !dayUrl || (g.status !== 'void' && !g.tbd)).map((g) => {
       /* Identity travels WITH the game, because the shipped team file is a
        * snapshot and the feed is not. Fall back to it only for what is missing. */
       for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
@@ -768,16 +807,23 @@ async function groupData(fixtures) {
   let who = '';
   try { who = localStorage.getItem('ag.handle') || ''; } catch { who = ''; }
   const scope = who + '.' + group.id;
-  const sport = group.sport === 'nfl' ? 'nfl' : 'college-football';
+  const sport = POOL_SPORT_IDS.includes(group.sport) ? group.sport : 'college-football';
+  /* An F1 group plays the race weekend, not a slate - its door is Race weekend. */
+  if (sport === 'f1') return { ...base, groups, group, sport, groupState: 'f1' };
+  const isDay = DAY_POOL_SPORTS.includes(sport);
+  const today = poolDayOf(Date.now());
+  const day = isDay ? chosenPoolDay(sport, today) : null;
   /* A one-week group plays its own week; a season group plays the week this screen
-   * already reads for that sport. */
-  const week = Number.isInteger(group.week) && group.week > 0 ? group.week : (WEEK[sport] || 1);
+   * already reads for that sport; a basketball group plays the chosen day. */
+  const week = isDay ? Number(day)
+    : (Number.isInteger(group.week) && group.week > 0 ? group.week : (WEEK[sport] || 1));
   const byId = {};
   const db = (fixtures && fixtures.teams && fixtures.teams.teams) || {};
   for (const k of Object.keys(db)) byId[db[k].id] = db[k];
   /* 🔴 ONLY THE GROUP'S GAMES. Jason, 2026-09-11: "When looking at the games for
    * that group you should only see what is configured for the group." */
-  const games = ((await realSlate(byId, sport, week)) || []).filter((g) => inGroupGames(g, group));
+  const games = ((await realSlate(byId, sport, week, isDay ? '/api/day/' + sport + '/' + day : null)) || [])
+    .filter((g) => inGroupGames(g, group));
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
   const tb = games.find((g) => g.status === 'scheduled') || games[games.length - 1];
   /* 🔴 THE SERVER'S COPY OF YOUR PICKS IN THIS GROUP, MERGED OVER THE PHONE'S.
@@ -800,6 +846,7 @@ async function groupData(fixtures) {
   } catch { /* offline or no window: the phone's copy stands */ }
   return {
     ...base, groups, group, sport, week,
+    day, today, dayLabel: day ? poolDayName(day, today) : null,
     groupState: games.length ? 'ready' : (offline ? 'offline' : 'empty'),
     /* 'ats' grades on the cover; neither group mode is ever priced. */
     mode: group.ats ? 'ats' : 'pool',
@@ -1180,7 +1227,7 @@ function zone(ctx, game, side) {
      * paid for by taking something off the crest's line. At 44 it is the first
      * thing seen and the block reads top-down: WHO, then the numbers about them. */
     size: 44,
-    league: ctx.sport === 'nfl' ? 'nfl' : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba'].includes(ctx.sport) ? ctx.sport : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
 
@@ -1846,7 +1893,7 @@ export function render(root, data, state) {
 
   head(root, data, null);
   /* The group state: which group, the dropdown, and the door to the group's page. */
-  if (grp) groupBar(root, data, state);
+  if (grp) { groupBar(root, data, state); dayBar(root, data, state); }
 
   /* The "You're invited" line is gone (CONTRACT-GROUPS §1, amended 2026-09-11):
    * an invite opens #/g now, and the slate shows no invite. */
@@ -2079,7 +2126,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2104,7 +2151,8 @@ function head(root, data, _) {
    * The top bar names the screen; the page keeps only its one sub line. */
   /* Group pools: its own sub line, and "How it's scored" opens the GROUP's rules. */
   const gsub = data && data.groupMode
-    ? (data.group && wk ? 'Week ' + wk + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub) : GROUP_COPY.subNoWeek)
+    ? (data.group && data.dayLabel ? data.dayLabel + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub)
+      : data.group && wk ? 'Week ' + wk + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub) : GROUP_COPY.subNoWeek)
     : null;
   root.appendChild(pageHeader({
     title: (data && data.mode) === 'week' ? "The week's card" : 'The slate',
@@ -2163,6 +2211,46 @@ function groupBar(root, data, state) {
   const door = el('a', 'p2-gdoor', GROUP_COPY.door.label);
   door.href = GROUP_COPY.door.href;
   bar.appendChild(door);
+  /* 🔴 REMIND ME. Jason, 2026-09-12: "add reminders to your calendar". A calendar
+   * event at the first game this group's picks lock at, with an alarm an hour
+   * before (src/lib/ics.ts icsDeadline) - the reminder every phone already
+   * delivers, with nothing to run. Only when a game is still to come. */
+  const next = (data.games || []).filter((g) => g.status === 'scheduled' && g.kickoffUtc > Date.now())
+    .sort((a, b) => a.kickoffUtc - b.kickoffUtc)[0];
+  if (data.group && next) {
+    const rem = el('a', 'p2-gdoor', 'Remind me');
+    rem.href = '/api/ics/deadline?g=' + encodeURIComponent(data.group.id) + '&s=' + next.kickoffUtc
+      + '&n=' + encodeURIComponent(data.group.name || 'My group');
+    rem.setAttribute('aria-label', 'Add a reminder to your calendar before picks lock');
+    bar.appendChild(rem);
+  }
+  root.appendChild(bar);
+}
+
+/** A basketball group's days, yesterday to six days out. Choosing one re-draws that
+ *  day's games and picks; the choice is kept per sport on this phone. The row scrolls
+ *  inside itself, so the page never scrolls sideways. */
+function dayBar(root, data, state) {
+  if (!data || !data.day || !data.today) return;
+  const bar = el('div', 'p2-days');
+  bar.setAttribute('role', 'tablist');
+  bar.setAttribute('aria-label', 'Day');
+  bar.style.cssText = 'display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;max-width:100%';
+  for (let i = -1; i <= 6; i++) {
+    const d = poolAddDays(data.today, i);
+    const on = d === data.day;
+    const b = el('button', 'p2-day', poolDayName(d, data.today));
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(on));
+    b.style.cssText = 'flex:0 0 auto;min-height:44px;padding:0 14px;border-radius:999px;font:inherit;font-weight:700;white-space:nowrap;background:var(--card);'
+      + (on ? 'border:1px solid var(--accent);color:var(--accent)' : 'border:1px solid var(--line);color:var(--fg)');
+    b.onclick = () => {
+      try { localStorage.setItem('ag.poolday.' + data.sport, d); } catch { /* private mode */ }
+      regroup(root, data, state);
+    };
+    bar.appendChild(b);
+  }
   root.appendChild(bar);
 }
 
@@ -2197,9 +2285,22 @@ function groupGate(root, data, state) {
     root.appendChild(card);
     return;
   }
+  if (gs === 'f1') {
+    groupBar(root, data, state);
+    const card = el('div', 'p2-gcard');
+    card.dataset.gate = 'f1';
+    card.appendChild(el('p', 'p2-gcard-h', GROUP_COPY.f1.title));
+    card.appendChild(el('p', 'p2-gcard-b', GROUP_COPY.f1.body));
+    const a = el('a', 'p2-gcta', GROUP_COPY.f1.cta);
+    a.href = GROUP_COPY.f1.href;
+    card.appendChild(a);
+    root.appendChild(card);
+    return;
+  }
   if (gs === 'empty') {
     groupBar(root, data, state);
-    root.appendChild(stateBlock('empty', GROUP_COPY.empty));
+    dayBar(root, data, state);
+    root.appendChild(stateBlock('empty', data.day ? GROUP_COPY.emptyDay : GROUP_COPY.empty));
     return;
   }
   const c = gs === 'offline' ? GROUP_COPY.offline : GROUP_COPY.error;

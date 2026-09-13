@@ -52,9 +52,26 @@ export function cleanName(n: unknown, max = LIMITS.nameMax): string {
  *  with a ranked team) or one conference (a game with a team from it); an NFL group
  *  is always all games. `null` is a choice that cannot be honored - a conference
  *  with no name. */
+/** The sports a group can play. Jason, 2026-09-12: "complete the pool revision,
+ *  but do all the sports for the pool". Football and basketball pick winners (a
+ *  basketball group picks a day at a time - its "week" is the day, YYYYMMDD);
+ *  F1 plays the race weekend in points (src/f1-pool.ts). Anything else is a
+ *  college football group, which is what every group was before this list. */
+export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1'] as const;
+export type PoolSport = typeof POOL_SPORTS[number];
+export function poolSport(s: unknown): PoolSport {
+  return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
+}
+/** A college sport chooses its games; a pro league and F1 play everything. */
+export const isCollegeSport = (s: string) => s === 'college-football' || s === 'mens-college-basketball';
+/** The world board of a sport, for picks made outside any group. */
+export const worldPoolId = (s: string) =>
+  s === 'nfl' ? 'world-nfl' : s === 'college-football' ? 'world-cfb' : 'world-' + s;
+
 export type GroupScope = 'all' | 'top25' | 'conference';
 export function cleanScope(sport: unknown, scope: unknown, arg: unknown): { scope: GroupScope; arg: string | null } | null {
-  if (sport === 'nfl') return { scope: 'all', arg: null };
+  /* A row from before the sport column is a college football group. */
+  if (!isCollegeSport(sport == null ? 'college-football' : String(sport))) return { scope: 'all', arg: null };
   const s = String(scope ?? 'all');
   if (s === 'all' || s === 'top25') return { scope: s, arg: null };
   if (s === 'conference') {

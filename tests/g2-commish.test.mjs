@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { KINDNESS, LIMITS } from '../src/lib/groups.ts';
+import { KINDNESS, LIMITS, POOL_SPORTS } from '../src/lib/groups.ts';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const JS = read('../public/screens/g2-commish.screen.js');
@@ -398,4 +398,81 @@ test('every var() in the stylesheet resolves to a defined token', () => {
   const defined = new Set([...strip(defs).matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]));
   const missing = [...new Set([...CSSC.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)].map((m) => m[1]))].filter((v) => !defined.has(v));
   assert.deepEqual(missing, []);
+});
+
+/* ------------------------------------------------------------ 4 · five sports
+ * Jason, 2026-09-12: "complete the pool revision, but do all the sports for the
+ * pool". Same shaped answers as above, with the group's sport changed. */
+
+function sportWorld(sport, scope = 'all') {
+  const g = { ...G, sport };
+  world({ groups: [g], det: detail({ group: { ...detail().group, sport, scope, scopeArg: null } }) });
+}
+const stateCalls = () => CALLS.filter((c) => c.path.startsWith('/api/state/'));
+
+test('sportName gives the five labels, and an unknown sport reads as college football', () => {
+  assert.deepEqual(POOL_SPORTS.map(mod.sportName),
+    ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1']);
+  assert.equal(mod.sportName('curling'), 'College football');
+  assert.deepEqual(POOL_SPORTS.map((s) => mod.scopeValues(s).length), [3, 0, 2, 0, 0]);
+});
+
+test('the header names the sport', async () => {
+  for (const [s, label] of [['f1', 'Formula 1'], ['nba', 'NBA'], ['mens-college-basketball', 'College basketball']]) {
+    sportWorld(s);
+    const { root } = await mount();
+    assert.match(text(root), new RegExp('3 members · ' + label));
+  }
+});
+
+test('college football keeps all three which-games choices, the conference list and the spread', async () => {
+  sportWorld('college-football');
+  const { root } = await mount();
+  assert.match(text(root), /Which games/);
+  for (const l of ['All games', 'Top 25', 'Conference']) assert.equal(buttons(root, l).length, 1, l);
+  assert.equal(byTag(root, 'select').length, 1, 'the conference list is gone');
+  assert.ok(byTag(root, 'button').some((b) => b.attrs.role === 'switch'));
+});
+
+test('college basketball: All games and Top 25 only, no conference list, and it saves', async () => {
+  sportWorld('mens-college-basketball', 'top25');
+  ROUTES['/api/group/settings'] = () => reply(200, { ok: true });
+  const { root } = await mount();
+  assert.match(text(root), /Which games/);
+  assert.equal(buttons(root, 'All games').length, 1);
+  assert.equal(buttons(root, 'Top 25').length, 1);
+  assert.equal(buttons(root, 'Conference').length, 0, 'conferences are football-only');
+  assert.equal(byTag(root, 'select').length, 0, 'a conference list on a basketball group');
+  assert.equal(stateCalls().length, 0, 'loaded the football conference list for a basketball group');
+  assert.equal(buttons(root, 'Top 25')[0].attrs['aria-checked'], 'true');
+  assert.match(text(root), /A college basketball day can have 150 games\./);
+  assert.equal(byClass(root, 'g2-seg')[0].style.gridTemplateColumns, '1fr 1fr');
+  /* The spread still applies to basketball. */
+  assert.ok(byTag(root, 'button').some((b) => b.attrs.role === 'switch'));
+
+  await buttons(root, 'All games')[0].fire('click');
+  const save = byClass(root, 'g2-wide').find((b) => b.textContent === 'Save');
+  assert.equal(save.disabled, false);
+  await save.fire('click');
+  assert.deepEqual(CALLS.find((c) => c.path === '/api/group/settings').body,
+    { id: G.id, scope: 'all', scopeArg: null });
+});
+
+test('NBA: every game, so no which-games section; the spread stays', async () => {
+  sportWorld('nba');
+  const { root } = await mount();
+  assert.doesNotMatch(text(root), /Which games/);
+  assert.ok(byTag(root, 'button').some((b) => b.attrs.role === 'switch'));
+  assert.equal(stateCalls().length, 0);
+});
+
+test('F1: no spread setting and no which-games section', async () => {
+  sportWorld('f1');
+  const { root } = await mount();
+  assert.equal(byTag(root, 'button').filter((b) => b.attrs.role === 'switch').length, 0, 'a spread switch on an F1 group');
+  assert.doesNotMatch(text(root), /against the spread|Which games/i);
+  /* Rename, invites and members are still there. */
+  assert.equal(byTag(root, 'input')[0].value, G.name);
+  assert.equal(byClass(root, 'g2-code')[0].textContent, G.id);
+  assert.equal(buttons(root, 'Remove').length, 2);
 });

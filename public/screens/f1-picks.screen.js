@@ -9,21 +9,189 @@
  * Each pick locks when its own session starts: qualifying at qualifying, the
  * race picks at the lights.
  *
- * Picks are kept on this phone for now (`ag.f1.<eventId>`), like The slate's
- * stakes; a group leaderboard is the next piece.
+ * Picks are always kept on this phone (`ag.f1.<eventId>`).
+ *
+ * 🔴 AND AN F1 GROUP PLAYS IT TOGETHER, ON THE SERVER. Jason, 2026-09-12:
+ * "complete the pool revision, but do all the sports for the pool". With one or
+ * more F1 groups the weekend is picked FOR a group - "Playing in" chooses which
+ * (`ag.f1.group`), the server's picks are shown over this phone's, and every
+ * change is saved here AND posted whole to /api/pool/f1pick. The server keeps a
+ * pick whose session has started whatever the phone sends, so its answer
+ * REPLACES what is shown - never the other way round. Signed out, or in no F1
+ * group, the screen is exactly what it was, plus one line to #/g.
  */
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { pageHeader } from '/components/header.js';
+import { myGroups, setCurrentGroupId } from '/components/group.js';
 import { POINTS, scoreWeekend, isPickLocked, sessionFor, dnfBand } from '/src/lib/f1.js';
 
-export async function previewData(fixtures, state) {
-  if (state && state !== 'ready') return {};
+/* ---- the group, pure - tests/f1-picks-group.test.mjs ---- */
+
+/** Which F1 group this phone last played in. Not `ag.group`: that is the group
+ *  section's current group, written only by components/group.js. */
+export const F1_GROUP_KEY = 'ag.f1.group';
+export const PICK_KEYS = ['qual', 'sprint', 'race', 'fastest', 'poleWins', 'dnf'];
+
+/** Only the groups that play the race weekend. */
+export function f1GroupsOf(groups) {
+  return (Array.isArray(groups) ? groups : []).filter((g) => g && g.sport === 'f1');
+}
+
+/** The remembered group if it is still one of mine, else the first. */
+export function chooseF1Group(groups, storedId) {
+  if (!groups || !groups.length) return null;
+  return groups.find((g) => g.id === storedId) || groups[0];
+}
+
+/** A pick that says something: a named driver in any slot, or a chosen answer. */
+export function hasPick(v) {
+  if (Array.isArray(v)) return v.some((x) => typeof x === 'string' && x !== '');
+  return typeof v === 'string' && v !== '';
+}
+
+const copy = (v) => (Array.isArray(v) ? v.slice() : v);
+
+/** SERVER OVER LOCAL, key by key. The group's stored pick wins; this phone's
+ *  fills a gap only while that pick is still open - a locked pick the server
+ *  never had cannot count for the group, so the group view does not show it. */
+export function mergeF1Picks(server, local, isLocked) {
+  const s = server && typeof server === 'object' ? server : {};
+  const l = local && typeof local === 'object' ? local : {};
+  const out = {};
+  for (const k of PICK_KEYS) {
+    if (hasPick(s[k])) out[k] = copy(s[k]);
+    else if (!isLocked(k) && hasPick(l[k])) out[k] = copy(l[k]);
+  }
+  return out;
+}
+
+/** The picks shown that the group does not have yet. */
+export function unsentKeys(picks, server) {
+  const s = server && typeof server === 'object' ? server : {};
+  return PICK_KEYS.filter((k) => hasPick(picks && picks[k]) && JSON.stringify(picks[k]) !== JSON.stringify(s[k]));
+}
+
+/** POST /api/pool/f1pick's body: the whole picks object, three slots per top
+ *  three with '' for an empty one, an unset answer left out. */
+export function f1PickPayload(pool, eventId, picks) {
+  const p = picks && typeof picks === 'object' ? picks : {};
+  const out = {};
+  for (const k of PICK_KEYS) {
+    const v = p[k];
+    if (k === 'qual' || k === 'sprint' || k === 'race') {
+      if (Array.isArray(v)) out[k] = [0, 1, 2].map((i) => (typeof v[i] === 'string' ? v[i] : ''));
+    } else if (typeof v === 'string' && v !== '') out[k] = v;
+  }
+  return { pool: String(pool), eventId: String(eventId), picks: out };
+}
+
+/** This phone's copy after the server answers: what was stored replaces what
+ *  was sent, and nothing the server did not mention is thrown away. */
+export function keepLocal(local, stored) {
+  return Object.assign({}, local && typeof local === 'object' ? local : {}, stored && typeof stored === 'object' ? stored : {});
+}
+
+/** One line, and it always says the picks are still here. */
+export function groupErrorText(status, loading) {
+  const head = status === 0 ? 'Offline.'
+    : status === 401 ? 'Sign in to play with your group.'
+    : status === 403 ? 'You are not in this group now.'
+    : status === 404 ? 'No Grand Prix on the server yet.'
+    : loading ? 'Your group picks did not load.' : 'Not saved with your group.';
+  return head + (loading ? ' Showing the picks on this phone.' : ' Kept on this phone.');
+}
+
+/** Save the whole picks object for a group. Never throws.
+ *  -> { kind: 'ok', picks } | { kind: 'over', eventId } | { kind: 'error', status, text } */
+export async function postF1Picks(api, pool, eventId, picks) {
+  let r;
+  try {
+    r = await api('/api/pool/f1pick', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(f1PickPayload(pool, eventId, picks))
+    });
+  } catch { return { kind: 'error', status: 0, text: groupErrorText(0, false) }; }
+  let j = null;
+  try { j = await r.json(); } catch { j = null; }
+  if (r.ok && j && j.picks && typeof j.picks === 'object') return { kind: 'ok', picks: j.picks };
+  if (r.status === 409 && j && j.error === 'event_over') return { kind: 'over', eventId: j.eventId || null };
+  return { kind: 'error', status: r.status, text: groupErrorText(r.status, false) };
+}
+
+/** A group's picks for this event, shown over this phone's. Picks the phone has
+ *  and the group does not are sent once, so what is shown is what counts.
+ *  -> { picks, stored, status, moved? } - `stored` is the server's copy, or null
+ *  when it could not be read. Never throws. */
+export async function loadGroupPicks(api, ev, group, local, now) {
+  const locked = (k) => isPickLocked(ev, k, now);
+  const err = (text) => ({ tone: 'err', text });
+  const mine = keepLocal(local, null);
+  let r;
+  try { r = await api('/api/pool/f1picks?pool=' + encodeURIComponent(group.id)); }
+  catch { return { picks: mine, stored: null, status: err(groupErrorText(0, true)) }; }
+  let j = null;
+  try { j = await r.json(); } catch { j = null; }
+  if (!r.ok || !j) return { picks: mine, stored: null, status: err(groupErrorText(r.status, true)) };
+  if (String(j.eventId) !== String(ev.id)) {
+    return { moved: true, picks: mine, stored: null, status: err('The weekend has moved on. Reload for the next one.') };
+  }
+  const server = j.picks && typeof j.picks === 'object' ? j.picks : {};
+  const picks = mergeF1Picks(server, local, locked);
+  if (!unsentKeys(picks, server).length) return { picks, stored: server, status: null };
+  const res = await postF1Picks(api, group.id, ev.id, picks);
+  if (res.kind === 'ok') {
+    return { picks: res.picks, stored: res.picks, status: { tone: 'ok', text: 'The picks on this phone were added to ' + group.name + '.' } };
+  }
+  if (res.kind === 'over') return { moved: true, picks, stored: server, status: err('The weekend has moved on. Reload for the next one.') };
+  return { picks, stored: server, status: err(res.text) };
+}
+
+/* ---- the data ---- */
+
+const api = () => (typeof window !== 'undefined' && window.agApiFetch) || fetch;
+
+function readChoice() { try { return localStorage.getItem(F1_GROUP_KEY) || ''; } catch { return ''; } }
+function writeChoice(id) { try { localStorage.setItem(F1_GROUP_KEY, String(id)); } catch { /* private mode */ } }
+
+async function readEvent() {
   try {
     const r = await fetch('/api/f1/current', { cache: 'no-store' });
     if (!r.ok) return { event: null };
     const d = await r.json();
     return { event: d.event || null, extras: d.extras || null, fromFeed: !!d.event };
   } catch { return { event: null }; }
+}
+
+/** One group's picks into `out`, and this phone's copy brought level. */
+async function playIn(out, g) {
+  const key = 'ag.f1.' + out.event.id;
+  const local = load(key);
+  const res = await loadGroupPicks(api(), out.event, g, local, Date.now());
+  if (res.stored) { try { localStorage.setItem(key, JSON.stringify(keepLocal(local, res.stored))); } catch { /* private mode */ } }
+  return Object.assign(out, { groupId: g.id, picks: res.picks, status: res.status, moved: !!res.moved });
+}
+
+export async function previewData(fixtures, state) {
+  if (state && state !== 'ready') return {};
+  let out = { event: null };
+  /* Twice at most: a server already on the next weekend means the feed is read again. */
+  for (let tries = 0; tries < 2; tries++) {
+    out = await readEvent();
+    if (!out.event) return out;
+    /* myGroups() asks nothing of a phone that is not signed in, so a stranger
+       never meets the sign-in sheet here. */
+    const mine = await myGroups();
+    out.groups = f1GroupsOf(mine && mine.groups);
+    out.signedIn = !!(mine && mine.signedIn);
+    out.groupsError = (mine && mine.error) || null;
+    const g = chooseF1Group(out.groups, readChoice());
+    if (!g) return out;
+    writeChoice(g.id);
+    await playIn(out, g);
+    if (!out.moved) break;
+  }
+  return out;
 }
 
 function el(tag, cls, text) {
@@ -90,17 +258,123 @@ export function render(root, data, state) {
   }
 
   const key = 'ag.f1.' + ev.id;
-  const picks = load(key);
+  const groups = Array.isArray(d.groups) ? d.groups : [];
+  const group = groups.find((g) => g.id === d.groupId) || null;
+  /* In a group the picks are the group's, held on `d` across redraws; alone
+     they are this phone's, read fresh as they always were. */
+  if (group && (!d.picks || typeof d.picks !== 'object')) d.picks = {};
+  const picks = group ? d.picks : load(key);
   const now = Date.now();
   const byId = new Map(ev.drivers.map((x) => [x.id, x]));
   const drivers = ev.drivers.slice().sort((a, b) => a.short.localeCompare(b.short));
-  const save = () => { try { localStorage.setItem(key, JSON.stringify(picks)); } catch { /* private mode */ } };
   const redraw = () => render(root, d, state);
+  /* A reply that lands after you have left the screen must not draw it back. */
+  const mounted = () => !!root.querySelector('[data-f1-weekend="' + ev.id + '"]');
+  const writeLocal = (v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* private mode */ } };
+  const reread = async () => {
+    const fresh = await previewData(null, 'ready');
+    if (!mounted()) return;
+    for (const k of Object.keys(d)) delete d[k];
+    Object.assign(d, fresh);
+    redraw();
+  };
+  const send = () => {
+    const seq = d.seq = (d.seq || 0) + 1;
+    const g = group;
+    d.status = { tone: 'busy', text: 'Saving with ' + g.name + '…' };
+    postF1Picks(api(), g.id, ev.id, picks).then((res) => {
+      if (seq !== d.seq) return;             /* a later change is on its way */
+      if (res.kind === 'ok') {
+        d.picks = res.picks;                 /* what was STORED, not what was sent */
+        writeLocal(keepLocal(load(key), res.picks));
+        d.status = { tone: 'ok', text: 'Saved with ' + g.name };
+      } else if (res.kind === 'over') {
+        d.status = { tone: 'busy', text: 'That weekend is over. Reading the next one…' };
+        if (mounted()) redraw();
+        reread();
+        return;
+      } else {
+        d.status = { tone: 'err', text: res.text };
+      }
+      if (mounted()) redraw();
+    });
+  };
+  const save = () => {
+    if (!group) { writeLocal(picks); return; }
+    writeLocal(keepLocal(load(key), picks));  /* here first, whatever the network does */
+    send();
+  };
   const score = scoreWeekend(ev, picks, d.extras || null);
 
   /* The running total, pinned - the one figure about you rather than the race. */
   const bar = el('div', 'f1-total num', score.total + (score.total === 1 ? ' point' : ' points') + ' this weekend');
+  bar.dataset.f1Weekend = ev.id;
   root.appendChild(bar);
+
+  if (group) {
+    /* PLAYING IN. A dropdown only when there is a choice - Jason, 2026-09-11:
+       "if i am part of more than one group, then i need a dropdown" - and the
+       name as plain text with one, as components/group.js draws it. */
+    const gc = el('section', 'card f1-card f1-group');
+    const row = el('div', 'f1-grow');
+    const lab = el('label', 'f1-glabel', 'Playing in');
+    row.appendChild(lab);
+    if (groups.length > 1) {
+      const sel = document.createElement('select');
+      sel.className = 'f1-sel';
+      sel.id = 'f1-group-' + ev.id;
+      lab.setAttribute('for', sel.id);
+      for (const g of groups) {
+        const o = document.createElement('option');
+        o.value = g.id; o.textContent = g.name;
+        sel.appendChild(o);
+      }
+      sel.value = group.id;
+      sel.addEventListener('change', () => {
+        const g = groups.find((x) => x.id === sel.value);
+        if (!g) return;
+        writeChoice(g.id);
+        d.groupId = g.id;
+        d.picks = keepLocal(load(key), null);  /* this phone's, until the group answers */
+        d.seq = (d.seq || 0) + 1;            /* drop any reply for the old group */
+        d.status = { tone: 'busy', text: 'Reading ' + g.name + '…' };
+        redraw();
+        const seq = d.seq;
+        const next = { event: ev };
+        playIn(next, g).then(() => {
+          if (seq !== d.seq) return;         /* switched again, or picked meanwhile */
+          if (next.moved) { reread(); return; }
+          Object.assign(d, { groupId: next.groupId, picks: next.picks, status: next.status });
+          if (mounted()) redraw();
+        });
+      });
+      row.appendChild(sel);
+    } else {
+      row.appendChild(el('span', 'f1-gname', group.name));
+    }
+    gc.appendChild(row);
+    const st = el('p', 'f1-gstatus', d.status ? d.status.text : '');
+    st.setAttribute('role', 'status');
+    if (d.status) st.dataset.tone = d.status.tone;
+    gc.appendChild(st);
+    const gl = el('a', 'f1-glink', 'Group standings');
+    gl.href = '#/gstandings';
+    /* The group section shows its CURRENT group - set it to this one first. */
+    gl.addEventListener('click', () => setCurrentGroupId(group.id));
+    gc.appendChild(gl);
+    root.appendChild(gc);
+  } else {
+    const inv = el('p', 'f1-invite');
+    if (d.groupsError) {
+      inv.textContent = 'Your groups did not load, so these picks are on this phone only.';
+    } else {
+      inv.appendChild(el('span', null, 'Pick the weekend with friends: '));
+      const a = el('a', null, 'start an F1 group');
+      a.href = '#/g';
+      inv.appendChild(a);
+    }
+    root.appendChild(inv);
+  }
   /* What each pick is worth, before any is made - the rule on the tile. */
   root.appendChild(el('p', 'f1-rule',
     'Exact spot ' + POINTS.exact + ' · right driver, wrong spot ' + POINTS.inTop3
@@ -214,14 +488,18 @@ export function render(root, data, state) {
       })());
   }
 
-  /* The live picks, on a finished race - src/lib/f1-live.ts. */
-  const rp = el('a', 'card f1-card f1-link');
-  rp.href = '#/f1live';
-  rp.appendChild(el('span', 'f1-title', 'Replay a race'));
-  rp.appendChild(el('span', 'f1-note', 'Call pit stops, fastest laps and safety cars on a finished Grand Prix, one lap at a time.'));
-  root.appendChild(rp);
+  /* The live picks, on a finished race - src/lib/f1-live.ts. Hidden in 100% pool,
+     where #/f1live falls back to Home (public/app.js BETTING_ROUTES). */
+  if (globalThis.AG_POOL_ONLY !== true) {
+    const rp = el('a', 'card f1-card f1-link');
+    rp.href = '#/f1live';
+    rp.appendChild(el('span', 'f1-title', 'Replay a race'));
+    rp.appendChild(el('span', 'f1-note', 'Call pit stops, fastest laps and safety cars on a finished Grand Prix, one lap at a time.'));
+    root.appendChild(rp);
+  }
 
   root.appendChild(el('p', 'f1-note f1-foot',
-    'Picks are saved on this phone. Results come from the published session order; a pick locks when its session starts. '
+    (group ? 'Picks are saved on this phone and with ' + group.name + '. ' : 'Picks are saved on this phone. ')
+    + 'Results come from the published session order; a pick locks when its session starts. '
     + 'Any Given is not associated in any way with the Formula 1 companies.'));
 }

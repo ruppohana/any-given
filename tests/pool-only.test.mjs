@@ -23,8 +23,9 @@ test('every betting route falls back to Home, and no pool route does', () => {
   const m = APP.match(/const BETTING_ROUTES = new Set\(\[([^\]]+)\]\)/);
   assert.ok(m, 'the hidden set is declared');
   const hidden = new Set([...m[1].matchAll(/'([a-z0-9]+)'/g)].map((x) => x[1]));
-  for (const id of ['allgames', 'buildparlay', 'f1', 'f1live', 'live']) assert.ok(hidden.has(id), id + ' is hidden');
-  for (const id of ['home', 'slate', 'picks', 'parlay', 'standings', 'invite', 'create', 'rules', 'info',
+  for (const id of ['allgames', 'buildparlay', 'f1live', 'live']) assert.ok(hidden.has(id), id + ' is hidden');
+  /* #/f1 is an F1 group's picks - a pool, so it stays. */
+  for (const id of ['home', 'slate', 'picks', 'parlay', 'standings', 'invite', 'create', 'rules', 'info', 'f1',
     'gpicks', 'gstandings', 'g', 'gcommish', 'grules', 'settings']) assert.equal(hidden.has(id), false, id + ' stays');
   assert.ok(APP.includes("if (POOL_ONLY && BETTING_ROUTES.has(id)) return ROUTES.find((r) => r.id === 'home') || ROUTES[0];"));
 });

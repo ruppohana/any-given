@@ -79,3 +79,46 @@ export function icsFromQuery(q: URLSearchParams, now: number): IcsEvent | null {
   const filename = (title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'game') + '.ics';
   return { body: lines.map(fold).join('\r\n') + '\r\n', filename };
 }
+
+/* 🔴 A GROUP'S PICK DEADLINE. Jason, 2026-09-12: "add reminders to your
+ * calendar". The pool slate's "Remind me" link carries the group's code, its
+ * name and the first kickoff (or tip-off, or lights out) its picks lock at; the
+ * event sits at that time with an alarm an hour before. Same bounds as the bell:
+ * the name is capped and cleaned, the time must be plausible, and the link back
+ * is built here from the code, never taken from the request. */
+export const ICS_DEADLINE_ALARM_MINUTES = 60;
+const CODE_RE = /^[A-Z0-9]{4,12}$/;
+
+export function icsDeadline(q: URLSearchParams, now: number): IcsEvent | null {
+  const code = String(q.get('g') || '').toUpperCase();
+  const name = clean(q.get('n') || '', 60);
+  const start = Number(q.get('s'));
+  if (!CODE_RE.test(code) || !name) return null;
+  if (!Number.isFinite(start) || start < now - DAY || start > now + 90 * DAY) return null;
+
+  const link = 'https://anygiven.app/?pool=' + code;
+  const title = 'Picks lock - ' + name;
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Any Given//anygiven.app//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    'UID:deadline-' + code + '-' + start + '@anygiven.app',
+    'DTSTAMP:' + stamp(now),
+    'DTSTART:' + stamp(start),
+    'DTEND:' + stamp(start + 15 * 60_000),
+    'SUMMARY:' + esc(title),
+    'DESCRIPTION:' + esc('Make your picks on Any Given before the first game: ' + link),
+    'URL:' + link,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'TRIGGER:-PT' + ICS_DEADLINE_ALARM_MINUTES + 'M',
+    'DESCRIPTION:' + esc('Picks lock in an hour - ' + name),
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+  return { body: lines.map(fold).join('\r\n') + '\r\n', filename: 'picks-lock-' + code.toLowerCase() + '.ics' };
+}

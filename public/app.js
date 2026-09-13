@@ -127,7 +127,9 @@ function ensureCss(name) {
  * without this shell - as every test does - is unchanged. */
 const POOL_ONLY = true;
 globalThis.AG_POOL_ONLY = POOL_ONLY;
-const BETTING_ROUTES = new Set(['allgames', 'buildparlay', 'f1', 'f1live', 'live', 'now', 'landed', 'missed',
+/* F1's race-weekend picks are a pool now (an F1 group plays them, src/f1-pool.ts),
+ * so #/f1 stays open; the solo race replay does not. */
+const BETTING_ROUTES = new Set(['allgames', 'buildparlay', 'f1live', 'live', 'now', 'landed', 'missed',
   'game', 'board', 'delay', 'cold', 'alerts', 'share']);
 if (POOL_ONLY) {
   try {

@@ -25,8 +25,11 @@ import { computeDue, nuggetAlertTick } from './nugget-due.ts';
 import { readLive, settleAgainst, type LiveState } from './live.ts';
 import { parseSlate, type Sport } from './feed/espn.ts';
 import { handleAuth, requireIdentity, sessionAccount } from './auth.ts';
-import { icsFromQuery } from './lib/ics.ts';
+import { icsFromQuery, icsDeadline } from './lib/ics.ts';
+import { handleContact } from './contact.ts';
 import { handleGroups } from './groups.ts';
+import { handleF1Pool, f1Standings } from './f1-pool.ts';
+import { poolSport, worldPoolId } from './lib/groups.ts';
 
 export interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
@@ -203,6 +206,9 @@ export default {
       }
       /* A sport that plays every day is captured a day at a time - today and
          tomorrow, one request each (src/slate-day.ts). */
+      /* F1: keep the current weekend fresh, so a finished one is archived for
+         the group season board (src/f1-feed.ts). A no-op while it is fresh. */
+      try { await serveF1(env); } catch { /* the next tick tries again */ }
       for (const sport of Object.keys(DAY_SPORTS)) {
         const today = dayOf(Date.now());
         for (const day of [today, addDays(today, 1)]) {
@@ -250,6 +256,9 @@ export default {
       if (authRes) return authRes;
 
       /* ---- group pools: /api/group/* (src/groups.ts) - 2026-09-11 ---- */
+      /* ---- F1 group pools: /api/pool/f1picks, /api/pool/f1pick (src/f1-pool.ts) ---- */
+      const f1Res = await handleF1Pool(req, env, p, json);
+      if (f1Res) return f1Res;
       const groupRes = await handleGroups(req, env, p, json);
       if (groupRes) return groupRes;
 
@@ -258,6 +267,23 @@ export default {
        * carries the title, kickoff and game key, src/lib/ics.ts bounds all of
        * them and builds the link back itself. `inline` so iPhone Safari offers
        * Add to Calendar rather than a download prompt. */
+      /* ---- the opt-ins: /api/contact (src/contact.ts) - nothing sends a text ---- */
+      const contactRes = await handleContact(req, env, p, json);
+      if (contactRes) return contactRes;
+
+      /* ---- a group's pick deadline as a calendar event (src/lib/ics.ts) ---- */
+      if (p === '/api/ics/deadline' && req.method === 'GET') {
+        const ev = icsDeadline(url.searchParams, Date.now());
+        if (!ev) return new Response('not a deadline', { status: 400, headers: { 'content-type': 'text/plain' } });
+        return new Response(ev.body, {
+          headers: {
+            'content-type': 'text/calendar; charset=utf-8',
+            'content-disposition': 'inline; filename="' + ev.filename + '"',
+            'cache-control': 'no-store'
+          }
+        });
+      }
+
       if (p === '/api/ics' && req.method === 'GET') {
         const ev = icsFromQuery(url.searchParams, Date.now());
         if (!ev) return new Response('not a game', { status: 400, headers: { 'content-type': 'text/plain' } });
@@ -719,8 +745,8 @@ export default {
         const who = await requireIdentity(req, env, b.deviceId, json);
         if ('error' in who) return who.error;
         const userId = who.userId;
-        const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
-        const poolId = b.poolId || (sport === 'nfl' ? 'world-nfl' : 'world-cfb');
+        const sport = poolSport(b.sport);
+        const poolId = b.poolId || worldPoolId(sport);
         const week = Number(b.week) || 0;
 
         /* 🔴 THE KICKOFF IS THE ONLY LOCK, AND THE SERVER OWNS THE CLOCK. A
@@ -786,7 +812,7 @@ export default {
         const who = await requireIdentity(req, env, b.deviceId, json);
         if ('error' in who) return who.error;
         const userId = who.userId;
-        const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
+        const sport = poolSport(b.sport);
         /* 🔴 A POOL CAN BE ONE WEEK, OR THE SEASON. Jason: "The pools can also
          * be single weeks." NULL is the season, which is every pool that
          * already exists - so this is additive and needs no backfill.
@@ -902,7 +928,7 @@ export default {
           return json({ error: 'no' }, 401);
         }
         const b = await req.json() as { sport?: string; season?: number; week?: number; games?: any[] };
-        const sport = b.sport === 'nfl' ? 'nfl' : 'college-football';
+        const sport = poolSport(b.sport);
         const list = Array.isArray(b.games) ? b.games : [];
         if (!list.length) return json({ error: 'no games' }, 400);
 
@@ -951,7 +977,7 @@ export default {
         if (!poolId || poolId.startsWith('world-')) {
           return json({ error: 'pool_required', message: 'Which group?' }, 400);
         }
-        const sport = url.searchParams.get('sport') === 'nfl' ? 'nfl' : 'college-football';
+        const sport = poolSport(url.searchParams.get('sport'));
         const week = Number(url.searchParams.get('week')) || 0;
         const inIt = await env.DB.prepare(
           'SELECT 1 AS x FROM member WHERE pool_id = ? AND user_id = ?'
@@ -965,10 +991,14 @@ export default {
       }
 
       if (p === '/api/pool/standings') {
-        const sport = url.searchParams.get('sport') === 'nfl' ? 'nfl' : 'college-football';
+        const sport = poolSport(url.searchParams.get('sport'));
         let week = Number(url.searchParams.get('week')) || 0;
-        const poolId = url.searchParams.get('pool')
-          || (sport === 'nfl' ? 'world-nfl' : 'world-cfb');
+        const poolId = url.searchParams.get('pool') || worldPoolId(sport);
+        /* F1 scores a weekend in points, not winners (src/f1-pool.ts). */
+        if (sport === 'f1') {
+          return json({ pool: poolId, sport, week: 0, ats: false, unit: 'points',
+                        rows: await f1Standings(env, poolId), fetchedAt: Date.now() });
+        }
 
         /* 🔴 SCORED IN THE QUERY, FROM RESULTS THE CLIENT CANNOT WRITE. A client
          * that could report a final score could grade its own pick. `game` is
@@ -997,7 +1027,7 @@ export default {
          * on. That is also the right product: you pick Saturday once, and your
          * office group and your family group both score it. A second set of
          * picks per group would be a second slate to fill in. */
-        const worldId = sport === 'nfl' ? 'world-nfl' : 'world-cfb';
+        const worldId = worldPoolId(sport);
         /* 🔴 REVERSED 2026-09-11: A GROUP SCORES ITS OWN PICKS. Jason: "if i am
          * part of more than one group, then i need a dropdown to enter different
          * selections for the different groups." The note above was the right

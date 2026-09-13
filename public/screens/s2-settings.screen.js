@@ -672,6 +672,7 @@ export function render(root, data, state) {
   }
 
   root.appendChild(identitySection(data, 'ready'));
+  root.appendChild(contactSection());
   root.appendChild(teamSection(data, 'ready'));
   root.appendChild(delaySection(data));
   root.appendChild(themeSection(data));
@@ -681,4 +682,65 @@ export function render(root, data, state) {
   if (globalThis.AG_POOL_ONLY !== true) root.appendChild(balanceSection());
   root.appendChild(homeScreenSection());
   root.appendChild(rulesSection());
+}
+
+/* 🔴 REMINDERS - THE OPT-INS, CHANGEABLE. Jason, 2026-09-12: "we need to collect
+ * emails", "grab their phone number as well", "opt in to texts". The sign-in sheet
+ * asks once; this is where they are changed. The consent words are the SERVER's
+ * (/api/contact returns them), so this screen cannot drift from what was agreed to.
+ * Signed in only. Nothing sends a text yet (src/lib/contact.ts). */
+function contactSection() {
+  const sec = card('Reminders');
+  const note = el('p', 's2-note', 'Loading your reminder settings…');
+  sec.appendChild(note);
+  let tok = '';
+  try { tok = localStorage.getItem('ag.session') || ''; } catch { tok = ''; }
+  if (!tok || typeof fetch !== 'function') {
+    note.textContent = 'Reminders follow the email you play with. They show here once it is on this phone.';
+    return sec;
+  }
+  const api = (typeof window !== 'undefined' && window.agApiFetch) || fetch;
+  const box = (text, on) => {
+    const l = el('label', 's2-check');
+    l.style.cssText = 'display:flex;gap:10px;align-items:flex-start;min-height:44px;font-size:13px;line-height:1.4;color:var(--dim)';
+    const c = el('input', '');
+    c.type = 'checkbox';
+    c.checked = !!on;
+    c.style.cssText = 'width:20px;height:20px;margin:1px 0 0;flex:0 0 auto';
+    l.append(c, el('span', '', text));
+    return [l, c];
+  };
+  api('/api/contact').then((r) => (r && r.ok ? r.json() : null)).then((j) => {
+    if (!j) { note.textContent = 'Your reminder settings did not load. Try again later.'; return; }
+    note.remove();
+    const [el1, email] = box(j.emailConsent, j.emailOptIn);
+    const phone = el('input', 's2-input');
+    phone.type = 'tel'; phone.autocomplete = 'tel'; phone.inputMode = 'tel';
+    phone.placeholder = 'Mobile number (optional)';
+    phone.value = j.phone || '';
+    phone.setAttribute('aria-label', 'Mobile number');
+    phone.style.cssText = 'font:inherit;width:100%;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg);box-sizing:border-box';
+    const [el2, sms] = box(j.smsConsent, j.smsOptIn);
+    const save = el('button', 's2-btn', 'Save reminders');
+    save.type = 'button';
+    save.style.cssText = 'font:inherit;font-weight:700;min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg)';
+    const said = el('p', 's2-note', '');
+    save.onclick = async () => {
+      save.disabled = true; said.textContent = '';
+      try {
+        const r = await api('/api/contact', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ emailOptIn: email.checked, phone: phone.value.trim() || null, smsOptIn: sms.checked }) });
+        const k = await r.json().catch(() => ({}));
+        if (!r.ok) { said.textContent = k.message || 'That did not save.'; }
+        else {
+          phone.value = k.phone || '';
+          sms.checked = !!k.smsOptIn;
+          said.textContent = 'Saved.' + (sms.checked ? '' : phone.value ? ' Texts stay off until the box is ticked.' : '');
+        }
+      } catch { said.textContent = 'No connection. Nothing changed.'; }
+      save.disabled = false;
+    };
+    sec.append(el1, phone, el2, save, said);
+  }).catch(() => { note.textContent = 'Offline. Your reminder settings will load when you are back.'; });
+  return sec;
 }

@@ -162,7 +162,46 @@ export async function captureDay(env: any, sport: string, day: string, fetchImpl
   }
   const doc = { sport, day, schema: 1, games, fetchedAt: now, by: 'day' };
   await env.LIVE.put(key, JSON.stringify(doc), { expirationTtl: DAY_TTL });
+  /* The results table too, so a basketball group can be graded - the pool's
+     standings read `game`, never KV. A failure here costs a grade, not the board. */
+  try { await writeDayGames(env, sport, day, games); } catch { /* the next capture writes it */ }
   return { key, wrote: games.length, doc };
+}
+
+/** A day's games into D1's `game` table, the one the pool's standings grade
+ *  from. The pool's "week" for a day sport is the day itself, as a number
+ *  (20261103). A game with no tip time yet (tbd) is left out: its placeholder
+ *  would lock it before its day began, and the pool slate does not offer it.
+ *  Postponed and cancelled arrive as status 'void' and are never graded - the
+ *  one void path. Written in batches of 100. */
+export async function writeDayGames(env: any, sport: string, day: string, games: any[]): Promise<number> {
+  if (!env || !env.DB) return 0;
+  const rows = (games || []).filter((g) => !g.tbd && g.id && g.homeTeamId && g.awayTeamId);
+  if (!rows.length) return 0;
+  const stmt = env.DB.prepare(
+    `INSERT INTO game (id, season, week, kickoff_utc, home_team_id, away_team_id,
+                       spread, status, home_score, away_score, void, sport)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       week        = excluded.week,
+       kickoff_utc = excluded.kickoff_utc,
+       spread      = COALESCE(excluded.spread, game.spread),
+       status      = excluded.status,
+       home_score  = excluded.home_score,
+       away_score  = excluded.away_score`
+  );
+  const week = Number(day);
+  for (let i = 0; i < rows.length; i += 100) {
+    await env.DB.batch(rows.slice(i, i + 100).map((g) => stmt.bind(
+      String(g.id), Number(g.season) || 2026, week, Number(g.kickoffUtc) || 0,
+      String(g.homeTeamId), String(g.awayTeamId),
+      typeof g.spread === 'number' ? g.spread : null, String(g.status || 'scheduled'),
+      g.homeScore == null ? null : Number(g.homeScore),
+      g.awayScore == null ? null : Number(g.awayScore),
+      sport
+    )));
+  }
+  return rows.length;
 }
 
 /** Is a stored day too old to serve? A minute while a game is on or about to

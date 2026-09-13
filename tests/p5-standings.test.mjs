@@ -501,3 +501,196 @@ test('group state: the record line reads the API\'s wins, played and picks', () 
   assert.equal(G.recordText({ wins: 0, played: 0, picks: 5 }), '5 picks · none final');
   assert.equal(G.recordText({ wins: 2, played: 3, picks: 5 }), '2–1 · 5 picks');
 });
+
+/* ------------------------------------------------------------------ *
+ * 5. All five sports, and the boast - 2026-09-12
+ *
+ * Jason: "complete the pool revision, but do all the sports for the pool" and
+ * "ability to boast via x and text". Every row fed below is a TEST INPUT in the
+ * frozen contract's own shape - football {id, name, picks, wins, played}, F1
+ * {id, name, points, events, wins, picks, played} - and not a fixture. No F1 or
+ * basketball group has been played. The origin is a test value too.
+ * ------------------------------------------------------------------ */
+
+/** A top-level `const NAME = {...}` or `[...]`, by bracket matching. */
+function constSource(name) {
+  const m = new RegExp('const\\s+' + name + '\\s*=\\s*').exec(SCREEN_SRC);
+  assert.ok(m, `screen no longer declares ${name}`);
+  const from = m.index + m[0].length;
+  const open = SCREEN_SRC[from], close = open === '{' ? '}' : ']';
+  let depth = 0;
+  for (let i = from; i < SCREEN_SRC.length; i++) {
+    if (SCREEN_SRC[i] === open) depth++;
+    else if (SCREEN_SRC[i] === close) { depth--; if (depth === 0) return 'const ' + name + ' = ' + SCREEN_SRC.slice(from, i + 1) + ';'; }
+  }
+  assert.fail(`could not find the end of ${name}`);
+}
+
+const S = new Function([constSource('SPORT_LABEL'), fnSource('groupSport'), fnSource('sportLabel'),
+  fnSource('boardKind'), fnSource('safeName'), fnSource('shapeF1Rows'), fnSource('weekendsText'),
+  fnSource('ordinal'), fnSource('boastText'), fnSource('boastLinks'), fnSource('boastFor'),
+  'return { groupSport, sportLabel, boardKind, shapeF1Rows, weekendsText, ordinal, boastText, boastLinks, boastFor };'
+].join('\n'))();
+
+/** loadGroupBoard with group.js, fetch and storage stubbed; records every URL asked for. */
+function groupLoader(group, answer) {
+  const calls = [];
+  const fakeFetch = async (u) => {
+    calls.push(u);
+    /* REAL Responses: a body reads once, as in a browser. The first version of this
+       fake returned objects that could be read any number of times, and hid a board
+       that read the same season response twice and called itself "offline". */
+    if (u.startsWith('/api/group/detail')) return new Response(JSON.stringify({ members: [{ name: 'al', you: true }], commissioner: 'al' }), { status: 200 });
+    const week = Number(new URL(u, 'http://t').searchParams.get('week'));
+    return new Response(JSON.stringify(answer(week)), { status: 200 });
+  };
+  const load = new Function('myGroups', 'pickCurrent', 'fetch', 'window', 'localStorage', [
+    constSource('GROUP_WEEK'), constSource('SPORT_LABEL'), fnSource('groupSport'), fnSource('boardKind'),
+    fnSource('safeName'), fnSource('shapeGroupRows'), fnSource('shapeF1Rows'), fnSource('loadGroupBoard'),
+    'return loadGroupBoard;'].join('\n'))(
+    async () => ({ signedIn: true, groups: [group] }), (gs) => gs[0], fakeFetch, {}, { getItem: () => null });
+  return { load, calls, standings: () => calls.filter((u) => u.startsWith('/api/pool/standings')) };
+}
+
+test('five sports: every group sport has its label, and nothing is forced to football', () => {
+  assert.equal(S.sportLabel('college-football'), 'College football');
+  assert.equal(S.sportLabel('nfl'), 'NFL');
+  assert.equal(S.sportLabel('mens-college-basketball'), 'College basketball');
+  assert.equal(S.sportLabel('nba'), 'NBA');
+  assert.equal(S.sportLabel('f1'), 'Formula 1');
+  for (const s of ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1']) assert.equal(S.groupSport(s), s);
+  assert.equal(S.groupSport('curling'), 'college-football', 'an unknown sport keeps the old default');
+  assert.equal(S.groupSport(undefined), 'college-football');
+  assert.deepEqual(['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1'].map(S.boardKind),
+    ['week', 'week', 'season', 'season', 'points']);
+  const load = fnSource('loadGroupBoard');
+  assert.ok(load.includes('groupSport(g.sport)'), 'the group sport is normalized to the five');
+  assert.ok(!/g\.sport === 'nfl' \? 'nfl' : 'college-football'/.test(load), 'the two-sport force is gone');
+  assert.ok(SCREEN_SRC.includes('sportLabel(d.sport)'), 'the sub line names the sport through the one label table');
+});
+
+test('F1: points board, ranked on points, weekends entered, a dash until anything scores', () => {
+  /* Test input, in the order the API sends it: points desc, then weekends. */
+  const api = [
+    { id: 'b', name: 'bo', points: 14, events: 3, wins: 14, picks: 3, played: 3 },
+    { id: 'a', name: 'al', points: 14, events: 2, wins: 14, picks: 2, played: 2 },
+    { id: 'c', name: 'cy', points: 5, events: 1, wins: 5, picks: 1, played: 1 },
+    { id: 'd', name: 'di', points: 0, events: 0, wins: 0, picks: 0, played: 0 }
+  ];
+  const rows = S.shapeF1Rows(api, 'cy', 'al');
+  assert.deepEqual(rows.map((r) => r.userId), ['b', 'a', 'c', 'd'], 'the server order holds inside a tie');
+  assert.deepEqual(rows.map((r) => r.rank), [1, 1, 3, 4], 'competition ranking on points');
+  assert.deepEqual(rows.map((r) => r.seasonPoints), [14, 14, 5, null], 'no weekend entered is a dash');
+  assert.equal(rows.find((r) => r.isSelf).userId, 'c');
+  assert.equal(rows.find((r) => r.isCommish).userId, 'a');
+  assert.ok(rows.every((r) => r.weekRec === null && r.seasonRec === null), 'no W-L record on an F1 row');
+  assert.equal(S.weekendsText(0), 'No weekends yet');
+  assert.equal(S.weekendsText(1), '1 weekend entered');
+  assert.equal(S.weekendsText(3), '3 weekends entered');
+
+  const none = S.shapeF1Rows([
+    { id: 'z', name: 'zed', points: 0, events: 1, wins: 0, picks: 1, played: 1 },
+    { id: 'm', name: 'mo', points: 0, events: 1, wins: 0, picks: 1, played: 1 }
+  ], '', '');
+  assert.deepEqual(none.map((r) => r.displayName), ['mo', 'zed'], 'nothing scored: alphabetical');
+  assert.deepEqual(none.map((r) => r.rank), [0, 0]);
+  assert.ok(none.every((r) => r.seasonPoints === null), 'a weekend entered is not a weekend scored');
+  console.log('    F1 ranks:', rows.map((r) => r.displayName + ' ' + r.rank + ' (' + r.seasonPoints + ')').join(', '));
+});
+
+test('F1: the group board asks once, reads unit points, and has no week', async () => {
+  const f = groupLoader({ id: 'F1GRP', name: 'Pit Wall', sport: 'f1', members: 3 }, () => ({
+    unit: 'points', week: 0,
+    rows: [
+      { id: 'a', name: 'al', points: 9, events: 2, wins: 9, picks: 2, played: 2 },
+      { id: 'b', name: 'bo', points: 4, events: 2, wins: 4, picks: 2, played: 2 }
+    ]
+  }));
+  const out = await f.load();
+  assert.deepEqual(f.standings(), ['/api/pool/standings?sport=f1&pool=F1GRP&week=0']);
+  assert.equal(out.board, 'points');
+  assert.equal(out.pool.week, 0);
+  assert.deepEqual(out.seasonRows.map((r) => [r.displayName, r.rank, r.seasonPoints]), [['al', 1, 9], ['bo', 2, 4]]);
+  assert.equal(out.weekPicks, 4, 'weekends entered stand in for picks, so the empty state stays off');
+  const draw = fnSource('drawGroup');
+  assert.ok(/if \(kind === 'week'\) host\.appendChild\(toggle\(pool\)\)/.test(draw), 'only football gets the week toggle');
+  assert.ok(SCREEN_SRC.includes("data.board === 'points' ? 'Points' : 'Season'"), 'the one column is headed Points');
+});
+
+test('basketball: the season board only, never a day number as a week', async () => {
+  for (const sport of ['mens-college-basketball', 'nba']) {
+    const f = groupLoader({ id: 'HOOPS1', name: 'Hoops', sport, week: 20260912, members: 2 }, (week) => ({
+      week,
+      rows: [
+        { id: 'a', name: 'al', picks: 6, wins: 4, played: 5 },
+        { id: 'b', name: 'bo', picks: 6, wins: 3, played: 5 }
+      ]
+    }));
+    const out = await f.load();
+    assert.deepEqual(f.standings(), ['/api/pool/standings?sport=' + sport + '&pool=HOOPS1&week=0'],
+      sport + ' must read week=0 and nothing else');
+    assert.equal(out.board, 'season');
+    assert.equal(out.pool.week, 0);
+    assert.deepEqual(out.seasonRows.map((r) => [r.displayName, r.rank, r.seasonPoints]), [['al', 1, 4], ['bo', 2, 3]]);
+  }
+  /* Football is unchanged: its week, then its season. */
+  const nfl = groupLoader({ id: 'NFLGRP', name: 'Sundays', sport: 'nfl', members: 1 }, (week) => ({ week, rows: [] }));
+  await nfl.load();
+  assert.deepEqual(nfl.standings(), [
+    '/api/pool/standings?sport=nfl&pool=NFLGRP&week=1',
+    '/api/pool/standings?sport=nfl&pool=NFLGRP&week=0'
+  ]);
+});
+
+test('boast: the words - ordinal, rank of members, group name', () => {
+  assert.equal(S.boastText(2, 6, 'The Fourth Floor', false), "I'm 2nd of 6 in The Fourth Floor on Any Given");
+  assert.equal(S.boastText(1, 6, 'The Fourth Floor', true), "I'm tied for 1st of 6 in The Fourth Floor on Any Given");
+  assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101].map(S.ordinal),
+    ['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st']);
+});
+
+test('boast: X intent URL-encoded, and sms body in the one form both phones read', () => {
+  const text = "I'm 2nd of 6 in The Fourth Floor on Any Given";
+  const url = 'https://anygiven.test/?pool=ABC123';
+  const { x, sms } = S.boastLinks(text, url);
+  assert.ok(x.startsWith('https://twitter.com/intent/tweet?'));
+  const u = new URL(x);
+  assert.equal(u.searchParams.get('text'), text);
+  assert.equal(u.searchParams.get('url'), url);
+  assert.ok(!/[ '\n]/.test(x), 'the intent carries no raw space, quote or newline');
+  assert.ok(sms.startsWith('sms:?&body='));
+  assert.equal(decodeURIComponent(sms.slice('sms:?&body='.length)), text + '\n' + url);
+  assert.ok(!/[ \n]/.test(sms), 'the body is encoded');
+  console.log('    X:', x);
+  console.log('    sms:', sms);
+});
+
+test('boast: no row without a rank, and the link is the group code', () => {
+  const g = { id: 'ABC123', name: 'The Fourth Floor' };
+  const pool = { memberCount: 6 };
+  const origin = 'https://anygiven.test';
+  const row = (id, rank, isSelf) => ({ userId: id, displayName: id, rank, isSelf });
+  assert.equal(S.boastFor([row('a', 1, false), row('b', 2, false)], pool, g, origin), null, 'not on the board');
+  assert.equal(S.boastFor([row('a', 0, true), row('b', 0, false)], pool, g, origin), null, 'unranked');
+  assert.equal(S.boastFor([], pool, g, origin), null);
+  assert.equal(S.boastFor([row('a', 1, true)], pool, null, origin), null, 'no group');
+
+  const b = S.boastFor([row('a', 1, false), row('b', 2, true), row('c', 3, false)], pool, g, origin);
+  assert.equal(b.text, "I'm 2nd of 6 in The Fourth Floor on Any Given");
+  assert.equal(b.url, 'https://anygiven.test/?pool=ABC123');
+  assert.equal(new URL(b.x).searchParams.get('url'), b.url);
+  const t = S.boastFor([row('a', 1, true), row('b', 1, false)], pool, g, origin);
+  assert.equal(t.text, "I'm tied for 1st of 6 in The Fourth Floor on Any Given");
+
+  const draw = fnSource('drawGroup');
+  assert.ok(/const brag = boastFor\(/.test(draw) && /if \(brag\) host\.appendChild\(boastRow\(brag\)\)/.test(draw),
+    'the row is drawn only when boastFor returns something');
+  const br = fnSource('boastRow');
+  assert.ok(br.includes('navigator.share') && /if \(typeof navigator !== 'undefined' && navigator\.share\)/.test(br),
+    'Share only where the native sheet exists');
+  assert.ok(/\.p5-boast-go\s*\{[^}]*min-height:\s*var\(--tap-min\)/.test(CSS_SRC), 'each boast action is 44px');
+  assert.ok(/\.p5-boast\s*\{[^}]*grid-auto-columns:\s*minmax\(0,\s*1fr\)/.test(CSS_SRC),
+    'the actions share one row and can shrink - no sideways scroll');
+  assert.ok(/\.p5-table--one \.p5-row\s*\{\s*grid-template-columns:\s*26px 24px 22px minmax\(0, 1fr\) 58px/.test(CSS_SRC),
+    'the one-figure board drops the week column');
+});

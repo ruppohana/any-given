@@ -14,6 +14,9 @@
  *   - the in-page two-tap leave (never window.confirm), and the commissioner's
  *     leave question names the longest-standing member
  *   - the limits match src/lib/groups.ts, every var() is a defined token, no shadow
+ *   - five sports, in POOL_SPORTS order (2026-09-12, "do all the sports for the
+ *     pool"): the payload per sport, college basketball's two which-games
+ *     choices, and no spread for F1
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -85,7 +88,7 @@ test('Create stays off until the pledge is ticked - and the pledge has words', (
   assert.match(CJS, /if\s*\(!canCreate\(form\)\)\s*return;/, 'submit re-checks the pledge');
 });
 
-test('Create sends pledge: true, a real sport and the spread choice', () => {
+test('Create sends pledge: true, a real sport and the spread choice (NFL: no scope)', () => {
   const p = mod.createPayload({ name: 'A-Test', sport: 'nfl', ats: true, pledged: true, kindness: KINDNESS });
   assert.deepEqual(p, { name: 'A-Test', sport: 'nfl', pledge: true, ats: true });
   const q = mod.createPayload({ name: 'A-Two', sport: 'anything', pledged: true, kindness: KINDNESS });
@@ -247,4 +250,105 @@ test('the header is the shared template with no title of its own', () => {
     assert.ok(CJS.includes("'" + label + "'"), 'missing the label ' + label);
   }
   assert.ok(CJS.includes("'#/gcommish'") && CJS.includes("'#/grules'"));
+});
+
+/* ---------------------------------------------------------- five sports
+ * Jason, 2026-09-12: "complete the pool revision, but do all the sports for the
+ * pool". The ids are src/lib/groups.ts POOL_SPORTS, read here as text. */
+
+const POOL_SPORTS = ((LIB.match(/POOL_SPORTS\s*=\s*\[([^\]]+)\]/) || [])[1] || '')
+  .split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean);
+const HAS = { name: 'A-Test', pledged: true };
+
+test('the Sport control offers all five, in POOL_SPORTS order, with their labels', () => {
+  assert.deepEqual(POOL_SPORTS, ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1']);
+  assert.deepEqual(mod.SPORTS.map((s) => s[0]), POOL_SPORTS, 'the screen and the server disagree on the sports');
+  assert.deepEqual(mod.SPORTS.map((s) => s[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1']);
+  for (const [id, label] of mod.SPORTS) assert.equal(mod.sportLabel(id), label);
+  assert.equal(mod.sportLabel('curling'), 'College football', 'an unknown sport reads as the server reads it');
+  assert.equal(mod.sportLabel(undefined), 'College football');
+  /* The control is built from that list, not its own copy of it. */
+  assert.match(CJS, /for \(const \[v, t\] of SPORTS\)/);
+  assert.match(CJS, /el\('div', 'g1-seg g1-seg--sport'\)/);
+});
+
+test('the sport default is ag.sport when it is one of the five, else college football', () => {
+  for (const s of POOL_SPORTS) assert.equal(mod.poolSport(s), s);
+  for (const s of ['soccer', '', null, undefined, 42]) assert.equal(mod.poolSport(s), 'college-football');
+  assert.match(CJS, /return poolSport\(JSON\.parse\(localStorage\.getItem\('ag\.sport'\)\)\)/);
+  assert.match(CJS, /const sport0 = poolSport\(data\.sportDefault\)/);
+});
+
+test('five sports on a 393px phone: two across, Formula 1 the full width, 44px each', () => {
+  assert.match(CCSS, /\.scr-g1-group \.g1-seg \{ display: grid; grid-template-columns: 1fr 1fr;/);
+  assert.match(CCSS, /\.g1-seg--sport \.g1-seg-b:last-child:nth-child\(odd\) \{ grid-column: 1 \/ -1; \}/);
+  assert.equal(mod.SPORTS.length % 2, 1, 'the fifth button spans only while the count is odd');
+  /* A hidden which-games button and the hidden spread row must actually hide:
+   * display: grid / flex beats the browser's own [hidden]. */
+  assert.match(CCSS, /\.g1-seg-b\[hidden\] \{ display: none; \}/);
+  assert.match(CCSS, /\.g1-switch-row\[hidden\] \{ display: none; \}/);
+});
+
+test('what Create sends, per sport', () => {
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'college-football' }),
+    { name: 'A-Test', sport: 'college-football', pledge: true, ats: false, scope: 'all', scopeArg: null });
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'college-football', scope: 'conference', scopeArg: 'Big Ten', ats: true }),
+    { name: 'A-Test', sport: 'college-football', pledge: true, ats: true, scope: 'conference', scopeArg: 'Big Ten' });
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'nfl', scope: 'top25' }),
+    { name: 'A-Test', sport: 'nfl', pledge: true, ats: false }, 'NFL is always all games');
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'mens-college-basketball' }),
+    { name: 'A-Test', sport: 'mens-college-basketball', pledge: true, ats: false, scope: 'top25', scopeArg: null },
+    'college basketball starts at the Top 25');
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'mens-college-basketball', scope: 'all', ats: true }),
+    { name: 'A-Test', sport: 'mens-college-basketball', pledge: true, ats: true, scope: 'all', scopeArg: null });
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'mens-college-basketball', scope: 'conference', scopeArg: 'Big Ten' }),
+    { name: 'A-Test', sport: 'mens-college-basketball', pledge: true, ats: false, scope: 'top25', scopeArg: null },
+    'a conference is never sent for basketball - it is not offered');
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'nba', scope: 'top25', ats: true }),
+    { name: 'A-Test', sport: 'nba', pledge: true, ats: true });
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'f1', scope: 'top25', ats: true }),
+    { name: 'A-Test', sport: 'f1', pledge: true, ats: false }, 'F1 never sends the spread on');
+});
+
+test('which games: three for college football, All games and Top 25 for college basketball, none else', () => {
+  assert.deepEqual(mod.scopeValues('college-football'), ['all', 'top25', 'conference']);
+  assert.deepEqual(mod.scopeValues('mens-college-basketball'), ['all', 'top25']);
+  for (const s of ['nfl', 'nba', 'f1']) assert.deepEqual(mod.scopeValues(s), []);
+  assert.equal(mod.defaultScope('mens-college-basketball'), 'top25');
+  assert.equal(mod.defaultScope('college-football'), 'all');
+  assert.match(mod.basketballScopeNote('top25'), /A college basketball day can have 150 games\.$/);
+  assert.match(mod.basketballScopeNote('all'), /A college basketball day can have 150 games\.$/);
+  /* The screen hides what a sport does not offer, and shows the conference list
+   * only for college football. */
+  assert.match(CJS, /b\.hidden = !offered\.includes\(b\.dataset\.v\)/);
+  assert.match(CJS, /confSel\.hidden = !\(form\.sport === 'college-football' && form\.scope === 'conference'\)/);
+});
+
+test('a conference is required only for college football set to one conference', () => {
+  const k = { pledged: true, kindness: KINDNESS };
+  assert.equal(mod.canCreate({ ...k, sport: 'college-football', scope: 'conference', scopeArg: '' }), false);
+  assert.equal(mod.canCreate({ ...k, sport: 'college-football', scope: 'conference', scopeArg: 'SEC' }), true);
+  for (const s of ['nfl', 'mens-college-basketball', 'nba', 'f1']) {
+    assert.equal(mod.canCreate({ ...k, sport: s, scope: 'conference', scopeArg: '' }), true, s);
+  }
+});
+
+test('F1 hides the against-the-spread switch', () => {
+  assert.match(CJS, /function paintAts\(\) \{ sw\.hidden = form\.sport === 'f1'; \}/);
+  assert.match(CJS, /paintSeg\(\); paintScope\(\); paintAts\(\);/, 'changing sport repaints the switch');
+});
+
+test('the group card: football unchanged, basketball by the day, F1 in points', () => {
+  assert.equal(mod.periodLabel('nfl', 3), 'Week 3');
+  assert.equal(mod.periodLabel('college-football', null), 'Week not set');
+  assert.equal(mod.periodLabel('mens-college-basketball', 20261115), 'A day at a time');
+  assert.equal(mod.periodLabel('nba', 20261115), 'A day at a time');
+  assert.equal(mod.periodLabel('f1', null), 'Race weekends');
+  assert.equal(mod.picksLine({ sport: 'nfl', ats: true }), 'Picks against the spread');
+  assert.equal(mod.picksLine({ sport: 'college-football', ats: false }), 'Picks straight up - who wins');
+  assert.equal(mod.picksLine({ sport: 'f1', ats: true }), 'Race weekend picks, scored in points');
+  assert.equal(mod.shareText('A-Test', 'BCD234'),
+    'Join my group A-Test on Any Given. Pick the winners each week, scored in points. Code BCD234');
+  assert.match(mod.shareText('A-Test', 'BCD234', 'f1'), /Pick the race weekend/);
+  assert.match(mod.shareText('A-Test', 'BCD234', 'nba'), /each day/);
 });
