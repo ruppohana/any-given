@@ -214,6 +214,13 @@ export function render(root, data, state) {
       })());
   }
 
+  /* The live picks, on a finished race - src/lib/f1-live.ts. */
+  const rp = el('a', 'card f1-card f1-link');
+  rp.href = '#/f1live';
+  rp.appendChild(el('span', 'f1-title', 'Replay a race'));
+  rp.appendChild(el('span', 'f1-note', 'Call pit stops, fastest laps and safety cars on a finished Grand Prix, one lap at a time.'));
+  root.appendChild(rp);
+
   root.appendChild(el('p', 'f1-note f1-foot',
     'Picks are saved on this phone. Results come from the published session order; a pick locks when its session starts. '
     + 'Any Given is not associated in any way with the Formula 1 companies.'));

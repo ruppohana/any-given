@@ -1,0 +1,61 @@
+/* F1 race replay - Race weekend > Replay a race. The lap and the total pinned,
+   the running order, then one card per call. 44px reach on every control. */
+.scr-f1l { display: grid; gap: 12px; padding-bottom: 96px; }
+.scr-f1l .f1l-bar {
+  position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 12px; background: var(--card); border-bottom: 1px solid var(--line);
+  font-weight: 800; font-size: var(--t-emph);
+}
+.scr-f1l .f1l-total { color: var(--accent); }
+.scr-f1l .f1l-ctl { display: grid; grid-template-columns: auto 1fr 1.4fr; gap: 8px; }
+.scr-f1l .f1l-btn {
+  font: inherit; font-weight: 700; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-f1l .f1l-btn.is-main { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.scr-f1l .f1l-btn.is-quiet { color: var(--dim); font-weight: 600; }
+.scr-f1l .f1l-btn:disabled { opacity: .45; }
+.scr-f1l .f1l-card { display: grid; gap: 8px; padding: 12px; }
+.scr-f1l .f1l-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.scr-f1l .f1l-title { font-weight: 800; font-size: var(--t-emph); }
+.scr-f1l .f1l-worth { font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.scr-f1l .f1l-dim { font-size: 12px; color: var(--dim); margin: 0; }
+.scr-f1l .f1l-feed { margin: 0; font-size: 13px; font-weight: 700; }
+.scr-f1l .f1l-sec { margin: 8px 4px 0; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.scr-f1l .f1l-order { list-style: none; margin: 0; padding: 0; display: grid; }
+.scr-f1l .f1l-o {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  min-height: 32px; border-top: 1px solid var(--line);
+}
+.scr-f1l .f1l-o:first-child { border-top: 0; }
+.scr-f1l .f1l-pos { font-weight: 800; color: var(--dim); }
+.scr-f1l .f1l-drv { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; min-width: 0; }
+.scr-f1l .f1l-team { font-size: 12px; font-weight: 500; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scr-f1l .f1l-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: 0 0 auto; }
+.scr-f1l .f1l-gap { font-size: 13px; color: var(--dim); }
+.scr-f1l .f1l-more {
+  font: inherit; font-weight: 700; min-height: 44px; border: 0; background: none; color: var(--accent); text-align: left; padding: 0;
+}
+.scr-f1l .f1l-sel {
+  font: inherit; width: 100%; min-height: 44px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-f1l .f1l-choices { display: flex; gap: 8px; }
+.scr-f1l .f1l-choice {
+  flex: 1; font: inherit; font-weight: 700; min-height: 44px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-f1l .f1l-mine { margin: 0; font-size: 13px; font-weight: 700; color: var(--accent); }
+.scr-f1l .f1l-res {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px;
+  padding: 6px 0; border-top: 1px solid var(--line);
+}
+.scr-f1l .f1l-res:first-child { border-top: 0; }
+.scr-f1l .f1l-rtxt { display: grid; gap: 2px; min-width: 0; }
+.scr-f1l .f1l-rq { font-weight: 700; }
+.scr-f1l .f1l-pts { font-weight: 800; min-width: 36px; text-align: right; color: var(--dim); }
+.scr-f1l .f1l-pts[data-state="hit"] { color: var(--accent); }
+.scr-f1l .f1l-foot { margin: 4px; }

@@ -3,6 +3,7 @@ import { captureSlate } from './slate-cron.ts';
 import { captureDay, serveDay } from './slate-day.ts';
 import { DAY_SPORTS, isDaySport, dayOf, addDays } from './lib/day.ts';
 import { serveF1 } from './f1-feed.ts';
+import { buildReplay, listReplays } from './f1-replay.ts';
 export { LivePoller } from './poller-do.ts';
 import { computeDue, nuggetAlertTick } from './nugget-due.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
@@ -489,6 +490,29 @@ export default {
         const head = { 'content-type': 'application/json', 'cache-control': 'no-store' };
         if (!doc) return new Response(JSON.stringify({ error: 'no F1 event on the feed' }), { status: 404, headers: head });
         return new Response(JSON.stringify(doc), { headers: head });
+      }
+
+      /* ---- F1 replays: finished races off OpenF1's free history (src/f1-replay.ts) ---- */
+      const rl = p.match(/^\/api\/f1\/replays(?:\/(\d{4}))?$/);
+      if (rl) {
+        const head = { 'content-type': 'application/json', 'cache-control': 'public, max-age=600' };
+        try {
+          const races = await listReplays(env, Number(rl[1]) || new Date().getUTCFullYear());
+          return new Response(JSON.stringify({ races }), { headers: head });
+        } catch (e: any) {
+          return new Response(JSON.stringify({ error: String(e?.message || e) }), { status: 502, headers: { ...head, 'cache-control': 'no-store' } });
+        }
+      }
+      const rp = p.match(/^\/api\/f1\/replay\/(\d{3,6})$/);
+      if (rp) {
+        const head = { 'content-type': 'application/json', 'cache-control': 'public, max-age=86400' };
+        try {
+          const tl = await buildReplay(env, Number(rp[1]));
+          if (!tl) return new Response(JSON.stringify({ error: 'not a finished race' }), { status: 404, headers: { ...head, 'cache-control': 'no-store' } });
+          return new Response(JSON.stringify(tl), { headers: head });
+        } catch (e: any) {
+          return new Response(JSON.stringify({ error: String(e?.message || e) }), { status: 502, headers: { ...head, 'cache-control': 'no-store' } });
+        }
       }
 
       /* ---- what the poller last pushed ---- */

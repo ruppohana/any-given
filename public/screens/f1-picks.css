@@ -38,3 +38,5 @@
 .scr-f1 .f1-choice[data-on="true"]:disabled { opacity: 1; }
 .scr-f1 .f1-note { font-size: 12px; color: var(--dim); margin: 0; }
 .scr-f1 .f1-foot { margin: 4px; }
+.scr-f1 .f1-link { color: var(--fg); text-decoration: none; min-height: 44px; }
+.scr-f1 .f1-link .f1-title { color: var(--accent); }
