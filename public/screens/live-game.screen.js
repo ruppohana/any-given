@@ -4078,7 +4078,9 @@ const HOME_FAMILIES = [
   { h: 'Basketball', leagues: [['mens-college-basketball', 'College basketball'], ['nba', 'NBA'], ['wnba', 'WNBA']] },
   { h: 'Baseball', leagues: [['mlb', 'MLB']] },
   { h: 'Hockey', leagues: [['nhl', 'NHL']] },
-  { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']] }
+  { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']] },
+  /* Soccer, 2026-09-13 - last, as in POOL_SPORTS. Names in type: no league mark. */
+  { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS']] }
 ];
 /* The marks page 2 already draws, and no others. The mark alone, the name as
  * the tile's accessible label - "remove the word NFL and College" (2026-09-11). */

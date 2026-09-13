@@ -82,11 +82,16 @@ const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
  * allowed, no which-games choice. */
 const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
-  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks' };
+  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks',
+  epl: 'Premier League', mls: 'MLS' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
 export const isRacing = (s) => { const p = poolSport(s); return p === 'f1' || p.startsWith('nascar'); };
+/** Soccer - the Premier League and MLS. A draw is a pick there, and there is no spread. */
+export const isSoccer = (s) => { const p = poolSport(s); return p === 'epl' || p === 'mls'; };
+/** No spread to switch: the races and soccer (src/lib/groups.ts hasNoSpread). */
+export const hasNoSpread = (s) => isRacing(s) || isSoccer(s);
 /** Which-games choices a sport offers: conferences are football's only; the pro
  *  leagues and the races play every game. */
 export const scopeValues = (s) => {
@@ -332,8 +337,9 @@ export function render(root, data, state) {
     }
 
     host.appendChild(nameSection(group, flashFor('name')));
-    /* An F1 or NASCAR group is scored in points - there is no spread to switch. */
-    if (!isRacing(group.sport)) host.appendChild(atsSection(group, flashFor('ats')));
+    /* An F1 or NASCAR group is scored in points, and a soccer group picks the
+     * result with the draw as a side - there is no spread to switch in either. */
+    if (!hasNoSpread(group.sport)) host.appendChild(atsSection(group, flashFor('ats')));
     if (scopeValues(group.sport).length) host.appendChild(scopeSection(group, d.conferences || [], flashFor('scope')));
     if (detail.invite) host.appendChild(inviteSection(group, detail.invite));
     host.appendChild(membersSection(group, members, flashFor('members')));

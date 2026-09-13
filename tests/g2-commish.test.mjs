@@ -411,14 +411,14 @@ function sportWorld(sport, scope = 'all') {
 }
 const stateCalls = () => CALLS.filter((c) => c.path.startsWith('/api/state/'));
 
-test('sportName gives the eleven labels, and an unknown sport reads as college football', () => {
+test('sportName gives the thirteen labels, and an unknown sport reads as college football', () => {
   assert.deepEqual([...POOL_SPORTS], ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
-    'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck']);
+    'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls']);
   assert.deepEqual(POOL_SPORTS.map(mod.sportName),
     ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR', 'MLB', 'NHL', 'WNBA',
-      'NASCAR O’Reilly', 'NASCAR Trucks']);
+      'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS']);
   assert.equal(mod.sportName('curling'), 'College football');
-  assert.deepEqual(POOL_SPORTS.map((s) => mod.scopeValues(s).length), [3, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(POOL_SPORTS.map((s) => mod.scopeValues(s).length), [3, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   /* The races are the two with no spread - one helper, not two comparisons. */
   assert.deepEqual(POOL_SPORTS.filter(mod.isRacing), ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']);
   assert.equal(mod.isRacing('curling'), false);

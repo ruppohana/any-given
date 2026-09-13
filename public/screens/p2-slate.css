@@ -629,6 +629,23 @@
 .scr-p2-slate .p2-score .p2-sc { font-size: var(--t-section); font-weight: 800; }
 .scr-p2-slate .p2-score .p2-sc[data-loser="true"] { color: var(--dim); }
 
+/* 🔴 THE DRAW - soccer's third choice, in the middle slot (2026-09-13). It IS a
+   .p2-zone, so it inherits the picked outline, the disabled state and the
+   84px height the team zones stretch to; this only narrows it and sets its word.
+   64px wide keeps both team blocks readable at 393px and is well over the 44px
+   floor. The score rides in it once the match has started. */
+.scr-p2-slate .p2-sides > .p2-draw { min-width: 64px; padding: 8px 6px; gap: 3px; }
+.scr-p2-slate .p2-draw .p2-draw-t { font-size: var(--t-body); font-weight: 800; }
+.scr-p2-slate .p2-draw .p2-c-lo { font-size: 10px; font-weight: 800; letter-spacing: .06em; color: var(--dim); }
+.scr-p2-slate .p2-draw .p2-c-lo[data-live="true"] { color: var(--accent); }
+/* A level final: the word is the result, whoever picked it - never dimmed as a
+   void, never read as a game still going. */
+.scr-p2-slate .p2-draw[data-outcome="draw"] .p2-draw-t { color: var(--fg); text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-thickness: 2px; }
+.scr-p2-slate .p2-draw:not([data-outcome="draw"]) .p2-draw-t { color: var(--dim); }
+.scr-p2-slate .p2-draw[data-pick="on"] .p2-draw-t { color: var(--accent); }
+.scr-p2-slate .p2-row[data-state="picked"] .p2-draw:not([data-pick="on"]) .p2-draw-t { opacity: .55; }
+
 /* The invite line's styles left with the line itself - an invite opens #/g now
    (CONTRACT-GROUPS §1, amended 2026-09-11). */
 

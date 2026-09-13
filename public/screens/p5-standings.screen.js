@@ -458,7 +458,10 @@ const SPORT_LABEL = {
   nhl: 'NHL',
   wnba: 'WNBA',
   'nascar-oreilly': 'NASCAR O’Reilly',
-  'nascar-truck': 'NASCAR Trucks'
+  'nascar-truck': 'NASCAR Trucks',
+  /* Soccer (2026-09-13): a day at a time, like the NBA - so the season board. */
+  epl: 'Premier League',
+  mls: 'MLS'
 };
 
 /** A group's sport as one of the five; anything else is college football, as before. */
@@ -477,6 +480,8 @@ function boardKind(s) {
   if (k === 'f1' || k.startsWith('nascar')) return 'points';
   /* Every league that picks a day at a time (MLB, NHL, WNBA joined 2026-09-12). */
   if (k === 'mens-college-basketball' || k === 'nba' || k === 'mlb' || k === 'nhl' || k === 'wnba') return 'season';
+  /* The Premier League and MLS pick a day at a time too: their "week" is a date. */
+  if (k === 'epl' || k === 'mls') return 'season';
   return 'week';
 }
 
@@ -1078,7 +1083,11 @@ export function render(root, data, state) {
       ? 'Points from every Grand Prix weekend you enter. In qualifying, the sprint and the race: 3 for a driver '
         + 'in the exact spot, 1 for the right driver in the wrong spot. 3 for the fastest lap, 1 for the pole call, '
         + '2 for the retirements. Scored as each session finishes.'
-      : 'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
+      /* Soccer (2026-09-13): a level final is a result - the draw pickers score it
+       * (src/lib/groups.ts gradeSql) - so "a tie counts for nobody" would be false. */
+      : (d.sport === 'epl' || d.sport === 'mls')
+        ? 'A point for every right pick - a winner or the draw - once the match is final. A void game counts for nobody.'
+        : 'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
     host.appendChild(foot);
   }
 

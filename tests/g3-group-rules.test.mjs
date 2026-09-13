@@ -33,6 +33,7 @@ const CSS = read('../public/screens/g3-group-rules.css');
 const S6 = read('../public/screens/s6-rules.screen.js');
 const TOKENS = read('../public/styles/tokens.css');
 const GROUPS = read('../src/groups.ts');
+const LIBG = read('../src/lib/groups.ts');
 const WORKER = read('../src/worker.ts');
 const MAIL = read('../src/mail.ts');
 const CRON = read('../src/slate-cron.ts');
@@ -245,8 +246,12 @@ test('scoring: a right pick counts one, only final games with a winner count', (
   assert.match(sql, /SUM\(CASE WHEN g\.status = 'final' AND g\.void = 0/);
   /* A zero margin - a tie straight up, a push against the spread - counts for
    * nobody: it is in neither wins nor played. */
-  assert.match(sql, /AND \$\{margin\} <> 0/);
-  assert.match(sql, /: '\(g\.home_score - g\.away_score\)'/);
+  /* 2026-09-13: the margin and the counted rule moved into src/lib/groups.ts
+   * gradeSql when soccer made a level final a result; the query reads them. */
+  assert.match(sql, /const G = gradeSql\(sport, ats\);/);
+  assert.match(sql, /AND \$\{G\.counted\}/);
+  assert.match(LIBG, /counted: `\$\{margin\} <> 0`/);
+  assert.match(LIBG, /: '\(g\.home_score - g\.away_score\)'/);
   assert.match(sql, /ORDER BY wins DESC/);
   assert.match(sql, /FROM member m\s+LEFT JOIN pick p/);
   /* Cancelled and postponed games never reach 'final' in the cron. */
@@ -257,7 +262,7 @@ test('scoring: a right pick counts one, only final games with a winner count', (
    * switch became scored ("the comish has the option") and this failed - so the
    * page says how the spread scores and the push is in its void line, and this
    * now pins both halves: the scorer reads the group's line, and the page says so. */
-  assert.match(sql, /COALESCE\(p\.spread_at, g\.spread, 0\)/, 'scored against the line the pick was made at');
+  assert.match(LIBG, /COALESCE\(p\.spread_at, g\.spread, 0\)/, 'scored against the line the pick was made at');
   assert.match(sql, /Number\(meta\.ats\) === 1/, 'only when the commissioner turned it on');
   assert.match(JS, /covers the spread it was picked at/, 'the page says how the spread scores');
   assert.match(JS, /lands ' \+\s*'exactly on the spread never counts/, 'the push is in the void line');
@@ -322,16 +327,16 @@ function branch(fn, cond) {
 }
 const lits = (src) => (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((s) => s.slice(1, -1)).join('');
 
-test('the League row shows the eleven labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
+test('the League row shows the thirteen labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
   const m = CJS.match(/const LEAGUES = \{([^}]*)\}/);
   assert.ok(m, 'no LEAGUES map');
   const pairs = [...m[1].matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((x) => [x[1], x[2]]);
   assert.deepEqual(pairs.map((p) => p[0]), [...POOL_SPORTS]);
   assert.deepEqual(pairs.map((p) => p[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR',
-    'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks']);
+    'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS']);
   assert.match(CJS, /\['League', LEAGUES\[sport\]\]/);
   /* How a group starts says all nine too. */
-  assert.ok(FLAT.includes('A group plays one sport - college football, the NFL, college basketball, the NBA, the WNBA, MLB, the NHL, Formula 1 or NASCAR (Cup, O’Reilly or Trucks) - chosen when it starts.'));
+  assert.ok(FLAT.includes('A group plays one sport - college football, the NFL, college basketball, the NBA, the WNBA, MLB, the NHL, the Premier League, MLS, Formula 1 or NASCAR (Cup, O’Reilly or Trucks) - chosen when it starts.'));
   assert.doesNotMatch(FLAT, /NFL or college football, chosen/);
 });
 
@@ -351,7 +356,7 @@ test('🔴 F1: scored in points over each race weekend, and nothing about spread
   for (const [name, s] of [['picking', pick], ['scoring', score]]) {
     assert.doesNotMatch(s, /spread|kickoff|kicks off/i, 'the F1 ' + name + ' section talks football');
   }
-  assert.match(CJS, /isRacing\(sport\) \? 'Rename the group\.' : 'Rename the group, and switch against the spread on or off\.'/);
+  assert.match(CJS, /hasNoSpread\(sport\) \? 'Rename the group\.' : 'Rename the group, and switch against the spread on or off\.'/);
   /* Every NASCAR series is a race (O'Reilly and Truck joined 2026-09-13). */
   assert.ok(CJS.includes("function isRacing(s) { return s === 'f1' || String(s).startsWith('nascar'); }"));
   /* No point value is typed (the 1 in "F1" is a name, not a number): the words
@@ -407,7 +412,7 @@ test('🔴 NASCAR: scored in points over each race, locked at the green flag, no
 test('the day sports are one list, equal to src/lib/day.ts, and the page reads them through it', () => {
   assert.deepEqual([...mod.DAY_SPORTS].sort(), Object.keys(SERVER_DAY).sort(),
     'the page and src/lib/day.ts disagree on which sports pick a day at a time');
-  assert.deepEqual(POOL_SPORTS.filter(mod.isDaySport), ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba']);
+  assert.deepEqual(POOL_SPORTS.filter(mod.isDaySport), ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls']);
   assert.doesNotMatch(CJS, /isHoops/, 'the old basketball-only helper is still in use');
   /* Picking and the group card both go through it. */
   const pick = branch('sPicking', 'isDaySport(sport)');
@@ -457,7 +462,7 @@ test('MLB and the NHL name their spread in the scoring rules; nobody else does',
   }
   assert.match(CJS, /\(spreadNote\(sport\) \? ' ' \+ spreadNote\(sport\) : ''\)/);
   /* Not a race, so the commissioner's spread switch is in their rules too. */
-  assert.match(CJS, /isRacing\(sport\) \? 'Rename the group\.' : 'Rename the group, and switch against the spread on or off\.'/);
+  assert.match(CJS, /hasNoSpread\(sport\) \? 'Rename the group\.' : 'Rename the group, and switch against the spread on or off\.'/);
 });
 
 test('football keeps its card note and its rules word for word', () => {

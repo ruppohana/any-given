@@ -79,7 +79,11 @@ export const SPORTS = [
   ['nhl', 'NHL'],
   ['wnba', 'WNBA'],
   ['nascar-oreilly', 'NASCAR O’Reilly'],
-  ['nascar-truck', 'NASCAR Trucks']
+  ['nascar-truck', 'NASCAR Trucks'],
+  /* Soccer, 2026-09-13: the Premier League and MLS, a day at a time, and the one
+   * pool where the draw is a pick. */
+  ['epl', 'Premier League'],
+  ['mls', 'MLS']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -92,7 +96,8 @@ export const SPORT_FAMILIES = [
   ['Basketball', ['mens-college-basketball', 'nba', 'wnba']],
   ['Baseball', ['mlb']],
   ['Hockey', ['nhl']],
-  ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']]
+  ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']],
+  ['Soccer', ['epl', 'mls']]
 ];
 
 export function poolSport(s) {
@@ -106,11 +111,23 @@ export function isRacing(s) {
   return p === 'f1' || p.startsWith('nascar');
 }
 
+/** The Premier League and MLS: a draw is a pick, and there is no spread. */
+export function isSoccer(s) {
+  const p = poolSport(s);
+  return p === 'epl' || p === 'mls';
+}
+
+/** No spread to pick against: the races, and soccer. The server's copy is
+ *  src/lib/groups.ts hasNoSpread, which refuses a spread for the same sports. */
+export function hasNoSpread(s) {
+  return isRacing(s) || isSoccer(s);
+}
+
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME - the group's "week" is
  * the day (YYYYMMDD). src/lib/day.ts DAY_SPORTS is the server's copy; a browser
  * module with its imports stripped cannot read it, so tests/g1-group.test.mjs
  * holds the two equal. */
-export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl'];
+export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls'];
 
 /** Picks a day at a time: basketball, baseball, hockey. */
 export function isDaySport(s) {
@@ -123,6 +140,8 @@ export function lockWord(s) {
   const p = poolSport(s);
   if (p === 'mlb') return 'first pitch';
   if (p === 'nhl') return 'puck drop';
+  /* A soccer match kicks off - a day sport, but not a tip-off. */
+  if (isSoccer(p)) return 'kickoff';
   if (isDaySport(p)) return 'tip-off';
   if (isRacing(p)) return '';
   return 'kickoff';
@@ -142,6 +161,7 @@ export function sportNote(s) {
   const p = poolSport(s);
   if (p === 'f1') return 'Pick the race weekend, scored in points. Each pick locks when its session starts.';
   if (p.startsWith('nascar')) return 'Pick the race, scored in points. Every pick locks at the green flag.';
+  if (isSoccer(p)) return 'Pick the winner or the draw, a day at a time. Every pick locks at kickoff.';
   if (isDaySport(p)) return 'Pick the winners a day at a time. Every pick locks at ' + lockWord(p) + '.';
   return 'Pick the winners each week. Every pick locks at kickoff.';
 }
@@ -181,7 +201,7 @@ export function createPayload(form) {
     name: String((form && form.name) || ''),
     sport,
     pledge: true,
-    ats: !isRacing(sport) && !!(form && form.ats),
+    ats: !hasNoSpread(sport) && !!(form && form.ats),
     ...(choices.length ? { scope, scopeArg: scope === 'conference' ? String(form.scopeArg || '') : null } : {})
   };
 }
@@ -211,6 +231,7 @@ export function picksLine(g) {
   const s = g && poolSport(g.sport);
   if (s === 'f1') return 'Race weekend picks, scored in points';
   if (String(s).startsWith('nascar')) return 'Race day picks, scored in points';
+  if (isSoccer(s)) return 'Picks straight up - who wins, or the draw';
   return g && g.ats ? 'Picks against the spread' : 'Picks straight up - who wins';
 }
 
@@ -254,6 +275,7 @@ export function shareText(groupName, code, sport) {
   const s = poolSport(sport);
   const how = s === 'f1' ? 'Pick the race weekend, scored in points.'
     : String(s).startsWith('nascar') ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
+    : isSoccer(s) ? 'Pick the winner or the draw each day, scored in points.'
     : isDaySport(s) ? 'Pick the winners each day, scored in points.'
     : 'Pick the winners each week, scored in points.';
   return 'Join my group ' + groupName + ' on Any Given. ' + how + ' Code ' + code;
@@ -592,10 +614,11 @@ function startForm(host, data) {
   swB.appendChild(el('span', 'g1-knob'));
   sw.append(swText, swB);
   c.appendChild(sw);
-  /* F1 and NASCAR are scored in points - there is no spread to pick against.
-   * MLB and the NHL name their spread, so the note says what it is called. */
+  /* F1 and NASCAR are scored in points and soccer picks the result, draw and
+   * all - there is no spread to pick against in any of them. MLB and the NHL
+   * name their spread, so the note says what it is called. */
   function paintAts() {
-    sw.hidden = isRacing(form.sport);
+    sw.hidden = hasNoSpread(form.sport);
     swNote.textContent = ['Off: pick who wins. On: your team has to cover the spread you picked at.',
       spreadNote(form.sport), 'The commissioner can change it later.'].filter(Boolean).join(' ');
   }

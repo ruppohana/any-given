@@ -138,7 +138,11 @@ export function marksOn(doc) {
  * Found by pointing the live screen at a real NFL game and looking at it, which
  * is the only way this class of bug is ever found. */
 const LEAGUE_PATH = { nfl: 'nfl', 'college-football': 'ncaa', ncaa: 'ncaa',
-  'mens-college-basketball': 'ncaa', nba: 'nba', mlb: 'mlb', nhl: 'nhl', wnba: 'wnba' };
+  'mens-college-basketball': 'ncaa', nba: 'nba', mlb: 'mlb', nhl: 'nhl', wnba: 'wnba',
+  /* 🔴 SOCCER CRESTS ARE BY TEAM ID, under ESPN's one `soccer` folder for every
+     league (soccer/500/349.png, soccer/500-dark/183.png - both 200, 2026-09-13).
+     Not BY_ABBREV: a club's abbreviation is not its file name there. */
+  epl: 'soccer', mls: 'soccer' };
 /* The pro leagues ESPN files by ABBREVIATION (nba/500/bos.png) - an id there is a
    different team in college. MLB, NHL and WNBA joined 2026-09-12. */
 const BY_ABBREV = new Set(['nba', 'mlb', 'nhl', 'wnba']);

@@ -110,13 +110,14 @@ beforeEach(() => {
 
 test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once', () => {
   const { HOME_FAMILIES } = load();
-  assert.deepEqual(HOME_FAMILIES.map((f) => f.h), ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing']);
+  assert.deepEqual(HOME_FAMILIES.map((f) => f.h), ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing', 'Soccer']);
   assert.deepEqual(HOME_FAMILIES.map((f) => f.leagues), [
     [['college-football', 'College football'], ['nfl', 'NFL']],
     [['mens-college-basketball', 'College basketball'], ['nba', 'NBA'], ['wnba', 'WNBA']],
     [['mlb', 'MLB']],
     [['nhl', 'NHL']],
-    [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']]
+    [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']],
+    [['epl', 'Premier League'], ['mls', 'MLS']]
   ]);
   const ids = HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id));
   assert.equal(new Set(ids).size, ids.length, 'no sport twice');
@@ -158,10 +159,10 @@ test('signed out: every tile, no request, and a tap goes to the group page on th
   M.homeScreen(wrap);
   assert.deepEqual(wrap.children.map((n) => n.stub || n.className), ['hero', 'lg-sports']);
   assert.deepEqual(tiles(wrap).map((b) => b.dataset.sport),
-    M.HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id)), 'all eleven, in order');
-  assert.deepEqual(byClass(wrap, 'lg-fam-h').map((h) => h.textContent), ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing']);
+    M.HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id)), 'all thirteen, in order');
+  assert.deepEqual(byClass(wrap, 'lg-fam-h').map((h) => h.textContent), ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing', 'Soccer']);
   assert.deepEqual(byClass(wrap, 'lg-fam-row').map((r) => r.className),
-    ['lg-fam-row n2', 'lg-fam-row n3', 'lg-fam-row n1', 'lg-fam-row n1', 'lg-fam-row n2'], 'two or three across');
+    ['lg-fam-row n2', 'lg-fam-row n3', 'lg-fam-row n1', 'lg-fam-row n1', 'lg-fam-row n2', 'lg-fam-row n2'], 'two or three across');
   assert.equal(tile(wrap, 'nfl').children[0].tagName, 'img', 'NFL is its shield');
   assert.equal(tile(wrap, 'f1').children[0].textContent, 'Formula 1', 'F1 is words');
   assert.equal(tile(wrap, 'nfl').getAttribute('aria-label'), 'NFL', 'a mark tile still says its name');
@@ -186,7 +187,7 @@ test('signed in: the first paint does not wait, and the tiles say "Your group" o
   const M = load();
   const wrap = mk('div');
   M.homeScreen(wrap);
-  assert.equal(tiles(wrap).length, 11, 'drawn while the request is still out');
+  assert.equal(tiles(wrap).length, 13, 'drawn while the request is still out');
   assert.equal(tiles(wrap).some((b) => b.classList.contains('is-mine')), false, 'and nothing claimed yet');
   assert.deepEqual(CALLS, ['/api/group/mine']);
 

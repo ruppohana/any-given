@@ -79,6 +79,8 @@ export const states = ['ready', 'ready-short', 'empty', 'loading', 'offline', 'e
 export const GROUP_COPY = {
   sub: ' · pick the winners · scored in points',
   subAts: ' · against the spread · scored in points',
+  /* Soccer: three picks a match, and the draw is one of them. */
+  subSoccer: ' · pick the winner or the draw · scored in points',
   subNoWeek: 'Pick the winners · scored in points',
   /* Every sport the pool plays (Jason, 2026-09-12). An F1 group plays the race
    * weekend on its own screen; a basketball group picks a day at a time. */
@@ -251,6 +253,26 @@ export function winnerOf(game) {
   return game.homeScore > game.awayScore ? 'home' : 'away';
 }
 
+/* 🔴 SOCCER: A LEVEL FINAL IS A DRAW, AND THE DRAW IS A PICK (2026-09-13). The
+ * Premier League and MLS are the one pool with three sides. src/lib/pool.ts
+ * resolveGame says the same for any game whose `sport` is epl or mls - restated
+ * here, not imported, because the p2 tests load this module with its imports
+ * stripped. tests/soccer-screens.test.mjs holds the two equal on the real day. */
+export const SOCCER_SPORTS = ['epl', 'mls'];
+export function isSoccerSport(s) { return SOCCER_SPORTS.includes(s); }
+
+/** The sides a row offers, and so the sides a saved pick may carry. */
+export function sidesFor(sport) {
+  return isSoccerSport(sport) ? ['home', 'away', 'draw'] : ['home', 'away'];
+}
+
+/** A finished soccer match: 'home', 'away' or 'draw'. Null until it is final. */
+export function soccerResult(game) {
+  if (game.status !== 'final' || game.homeScore == null || game.awayScore == null) return null;
+  if (game.homeScore === game.awayScore) return 'draw';
+  return game.homeScore > game.awayScore ? 'home' : 'away';
+}
+
 /**
  * The PickState for one row. Stays inside the CONTRACT §6 union - there is no eighth
  * member. `--up` / `--down` are reached ONLY by `won` and `lost`: a pick that has not
@@ -262,6 +284,13 @@ export function pickStateOf(game, pick, now, mode) {
   const started = game.status !== 'scheduled' || now >= game.kickoffUtc;
   if (!side) return started ? 'locked' : 'unpicked';
   if (game.status === 'final') {
+    /* Soccer first: a level final is the draw - won by whoever picked it, lost by
+     * both sides - never the void path, and never graded on a spread. The game
+     * carries its own `sport`, so the grade cannot depend on which screen asks. */
+    if (isSoccerSport(game.sport)) {
+      const r = soccerResult(game);
+      if (r) return r === side ? 'won' : 'lost';
+    }
     /* 🔴 THE TWO PRODUCTS SETTLE DIFFERENTLY ON THE SAME GAME, which is the
      * whole point of them being two products. The pool asks who won; the week's
      * card asks who covered. A game can be a win in one and a loss in the other,
@@ -344,7 +373,10 @@ function slateGame(o) {
     /* Per-team form rides on the team objects, which are merged from the
        capture - so it needs no line here. The last meeting is about the PAIR
        and has nowhere else to live. */
-    lastMeeting: o.lastMeeting || null
+    lastMeeting: o.lastMeeting || null,
+    /* The league travels with the game, because grading reads it: a level
+     * soccer final is a draw and a level football final is a void. */
+    ...(o.sport ? { sport: o.sport } : {})
   };
 }
 
@@ -693,8 +725,9 @@ const WEEK = { 'college-football': 2, nfl: 1 };
  * the server stores the game (src/slate-day.ts writeDayGames). The day turns over
  * at 6 AM Eastern, as in src/lib/day.ts - restated here, not imported, because the
  * p2 tests load this module with its imports stripped. */
-const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck'];
+/* Soccer joined 2026-09-13: the Premier League and MLS pick a day at a time too. */
+const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls'];
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -743,7 +776,8 @@ async function realSlate(byId, sport, weekArg, dayUrl) {
         status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
         homeScore: g.homeScore, awayScore: g.awayScore,
         rankHome: g.rankHome, rankAway: g.rankAway, conferences: g.conferences,
-        lastMeeting: g.lastMeeting || null
+        lastMeeting: g.lastMeeting || null,
+        sport
       });
     }).filter((g) => g.home && g.away);
     /* 🔴 THE SAME LIVE OVERLAY AS ALL GAMES, and this is the screen that
@@ -842,7 +876,8 @@ async function groupData(fixtures) {
     if (r && r.ok) {
       const j = await r.json();
       for (const p of (j && Array.isArray(j.picks) ? j.picks : [])) {
-        if (!p || !p.gameId || (p.side !== 'home' && p.side !== 'away')) continue;
+        /* A soccer pick may be the draw; everywhere else a side is home or away. */
+        if (!p || !p.gameId || !sidesFor(sport).includes(p.side)) continue;
         local[String(p.gameId)] = { ...(local[String(p.gameId)] || {}), side: p.side };
       }
       savePicks(sport, week, local, scope);
@@ -1231,7 +1266,7 @@ function zone(ctx, game, side) {
      * paid for by taking something off the crest's line. At 44 it is the first
      * thing seen and the block reads top-down: WHO, then the numbers about them. */
     size: 44,
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba'].includes(ctx.sport) ? ctx.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'].includes(ctx.sport) ? ctx.sport : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
 
@@ -1309,6 +1344,55 @@ function zone(ctx, game, side) {
   b.setAttribute('aria-pressed', String(pick && pick.side === side));
   b.setAttribute('aria-label', (team.name || team.short) + (open ? '' : ' – locked'));
   if (open) b.addEventListener('click', () => ctx.onPick(game.id, side));
+  return b;
+}
+
+/** 🔴 THE DRAW - soccer's third tap target, between the two teams (2026-09-13).
+ *  The same button as a team zone, with the same states: picked, locked, won,
+ *  lost, and the same height as the two sides beside it. The tap sends
+ *  side 'draw', which /api/pool/pick takes only for epl and mls.
+ *
+ *  Once the match has started, the score sits in it - the middle column is one
+ *  slot, exactly as the "@" becomes the score on a football row. A level final
+ *  is marked as the result whoever picked it, so a finished draw reads as a
+ *  finished draw and never as a game still going or a void. */
+function drawZone(ctx, game) {
+  const b = el('button', 'p2-zone p2-draw');
+  b.type = 'button';
+  b.dataset.side = 'draw';
+  b.dataset.game = game.id;
+  const pick = ctx.picks[game.id];
+  const st = pickStateOf(game, pick, ctx.now, ctx.mode);
+  const mine = !!(pick && pick.side === 'draw');
+  const started = game.status === 'in_progress' || game.status === 'final';
+  if (started) {
+    const top = el('span', 'p2-c-lo', game.status === 'final' ? 'Final' : 'Live');
+    if (game.status === 'in_progress') top.dataset.live = 'true';
+    const w = winnerOf(game);
+    const sc = el('span', 'p2-score num');
+    const a = el('b', 'p2-sc', String(game.awayScore == null ? '–' : game.awayScore));
+    const h = el('b', 'p2-sc', String(game.homeScore == null ? '–' : game.homeScore));
+    if (w === 'home') a.dataset.loser = 'true';
+    if (w === 'away') h.dataset.loser = 'true';
+    sc.append(a, el('span', 'p2-sc-sep', '–'), h);
+    b.append(top, sc);
+  }
+  b.appendChild(el('span', 'p2-draw-t', 'Draw'));
+  if (soccerResult(game) === 'draw') b.dataset.outcome = 'draw';
+  if (mine && (st === 'won' || st === 'lost' || st === 'void')) {
+    const m = el('div', 'p2-result');
+    m.dataset.result = st;
+    m.appendChild(icon(st === 'won' ? 'check' : st === 'lost' ? 'cross' : 'dash'));
+    b.appendChild(m);
+  }
+  if (mine) b.dataset.pick = 'on';
+  const open = st === 'unpicked' || st === 'picked';
+  b.disabled = !open;
+  b.setAttribute('aria-pressed', String(mine));
+  const score = started && game.awayScore != null && game.homeScore != null
+    ? ', ' + (game.status === 'final' ? 'final ' : 'live ') + game.awayScore + '–' + game.homeScore : '';
+  b.setAttribute('aria-label', 'Draw' + score + (open ? '' : ' – locked'));
+  if (open) b.addEventListener('click', () => ctx.onPick(game.id, 'draw'));
   return b;
 }
 
@@ -1556,8 +1640,13 @@ function row(ctx, game) {
    * 0-14 in the first quarter, drawn on the pool slate as "Next up" with no
    * score at all - while previewData held status in_progress the whole time.
    * The data was right; the one function that could draw it was dead code. */
-  const mid = (game.status === 'in_progress' || game.status === 'final')
-    ? center(ctx, game) : el('span', 'p2-at', '@');
+  /* Soccer puts the Draw between the teams, and the score inside it once the
+   * match has started - see drawZone. */
+  const soccer = isSoccerSport(ctx.sport) || isSoccerSport(game.sport);
+  if (soccer) r.dataset.soccer = 'true';
+  const mid = soccer ? drawZone(ctx, game)
+    : (game.status === 'in_progress' || game.status === 'final')
+      ? center(ctx, game) : el('span', 'p2-at', '@');
   sides.append(zone(ctx, game, 'away'), mid, zone(ctx, game, 'home'));
   r.appendChild(sides);
   return r;
@@ -1662,7 +1751,9 @@ export function openInfo(game, ctx) {
   const facts = el('div', 'p2-facts');
   d.appendChild(facts);
   const lg = ctx && ctx.sport === 'nfl' ? 'nfl' : 'ncaa';
-  for (const side of [A, H]) {
+  /* No soccer facts file exists, and a club's id under ncaa is a different team
+   * entirely - so a soccer card asks for none. */
+  for (const side of (isSoccerSport(ctx && ctx.sport) ? [] : [A, H])) {
     if (!side || !side.id) continue;
     const slot = el('div', 'p2-fact');
     slot.hidden = true;
@@ -2080,7 +2171,8 @@ export function render(root, data, state) {
     const card = el('div', 'card p2-tb');
     card.append(el('div', 'p2-tb-k', 'Tiebreaker'));
     const rowEl = el('label', 'p2-tb-row');
-    rowEl.append(el('span', 'p2-tb-q', 'Combined points in ' + (tb.away.short || tb.away.name) + ' at ' + (tb.home.short || tb.home.name)));
+    rowEl.append(el('span', 'p2-tb-q', (isSoccerSport(ctx.sport) ? 'Combined goals in ' : 'Combined points in ')
+      + (tb.away.short || tb.away.name) + ' at ' + (tb.home.short || tb.home.name)));
     const input = el('input', 'p2-tb-in num');
     input.type = 'number'; input.inputMode = 'numeric'; input.min = '0'; input.max = '200';
     input.placeholder = '\u2014';
@@ -2130,7 +2222,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2155,7 +2247,8 @@ function head(root, data, _) {
    * The top bar names the screen; the page keeps only its one sub line. */
   /* Group pools: its own sub line, and "How it's scored" opens the GROUP's rules. */
   const gsub = data && data.groupMode
-    ? (data.group && data.dayLabel ? data.dayLabel + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub)
+    ? (data.group && data.dayLabel ? data.dayLabel + (data.mode === 'ats' ? GROUP_COPY.subAts
+      : isSoccerSport(data.sport) ? GROUP_COPY.subSoccer : GROUP_COPY.sub)
       : data.group && wk ? 'Week ' + wk + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub) : GROUP_COPY.subNoWeek)
     : null;
   root.appendChild(pageHeader({

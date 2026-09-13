@@ -267,6 +267,10 @@ function sVoid(data, opts) {
     'The spread landed exactly, in a pool playing against the spread.',
     'The game left your pool’s slate.'
   ]));
+  /* Soccer, 2026-09-13: src/lib/pool.ts resolveGame grades a level soccer final
+   * as 'draw', a pickable result. One sentence, so the level line above is not
+   * read as covering a draw. */
+  box.appendChild(para('s6-p', 'In soccer a draw is a result you can pick, not a void.'));
   box.appendChild(para('s6-p',
     'There is one way out of all of them and it is the sentence above. The app ' +
     'does not have a rule for pushes and a different rule for postponements, and ' +

@@ -212,8 +212,20 @@ export function gameAt(spec, now) {
     spread: spec.spread,
     status,
     homeScore: settled ? spec.homeScore : null,
-    awayScore: settled ? spec.awayScore : null
+    awayScore: settled ? spec.awayScore : null,
+    /* 🔴 THE SPORT GOES THROUGH TO THE GRADER. pool.ts resolveGame returns 'draw'
+     * for a level final only when `sport` is epl or mls; without it a soccer
+     * draw would grade as a void. */
+    ...(spec.sport ? { sport: spec.sport } : {})
   };
+}
+
+/** What a pick is called on its row: the team, or "Draw" - soccer's third side,
+ *  which is a result rather than a team. */
+export function pickLabel(game, side) {
+  if (side === 'draw') return 'Draw';
+  const t = game && game[side];
+  return t ? (t.short || t.name || '') : '';
 }
 
 /** Margin against the spread FROM ONE SIDE'S POINT OF VIEW. Positive covered,
@@ -225,6 +237,8 @@ export function gameAt(spec, now) {
  *  against-the-spread pool LOST by 17.5 while the team WON by 7. Without this clause
  *  on the row, that reads as a bug in the app. */
 export function coverMargin(game, side) {
+  /* The draw covers nothing: soccer has no spread, and a draw has no margin. */
+  if (side !== 'home' && side !== 'away') return null;
   if (game.spread == null || game.homeScore == null || game.awayScore == null) return null;
   const m = game.homeScore + game.spread - game.awayScore;
   return side === 'home' ? m : -m;
@@ -256,6 +270,8 @@ export function spreadText(spread, side) {
  *  which is pool.ts's shape and the only one that can be updated when a pick moves. */
 export function crowdShare(crowd, side) {
   if (!crowd || !crowd.n) return null;
+  /* The crowd counts two sides; a draw pick has no share in it. */
+  if (typeof crowd[side] !== 'number') return null;
   return crowd[side] / crowd.n;
 }
 
@@ -457,7 +473,10 @@ async function realWeek(byId, sport) {
         spread: typeof g.spread === 'number' ? g.spread : null,
         homeScore: g.homeScore == null ? null : g.homeScore,
         awayScore: g.awayScore == null ? null : g.awayScore,
-        voidAt: null, real: true
+        voidAt: null, real: true,
+        /* The league travels with the game: resolveGame grades a level soccer
+         * final as a draw and a level football final as a void. */
+        sport
       };
     }).filter((g) => g.home && g.away);
   } catch { return null; }
@@ -773,7 +792,11 @@ function row(ctx, spec) {
   const game = gameAt(spec, ctx.now);
   const pick = ctx.picks[spec.id];
   const side = pick.side;
+  /* A soccer draw is a side of its own, with no "other" team. */
+  const draw = side === 'draw';
   const other = side === 'home' ? 'away' : 'home';
+  /* Graded through pool.ts with `sport` on the game (gameAt), so a level soccer
+   * final is 'won' for a draw pick rather than a void. */
   const st = pickState(side, game, ctx.pool.ats, ctx.now);
   /* 🔴 A STAKE IS NOT A POOL PICK, AND ONLY ONE OF THEM MAY BE FLIPPED. Jason,
    * 2026-09-09: "But on picks I can still flip a bet?"
@@ -822,16 +845,27 @@ function row(ctx, spec) {
    * is a harder version of the adjacency test than a horizontal pair, not a softer one. */
   const idBlock = el('div', 'p4-id');
   const l1 = el('div', 'p4-id1');
-  l1.appendChild(teamChip(game[side], { size: 18, league: ctx.league, adjacentTo: game[other] }));
-  l1.appendChild(el('span', 'p4-team', game[side].short || game[side].name));
-  if (ctx.pool.ats) {
-    const sp = spreadText(game.spread, side);
-    if (sp) l1.appendChild(el('span', 'p4-spread num', sp));
-  }
   const l2 = el('div', 'p4-id2');
-  l2.appendChild(el('span', 'p4-over', 'over'));
-  l2.appendChild(teamChip(game[other], { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game[side] }));
-  l2.appendChild(el('span', 'p4-opp', game[other].short || game[other].name));
+  if (draw) {
+    /* 🔴 A DRAW PICK READS "Draw". It is not a team, so no crest leads the row;
+     * both teams sit under it, away at home - the slate's order. */
+    l1.appendChild(el('span', 'p4-team', pickLabel(game, side)));
+    l2.appendChild(teamChip(game.away, { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game.home }));
+    l2.appendChild(el('span', 'p4-opp', game.away.short || game.away.name));
+    l2.appendChild(el('span', 'p4-over', 'at'));
+    l2.appendChild(teamChip(game.home, { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game.away }));
+    l2.appendChild(el('span', 'p4-opp', game.home.short || game.home.name));
+  } else {
+    l1.appendChild(teamChip(game[side], { size: 18, league: ctx.league, adjacentTo: game[other] }));
+    l1.appendChild(el('span', 'p4-team', pickLabel(game, side)));
+    if (ctx.pool.ats) {
+      const sp = spreadText(game.spread, side);
+      if (sp) l1.appendChild(el('span', 'p4-spread num', sp));
+    }
+    l2.appendChild(el('span', 'p4-over', 'over'));
+    l2.appendChild(teamChip(game[other], { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game[side] }));
+    l2.appendChild(el('span', 'p4-opp', game[other].short || game[other].name));
+  }
   idBlock.append(l1, l2);
 
   /* ---- status. THE EDIT DEADLINE IS STATED, PER PICK, IN WORDS. A padlock says
@@ -872,7 +906,9 @@ function row(ctx, spec) {
    * rows, which is what makes a long list scannable. And it is a real 44x44 target,
    * not a 36px one dressed up as one. */
   const act = el('div', 'p4-act');
-  if (editable) {
+  /* The swap flips one team for the other; a draw has no other team to flip to,
+   * so a draw is changed on the slate, where all three choices are. */
+  if (editable && !draw) {
     const b = el('button', 'p4-swap');
     b.type = 'button';
     b.appendChild(icon('swap', 16));
@@ -933,7 +969,8 @@ function row(ctx, spec) {
   }
 
   r.setAttribute('aria-label', [
-    (game[side].name || game[side].short) + ' over ' + (game[other].name || game[other].short),
+    draw ? 'Draw, ' + (game.away.name || game.away.short) + ' at ' + (game.home.name || game.home.short)
+      : (game[side].name || game[side].short) + ' over ' + (game[other].name || game[other].short),
     STATE_WORD[st] || st,
     editable ? 'editable for another ' + remainingLabel(left) : null
   ].filter(Boolean).join(', '));
@@ -1125,13 +1162,13 @@ export function render(root, data, state) {
      * id under the college path returns a real logo for the wrong team - 200 OK,
      * nothing logged, and only visible by looking. Found on the slate the same
      * day and fixed here before it could ship the same way. */
-    league: (data.sport === 'nfl') ? 'nfl' : 'college-football',
+    league: ['nfl', 'epl', 'mls'].includes(data.sport) ? data.sport : 'college-football',
     mode: data.mode || 'pool',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',
     onSwap: (gameId) => {
       const p = ctx.picks[gameId];
-      if (!p || !p.side) return;
+      if (!p || !p.side || p.side === 'draw') return;
       const to = p.side === 'home' ? 'away' : 'home';
       p.crowd = swapCrowd(p.crowd, p.side, to);
       p.side = to;
