@@ -182,6 +182,10 @@ export function dayLabel(ms) {
  *  says Live and nothing else, and that is a stated limitation rather than a design. */
 export function statusAt(spec, now) {
   if (spec.voidAt != null && now >= spec.voidAt) return 'void';
+  /* A soccer day comes off the live day feed, which KNOWS when a match is live or
+   * finished - a match ends in about two hours, well inside the football window
+   * below. Only a feed that has not moved yet falls through to the clock. */
+  if (spec.feedStatus === 'final' || spec.feedStatus === 'in_progress') return spec.feedStatus;
   /* 🔴 `lagMs` IS THE `locked` ROW STATE'S ONLY ROUTE, AND IT WAS MISSING UNTIL THE
    * routes were counted in the browser: won, lost, void, in_progress and picked were
    * all drawn and `locked` was drawn nowhere, because a game that has kicked went
@@ -395,8 +399,138 @@ function clockFor(state, sat) {
 function chosenSport() {
   try {
     const v = JSON.parse(localStorage.getItem('ag.sport'));
-    return v === 'nfl' ? 'nfl' : 'college-football';
+    /* Soccer joined 2026-09-13 - Jason: "add soccer to my picks". */
+    return v === 'nfl' || SOCCER.includes(v) ? v : 'college-football';
   } catch { return 'college-football'; }
+}
+
+/* 🔴 SOCCER ON MY PICKS. Jason, 2026-09-13: "add soccer to my picks".
+ *
+ * A soccer pool is played in a group, a day at a time (the slate's day bar), so
+ * this card is YOUR PICKS IN YOUR SOCCER GROUP ON THE DAY THE SLATE IS SHOWING:
+ * the day's matches from /api/day (the same games the slate draws), your picks
+ * from the server's copy for that group merged over this phone's - the slate's
+ * own bucket, so the two screens can never disagree about your card. With no
+ * soccer group it reads the public slate's key, which is empty today.
+ *
+ * The day rules are restated from p2-slate rather than imported, because the
+ * tests load this module with its imports stripped. The day turns over at 6 AM
+ * Eastern, as in src/lib/day.ts. */
+const SOCCER = ['epl', 'mls'];
+function soccerToday(ms) {
+  const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(ms - 6 * 3600000));
+  return s.split('-').join('');
+}
+function soccerAddDays(ymd, n) {
+  const d = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8))) + n * 86400000);
+  return String(d.getUTCFullYear()) + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
+}
+/** The day the slate last chose for this sport, if it is still on its bar. */
+export function soccerDay(sport, today) {
+  let v = '';
+  try { v = localStorage.getItem('ag.poolday.' + sport) || ''; } catch { v = ''; }
+  const ok = v.length === 8 && [...v].every((c) => c >= '0' && c <= '9');
+  return ok && v >= soccerAddDays(today, -1) && v <= soccerAddDays(today, 6) ? v : today;
+}
+export function soccerDayName(ymd, today) {
+  if (ymd === today) return 'Today';
+  if (ymd === soccerAddDays(today, 1)) return 'Tomorrow';
+  if (ymd === soccerAddDays(today, -1)) return 'Yesterday';
+  const d = new Date(Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(4, 6)) - 1, Number(ymd.slice(6, 8)), 12));
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+/** Which group's picks this card shows: the current group when it plays this
+ *  sport, else the first group that does, else none. */
+export function soccerGroup(groups, currentId, sport) {
+  const list = (Array.isArray(groups) ? groups : []).filter((g) => g && g.sport === sport);
+  return list.find((g) => g.id === currentId) || list[0] || null;
+}
+
+/** A day's matches from the day feed, as this screen's specs. */
+export function soccerSpecs(dayGames, sport, day, byId) {
+  const week = Number(day);
+  return (Array.isArray(dayGames) ? dayGames : []).filter((g) => g && !g.tbd).map((g) => {
+    for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
+    return {
+      id: String(g.id), week, kickoffUtc: g.kickoffUtc,
+      home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
+      /* A soccer group never picks against a spread. */
+      spread: null,
+      homeScore: g.homeScore == null ? null : g.homeScore,
+      awayScore: g.awayScore == null ? null : g.awayScore,
+      /* Postponed or cancelled: the one void path, whatever the clock says. */
+      voidAt: g.status === 'void' ? 0 : null,
+      feedStatus: g.status === 'final' || g.status === 'in_progress' ? g.status : null,
+      real: true, sport
+    };
+  }).filter((g) => g.home && g.away);
+}
+
+async function soccerCard(byId, sport) {
+  const now = Date.now();
+  const today = soccerToday(now);
+  const day = soccerDay(sport, today);
+  const week = Number(day);
+  let games = [];
+  try {
+    const r = await fetch('/api/day/' + sport + '/' + day);
+    if (r.ok) games = soccerSpecs((await r.json()).games, sport, day, byId);
+  } catch { games = []; }
+
+  let group = null;
+  try {
+    const G = await import('/components/group.js');
+    const mine = await G.myGroups();
+    group = soccerGroup(mine && mine.groups, G.currentGroupId(), sport);
+  } catch { group = null; }
+
+  let saved = {};
+  if (group) {
+    let who = '';
+    try { who = localStorage.getItem('ag.handle') || ''; } catch { who = ''; }
+    /* The slate's group bucket: picksKey(sport, week, handle + '.' + group id). */
+    try {
+      const raw = localStorage.getItem('ag.picks.g.' + who + '.' + group.id + '.' + sport + '.' + week);
+      const o = raw ? JSON.parse(raw) : null;
+      if (o && typeof o === 'object') saved = o;
+    } catch { saved = {}; }
+    try {
+      const r = await ((typeof window !== 'undefined' && window.agApiFetch) || fetch)('/api/pool/picks?pool='
+        + encodeURIComponent(group.id) + '&sport=' + sport + '&week=' + week);
+      if (r && r.ok) {
+        const j = await r.json();
+        for (const p of (j && Array.isArray(j.picks) ? j.picks : [])) {
+          if (!p || !p.gameId || !['home', 'away', 'draw'].includes(p.side)) continue;
+          saved[String(p.gameId)] = { ...(saved[String(p.gameId)] || {}), side: p.side };
+        }
+      }
+    } catch { /* offline: this phone's copy stands */ }
+  } else {
+    saved = loadPicks(sport, week);
+  }
+
+  const specs = games.filter((g) => saved[g.id] && saved[g.id].side);
+  const picks = {};
+  for (const g of specs) {
+    picks[g.id] = { gameId: g.id, side: saved[g.id].side, state: 'unpicked', lockedAt: g.kickoffUtc, crowd: null };
+  }
+  return {
+    sport, mode: 'pool',
+    pool: {
+      id: group ? group.id : null, name: group ? group.name : 'No pool yet', commissionerId: null,
+      scope: 'all', scopeArg: null, rankingSource: null,
+      ats: false, season: 2026, scopeLockedAt: null, memberCount: group ? (group.members || 0) : 0
+    },
+    week, dayLabel: soccerDayName(day, today),
+    /* A soccer slate is the group's; with no group, the way in is the group page. */
+    slateHref: group ? '#/gpicks' : '#/g',
+    slateSize: games.length,
+    specs, games: specs, picks, legs: [],
+    userId: 'u_self',
+    asOf: now, now, slate: games,
+    captured: games.length, synthetic: 0, fromFeed: true
+  };
 }
 
 /* 🔴 THE NFL WEEK IS REAL AND UNPICKED, and both halves of that are the point.
@@ -489,6 +623,8 @@ export async function previewData(fixtures, state) {
   const all = Object.values(db);
 
   const sport = chosenSport();
+  /* Soccer is a day, not a week - its own card (soccerCard above). */
+  if (SOCCER.includes(sport)) return soccerCard(byId, sport);
   const wk = WEEK[sport] || 1;
   const live = await realWeek(byId, sport);
   /* 🔴 THE FEED WINS WHEREVER THERE IS ONE, for either sport. The designed
@@ -1208,7 +1344,9 @@ export function render(root, data, state) {
     /* ---- the parlay, pinned. POOL-SCREENS P4: "the parlay's state pinned where it
      * cannot be missed." Sticky, and it is the ONLY sticky thing on this screen - two
      * pinned elements is neither of them pinned. */
-    host.appendChild(parlayPin());
+    /* A soccer card is a GROUP's day, and a group's standings count picks only -
+     * a parlay pinned there would promise points no board ever scores. */
+    if (!data.dayLabel) host.appendChild(parlayPin());
 
     /* 🔴 WHAT YOU DID INSIDE A GAME, on the screen called My picks. Jason,
      * 2026-09-09: "On my picks, if I bet inside that game shown, the outcome
@@ -1252,13 +1390,15 @@ export function render(root, data, state) {
         body: first
           ? 'The first game on this pool’s slate closes in ' + remainingLabel(first.kickoffUtc - ctx.now) +
             ', at ' + timeLabel(first.kickoffUtc) + '. Every pick stays editable until its own kickoff, so nothing is decided until then.'
-          : 'Every game this week has kicked. Nothing can be picked now, and the week scored nothing.',
+          : data.dayLabel
+            ? 'Every match that day has kicked. Nothing can be picked now, and the day scored nothing.'
+            : 'Every game this week has kicked. Nothing can be picked now, and the week scored nothing.',
         /* 🔴 A BUTTON WITH NO HANDLER IS A DEAD END WEARING A DOOR'S CLOTHES.
          * Jason, 2026-09-09: "Go to. Slate does not work." stateBlock only wires
          * a click when it is GIVEN one, and this passed a label alone - so the
          * one action offered on the one screen that exists to send you somewhere
          * did nothing at all. */
-        action: { label: 'Go to the slate', onClick: () => { location.hash = '#/slate'; } }
+        action: { label: 'Go to the slate', onClick: () => { location.hash = data.slateHref || '#/slate'; } }
       }));
       host.appendChild(footer(0));
       return;
@@ -1291,7 +1431,10 @@ export function render(root, data, state) {
     host.appendChild(pageHeader({
       title: 'My picks',
       noTitle: true,
-      sub: 'Week ' + (data.week || '')
+      sub: data.dayLabel
+        /* A soccer card is a day - the slate's own soccer line. */
+        ? data.dayLabel + ' · pick the winner or the draw · scored in points'
+        : 'Week ' + (data.week || '')
         /* Matches the slate's line - Jason, 2026-09-10: "match my picks too". */
         + ((data.mode === 'week') ? ' · against the spread' : ' · pick the winners · scored in points'),
       /* Same link as the slate - Jason, 2026-09-11. */
@@ -1336,7 +1479,7 @@ export function render(root, data, state) {
     const grid = el('div', 'p4-sum-grid');
 
     const c1 = el('div', 'p4-cell');
-    c1.append(el('div', 'p4-cell-k', 'Points this week'),
+    c1.append(el('div', 'p4-cell-k', data.dayLabel ? 'Points' : 'Points this week'),
               el('div', 'p4-cell-v num', anyResolved ? String(scored.weekPoints) : '—'));
     const c2 = el('div', 'p4-cell');
     c2.append(el('div', 'p4-cell-k', 'Still editable'),
@@ -1485,7 +1628,11 @@ export function render(root, data, state) {
      * which is the same failure as the sample-data banner and worse - a
      * disclaimer that is wrong is not caution, it is misinformation somebody
      * will believe precisely because it sounds careful. */
-    box.appendChild(el('p', 'p4-footline p4-real num', data.fromFeed
+    box.appendChild(el('p', 'p4-footline p4-real num', data.dayLabel
+      /* A soccer card has no line to name, and its picks are one group's own. */
+      ? data.captured + ' real matches off the feed. Your picks count in '
+        + (data.pool && data.pool.id ? data.pool.name : 'no group yet') + '. Each one locks at its own kickoff.'
+      : data.fromFeed
       ? data.captured + ' real games off the feed — real kickoffs, real lines with the book named. '
         + 'Your picks count on the world board and in every group you are in. Each one locks at its own kickoff.'
       : data.captured + ' of these games are real captures with their real final scores and their real lines. '
