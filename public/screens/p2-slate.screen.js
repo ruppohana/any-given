@@ -2243,7 +2243,7 @@ function dayBar(root, data, state) {
     b.type = 'button';
     b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', String(on));
-    b.style.cssText = 'flex:0 0 auto;min-height:44px;padding:0 14px;border-radius:999px;font:inherit;font-weight:700;white-space:nowrap;background:var(--card);'
+    b.style.cssText = 'flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border-radius:999px;font:inherit;font-weight:700;white-space:nowrap;background:var(--card);'
       + (on ? 'border:1px solid var(--accent);color:var(--accent)' : 'border:1px solid var(--line);color:var(--fg)');
     b.onclick = () => {
       try { localStorage.setItem('ag.poolday.' + data.sport, d); } catch { /* private mode */ }
