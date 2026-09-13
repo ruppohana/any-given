@@ -128,6 +128,21 @@ test('All games: a live game opens live from over its score, and every card has 
     /\.p6a-teams > \.p6a-clock \{\s*grid-column: 2; grid-row: 2;[^}]*width: 0;/, 'the clock sits on the name row at zero width, so the middle column stays narrow');
 });
 
+test('Home starts with the sports on the pool-only app', () => {
+  // Jason, 2026-09-13, with The Games hidden (app.js POOL_ONLY): "since the
+  // front page is only 1 button now, start with the sports." The pool-only
+  // Home draws the sport chooser in place of the one door; the doors below are
+  // untouched for POOL_ONLY = false. tests/home-sports.test.mjs runs both.
+  const gate = "if (globalThis.AG_POOL_ONLY === true) { wrap.appendChild(homeSports(wrap)); return; }";
+  const home = SRC.indexOf('function homeScreen(wrap) {');
+  const at = SRC.indexOf(gate);
+  assert.ok(at > home, 'the gate is in homeScreen');
+  assert.ok(at > SRC.indexOf('wrap.appendChild(heroBlock());', home), 'under the hero');
+  assert.ok(at < SRC.indexOf("if (S.homeStep === 'go') {", home), 'and before the doors, which it returns ahead of');
+  assert.ok(at < SRC.indexOf('wrap.appendChild(modeCard(wrap));', home));
+  assert.ok(SRC.includes("my.href = '#/g';"), 'a quiet My groups link to the group page');
+});
+
 test('Home has two doors, The Games and The Pools, and the third tab looks like where it goes', () => {
   // Jason, 2026-09-11: "Only 2 options. Betting or pools." / "all games is
   // removed from the home page" / "it highlighted the slate".

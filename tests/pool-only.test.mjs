@@ -34,13 +34,13 @@ test('a phone still holding the betting side is moved to the pool', () => {
   assert.ok(APP.includes("if (m && m !== 'pool') localStorage.setItem('ag.mode', JSON.stringify('pool'));"));
 });
 
-test('Home offers only The Pools, and The Games stays in the list to come back', () => {
+test('the old pool-only Home filter and The Games stay in the file, to come back', () => {
   assert.ok(HOME.includes("for (const o of opts.filter((x) => globalThis.AG_POOL_ONLY !== true || x.id === 'pool')) {"));
   assert.ok(HOME.includes("{ id: 'allgames', h: 'The Games',"), 'hidden, not deleted');
 });
 
 test('the rules ask only the pool\'s questions, and settings drops the balance', () => {
-  assert.ok(RULES.includes("const POOL_SECTIONS = new Set(['void', 'scoring', 'ties', 'scope']);"));
+  assert.ok(RULES.includes("const POOL_SECTIONS = new Set(['void', 'scoring', 'ties', 'scope', 'age']);"));
   assert.ok(RULES.includes('const SECTIONS = globalThis.AG_POOL_ONLY === true ? ALL_SECTIONS.filter((s) => POOL_SECTIONS.has(s.id)) : ALL_SECTIONS;'));
   assert.ok(SETTINGS.includes('if (globalThis.AG_POOL_ONLY !== true) root.appendChild(balanceSection());'));
 });

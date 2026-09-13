@@ -41,6 +41,8 @@ import { teamChip, applyTeamVars, tooClose, normalizeColor, marksOn, logoUrl } f
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { adSlot } from '/components/ad.js';
 import { signed, signClass, clock } from '/components/fmt.js';
+/* Home's sport chooser reads which groups you are in (homeSports, below). */
+import { myGroups, currentGroupId, setCurrentGroupId } from '/components/group.js';
 
 export const id = 'live-game';
 export const title = 'Live — the call';
@@ -4051,6 +4053,133 @@ function heroBlock() {
   return h;
 }
 
+/* 🔴 100% POOL: HOME STARTS WITH THE SPORTS. Jason, 2026-09-13: "since the
+ * front page is only 1 button now, start with the sports." With The Games off
+ * the screen (app.js POOL_ONLY), the front door was a hero and one door, The
+ * Pools, which only ever led to the group page. So the question the group page
+ * asks first - which sport - is asked here instead, and the tap lands where
+ * that answer leads:
+ *
+ *   in a group of that sport  -> it becomes the current group, and #/gpicks
+ *                                (for a racing group that is the door to the race)
+ *   not in one               -> #/g, whose Start form opens on ag.sport
+ *
+ * The families and ids are src/lib/groups.ts POOL_SPORTS, in Jason's order;
+ * tests/home-sports.test.mjs checks them against it. The marks are the ones
+ * page 2 already draws (the NFL and NCAA shields, the NBA's league mark from
+ * ESPN, Formula 1 as words); every other league is its name in type.
+ *
+ * Which groups you are in is read AFTER the first paint and written into the
+ * tiles in place. A signed-out phone asks nothing (myGroups), and a slow
+ * network never holds the front door blank. POOL_ONLY = false draws Home
+ * exactly as before - the gate in homeScreen returns before anything else. */
+const HOME_FAMILIES = [
+  { h: 'Football', leagues: [['college-football', 'College football'], ['nfl', 'NFL']] },
+  { h: 'Basketball', leagues: [['mens-college-basketball', 'College basketball'], ['nba', 'NBA'], ['wnba', 'WNBA']] },
+  { h: 'Baseball', leagues: [['mlb', 'MLB']] },
+  { h: 'Hockey', leagues: [['nhl', 'NHL']] },
+  { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']] }
+];
+/* The marks page 2 already draws, and no others. The mark alone, the name as
+ * the tile's accessible label - "remove the word NFL and College" (2026-09-11). */
+const HOME_MARKS = {
+  'college-football': '/logos/leagues/ncaa-500.png',
+  'nfl': '/logos/leagues/nfl-500.png',
+  'mens-college-basketball': '/logos/leagues/ncaa-500.png',
+  'nba': 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png'
+};
+
+/** Where a tap on a sport goes. Pure: the sport, my groups, the current group's
+ *  id. The current group wins when it is of that sport; a group row from before
+ *  the sport column is a college football group, as the server reads it. */
+function homeSportDest(sport, groups, currentId) {
+  const mine = (Array.isArray(groups) ? groups : [])
+    .filter((g) => g && g.id && (g.sport || 'college-football') === sport);
+  const g = mine.find((x) => x.id === currentId) || mine[0];
+  return g ? { sport, groupId: g.id, hash: '#/gpicks' } : { sport, groupId: '', hash: '#/g' };
+}
+
+function homeSports(wrap) {
+  const c = el('div', 'lg-sports');
+  const fams = el('div', 'lg-fams');
+  fams.setAttribute('role', 'group');
+  fams.setAttribute('aria-label', 'Which sport?');
+  for (const f of HOME_FAMILIES) {
+    const n = f.leagues.length;
+    /* A family of one sits half width, so Baseball and Hockey share a row. */
+    const fam = el('div', 'lg-fam' + (n === 1 ? ' is-one' : ''));
+    fam.appendChild(el('div', 'lg-fam-h', f.h));
+    /* Two or three across; four is two rows of two. */
+    const row = el('div', 'lg-fam-row n' + (n > 3 ? 2 : n));
+    for (const [id, label] of f.leagues) row.appendChild(leagueTile(id, label));
+    fam.appendChild(row);
+    fams.appendChild(fam);
+  }
+  c.appendChild(fams);
+  const my = el('a', 'lg-mygroups', 'My groups');
+  my.href = '#/g';
+  c.appendChild(my);
+  loadHomeGroups(wrap);
+  return c;
+}
+
+function leagueTile(id, label) {
+  const b = el('button', 'lg-league');
+  b.type = 'button';
+  b.dataset.sport = id;
+  b.dataset.label = label;
+  if (HOME_MARKS[id]) {
+    const img = document.createElement('img');
+    img.className = 'lg-league-logo';
+    img.src = HOME_MARKS[id];
+    img.alt = ''; img.width = 32; img.height = 32;
+    b.appendChild(img);
+  } else {
+    b.appendChild(el('span', 'lg-league-n', label));
+  }
+  /* Always there, shown by .is-mine - so marking a tile never rebuilds it. */
+  b.appendChild(el('span', 'lg-league-yg', 'Your group'));
+  mineMark(b);
+  b.onclick = () => homeSportTap(id);
+  return b;
+}
+
+/** Say on a tile whether you are in a group of its sport, from what is loaded. */
+function mineMark(b) {
+  const has = !!homeSportDest(b.dataset.sport, S.homeGroups, currentGroupId()).groupId;
+  b.classList.toggle('is-mine', has);
+  b.setAttribute('aria-label', b.dataset.label + (has ? ', your group' : ''));
+}
+
+function markHomeGroups(wrap) {
+  for (const b of wrap.querySelectorAll('.lg-league')) mineMark(b);
+}
+
+/* Once per mount (each mount is a new wrap); a repaint of the same Home draws
+ * from S.homeGroups and the answer, when it lands, is written in place. */
+function loadHomeGroups(wrap) {
+  if (S.homeGroupsFor === wrap) return;
+  S.homeGroupsFor = wrap;
+  S.homeGroupsP = myGroups().then((m) => {
+    /* Offline keeps the list we already had rather than forgetting every group. */
+    if (!m.error || !Array.isArray(S.homeGroups)) S.homeGroups = m.groups || [];
+    if (wrap.isConnected) markHomeGroups(wrap);
+    return S.homeGroups;
+  });
+}
+
+async function homeSportTap(id) {
+  store.set('sport', id);
+  /* What The Pools door did before it: the pool side. */
+  S.mode = 'pool'; store.set('mode', 'pool');
+  /* A tap before the list lands waits for the one already asked for, rather
+   * than sending somebody with a group to the Start form. */
+  const groups = Array.isArray(S.homeGroups) ? S.homeGroups : S.homeGroupsP ? await S.homeGroupsP : [];
+  const d = homeSportDest(id, groups, currentGroupId());
+  if (d.groupId) setCurrentGroupId(d.groupId);
+  location.hash = d.hash;
+}
+
 function homeScreen(wrap) {
   /* 🔴 HOME IS THE FORK. ALWAYS. Jason settled this on 2026-09-09, after saying
    * "Home button still goes here" seven times and my guessing wrong every time.
@@ -4084,6 +4213,10 @@ function homeScreen(wrap) {
    * the prose read as though the whole thing had been. */
   /* The hero heads every step of the front door - it is the door, not a step. */
   wrap.appendChild(heroBlock());
+  /* 🔴 100% POOL: THE SPORTS ARE THE FRONT DOOR. Jason, 2026-09-13: "since the
+   * front page is only 1 button now, start with the sports." See homeSports.
+   * With POOL_ONLY off, nothing below this line changed. */
+  if (globalThis.AG_POOL_ONLY === true) { wrap.appendChild(homeSports(wrap)); return; }
   if (S.homeStep === 'go') {
     wrap.appendChild(goCard(wrap));
     return;
@@ -5551,6 +5684,37 @@ const CSS = `
   color: var(--accent); padding: 12px 0; min-height: 44px; }
 .lg-how-s::-webkit-details-marker { display: none; }
 .lg-how[open] .lg-how-s { padding-bottom: 8px; }
+/* 100% POOL: Home starts with the sports (Jason, 2026-09-13). A heading per
+   family, the leagues as 44px tiles two or three across; a family of one sits
+   half width so Baseball and Hockey share a row. Nothing here is wider than
+   its column, so 393px never scrolls sideways. */
+.lg-sports { display: grid; gap: 6px; }
+.lg-fams { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 10px; }
+.lg-fam { grid-column: 1 / -1; display: grid; gap: 6px; min-width: 0; }
+.lg-fam.is-one { grid-column: auto; }
+/* Each heading sits on a chip of the page ground: the stadium bleeds 75px under
+   the first lines, and the doors this replaced were solid cards - a bare dim
+   heading on the roof was unreadable (measured at 393px, 2026-09-13). */
+.lg-fam-h { justify-self: start; font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dim); padding: 1px 6px; margin-left: -4px;
+  background: var(--bg); border-radius: var(--radius-chip); }
+.lg-fam-row { display: grid; gap: 8px; }
+.lg-fam-row.n1 { grid-template-columns: minmax(0, 1fr); }
+.lg-fam-row.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lg-fam-row.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lg-league { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; min-height: 44px; min-width: 0; padding: 6px 8px; font: inherit; text-align: center;
+  border: 1px solid var(--line); border-radius: var(--radius-card);
+  background: var(--card); color: var(--fg); cursor: pointer; }
+.lg-league:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lg-league-logo { display: block; width: 32px; height: 32px; object-fit: contain; }
+.lg-league-n { font-size: var(--t-body); font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.lg-league-yg { display: none; font-size: var(--t-micro); font-weight: 700; color: var(--accent); }
+.lg-league.is-mine { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.lg-league.is-mine .lg-league-yg { display: block; }
+.lg-mygroups { justify-self: center; display: inline-flex; align-items: center; min-height: 44px;
+  padding: 0 8px; font-size: var(--t-micro); font-weight: 700; color: var(--dim);
+  text-decoration: underline; }
 .lg-sport-name { display: block; font-size: var(--t-body); }
 .lg-sport-pick { font: inherit; font-size: var(--t-emph); font-weight: 800; min-height: 52px;
   border: 1px solid var(--line); border-radius: var(--radius-card);
