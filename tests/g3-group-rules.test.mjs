@@ -327,16 +327,19 @@ function branch(fn, cond) {
 }
 const lits = (src) => (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((s) => s.slice(1, -1)).join('');
 
-test('the League row shows the thirteen labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
+test('the League row shows the eighteen labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
   const m = CJS.match(/const LEAGUES = \{([^}]*)\}/);
   assert.ok(m, 'no LEAGUES map');
   const pairs = [...m[1].matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((x) => [x[1], x[2]]);
   assert.deepEqual(pairs.map((p) => p[0]), [...POOL_SPORTS]);
   assert.deepEqual(pairs.map((p) => p[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR',
-    'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS']);
+    'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
+    'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball']);
   assert.match(CJS, /\['League', LEAGUES\[sport\]\]/);
-  /* How a group starts says all nine too. */
-  assert.ok(FLAT.includes('A group plays one sport - college football, the NFL, college basketball, the NBA, the WNBA, MLB, the NHL, the Premier League, MLS, Formula 1 or NASCAR (Cup, O’Reilly or Trucks) - chosen when it starts.'));
+  /* How a group starts says all of them too - and names the O'Reilly series'
+     old name once (Jason, 2026-09-13: the Xfinity Series, renamed for 2026). */
+  assert.ok(FLAT.includes('A group plays one sport - college football, the NFL, men’s or women’s college basketball, the NBA, the WNBA, MLB, the NHL, college hockey, the Premier League, MLS, the Champions League, La Liga, Liga MX, Formula 1 or NASCAR (Cup, Trucks or O’Reilly, formerly Xfinity) - chosen when it starts.'));
+  assert.equal(FLAT.split('formerly Xfinity').length - 1, 1, 'the old name is said once');
   assert.doesNotMatch(FLAT, /NFL or college football, chosen/);
 });
 
@@ -412,7 +415,8 @@ test('🔴 NASCAR: scored in points over each race, locked at the green flag, no
 test('the day sports are one list, equal to src/lib/day.ts, and the page reads them through it', () => {
   assert.deepEqual([...mod.DAY_SPORTS].sort(), Object.keys(SERVER_DAY).sort(),
     'the page and src/lib/day.ts disagree on which sports pick a day at a time');
-  assert.deepEqual(POOL_SPORTS.filter(mod.isDaySport), ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls']);
+  assert.deepEqual(POOL_SPORTS.filter(mod.isDaySport), ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls',
+    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball']);
   assert.doesNotMatch(CJS, /isHoops/, 'the old basketball-only helper is still in use');
   /* Picking and the group card both go through it. */
   const pick = branch('sPicking', 'isDaySport(sport)');

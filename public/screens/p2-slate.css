@@ -639,6 +639,10 @@
 .scr-p2-slate .p2-draw:not([data-outcome="draw"]) .p2-draw-t { color: var(--dim); }
 .scr-p2-slate .p2-draw[data-pick="on"] .p2-draw-t { color: var(--accent); }
 .scr-p2-slate .p2-row[data-state="picked"] .p2-draw:not([data-pick="on"]) .p2-draw-t { opacity: .55; }
+/* A knockout won on penalties: one centered line under the teams, the result's
+   second half ("PSG on penalties (4–3)"). Fact weight, not the pill's color. */
+.scr-p2-slate .p2-pens { text-align: center; font-size: var(--t-micro); font-weight: 700;
+  color: var(--fg); margin-top: -2px; }
 
 /* The invite line's styles left with the line itself - an invite opens #/g now
    (CONTRACT-GROUPS §1, amended 2026-09-11). */

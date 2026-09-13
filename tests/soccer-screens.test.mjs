@@ -163,7 +163,7 @@ test('a soccer card asks for no facts, and its tiebreak counts goals', () => {
   assert.ok(!C.includes("'/nuggets/"), 'no facts fetch');
   assert.match(C, /isSoccerSport\(ctx\.sport\) \? 'Combined goals in ' : 'Combined points in '/);
   assert.equal(P2.GROUP_COPY.subSoccer, ' · pick the winner or the draw · scored in points');
-  assert.match(C, /league: \[[^\]]*'epl', 'mls'\]\.includes\(ctx\.sport\)/, 'soccer rows ask for soccer crests');
+  assert.match(C, /league: \[[^\]]*'epl', 'mls', 'ucl', 'laliga', 'ligamx'[^\]]*\]\.includes\(ctx\.sport\)/, 'soccer rows ask for soccer crests');
 });
 
 /* ------------------------------------------------------------ P4 my picks */
@@ -207,14 +207,16 @@ test('standings: the two league labels, and the season board a day sport gets', 
    * for nobody" there - found on the rendered board at 393px, 2026-09-13. */
   const F = flat(P5_SRC);
   assert.ok(F.includes('A point for every right pick - a winner or the draw - once the match is final. A void game counts for nobody.'));
-  assert.match(code(P5_SRC), /: \(d\.sport === 'epl' \|\| d\.sport === 'mls'\)\s*\?/);
+  assert.match(code(P5_SRC), /: isSoccerBoard\(d\.sport\)\s*\?/);
+  assert.ok(P5_SRC.includes("function isSoccerBoard(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(s); }"));
 });
 
 /* ------------------------------------------------------------ G1 G2 G3 groups */
 
-test('group create: a Soccer family holds the Premier League and MLS, in POOL_SPORTS order', () => {
-  assert.deepEqual(G1.SPORTS.slice(-2), [['epl', 'Premier League'], ['mls', 'MLS']]);
-  assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 1], ['Soccer', ['epl', 'mls']]);
+test('group create: a Soccer family holds the five leagues, in POOL_SPORTS order', () => {
+  assert.deepEqual(G1.SPORTS.filter(([id]) => isSoccerSport(id)), [['epl', 'Premier League'], ['mls', 'MLS'],
+    ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX']]);
+  assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 1], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]);
   const order = G1.SPORT_FAMILIES.find((f) => f[0] === 'Soccer')[1];
   assert.deepEqual(order, POOL_SPORTS.filter((s) => isSoccerSport(s)));
   assert.equal(G1.sportLabel('epl'), 'Premier League');
@@ -278,11 +280,12 @@ test('group rules: the draw is a pick, a level final scores the draw pickers, an
 
 /* ------------------------------------------------------------ Home */
 
-test('Home: a Soccer family with Premier League and MLS tiles, and the same tap as every tile', () => {
+test('Home: a Soccer family with all five league tiles, and the same tap as every tile', () => {
   const H = new Function([lift(HOME_SRC, 'const HOME_FAMILIES = ['), lift(HOME_SRC, 'function homeSportDest('),
     'return { HOME_FAMILIES, homeSportDest };'].join('\n'))();
   assert.deepEqual(H.HOME_FAMILIES[H.HOME_FAMILIES.length - 1],
-    { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS']] });
+    { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'],
+      ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] });
   const G = [{ id: 'SOCCR1', sport: 'epl' }, { id: 'NFL1', sport: 'nfl' }];
   assert.deepEqual(H.homeSportDest('epl', G, ''), { sport: 'epl', groupId: 'SOCCR1', hash: '#/gpicks' });
   assert.deepEqual(H.homeSportDest('mls', G, ''), { sport: 'mls', groupId: '', hash: '#/g' });

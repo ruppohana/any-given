@@ -99,5 +99,5 @@ test('a day with nothing on it says so, instead of "every game has kicked"', () 
 });
 
 test('the chips get the day sport\'s own crests - a pro crest by abbreviation, a college one by id', () => {
-  assert.ok(SRC.includes("league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'].includes(data.sport) ? data.sport : 'college-football',"));
+  assert.ok(SRC.includes("league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'].includes(data.sport) ? data.sport : 'college-football',"));
 });

@@ -4075,12 +4075,18 @@ function heroBlock() {
  * exactly as before - the gate in homeScreen returns before anything else. */
 const HOME_FAMILIES = [
   { h: 'Football', leagues: [['college-football', 'College football'], ['nfl', 'NFL']] },
-  { h: 'Basketball', leagues: [['mens-college-basketball', 'College basketball'], ['nba', 'NBA'], ['wnba', 'WNBA']] },
+  /* Two NCAA shields in one family: each carries a caption under it, Men and
+   * Women (2026-09-13), so the two college basketball tiles cannot be confused.
+   * The third element is that caption; the second is still the accessible name. */
+  { h: 'Basketball', leagues: [['mens-college-basketball', 'College basketball', 'Men'],
+    ['womens-college-basketball', 'Women’s college basketball', 'Women'], ['nba', 'NBA'], ['wnba', 'WNBA']] },
   { h: 'Baseball', leagues: [['mlb', 'MLB']] },
-  { h: 'Hockey', leagues: [['nhl', 'NHL']] },
+  /* College hockey, 2026-09-13 - beside the NHL. Its name in type. */
+  { h: 'Hockey', leagues: [['nhl', 'NHL'], ['mens-college-hockey', 'College hockey']] },
   { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']] },
   /* Soccer, 2026-09-13 - last, as in POOL_SPORTS. Names in type: no league mark. */
-  { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS']] }
+  { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'],
+    ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] }
 ];
 /* The marks page 2 already draws, and no others. The mark alone, the name as
  * the tile's accessible label - "remove the word NFL and College" (2026-09-11). */
@@ -4088,6 +4094,7 @@ const HOME_MARKS = {
   'college-football': '/logos/leagues/ncaa-500.png',
   'nfl': '/logos/leagues/nfl-500.png',
   'mens-college-basketball': '/logos/leagues/ncaa-500.png',
+  'womens-college-basketball': '/logos/leagues/ncaa-500.png',
   'nba': 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png'
 };
 
@@ -4106,17 +4113,20 @@ function homeSports(wrap) {
   const fams = el('div', 'lg-fams');
   fams.setAttribute('role', 'group');
   fams.setAttribute('aria-label', 'Which sport?');
-  for (const f of HOME_FAMILIES) {
+  HOME_FAMILIES.forEach((f, i) => {
     const n = f.leagues.length;
-    /* A family of one sits half width, so Baseball and Hockey share a row. */
-    const fam = el('div', 'lg-fam' + (n === 1 ? ' is-one' : ''));
+    /* A family of one sits half width only beside another family of one, so two
+     * of them share a row. Alone - Baseball, since College hockey joined the NHL
+     * (2026-09-13) - it takes the full width rather than leaving half a row empty. */
+    const pair = n === 1 && [HOME_FAMILIES[i - 1], HOME_FAMILIES[i + 1]].some((x) => x && x.leagues.length === 1);
+    const fam = el('div', 'lg-fam' + (pair ? ' is-one' : ''));
     fam.appendChild(el('div', 'lg-fam-h', f.h));
-    /* Two or three across; four is two rows of two. */
+    /* Two or three across; four or more is rows of two. */
     const row = el('div', 'lg-fam-row n' + (n > 3 ? 2 : n));
-    for (const [id, label] of f.leagues) row.appendChild(leagueTile(id, label));
+    for (const [id, label, cap] of f.leagues) row.appendChild(leagueTile(id, label, cap));
     fam.appendChild(row);
     fams.appendChild(fam);
-  }
+  });
   c.appendChild(fams);
   const my = el('a', 'lg-mygroups', 'My groups');
   my.href = '#/g';
@@ -4125,7 +4135,7 @@ function homeSports(wrap) {
   return c;
 }
 
-function leagueTile(id, label) {
+function leagueTile(id, label, cap) {
   const b = el('button', 'lg-league');
   b.type = 'button';
   b.dataset.sport = id;
@@ -4136,6 +4146,8 @@ function leagueTile(id, label) {
     img.src = HOME_MARKS[id];
     img.alt = ''; img.width = 32; img.height = 32;
     b.appendChild(img);
+    /* The caption that tells two identical marks apart - Men, Women. */
+    if (cap) b.appendChild(el('span', 'lg-league-c', cap));
   } else {
     b.appendChild(el('span', 'lg-league-n', label));
   }
@@ -5681,6 +5693,8 @@ const CSS = `
 .lg-league:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .lg-league-logo { display: block; width: 32px; height: 32px; object-fit: contain; }
 .lg-league-n { font-size: var(--t-body); font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+/* Men / Women under the two NCAA shields - the only thing that tells them apart. */
+.lg-league-c { font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
 .lg-league-yg { display: none; font-size: var(--t-micro); font-weight: 700; color: var(--accent); }
 .lg-league.is-mine { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .lg-league.is-mine .lg-league-yg { display: block; }

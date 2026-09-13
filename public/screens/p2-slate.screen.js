@@ -249,8 +249,41 @@ export function coversSpread(game, side) {
 
 export function winnerOf(game) {
   if (game.status !== 'final' || game.homeScore == null || game.awayScore == null) return null;
-  if (game.homeScore === game.awayScore) return null;
+  /* A soccer knockout level after extra time still has a winner - see knockoutWinner. */
+  if (game.homeScore === game.awayScore) return knockoutWinner(game);
   return game.homeScore > game.awayScore ? 'home' : 'away';
+}
+
+/* 🔴 A KNOCKOUT HAS A WINNER. Jason, 2026-09-13: "a knockout round has a winner,
+ * that is the winner". A soccer match level after extra time and decided on
+ * penalties keeps its LEVEL score (the shootout is not in it), and the day feed
+ * names the side that went through as `winner`, with the shootout goals in
+ * `penHome` / `penAway` (src/slate-day.ts parseDay). src/lib/pool.ts resolveGame
+ * reads `winner` before the score, so this does too: that side is won and the
+ * draw is lost. Null for every other game, a league draw included. */
+export function knockoutWinner(game) {
+  if (!game || !isSoccerSport(game.sport) || game.status !== 'final') return null;
+  if (game.homeScore == null || game.homeScore !== game.awayScore) return null;
+  return game.winner === 'home' || game.winner === 'away' ? game.winner : null;
+}
+
+/** "PSG on penalties (4–3)" - the side that went through, by its short name, and
+ *  the shootout with the winner's goals first. Null unless knockoutWinner is set. */
+export function pensText(game) {
+  const w = knockoutWinner(game);
+  if (!w) return null;
+  const t = game[w];
+  const name = (t && (t.short || t.name)) || (w === 'home' ? 'The home side' : 'The away side');
+  const pw = w === 'home' ? game.penHome : game.penAway;
+  const pl = w === 'home' ? game.penAway : game.penHome;
+  return name + ' on penalties' + (Number.isInteger(pw) && Number.isInteger(pl) ? ' (' + pw + '–' + pl + ')' : '');
+}
+
+/** The whole result line: "Final 1–1 · PSG on penalties (4–3)". Away first, as
+ *  every score on this screen is. */
+export function knockoutLine(game) {
+  const p = pensText(game);
+  return p ? 'Final ' + game.awayScore + '–' + game.homeScore + ' · ' + p : null;
 }
 
 /* 🔴 SOCCER: A LEVEL FINAL IS A DRAW, AND THE DRAW IS A PICK (2026-09-13). The
@@ -258,7 +291,9 @@ export function winnerOf(game) {
  * resolveGame says the same for any game whose `sport` is epl or mls - restated
  * here, not imported, because the p2 tests load this module with its imports
  * stripped. tests/soccer-screens.test.mjs holds the two equal on the real day. */
-export const SOCCER_SPORTS = ['epl', 'mls'];
+/* The Champions League, La Liga and Liga MX joined 2026-09-13 - src/lib/groups.ts
+ * isSoccerSport names the same five. */
+export const SOCCER_SPORTS = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
 export function isSoccerSport(s) { return SOCCER_SPORTS.includes(s); }
 
 /** The sides a row offers, and so the sides a saved pick may carry. */
@@ -266,10 +301,11 @@ export function sidesFor(sport) {
   return isSoccerSport(sport) ? ['home', 'away', 'draw'] : ['home', 'away'];
 }
 
-/** A finished soccer match: 'home', 'away' or 'draw'. Null until it is final. */
+/** A finished soccer match: 'home', 'away' or 'draw'. Null until it is final.
+ *  A level knockout won on penalties is its winner's, never 'draw'. */
 export function soccerResult(game) {
   if (game.status !== 'final' || game.homeScore == null || game.awayScore == null) return null;
-  if (game.homeScore === game.awayScore) return 'draw';
+  if (game.homeScore === game.awayScore) return knockoutWinner(game) || 'draw';
   return game.homeScore > game.awayScore ? 'home' : 'away';
 }
 
@@ -376,7 +412,13 @@ function slateGame(o) {
     lastMeeting: o.lastMeeting || null,
     /* The league travels with the game, because grading reads it: a level
      * soccer final is a draw and a level football final is a void. */
-    ...(o.sport ? { sport: o.sport } : {})
+    ...(o.sport ? { sport: o.sport } : {}),
+    /* 🔴 AND A KNOCKOUT'S WINNER TRAVELS TOO - this is an allow-list mapper, so a
+     * field not named here does not exist on the slate. Without it a Champions
+     * League final won on penalties would grade the draw pickers right. */
+    ...(o.winner === 'home' || o.winner === 'away'
+      ? { winner: o.winner, penHome: o.penHome == null ? null : o.penHome, penAway: o.penAway == null ? null : o.penAway }
+      : {})
   };
 }
 
@@ -725,9 +767,11 @@ const WEEK = { 'college-football': 2, nfl: 1 };
  * the server stores the game (src/slate-day.ts writeDayGames). The day turns over
  * at 6 AM Eastern, as in src/lib/day.ts - restated here, not imported, because the
  * p2 tests load this module with its imports stripped. */
-/* Soccer joined 2026-09-13: the Premier League and MLS pick a day at a time too. */
-const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls'];
+/* Soccer joined 2026-09-13: the Premier League and MLS pick a day at a time too,
+ * then the Champions League, La Liga, Liga MX, college hockey and women's college
+ * basketball the same day. */
+const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -775,6 +819,8 @@ async function realSlate(byId, sport, weekArg, dayUrl) {
         spread: typeof g.spread === 'number' ? g.spread : null,
         status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
         homeScore: g.homeScore, awayScore: g.awayScore,
+        /* A level knockout's winner and shootout (src/slate-day.ts parseDay). */
+        winner: g.winner, penHome: g.penHome, penAway: g.penAway,
         rankHome: g.rankHome, rankAway: g.rankAway, conferences: g.conferences,
         lastMeeting: g.lastMeeting || null,
         sport
@@ -1266,7 +1312,7 @@ function zone(ctx, game, side) {
      * paid for by taking something off the crest's line. At 44 it is the first
      * thing seen and the block reads top-down: WHO, then the numbers about them. */
     size: 44,
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'].includes(ctx.sport) ? ctx.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'].includes(ctx.sport) ? ctx.sport : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
 
@@ -1350,7 +1396,11 @@ function zone(ctx, game, side) {
 /** 🔴 THE DRAW - soccer's third tap target, between the two teams (2026-09-13).
  *  The same button as a team zone, with the same states: picked, locked, won,
  *  lost, and the same height as the two sides beside it. The tap sends
- *  side 'draw', which /api/pool/pick takes only for epl and mls.
+ *  side 'draw', which /api/pool/pick takes only for the soccer leagues.
+ *
+ *  🔴 A level knockout decided on penalties is NOT a draw: the Draw reads lost
+ *  (a cross if it was your pick), the side that went through is won, and the
+ *  row says so under the teams - see pensText.
  *
  *  Once the match has started, the score sits in it - the middle column is one
  *  slot, exactly as the "@" becomes the score on a football row. A level final
@@ -1391,7 +1441,8 @@ function drawZone(ctx, game) {
   b.setAttribute('aria-pressed', String(mine));
   const score = started && game.awayScore != null && game.homeScore != null
     ? ', ' + (game.status === 'final' ? 'final ' : 'live ') + game.awayScore + '–' + game.homeScore : '';
-  b.setAttribute('aria-label', 'Draw' + score + (open ? '' : ' – locked'));
+  const pens = pensText(game);
+  b.setAttribute('aria-label', 'Draw' + score + (pens ? ', ' + pens : '') + (open ? '' : ' – locked'));
   if (open) b.addEventListener('click', () => ctx.onPick(game.id, 'draw'));
   return b;
 }
@@ -1649,6 +1700,16 @@ function row(ctx, game) {
       ? center(ctx, game) : el('span', 'p2-at', '@');
   sides.append(zone(ctx, game, 'away'), mid, zone(ctx, game, 'home'));
   r.appendChild(sides);
+  /* 🔴 A KNOCKOUT WON ON PENALTIES SAYS SO, under the teams - the level score is
+   * in the middle slot, so this line finishes the sentence it starts: "Final
+   * 1–1" ... "PSG on penalties (4–3)". Without it a 1–1 with the Draw crossed
+   * out reads as a grading bug. */
+  const pens = pensText(game);
+  if (pens) {
+    const p = el('div', 'p2-pens', pens);
+    p.setAttribute('aria-label', knockoutLine(game));
+    r.appendChild(p);
+  }
   return r;
 }
 
@@ -2198,7 +2259,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line

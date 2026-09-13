@@ -218,10 +218,36 @@ export function gameAt(spec, now) {
     homeScore: settled ? spec.homeScore : null,
     awayScore: settled ? spec.awayScore : null,
     /* 🔴 THE SPORT GOES THROUGH TO THE GRADER. pool.ts resolveGame returns 'draw'
-     * for a level final only when `sport` is epl or mls; without it a soccer
+     * for a level final only when `sport` is a soccer league; without it a soccer
      * draw would grade as a void. */
-    ...(spec.sport ? { sport: spec.sport } : {})
+    ...(spec.sport ? { sport: spec.sport } : {}),
+    /* 🔴 AND SO DOES A KNOCKOUT'S WINNER. Jason, 2026-09-13: "a knockout round has
+     * a winner, that is the winner". A match level after extra time and won on
+     * penalties keeps its level score; resolveGame reads `winner` first, so the
+     * side that went through is won and the draw is lost - but only if it is on
+     * the game it grades. Only once the clock has reached the final. */
+    ...(settled && (spec.winner === 'home' || spec.winner === 'away')
+      ? { winner: spec.winner, penHome: spec.penHome == null ? null : spec.penHome,
+          penAway: spec.penAway == null ? null : spec.penAway }
+      : {})
   };
+}
+
+/** "PSG on penalties (4–3)" for a level soccer final one side still won, else
+ *  null. The side by its short name, the winner's shootout goals first. Restated
+ *  from p2-slate (pensText), because the tests load this module with its imports
+ *  stripped. */
+const SOCCER_IDS = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+export function pensText(game) {
+  if (!game || !SOCCER_IDS.includes(game.sport) || game.status !== 'final') return null;
+  if (game.homeScore == null || game.homeScore !== game.awayScore) return null;
+  const w = game.winner === 'home' || game.winner === 'away' ? game.winner : null;
+  if (!w) return null;
+  const t = game[w];
+  const name = (t && (t.short || t.name)) || (w === 'home' ? 'The home side' : 'The away side');
+  const pw = w === 'home' ? game.penHome : game.penAway;
+  const pl = w === 'home' ? game.penAway : game.penHome;
+  return name + ' on penalties' + (Number.isInteger(pw) && Number.isInteger(pl) ? ' (' + pw + '–' + pl + ')' : '');
 }
 
 /** What a pick is called on its row: the team, or "Draw" - soccer's third side,
@@ -423,9 +449,11 @@ function chosenSport() {
  * The day rules are restated from p2-slate rather than imported, because the
  * tests load this module with its imports stripped. The day turns over at 6 AM
  * Eastern, as in src/lib/day.ts. */
-const SOCCER = ['epl', 'mls'];
-/* Every sport the pool plays a day at a time - src/lib/day.ts DAY_SPORTS. */
-const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'];
+const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+/* Every sport the pool plays a day at a time - src/lib/day.ts DAY_SPORTS. The
+ * Champions League, La Liga, Liga MX, college hockey and women's college
+ * basketball joined 2026-09-13. */
+const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
 function soccerToday(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -472,6 +500,10 @@ export function soccerSpecs(dayGames, sport, day, byId) {
       /* Postponed or cancelled: the one void path, whatever the clock says. */
       voidAt: g.status === 'void' ? 0 : null,
       feedStatus: g.status === 'final' || g.status === 'in_progress' ? g.status : null,
+      /* A level knockout's winner and its shootout - gameAt carries them on. */
+      winner: g.winner === 'home' || g.winner === 'away' ? g.winner : null,
+      penHome: g.penHome == null ? null : g.penHome,
+      penAway: g.penAway == null ? null : g.penAway,
       real: true, sport
     };
   }).filter((g) => g.home && g.away);
@@ -1089,6 +1121,11 @@ function row(ctx, spec) {
   /* ---- line three. Only where there is something to say. A row with nothing to add
    * stays two lines, which is what keeps thirty-one of them readable. */
   const notes = [];
+  /* 🔴 A KNOCKOUT WON ON PENALTIES SAYS SO - the level score is on the right
+   * ("Final 1 – 1"), and this finishes it: "PSG on penalties (4–3)". Without it
+   * a Draw pick crossed out on a 1-1 reads as a grading bug. */
+  const pens = pensText(game);
+  if (pens && (st === 'won' || st === 'lost')) notes.push(pens);
   if (st === 'won' || st === 'lost') {
     const c = coverText(game, side);
     if (c) notes.push(c);
@@ -1127,6 +1164,7 @@ function row(ctx, spec) {
     draw ? 'Draw, ' + (game.away.name || game.away.short) + ' at ' + (game.home.name || game.home.short)
       : (game[side].name || game[side].short) + ' over ' + (game[other].name || game[other].short),
     STATE_WORD[st] || st,
+    pens ? 'final ' + game.awayScore + '–' + game.homeScore + ', ' + pens : null,
     editable ? 'editable for another ' + remainingLabel(left) : null
   ].filter(Boolean).join(', '));
 
@@ -1146,6 +1184,8 @@ function score(game) {
   if (game.homeScore != null && game.awayScore != null) {
     if (game.homeScore > game.awayScore) a.dataset.loser = 'true';
     else if (game.awayScore > game.homeScore) h.dataset.loser = 'true';
+    /* Level, but a knockout won on penalties: the side that went out is dimmed. */
+    else if (pensText(game)) (game.winner === 'home' ? a : h).dataset.loser = 'true';
   }
   wrap.append(el('span', 'p4-sc-k', 'Final'), a, el('span', 'p4-sc-sep', '–'), h);
   return wrap;
@@ -1319,7 +1359,7 @@ export function render(root, data, state) {
      * day and fixed here before it could ship the same way. */
     /* The same league list the slate hands its chips - a pro crest is filed by
        abbreviation and a college one by id (components/team-chip.js). */
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'].includes(data.sport) ? data.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'].includes(data.sport) ? data.sport : 'college-football',
     mode: data.mode || 'pool',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',

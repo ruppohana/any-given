@@ -83,13 +83,19 @@ const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
   mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks',
-  epl: 'Premier League', mls: 'MLS' };
+  epl: 'Premier League', mls: 'MLS',
+  /* 2026-09-13: three more soccer leagues, college hockey (run like the NHL) and
+     women's college basketball (run like the men's: All games or the Top 25). */
+  ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX',
+  'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
 export const isRacing = (s) => { const p = poolSport(s); return p === 'f1' || p.startsWith('nascar'); };
-/** Soccer - the Premier League and MLS. A draw is a pick there, and there is no spread. */
-export const isSoccer = (s) => { const p = poolSport(s); return p === 'epl' || p === 'mls'; };
+/** Soccer - the five leagues (src/lib/groups.ts isSoccerSport). A draw is a pick there, and there is no spread. */
+export const isSoccer = (s) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(poolSport(s));
+/** Men's and women's college basketball: the same which-games choice. */
+const isCollegeHoops = (s) => { const p = poolSport(s); return p === 'mens-college-basketball' || p === 'womens-college-basketball'; };
 /** No spread to switch: the races and soccer (src/lib/groups.ts hasNoSpread). */
 export const hasNoSpread = (s) => isRacing(s) || isSoccer(s);
 /** Which-games choices a sport offers: conferences are football's only; the pro
@@ -97,14 +103,15 @@ export const hasNoSpread = (s) => isRacing(s) || isSoccer(s);
 export const scopeValues = (s) => {
   const p = poolSport(s);
   return p === 'college-football' ? ['all', 'top25', 'conference']
-    : p === 'mens-college-basketball' ? ['all', 'top25'] : [];
+    : isCollegeHoops(p) ? ['all', 'top25'] : [];
 };
 /** What the spread is called where the line has its own name: MLB's run line and
  *  the NHL's puck line are what ESPN carries as the spread. '' everywhere else. */
 export const spreadNote = (s) => {
   const p = poolSport(s);
   return p === 'mlb' ? 'In MLB the spread is the run line.'
-    : p === 'nhl' ? 'In the NHL the spread is the puck line.' : '';
+    : p === 'nhl' ? 'In the NHL the spread is the puck line.'
+    : p === 'mens-college-hockey' ? 'In college hockey the spread is the puck line.' : '';
 };
 const at = (name) => '@' + String(name || '');
 
@@ -459,7 +466,8 @@ export function render(root, data, state) {
     const cur = { scope: group.scope || 'all', arg: group.scopeArg || '' };
     let pick = cur.scope, arg = cur.arg;
     const offered = scopeValues(group.sport);
-    const hoops = poolSport(group.sport) === 'mens-college-basketball';
+    const hoops = isCollegeHoops(group.sport);
+    const women = poolSport(group.sport) === 'womens-college-basketball';
     const seg = el('div', 'g2-seg');
     seg.setAttribute('role', 'radiogroup');
     seg.setAttribute('aria-labelledby', 'g2-scope-l');
@@ -497,7 +505,11 @@ export function render(root, data, state) {
     function paint() {
       for (const b of btns) b.setAttribute('aria-checked', String(b.dataset.v === pick));
       sel.hidden = pick !== 'conference';
-      const what = hoops
+      /* The women's Division I day on file is 72 games (espn-wcbb-scoreboard-260307). */
+      const what = hoops && women
+        ? (pick === 'top25' ? 'Any game with a ranked team in it.' : 'Every women’s college basketball game that day.')
+          + ' A women’s college basketball day can have more than 70 games.'
+        : hoops
         ? (pick === 'top25' ? 'Any game with a ranked team in it.' : 'Every college basketball game that day.')
           + ' A college basketball day can have 150 games.'
         : scopeNote(pick);

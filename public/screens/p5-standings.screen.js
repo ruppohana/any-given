@@ -461,8 +461,18 @@ const SPORT_LABEL = {
   'nascar-truck': 'NASCAR Trucks',
   /* Soccer (2026-09-13): a day at a time, like the NBA - so the season board. */
   epl: 'Premier League',
-  mls: 'MLS'
+  mls: 'MLS',
+  /* 2026-09-13: three more soccer leagues, college hockey, women's college
+   * basketball - every one a day at a time, so the season board. */
+  ucl: 'Champions League',
+  laliga: 'La Liga',
+  ligamx: 'Liga MX',
+  'mens-college-hockey': 'College hockey',
+  'womens-college-basketball': 'Women’s college basketball'
 };
+
+/** The soccer leagues - src/lib/groups.ts isSoccerSport. */
+function isSoccerBoard(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(s); }
 
 /** A group's sport as one of the five; anything else is college football, as before. */
 function groupSport(s) {
@@ -480,8 +490,10 @@ function boardKind(s) {
   if (k === 'f1' || k.startsWith('nascar')) return 'points';
   /* Every league that picks a day at a time (MLB, NHL, WNBA joined 2026-09-12). */
   if (k === 'mens-college-basketball' || k === 'nba' || k === 'mlb' || k === 'nhl' || k === 'wnba') return 'season';
-  /* The Premier League and MLS pick a day at a time too: their "week" is a date. */
-  if (k === 'epl' || k === 'mls') return 'season';
+  /* College hockey and women's college basketball (2026-09-13) too. */
+  if (k === 'mens-college-hockey' || k === 'womens-college-basketball') return 'season';
+  /* Every soccer league picks a day at a time too: its "week" is a date. */
+  if (['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(k)) return 'season';
   return 'week';
 }
 
@@ -1085,8 +1097,11 @@ export function render(root, data, state) {
         + '2 for the retirements. Scored as each session finishes.'
       /* Soccer (2026-09-13): a level final is a result - the draw pickers score it
        * (src/lib/groups.ts gradeSql) - so "a tie counts for nobody" would be false. */
-      : (d.sport === 'epl' || d.sport === 'mls')
+      /* A knockout won on penalties counts for the side that went through
+       * (src/lib/groups.ts gradeSql reads game.winner first). */
+      : isSoccerBoard(d.sport)
         ? 'A point for every right pick - a winner or the draw - once the match is final. A void game counts for nobody.'
+          + ' A knockout decided on penalties counts for the side that went through.'
         : 'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
     host.appendChild(foot);
   }

@@ -142,7 +142,11 @@ const LEAGUE_PATH = { nfl: 'nfl', 'college-football': 'ncaa', ncaa: 'ncaa',
   /* 🔴 SOCCER CRESTS ARE BY TEAM ID, under ESPN's one `soccer` folder for every
      league (soccer/500/349.png, soccer/500-dark/183.png - both 200, 2026-09-13).
      Not BY_ABBREV: a club's abbreviation is not its file name there. */
-  epl: 'soccer', mls: 'soccer' };
+  epl: 'soccer', mls: 'soccer', ucl: 'soccer', laliga: 'soccer', ligamx: 'soccer',
+  /* 🔴 COLLEGE HOCKEY AND WOMEN'S COLLEGE BASKETBALL ARE COLLEGE CRESTS (2026-09-13):
+     ESPN files both by SCHOOL id under ncaa (ncaa/500/2507.png is Providence,
+     ncaa/500/41.png UConn) - the same file the football and men's rows use. */
+  'mens-college-hockey': 'ncaa', 'womens-college-basketball': 'ncaa' };
 /* The pro leagues ESPN files by ABBREVIATION (nba/500/bos.png) - an id there is a
    different team in college. MLB, NHL and WNBA joined 2026-09-12. */
 const BY_ABBREV = new Set(['nba', 'mlb', 'nhl', 'wnba']);

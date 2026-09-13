@@ -71,18 +71,21 @@ function el(tag, cls, text) {
 const LEAGUES = { 'college-football': 'College football', nfl: 'NFL',
   'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
   mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks',
-  epl: 'Premier League', mls: 'MLS' };
+  epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX',
+  'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball' };
 function leagueOf(s) { return Object.prototype.hasOwnProperty.call(LEAGUES, s) ? s : 'college-football'; }
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME. src/lib/day.ts DAY_SPORTS
  * is the server's copy; tests/g3-group-rules.test.mjs holds the two equal. */
-export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls'];
+export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls',
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
 export function isDaySport(s) { return DAY_SPORTS.includes(s); }
 /** F1 and NASCAR are races: scored in points, with no spread anywhere. */
 /* F1 and every NASCAR series - Cup, O'Reilly, Truck (2026-09-13). */
 function isRacing(s) { return s === 'f1' || String(s).startsWith('nascar'); }
-/** The Premier League and MLS. src/lib/groups.ts isSoccerSport: the draw is a
- *  pick, and gradeSql scores a level final for the people who picked it. */
-export function isSoccer(s) { return s === 'epl' || s === 'mls'; }
+/** The five soccer leagues. src/lib/groups.ts isSoccerSport: the draw is a
+ *  pick, and gradeSql scores a level final for the people who picked it - unless
+ *  a knockout was won on penalties (game.winner). */
+export function isSoccer(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(s); }
 /** No spread anywhere: the races and soccer (src/lib/groups.ts hasNoSpread). */
 export function hasNoSpread(s) { return isRacing(s) || isSoccer(s); }
 
@@ -96,7 +99,8 @@ const DAY_WORDS = {
   soccer: { lock: 'kickoff', until: 'that game kicks off' }
 };
 function dayFamily(s) {
-  return s === 'mlb' ? 'baseball' : s === 'nhl' ? 'hockey' : isSoccer(s) ? 'soccer' : 'basketball';
+  return s === 'mlb' ? 'baseball' : s === 'nhl' || s === 'mens-college-hockey' ? 'hockey'
+    : isSoccer(s) ? 'soccer' : 'basketball';
 }
 export function lockWord(s) { return DAY_WORDS[dayFamily(s)].lock; }
 
@@ -104,7 +108,8 @@ export function lockWord(s) { return DAY_WORDS[dayFamily(s)].lock; }
  *  the NHL's puck line are what ESPN carries as the spread. '' everywhere else. */
 export function spreadNote(s) {
   return s === 'mlb' ? 'In MLB the spread is the run line.'
-    : s === 'nhl' ? 'In the NHL the spread is the puck line.' : '';
+    : s === 'nhl' ? 'In the NHL the spread is the puck line.'
+    : s === 'mens-college-hockey' ? 'In college hockey the spread is the puck line.' : '';
 }
 
 /** The picking rules of a day sport, as words. Pure, so the test can read the
@@ -204,9 +209,12 @@ function sHow() {
   box.appendChild(lead('A group is invite only. There is no list of groups to browse.'));
   box.appendChild(bullets([
     'Whoever starts a group is its commissioner.',
-    'A group plays one sport - college football, the NFL, college basketball, the NBA, ' +
-      'the WNBA, MLB, the NHL, the Premier League, MLS, Formula 1 or NASCAR (Cup, O’Reilly or ' +
-      'Trucks) - chosen when it starts.',
+    /* The O'Reilly series is the Xfinity Series renamed for 2026 (Jason,
+     * 2026-09-13) - named once here so the old name is recognized. */
+    'A group plays one sport - college football, the NFL, men’s or women’s college basketball, ' +
+      'the NBA, the WNBA, MLB, the NHL, college hockey, the Premier League, MLS, the Champions ' +
+      'League, La Liga, Liga MX, Formula 1 or NASCAR (Cup, Trucks or O’Reilly, formerly Xfinity) ' +
+      '- chosen when it starts.',
     'You join with the code from an invite. The invite link carries the same code, ' +
       'and the code works in any case, with or without spaces.',
     'You need to be signed in with your email, with a handle, to start or join one.',
@@ -339,6 +347,10 @@ function sScoring(sport) {
       'Every match has three picks: the home side, the away side, or the draw.',
       'A match that finishes level scores a point for everybody who picked the draw, and ' +
         'nothing for anybody who picked a side.',
+      /* 🔴 A KNOCKOUT HAS A WINNER - Jason, 2026-09-13. src/lib/pool.ts resolveGame
+       * reads game.winner before the level score. */
+      'A knockout match still level after extra time is decided on penalties. The side ' +
+        'that goes through wins it, so the draw scores nothing there.',
       'There is no spread in a soccer group. Every pick is straight up.'
     ]));
     box.appendChild(subHead('When a game does not count'));

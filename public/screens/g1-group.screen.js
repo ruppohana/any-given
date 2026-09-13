@@ -83,7 +83,14 @@ export const SPORTS = [
   /* Soccer, 2026-09-13: the Premier League and MLS, a day at a time, and the one
    * pool where the draw is a pick. */
   ['epl', 'Premier League'],
-  ['mls', 'MLS']
+  ['mls', 'MLS'],
+  /* 2026-09-13: three more soccer leagues, college hockey, and women's college
+   * basketball - src/lib/groups.ts POOL_SPORTS, in its order. */
+  ['ucl', 'Champions League'],
+  ['laliga', 'La Liga'],
+  ['ligamx', 'Liga MX'],
+  ['mens-college-hockey', 'College hockey'],
+  ['womens-college-basketball', 'Women’s college basketball']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -93,12 +100,18 @@ const SPORT_IDS = SPORTS.map((s) => s[0]);
  * phone's own picker does the long list. Every sport is in exactly one family. */
 export const SPORT_FAMILIES = [
   ['Football', ['college-football', 'nfl']],
-  ['Basketball', ['mens-college-basketball', 'nba', 'wnba']],
+  ['Basketball', ['mens-college-basketball', 'womens-college-basketball', 'nba', 'wnba']],
   ['Baseball', ['mlb']],
-  ['Hockey', ['nhl']],
+  ['Hockey', ['nhl', 'mens-college-hockey']],
   ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']],
-  ['Soccer', ['epl', 'mls']]
+  ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]
 ];
+
+/* The soccer leagues - src/lib/groups.ts isSoccerSport. */
+const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+/* The two college basketball leagues: the same which-games choice (All games,
+ * Top 25), because src/lib/groups.ts isCollegeSport names both. */
+const COLLEGE_HOOPS = ['mens-college-basketball', 'womens-college-basketball'];
 
 export function poolSport(s) {
   return SPORT_IDS.includes(s) ? s : 'college-football';
@@ -111,10 +124,9 @@ export function isRacing(s) {
   return p === 'f1' || p.startsWith('nascar');
 }
 
-/** The Premier League and MLS: a draw is a pick, and there is no spread. */
+/** The five soccer leagues: a draw is a pick, and there is no spread. */
 export function isSoccer(s) {
-  const p = poolSport(s);
-  return p === 'epl' || p === 'mls';
+  return SOCCER.includes(poolSport(s));
 }
 
 /** No spread to pick against: the races, and soccer. The server's copy is
@@ -127,9 +139,10 @@ export function hasNoSpread(s) {
  * the day (YYYYMMDD). src/lib/day.ts DAY_SPORTS is the server's copy; a browser
  * module with its imports stripped cannot read it, so tests/g1-group.test.mjs
  * holds the two equal. */
-export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls'];
+export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls',
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
 
-/** Picks a day at a time: basketball, baseball, hockey. */
+/** Picks a day at a time: basketball, baseball, hockey, soccer. */
 export function isDaySport(s) {
   return DAY_SPORTS.includes(poolSport(s));
 }
@@ -139,7 +152,8 @@ export function isDaySport(s) {
 export function lockWord(s) {
   const p = poolSport(s);
   if (p === 'mlb') return 'first pitch';
-  if (p === 'nhl') return 'puck drop';
+  /* College hockey drops the puck like the NHL. */
+  if (p === 'nhl' || p === 'mens-college-hockey') return 'puck drop';
   /* A soccer match kicks off - a day sport, but not a tip-off. */
   if (isSoccer(p)) return 'kickoff';
   if (isDaySport(p)) return 'tip-off';
@@ -153,6 +167,7 @@ export function spreadNote(s) {
   const p = poolSport(s);
   if (p === 'mlb') return 'In MLB the spread is the run line.';
   if (p === 'nhl') return 'In the NHL the spread is the puck line.';
+  if (p === 'mens-college-hockey') return 'In college hockey the spread is the puck line.';
   return '';
 }
 
@@ -172,13 +187,15 @@ export function sportNote(s) {
 export function scopeValues(sport) {
   const s = poolSport(sport);
   if (s === 'college-football') return ['all', 'top25', 'conference'];
-  if (s === 'mens-college-basketball') return ['all', 'top25'];
+  /* Men's and women's college basketball alike (women's joined 2026-09-13).
+   * College hockey is a college sport for crests only: every game, no choice. */
+  if (COLLEGE_HOOPS.includes(s)) return ['all', 'top25'];
   return [];
 }
 
 /** A college basketball day can have 150 games, so it starts at the Top 25. */
 export function defaultScope(sport) {
-  return poolSport(sport) === 'mens-college-basketball' ? 'top25' : 'all';
+  return COLLEGE_HOOPS.includes(poolSport(sport)) ? 'top25' : 'all';
 }
 
 /** The pledge gates Create. Ticked, and the pledge's own words actually on
@@ -210,8 +227,13 @@ export function sportLabel(s) {
   return SPORTS[SPORT_IDS.indexOf(poolSport(s))][1];
 }
 
-/** The one line under Which games for a college basketball group. */
-export function basketballScopeNote(scope) {
+/** The one line under Which games for a college basketball group. The women's
+ *  Division I day in fixtures/feed/espn-wcbb-scoreboard-260307.json is 72 games. */
+export function basketballScopeNote(scope, sport) {
+  if (poolSport(sport) === 'womens-college-basketball') {
+    return (scope === 'top25' ? 'Any game with a ranked team in it.' : 'Every women’s college basketball game that day.')
+      + ' A women’s college basketball day can have more than 70 games.';
+  }
   return (scope === 'top25' ? 'Any game with a ranked team in it.' : 'Every college basketball game that day.')
     + ' A college basketball day can have 150 games.';
 }
@@ -593,7 +615,7 @@ function startForm(host, data) {
       b.setAttribute('aria-checked', String(b.dataset.v === form.scope));
     }
     confSel.hidden = !(form.sport === 'college-football' && form.scope === 'conference');
-    scopeLine.textContent = (form.sport === 'mens-college-basketball' ? basketballScopeNote(form.scope)
+    scopeLine.textContent = (COLLEGE_HOOPS.includes(form.sport) ? basketballScopeNote(form.scope, form.sport)
       : scopeNote(form.scope)) + ' The commissioner can change it later.';
     if (typeof paint === 'function') paint();
   }
