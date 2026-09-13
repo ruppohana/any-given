@@ -418,6 +418,17 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* 🔴 A FIELD UNDER 16px ZOOMS THE WHOLE PAGE ON AN IPHONE. iOS Safari zooms in
+   when an input, select or textarea smaller than 16px takes focus, and never
+   zooms back - and this app's fields sit at --t-body, 13px (the group name, the
+   Sport select, the commissioner's fields). Only iOS understands
+   -webkit-touch-callout, so desktop and Android keep the designed sizes. The
+   !important is deliberate: screen styles set these fields' size with a higher
+   specificity, and every one of them would zoom otherwise. */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea { font-size: max(16px, 1em) !important; }
+}
+
 /* EVERY NUMBER IS TABULAR, no exceptions. A figure that reflows as it ticks is a
  * figure nobody trusts - and four of this app's five animated moments are a number
  * changing under time pressure. */
