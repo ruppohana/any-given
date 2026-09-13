@@ -1751,9 +1751,12 @@ export function openInfo(game, ctx) {
   const facts = el('div', 'p2-facts');
   d.appendChild(facts);
   const lg = ctx && ctx.sport === 'nfl' ? 'nfl' : 'ncaa';
-  /* No soccer facts file exists, and a club's id under ncaa is a different team
-   * entirely - so a soccer card asks for none. */
-  for (const side of (isSoccerSport(ctx && ctx.sport) ? [] : [A, H])) {
+  /* 🔴 FACTS EXIST FOR FOOTBALL ONLY (public/nuggets/nfl and /ncaa, keyed by team
+   * id). A team id is only unique within its league - NBA 5, an MLB, NHL or WNBA
+   * id, or a soccer club under ncaa is a different team entirely, and its "fun
+   * fact" would be some college's. So any other sport's card asks for none. */
+  const footballCard = !(ctx && ctx.sport) || ctx.sport === 'nfl' || ctx.sport === 'college-football';
+  for (const side of (footballCard ? [A, H] : [])) {
     if (!side || !side.id) continue;
     const slot = el('div', 'p2-fact');
     slot.hidden = true;

@@ -158,7 +158,9 @@ test('the Draw is a real tap target between the teams, and its tap sends side dr
 
 test('a soccer card asks for no football facts, and its tiebreak counts goals', () => {
   const C = code(P2_SRC);
-  assert.match(C, /for \(const side of \(isSoccerSport\(ctx && ctx\.sport\) \? \[\] : \[A, H\]\)\)/);
+  /* Widened 2026-09-13: facts are football's only, so every non-football card -
+     soccer included - asks for none (tests/facts-football-only.test.mjs). */
+  assert.match(C, /for \(const side of \(footballCard \? \[A, H\] : \[\]\)\)/);
   assert.match(C, /isSoccerSport\(ctx\.sport\) \? 'Combined goals in ' : 'Combined points in '/);
   assert.equal(P2.GROUP_COPY.subSoccer, ' · pick the winner or the draw · scored in points');
   assert.match(C, /league: \[[^\]]*'epl', 'mls'\]\.includes\(ctx\.sport\)/, 'soccer rows ask for soccer crests');
