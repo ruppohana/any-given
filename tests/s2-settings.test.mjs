@@ -58,7 +58,7 @@ const HEAD = TEAMS.slice()
 
 /* ---------------------------------------------------------------- the rules */
 
-test('18+ is a rating, never a wall - there is no date-of-birth field', () => {
+test('no age wall - there is no date-of-birth field', () => {
   // The counter-example is AQB-LIVE-signup-form-dob-required.png: seven fields
   // including Date of Birth, in front of every screen they ship.
   assert.equal(/type\s*=\s*["']date["']/.test(JS), false, 'a date input appeared');

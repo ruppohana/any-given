@@ -6,9 +6,9 @@
  * needs to sign in (src/auth.ts, REQUIRE_EMAIL); this sheet is only ever the
  * answer to it - or the menu's "Sign in with email".
  *
- * THREE STEPS, NO PASSWORD. Step one asks for the address and the 18-or-older
- * confirmation - the app is 18+ (settled.md, "18+, taken honestly"; Jason:
- * "i thought we were asking 18+ for apple"). Step two takes the code from the
+ * THREE STEPS, NO PASSWORD. Step one asks for the address and nothing else -
+ * the 18-or-older box came off 2026-09-13 with the betting side (Jason: "we
+ * dont have to be 18+ anymore" / "remove it from the sign in"). Step two takes the code from the
  * email. Step three - only for an account that has no handle yet - asks for
  * first name, last name and a handle, and says whether the handle is free as
  * it is typed. A returning account with a profile never sees step three.
@@ -38,8 +38,6 @@ const CSS = `
 .ag-si-avail { min-height: 16px; font-size: var(--t-micro); font-weight: 700; color: var(--dim); }
 .ag-si-avail[data-ok="true"] { color: var(--up); }
 .ag-si-avail[data-ok="false"] { color: var(--down); }
-.ag-si-age { display: flex; gap: 10px; align-items: center; font-size: var(--t-body); }
-.ag-si-age input { width: 20px; height: 20px; }
 .ag-si-go { font: inherit; font-weight: 800; min-height: var(--tap-min, 44px); border: 0;
   border-radius: var(--radius-button, 10px); background: var(--accent); color: var(--on-accent); }
 .ag-si-go:disabled { background: var(--track); color: var(--dim); }
@@ -153,25 +151,21 @@ export function openSignIn(reason, opts = {}) {
       const inp = el('input', 'ag-si-in');
       inp.type = 'email'; inp.autocomplete = 'email'; inp.inputMode = 'email';
       inp.placeholder = 'you@example.com'; inp.value = email || signedInEmail();
-      const age = el('label', 'ag-si-age');
-      const cb = document.createElement('input'); cb.type = 'checkbox';
-      age.append(cb, document.createTextNode('I’m 18 or older'));
       const go = el('button', 'ag-si-go', 'Send code'); go.type = 'button';
       const err = el('p', 'ag-si-err', errMsg || '');
       go.onclick = async () => {
         email = inp.value.trim();
         if (!email) { inp.focus(); return; }
-        if (!cb.checked) { err.textContent = 'You need to be 18 or older to play.'; return; }
         go.disabled = true; go.textContent = 'Sending…'; err.textContent = '';
         try {
           const r = await fetch('/api/auth/start', { method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ email, ageOk: true }) });
+            body: JSON.stringify({ email }) });
           const j = await r.json().catch(() => ({}));
           if (!r.ok) { go.disabled = false; go.textContent = 'Send code'; err.textContent = j.error || 'That didn’t work. Try again.'; return; }
           stepCode();
         } catch { go.disabled = false; go.textContent = 'Send code'; err.textContent = 'No connection. Try again in a moment.'; }
       };
-      box.append(inp, age, go, err);
+      box.append(inp, go, err);
       const fine = el('p', 'ag-si-fine');
       fine.append(document.createTextNode('We only use it to sign you in. '));
       const a = el('a', null, 'Privacy'); a.href = '/privacy.html'; a.target = '_blank'; a.rel = 'noopener';

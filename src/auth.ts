@@ -159,11 +159,12 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
     const b = await req.json().catch(() => ({})) as any;
     const email = normEmail(b.email);
     if (!EMAIL.test(email)) return json({ error: 'That doesn’t look like an email address.' }, 400);
-    /* 🔴 18+, NOT 13+. The app is rated 18+ (settled.md, "18+, taken
-       honestly", 2026-09-07) and the sign-in first shipped asking 13+ - the
-       COPPA line - until Jason caught it: "i thought we were asking 18+ for
-       apple". 18 covers COPPA as well. No email is stored without it. */
-    if (b.ageOk !== true) return json({ error: 'You need to be 18 or older to play.' }, 400);
+    /* 🔴 NO AGE GATE. The 18+ confirmation came off 2026-09-13 with the
+       betting side (Jason: "we dont have to be 18+ anymore" / "remove it from
+       the sign in"). A free pool with no prize is a general-audience app: the
+       privacy page says it is not directed at children under 13 and that we
+       delete what we learn came from one. An `ageOk` still sent by an old
+       cached client is ignored, never required. */
     if (!env.MAILERSEND_API_KEY && !env.RESEND_API_KEY) {
       return json({ error: 'Email sign-in isn’t switched on yet.', sender: false }, 503);
     }
@@ -187,8 +188,8 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
          attempts = 0, sent_at = excluded.sent_at, sends = excluded.sends`
     ).bind(email, await sha256(email + ':' + code), now + CODE_TTL_MS, now, sends).run();
     await env.DB.prepare(
-      `INSERT INTO account (id, email, verified_at, age_ok, created_at) VALUES (?, ?, NULL, 1, ?)
-       ON CONFLICT(email) DO UPDATE SET age_ok = 1`
+      `INSERT INTO account (id, email, verified_at, created_at) VALUES (?, ?, NULL, ?)
+       ON CONFLICT(email) DO NOTHING`
     ).bind(randHex(12), email, now).run();
     return json({ ok: true });
   }

@@ -217,12 +217,13 @@ const ALL_SECTIONS = [
   { id: 'marbles', q: 'Is anything here for sale?',                      h: 'Marbles, and the bank',        build: sMarbles },
   { id: 'price',   q: 'What does a call pay?',                           h: 'The price, before you commit', build: sPrice },
   { id: 'delay',   q: 'Why is the app behind my television?',            h: 'Behind on purpose',            build: sDelay },
-  { id: 'age',     q: 'Is this gambling?',                               h: '18+, and what that is not',    build: sAge }
+  { id: 'age',     q: 'Is this gambling?',                               h: 'No money, and no age wall',    build: sAge }
 ];
-/* 🔴 100% POOL (2026-09-12): the Marbles, price, delay and gambling questions
- * describe the hidden betting side, so the pool-only shell asks only the pool's
- * four. app.js sets the flag before any screen module loads. */
-const POOL_SECTIONS = new Set(['void', 'scoring', 'ties', 'scope']);
+/* 🔴 100% POOL (2026-09-12): the Marbles, price and delay questions describe
+ * the hidden betting side, so the pool-only shell asks only the pool's own -
+ * and "Is this gambling?", which a pool player asks too (back 2026-09-13, when
+ * the 18+ rating came off). app.js sets the flag before any screen module loads. */
+const POOL_SECTIONS = new Set(['void', 'scoring', 'ties', 'scope', 'age']);
 const SECTIONS = globalThis.AG_POOL_ONLY === true ? ALL_SECTIONS.filter((s) => POOL_SECTIONS.has(s.id)) : ALL_SECTIONS;
 
 /* -------------------------------------------------------------------- 1 VOID */
@@ -542,12 +543,13 @@ function sDelay(data) {
 function sAge(data) {
   const box = document.createDocumentFragment();
 
-  box.appendChild(lead('Any Given is rated 18+ and we answer that question ' +
-    'honestly on the store questionnaire.'));
+  /* The 18+ rating came off 2026-09-13 with the betting side (Jason: "we dont
+     have to be 18+ anymore"). A free pool with no prize has no age wall. */
+  box.appendChild(lead('No. There is no entry fee, no prize and no money in it, ' +
+    'so there is no age wall either.'));
   box.appendChild(para('s6-p',
-    'The rating is a rating. It is not a door: there is no date of birth field, ' +
-    'no account wall and nothing standing in front of the slate. The first thing ' +
-    'you see is the games.'));
+    'Anyone can play. There is no date of birth field, no account wall and ' +
+    'nothing standing in front of the slate. The first thing you see is the games.'));
 
   box.appendChild(el('p', 's6-sub-h', 'It is not a contest'));
   box.appendChild(bullets([
@@ -557,9 +559,7 @@ function sAge(data) {
     'Nothing of value is at stake in either half.'
   ]));
   box.appendChild(para('s6-p',
-    'The pool scores points and the live layer stakes Marbles, and neither one ' +
-    'crosses into money in either direction. The rating is there because the ' +
-    'subject matter is sports prediction, not because there is something to win.'));
+    'The pool scores points, and points never cross into money in either direction.'));
   return box;
 }
 

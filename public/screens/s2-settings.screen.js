@@ -18,8 +18,9 @@
  *
  * WHAT THAT MAKES THIS SCREEN, and none of it is a choice made here:
  *
- * 1. THERE IS NO DATE-OF-BIRTH FIELD, and no email, and no password. 18+ is a
- *    RATING, answered honestly on the store questionnaire - never a door. The
+ * 1. THERE IS NO DATE-OF-BIRTH FIELD, and no email, and no password. There is
+ *    no age wall at all since 2026-09-13 (the 18+ rating left with the betting
+ *    side), and there was never a door. The
  *    Armchair screen above is the thing this product is defined against, so the
  *    absence is stated on screen rather than merely implemented.
  * 2. A PERSON IS A DISPLAY NAME AND A DEVICE until they choose otherwise. In
