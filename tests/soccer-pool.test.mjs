@@ -58,10 +58,11 @@ test('a soccer clock is ESPN\'s own minute', () => {
 /* The standings arithmetic, on the real day. */
 function grade(sport, ats, games, picks) {
   const db = new DatabaseSync(':memory:');
-  db.exec(`CREATE TABLE game (id TEXT PRIMARY KEY, status TEXT, void INTEGER, home_score INTEGER, away_score INTEGER, spread REAL);
+  /* `winner` since migration 0010: a level soccer knockout that one side still won. */
+  db.exec(`CREATE TABLE game (id TEXT PRIMARY KEY, status TEXT, void INTEGER, home_score INTEGER, away_score INTEGER, spread REAL, winner TEXT);
            CREATE TABLE pick (user_id TEXT, game_id TEXT, side TEXT, spread_at REAL);`);
-  const ig = db.prepare('INSERT INTO game VALUES (?, ?, ?, ?, ?, ?)');
-  for (const g of games) ig.run(g.id, g.status, 0, g.homeScore, g.awayScore, g.spread ?? null);
+  const ig = db.prepare('INSERT INTO game VALUES (?, ?, ?, ?, ?, ?, ?)');
+  for (const g of games) ig.run(g.id, g.status, 0, g.homeScore, g.awayScore, g.spread ?? null, g.winner ?? null);
   const ip = db.prepare('INSERT INTO pick VALUES (?, ?, ?, NULL)');
   for (const [u, id, side] of picks) ip.run(u, id, side);
   const G = gradeSql(sport, ats);

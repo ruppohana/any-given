@@ -67,7 +67,9 @@ export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball'
   'nascar-oreilly', 'nascar-truck',
   /* 2026-09-13, "do all the sports for the pool": the Premier League and MLS, a day
      at a time, and the one pool where a draw is a pick (isSoccerSport below). */
-  'epl', 'mls'] as const;
+  'epl', 'mls',
+  /* 2026-09-13: three more soccer leagues and college hockey (src/lib/day.ts). */
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
@@ -82,7 +84,7 @@ export const isRacingSport = (s: unknown) => s === 'f1' || String(s).startsWith(
  * So a soccer pick has three sides, a level final grades the draw pickers right
  * and everyone else wrong, and it counts as played. No spread: a three-way
  * result has no single line. */
-export const isSoccerSport = (s: unknown) => s === 'epl' || s === 'mls';
+export const isSoccerSport = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(String(s));
 /** A race or a soccer match never picks against a spread. */
 export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s);
 /** The sides a pick may take. */
@@ -97,7 +99,10 @@ export function gradeSql(sport: unknown, ats: boolean): { counted: string; resul
     ? '(g.home_score + COALESCE(p.spread_at, g.spread, 0) - g.away_score)'
     : '(g.home_score - g.away_score)';
   if (isSoccerSport(sport)) {
-    return { counted: '1 = 1', result: `CASE WHEN ${margin} > 0 THEN 'home' WHEN ${margin} < 0 THEN 'away' ELSE 'draw' END` };
+    /* 🔴 A KNOCKOUT HAS A WINNER - Jason, 2026-09-13: "a knockout round has a winner,
+       that is the winner". A level final that one side still won (penalties) carries
+       that side in `game.winner` (migration 0010), and it is read before the score. */
+    return { counted: '1 = 1', result: `CASE WHEN g.winner IN ('home', 'away') THEN g.winner WHEN ${margin} > 0 THEN 'home' WHEN ${margin} < 0 THEN 'away' ELSE 'draw' END` };
   }
   return { counted: `${margin} <> 0`, result: `CASE WHEN ${margin} > 0 THEN 'home' ELSE 'away' END` };
 }

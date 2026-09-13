@@ -30,12 +30,25 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
      STATUS_FULL_TIME (src/slate-day.ts statusOf). Two halves; the clock is
      ESPN's own minute ("67'", "90'+6'"). */
   epl: { path: 'soccer/eng.1', groups: '', label: 'Premier League', periods: 2 },
-  mls: { path: 'soccer/usa.1', groups: '', label: 'MLS', periods: 2 }
+  mls: { path: 'soccer/usa.1', groups: '', label: 'MLS', periods: 2 },
+  /* 2026-09-13 - "soccer ... only MLS and premier?" The Champions League (league
+     phase Sep-Jan, then knockouts to the May final), La Liga and Liga MX: the same
+     ESPN soccer scoreboard. A knockout decided on penalties is WON - Jason: "a
+     knockout round has a winner, that is the winner" (src/slate-day.ts parseDay). */
+  ucl: { path: 'soccer/uefa.champions', groups: '', label: 'Champions League', periods: 2 },
+  laliga: { path: 'soccer/esp.1', groups: '', label: 'La Liga', periods: 2 },
+  ligamx: { path: 'soccer/mex.1', groups: '', label: 'Liga MX', periods: 2 },
+  /* Jason, 2026-09-13: "college hockey?" - ESPN carries it (21 games on 2026-03-07;
+     the season opens 2026-10-03 with 15). Three periods, like the NHL. */
+  'mens-college-hockey': { path: 'hockey/mens-college-hockey', groups: '', label: 'College hockey', periods: 3 }
 };
+
+/** The soccer day sports - src/lib/groups.ts isSoccerSport says the same. */
+export const SOCCER_DAY = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
 
 /** Soccer counts minutes, not a countdown - see dayClock. */
 export function isSoccerDay(sport: unknown): boolean {
-  return sport === 'epl' || sport === 'mls';
+  return SOCCER_DAY.includes(String(sport));
 }
 
 export function isDaySport(sport: unknown): boolean {

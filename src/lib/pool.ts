@@ -76,6 +76,9 @@ export type SlateGame = {
   /** The league, when the slate is not college football. Only soccer ('epl',
    *  'mls') changes the grading: a level final there is a draw, not a void. */
   sport?: string;
+  /** A soccer knockout level after extra time and won on penalties: the side that
+   *  won. Null for every other game - the score decides. */
+  winner?: 'home' | 'away' | null;
 };
 
 /** 'draw' exists only in soccer - the one pool where a level final is a result. */
@@ -204,7 +207,7 @@ export type GameOutcome = 'home' | 'away' | 'draw' | 'void' | null;
 
 /* Soccer - kept inline rather than imported, because this module is shipped to
    the browser on its own (src/lib/groups.ts isSoccerSport says the same). */
-const isSoccer = (s: unknown) => s === 'epl' || s === 'mls';
+const isSoccer = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(String(s));
 
 export type VoidReason =
   | 'status_void'      // cancelled or postponed. Same thing, deliberately.
@@ -228,7 +231,10 @@ export function resolveGame(game: SlateGame, ats: boolean): GameOutcome {
   /* 🔴 SOCCER: A LEVEL FINAL IS A DRAW, A RESULT SOMEBODY CAN PICK - not the
      void path. No spread either way (a soccer group never stores one). */
   if (isSoccer(game.sport)) {
-    return game.homeScore === game.awayScore ? 'draw' : game.homeScore > game.awayScore ? 'home' : 'away';
+    /* A knockout level after extra time is still WON on penalties - Jason: "a
+       knockout round has a winner, that is the winner". */
+    if (game.homeScore === game.awayScore) return game.winner === 'home' || game.winner === 'away' ? game.winner : 'draw';
+    return game.homeScore > game.awayScore ? 'home' : 'away';
   }
 
   if (ats) {

@@ -16,7 +16,7 @@
  * The game shape is the football slate's (src/slate-cron.ts), so The slate
  * draws a basketball card with the code that draws a football one.
  */
-import { DAY_SPORTS, CONF_SHORT, NBA_CONF, dayOf, addDays } from './lib/day.ts';
+import { DAY_SPORTS, CONF_SHORT, NBA_CONF, dayOf, addDays, isSoccerDay } from './lib/day.ts';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
   + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
@@ -111,6 +111,18 @@ export function parseDay(payload: any, sport: string, day: string): any[] {
     };
     const home = side(h), away = side(a);
 
+    /* 🔴 A KNOCKOUT HAS A WINNER. Jason, 2026-09-13: "a knockout round has a winner,
+       that is the winner". A soccer match level after extra time and decided on
+       penalties ends STATUS_FINAL_PEN with the SCORE LEVEL (1-1 in the 2026
+       Champions League final) - the shootout is not in it - and ESPN flags the side
+       that went through as `winner`. Read only for soccer and only on a level final:
+       a league-phase draw has no flag and stays a draw. College hockey's conference
+       shootouts do not count - the NCAA records those games as ties. */
+    const level = status === 'final' && home.score != null && home.score === away.score;
+    const winner = isSoccerDay(sport) && level
+      ? (h.winner === true ? 'home' : a.winner === true ? 'away' : null) : null;
+    const pens = (c: any) => (winner ? numOrNull(c.shootoutScore) : null);
+
     const o = (comp.odds || [])[0] || null;
     const ml = (s: 'home' | 'away') => {
       const direct = o?.[s + 'TeamOdds']?.moneyLine;
@@ -135,6 +147,8 @@ export function parseDay(payload: any, sport: string, day: string): any[] {
       clock: typeof comp.status?.displayClock === 'string' ? comp.status.displayClock : null,
       homeTeamId: home.id, awayTeamId: away.id,
       homeScore: home.score, awayScore: away.score,
+      /* The shootout's winner and its score, for a level knockout only. */
+      winner, penHome: pens(h), penAway: pens(a),
       /* ESPN's convention, same as football: the HOME number, negative = home favoured. */
       spread: typeof o?.spread === 'number' ? o.spread : null,
       spreadProvider: o?.provider?.name || null,
@@ -194,15 +208,16 @@ export async function writeDayGames(env: any, sport: string, day: string, games:
   if (!rows.length) return 0;
   const stmt = env.DB.prepare(
     `INSERT INTO game (id, season, week, kickoff_utc, home_team_id, away_team_id,
-                       spread, status, home_score, away_score, void, sport)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                       spread, status, home_score, away_score, void, sport, winner)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        week        = excluded.week,
        kickoff_utc = excluded.kickoff_utc,
        spread      = COALESCE(excluded.spread, game.spread),
        status      = excluded.status,
        home_score  = excluded.home_score,
-       away_score  = excluded.away_score`
+       away_score  = excluded.away_score,
+       winner      = excluded.winner`
   );
   const week = Number(day);
   for (let i = 0; i < rows.length; i += 100) {
@@ -212,7 +227,9 @@ export async function writeDayGames(env: any, sport: string, day: string, games:
       typeof g.spread === 'number' ? g.spread : null, String(g.status || 'scheduled'),
       g.homeScore == null ? null : Number(g.homeScore),
       g.awayScore == null ? null : Number(g.awayScore),
-      sport
+      sport,
+      /* A level soccer knockout's winner (migration 0010); null for everything else. */
+      g.winner === 'home' || g.winner === 'away' ? g.winner : null
     )));
   }
   return rows.length;
