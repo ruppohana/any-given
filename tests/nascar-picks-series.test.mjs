@@ -376,7 +376,9 @@ test('the series chips: Cup · O\'Reilly · Trucks, each a link to its route, th
 
 test('copy per series: the sub line names the series, the footer is the same on all three', () => {
   assert.equal(NAS.subLine('nascar', CUP), 'NASCAR Cup Series · World Wide Technology Raceway');
-  assert.equal(NAS.subLine('nascar-oreilly', ORL), 'NASCAR O\'Reilly Auto Parts Series · World Wide Technology');
+  /* The renamed Xfinity Series says so, once (Jason, 2026-09-13: "Same series, new name"). */
+  assert.equal(NAS.subLine('nascar-oreilly', ORL), 'NASCAR O\'Reilly Auto Parts Series (formerly Xfinity) · World Wide Technology');
+  assert.equal(NAS.SERIES['nascar-oreilly'].chip, 'O\'Reilly', 'never on the chip');
   assert.equal(NAS.subLine('nascar-truck', TRK), 'NASCAR Truck Series · Bristol');
   assert.equal(NAS.subLine('nascar-truck', null), 'NASCAR Truck Series');
   const js = code(SRC);

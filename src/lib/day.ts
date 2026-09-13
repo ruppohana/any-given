@@ -40,7 +40,10 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
   ligamx: { path: 'soccer/mex.1', groups: '', label: 'Liga MX', periods: 2 },
   /* Jason, 2026-09-13: "college hockey?" - ESPN carries it (21 games on 2026-03-07;
      the season opens 2026-10-03 with 15). Three periods, like the NHL. */
-  'mens-college-hockey': { path: 'hockey/mens-college-hockey', groups: '', label: 'College hockey', periods: 3 }
+  'mens-college-hockey': { path: 'hockey/mens-college-hockey', groups: '', label: 'College hockey', periods: 3 },
+  /* Jason, 2026-09-13: "add women's college basketball too". groups=50 is Division I
+     (72 games on 2026-03-07; without it ESPN returns 10). Four ten-minute quarters. */
+  'womens-college-basketball': { path: 'basketball/womens-college-basketball', groups: '50', label: "Women's college basketball", periods: 4 }
 };
 
 /** The soccer day sports - src/lib/groups.ts isSoccerSport says the same. */

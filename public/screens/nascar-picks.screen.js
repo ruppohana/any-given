@@ -41,7 +41,11 @@ import { NPOINTS, makesOf, DARK_HORSE_FROM, isLocked, poleSitter, isDarkHorse, s
 /** NASCAR's three national series, keyed by route id = group sport = feed series. */
 export const SERIES = {
   nascar: { chip: 'Cup', label: 'Cup Series', race: 'Cup race', invite: 'start a NASCAR group' },
-  'nascar-oreilly': { chip: "O'Reilly", label: "O'Reilly Auto Parts Series", race: "O'Reilly race", invite: "start a NASCAR O'Reilly group" },
+  /* 🔴 THE OLD XFINITY SERIES. Jason, 2026-09-13: "The NASCAR O'Reilly Auto Parts
+     Series is just the renamed Xfinity Series, effective 2026 ... Same series, new
+     name." The label stays the server's (ESPN's) name; `aka` tells a fan who knows
+     the old one, once, in the header - never on the chip. */
+  'nascar-oreilly': { chip: "O'Reilly", label: "O'Reilly Auto Parts Series", aka: 'formerly Xfinity', race: "O'Reilly race", invite: "start a NASCAR O'Reilly group" },
   'nascar-truck': { chip: 'Trucks', label: 'Truck Series', race: 'Truck Series race', invite: 'start a NASCAR Truck group' }
 };
 export const SERIES_IDS = Object.keys(SERIES);
@@ -68,7 +72,8 @@ export function feedUrl(series) {
 
 /** "NASCAR Cup Series · World Wide Technology Raceway" - the series as a fact. */
 export function subLine(series, ev) {
-  return 'NASCAR ' + SERIES[seriesOf(series)].label + (ev && ev.track ? ' · ' + ev.track : '');
+  const s = SERIES[seriesOf(series)];
+  return 'NASCAR ' + s.label + (s.aka ? ' (' + s.aka + ')' : '') + (ev && ev.track ? ' · ' + ev.track : '');
 }
 
 /** The empty state's line - the Truck Series may be between races. */

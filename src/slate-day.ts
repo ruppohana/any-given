@@ -96,7 +96,9 @@ export function parseDay(payload: any, sport: string, day: string): any[] {
            a college conference). Only the NBA has a table of its own. */
         conference: sport === 'nba'
           ? (NBA_CONF[String(t.id)] || null)
-          : sport === 'mens-college-basketball'
+          /* Women's college basketball uses ESPN's same conference ids (UConn is 4,
+             the Big East, in both) - checked on the captured 2026-03-07 day. */
+          : sport === 'mens-college-basketball' || sport === 'womens-college-basketball'
             ? (gameConf || CONF_SHORT[String(t.conferenceId)] || null)
             : null,
         /* The feed's own crest URL. An NBA team's ESPN id is a different team

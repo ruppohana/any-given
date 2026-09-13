@@ -69,7 +69,9 @@ export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball'
      at a time, and the one pool where a draw is a pick (isSoccerSport below). */
   'epl', 'mls',
   /* 2026-09-13: three more soccer leagues and college hockey (src/lib/day.ts). */
-  'ucl', 'laliga', 'ligamx', 'mens-college-hockey'] as const;
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey',
+  /* 2026-09-13, "add women's college basketball too" - a college day sport. */
+  'womens-college-basketball'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
@@ -107,7 +109,8 @@ export function gradeSql(sport: unknown, ats: boolean): { counted: string; resul
   return { counted: `${margin} <> 0`, result: `CASE WHEN ${margin} > 0 THEN 'home' ELSE 'away' END` };
 }
 /** A college sport chooses its games; a pro league and F1 play everything. */
-export const isCollegeSport = (s: string) => s === 'college-football' || s === 'mens-college-basketball';
+export const isCollegeSport = (s: string) =>
+  s === 'college-football' || s === 'mens-college-basketball' || s === 'womens-college-basketball';
 /** The world board of a sport, for picks made outside any group. */
 export const worldPoolId = (s: string) =>
   s === 'nfl' ? 'world-nfl' : s === 'college-football' ? 'world-cfb' : 'world-' + s;
