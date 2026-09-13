@@ -50,10 +50,12 @@ routes = [
 
 # 🔴 THE HOST POLLS, THE WORKER SERVES, AND KV IS THE JOINT.
 #
-# ESPN returns 403 to Cloudflare - to the datacenter, not to the header: a
-# browser User-Agent was added and it changed nothing. The vault already records
-# "only the host machine can reach ESPN" for the cloud container and the mount
-# VM; Workers are now on that list too.
+# 🔴 CORRECTED 2026-09-13: it is ONE ESPN HOST, not ESPN. site.api.espn.com
+# refuses by user agent (403 to browser, blank and PowerShell agents; 200 to
+# curl), and that is the 403 this paragraph was written about. site.web.api and
+# sports.core.api answer everyone, Cloudflare included - the day slates, F1,
+# NASCAR and the core-API football slate all run on them from this Worker. The
+# host poller below is still how the live football state reaches KV.
 #
 # So the poller runs on the machine that CAN reach the feed and pushes state up.
 # The architecture is unchanged in the way that matters - ONE server polls, a

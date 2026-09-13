@@ -98,7 +98,7 @@ export async function fetchSlate(
   const q = new URLSearchParams();
   if (opts.week) q.set('week', String(opts.week));
   if (opts.season) q.set('dates', String(opts.season));
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${PATH[sport]}/scoreboard`
+  const url = `https://site.web.api.espn.com/apis/site/v2/sports/${PATH[sport]}/scoreboard`
     + (q.toString() ? `?${q}` : '');
 
   const res = await f(url);

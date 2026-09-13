@@ -59,7 +59,11 @@ const SPORTS: Record<string, Sport> = {
   'college-football': 'college-football'
 };
 
-const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/football';
+/* 🔴 site.WEB.api, NOT site.api. site.api.espn.com refuses by user agent (403 to
+   browser, blank and PowerShell agents - research, 2026-09-13); site.web.api serves
+   the same paths to everyone, from Cloudflare too (the NFL summary, 545 KB, checked
+   the same night). Three routes below were still on the refused host. */
+const ESPN = 'https://site.web.api.espn.com/apis/site/v2/sports/football';
 
 /** How stale a live read may be. Ten seconds is under the median snap gap, so a
  *  play never waits on the cache - and it is long enough that a room full of
@@ -237,10 +241,12 @@ export default {
     try {
       /* ---- the poller pushes, and ONLY the poller ----
        *
-       * 🔴 ESPN RETURNS 403 TO CLOUDFLARE. Not to the header - a browser
-       * User-Agent was added and redeployed and it changed nothing - to the
-       * datacenter. The vault already records that only the host can reach ESPN,
-       * for the cloud container and the mount VM; Workers join that list.
+       * 🔴 CORRECTED 2026-09-13: ONE ESPN HOST RETURNS 403, NOT ESPN. The 403
+       * this was written about is site.api.espn.com, which refuses by user agent
+       * (403 to browser, blank and PowerShell agents; 200 to curl). site.web.api
+       * and sports.core.api answer everyone, this Worker included - the day
+       * slates, F1, NASCAR and the core-API football slate all run on them, and
+       * the ESPN constant above moved to site.web.api the same night.
        *
        * So the poller runs on the machine that can reach the feed and pushes
        * here. What matters about the architecture is untouched: ONE thing polls,
