@@ -300,7 +300,8 @@ test('no race on the feed: an empty event, and no group call', async () => {
     const d = await NAS.previewData({}, 'ready');
     /* noSample: nothing on this screen is made up, so the app's "Sample data"
        banner stays off even with no race (found at 393px, 2026-09-13). */
-    assert.deepEqual(d, { event: null, noSample: true });
+    /* `series` (2026-09-13): the data says which series it was read for - here the Cup. */
+    assert.deepEqual(d, { event: null, noSample: true, series: 'nascar' });
     assert.deepEqual(calls.map((c) => c.url), ['/api/nascar/current']);
   });
 });
@@ -462,16 +463,22 @@ test('render: the name, the doors, the disclaimer', () => {
   const js = code(SRC);
   const render = js.slice(js.indexOf('export function render'));
   assert.ok(render.includes("title: 'Race day'"), 'named for what it is');
-  assert.ok(render.includes("sub: 'NASCAR Cup Series' + (ev && ev.track ? ' · ' + ev.track : '')"), 'NASCAR only as the fact of the series');
+  /* 2026-09-13, three series: the sub line names the route's series - and the
+     Cup's reads exactly as it did (tests/nascar-picks-series.test.mjs has the rest). */
+  assert.ok(render.includes('sub: subLine(series, ev)'), 'NASCAR only as the fact of the series');
+  assert.equal(NAS.subLine('nascar', EV), 'NASCAR Cup Series · World Wide Technology Raceway');
+  assert.equal(NAS.subLine('nascar', null), 'NASCAR Cup Series');
   assert.ok(render.includes("'Playing in'"));
   assert.ok(render.includes("gl.href = '#/gstandings';"), 'the group board');
   assert.ok(render.includes("gl.addEventListener('click', () => setCurrentGroupId(group.id));"),
     'the group section\'s current group is set to THIS group before the link is followed');
-  assert.ok(render.includes("a.href = '#/g';") && render.includes("'start a NASCAR group'"), 'no group: one line to #/g');
+  assert.ok(render.includes("a.href = '#/g';") && render.includes('S.invite'), 'no group: one line to #/g');
+  assert.equal(NAS.SERIES.nascar.invite, 'start a NASCAR group', 'the Cup\'s line, word for word');
+  assert.equal(NAS.emptyBody('nascar'), 'The next Cup race shows here as soon as ESPN lists it.', 'the Cup\'s empty state, word for word');
   assert.ok(render.includes('Any Given is not associated in any way with NASCAR.'));
   assert.ok(render.includes("'Picks are saved on this phone. '"));
   assert.ok(render.includes('d.picks = res.picks;'), 'a reply replaces what is shown');
-  assert.ok(render.includes('writeChoice(g.id);'), 'switching group is remembered in ag.nascar.group');
+  assert.ok(render.includes('writeChoice(g.id, series);'), 'switching group is remembered in ag.nascar.group');
   assert.ok(render.includes("stateBlock('loading'") && render.includes("stateBlock('empty'"), 'loading and empty states');
   assert.ok(['Race top 3', 'Winning make', 'Dark horse'].every((t) => render.includes("card('" + t + "')")));
   assert.ok(render.includes('card(v.poleWins.title)'));

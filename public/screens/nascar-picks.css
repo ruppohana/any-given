@@ -1,7 +1,21 @@
-/* NASCAR race day - #/nascar. One card per question, a 44px reach on every
+/* NASCAR race day - #/nascar, #/nascar-oreilly, #/nascar-truck. One card per question, a 44px reach on every
    control, the running total pinned. The same shape as the F1 weekend
    (f1-picks.css), scoped to this screen. */
-.scr-nascar { display: grid; gap: 12px; padding-bottom: 96px; }
+/* align-content: start - .ag-main fills a 100dvh shell, so with little on the
+   screen (no race on the feed) the grid rows stretched to fill it: the series
+   chips measured 700px tall at 393px. Rows keep their own height now. */
+.scr-nascar { display: grid; gap: 12px; padding-bottom: 96px; align-content: start; }
+/* The series switch - Cup · O'Reilly · Trucks, each a link to its own route,
+   the current one lit. Three equal chips, a 44px reach, shrinkable to a phone. */
+.scr-nascar .nas-series { display: flex; gap: 8px; margin: 0 4px; }
+.scr-nascar .nas-chip {
+  flex: 1 1 0; min-width: 0; min-height: 44px; padding: 0 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-nascar .nas-chip[data-on="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .scr-nascar .nas-total {
   position: sticky; top: 0; z-index: 2; text-align: center;
   font-weight: 800; font-size: var(--t-emph); color: var(--accent);
@@ -38,6 +52,9 @@
   border: 1px solid var(--line); border-radius: var(--radius-chip);
   background: var(--card); color: var(--fg);
 }
+/* Four makes (the Truck Series fields RAM) sit two by two: four across leaves
+   "Chevrolet" under 80px at 393px. The Cup's three stay one row. */
+.scr-nascar .nas-choices[data-many="true"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .scr-nascar .nas-choice[data-on="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .scr-nascar .nas-choice:disabled { opacity: .7; }
 .scr-nascar .nas-choice[data-on="true"]:disabled { opacity: 1; }

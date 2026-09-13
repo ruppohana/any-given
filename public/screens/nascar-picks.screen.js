@@ -6,18 +6,27 @@
  * screen before any pick is made, and it settles off ESPN's published finishing
  * order - src/lib/nascar.ts holds the rules, this file only draws them.
  *
+ * 🔴 THREE SERIES, ONE SCREEN. Jason, 2026-09-13: "add the O'Reilly and Truck
+ * series too". The route id IS the series - #/nascar (Cup), #/nascar-oreilly,
+ * #/nascar-truck (app.js ROUTES) - and it is also the group's sport and the
+ * feed's ?series=. Anything else is the Cup. The Cup keeps every address it
+ * had: /api/nascar/current with no query, `ag.nascar.<eventId>`,
+ * `ag.nascar.group` - so nobody's Cup picks vanish. The other two use
+ * `ag.<series>.<eventId>` and `ag.<series>.group`. The winning-make choices come
+ * from the field (makesOf), because the Truck Series fields RAM.
+ *
  * Everything locks at once, at the green flag (`isLocked` - the race's start
  * time). There are no sessions, so there is one lock, not one per card.
  *
- * Picks are always kept on this phone (`ag.nascar.<eventId>`).
+ * Picks are always kept on this phone (`ag.<series>.<eventId>`).
  *
  * 🔴 AND A NASCAR GROUP PLAYS IT TOGETHER, ON THE SERVER. With one or more
- * NASCAR groups the race is picked FOR a group - "Playing in" chooses which
- * (`ag.nascar.group`), the server's picks are shown over this phone's, and every
+ * groups of this series the race is picked FOR a group - "Playing in" chooses
+ * which (`ag.<series>.group`), the server's picks are shown over this phone's, and every
  * change is saved here AND posted whole to /api/pool/racepick. After the green
  * flag the server keeps what it had whatever the phone sends, so its answer
  * REPLACES what is shown - never the other way round. Signed out, or in no
- * NASCAR group, the screen plays on this phone alone, plus one line to #/g.
+ * group of this series, the screen plays on this phone alone, plus one line to #/g.
  *
  * 🔴 "RACE DAY", NOT "NASCAR PICKS". NASCAR's marks may say which series this
  * is and nothing more - so the name appears only on the sub line, as a fact.
@@ -25,7 +34,53 @@
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { pageHeader } from '/components/header.js';
 import { myGroups, setCurrentGroupId } from '/components/group.js';
-import { NPOINTS, MAKES, DARK_HORSE_FROM, isLocked, poleSitter, isDarkHorse, scoreNascar } from '/src/lib/nascar.js';
+import { NPOINTS, makesOf, DARK_HORSE_FROM, isLocked, poleSitter, isDarkHorse, scoreNascar } from '/src/lib/nascar.js';
+
+/* ---- the series, pure - tests/nascar-picks-series.test.mjs ---- */
+
+/** NASCAR's three national series, keyed by route id = group sport = feed series. */
+export const SERIES = {
+  nascar: { chip: 'Cup', label: 'Cup Series', race: 'Cup race', invite: 'start a NASCAR group' },
+  'nascar-oreilly': { chip: "O'Reilly", label: "O'Reilly Auto Parts Series", race: "O'Reilly race", invite: "start a NASCAR O'Reilly group" },
+  'nascar-truck': { chip: 'Trucks', label: 'Truck Series', race: 'Truck Series race', invite: 'start a NASCAR Truck group' }
+};
+export const SERIES_IDS = Object.keys(SERIES);
+
+/** One of the three, or the Cup. */
+export function seriesOf(s) {
+  return Object.prototype.hasOwnProperty.call(SERIES, String(s)) ? String(s) : 'nascar';
+}
+
+/** '#/nascar-truck' -> 'nascar-truck'; anything else -> 'nascar'. */
+export function seriesFromHash(hash) {
+  return seriesOf(String(hash || '').replace(/^#\/?/, '').split(/[?&/]/)[0]);
+}
+
+function currentSeries() {
+  return seriesFromHash(typeof location !== 'undefined' && location ? location.hash : '');
+}
+
+/** The Cup keeps the address it has always read; the other two name themselves. */
+export function feedUrl(series) {
+  const s = seriesOf(series);
+  return s === 'nascar' ? '/api/nascar/current' : '/api/nascar/current?series=' + encodeURIComponent(s);
+}
+
+/** "NASCAR Cup Series · World Wide Technology Raceway" - the series as a fact. */
+export function subLine(series, ev) {
+  return 'NASCAR ' + SERIES[seriesOf(series)].label + (ev && ev.track ? ' · ' + ev.track : '');
+}
+
+/** The empty state's line - the Truck Series may be between races. */
+export function emptyBody(series) {
+  return 'The next ' + SERIES[seriesOf(series)].race + ' shows here as soon as ESPN lists it.';
+}
+
+/** The switch at the top: all three, each a link to its own route, this one marked. */
+export function seriesChips(current) {
+  const c = seriesOf(current);
+  return SERIES_IDS.map((id) => ({ id, label: SERIES[id].chip, href: '#/' + id, on: id === c }));
+}
 
 /* ---- the group, pure - tests/nascar-picks.test.mjs ---- */
 
@@ -33,12 +88,17 @@ import { NPOINTS, MAKES, DARK_HORSE_FROM, isLocked, poleSitter, isDarkHorse, sco
  *  group section's current group, written only by components/group.js. */
 export const NASCAR_GROUP_KEY = 'ag.nascar.group';
 export const PICK_KEYS = ['race', 'make', 'poleWins', 'darkHorse'];
+/** 🔴 The Cup's keys are the ones it always had - 'ag.nascar.group' and
+ *  'ag.nascar.<eventId>' - because the Cup's series id is 'nascar'. */
+export const groupKey = (series) => 'ag.' + seriesOf(series) + '.group';
 /** This phone's copy of one race's picks. */
-export const localKey = (eventId) => 'ag.nascar.' + eventId;
+export const localKey = (eventId, series) => 'ag.' + seriesOf(series) + '.' + eventId;
 
-/** Only the groups that play race day. */
-export function nascarGroupsOf(groups) {
-  return (Array.isArray(groups) ? groups : []).filter((g) => g && g.sport === 'nascar');
+/** Only the groups that play THIS series' race day - a Truck group never
+ *  appears on the Cup, and the other way round. */
+export function nascarGroupsOf(groups, series) {
+  const s = seriesOf(series);
+  return (Array.isArray(groups) ? groups : []).filter((g) => g && g.sport === s);
 }
 
 /** The remembered group if it is still one of mine, else the first. */
@@ -195,6 +255,12 @@ export function raceOptions(ev) {
   return ev.drivers.slice().sort(byNumber).map((d) => ({ value: d.id, label: driverLabel(d) }));
 }
 
+/** The winning-make choices: the makes in THIS field (makesOf - the one the
+ *  server validates against), so a Truck race offers RAM and the Cup does not. */
+export function makeChoices(ev) {
+  return makesOf(ev).map((m) => [m, m]);
+}
+
 /** The dark horse choices: cars that start 11th or worse, from the back of the
  *  front ten down. `keep` (the stored pick) is always offered so a pick made
  *  before the grid was set is never hidden. */
@@ -261,7 +327,7 @@ export function raceDayView(ev, picks, now) {
     totalText: score.total + (score.total === 1 ? ' point' : ' points') + ' this race',
     race,
     make: {
-      pick: MAKES.includes(p.make) ? p.make : '',
+      pick: makesOf(ev).includes(p.make) ? p.make : '',
       actualText: winner ? winner.short + ' · ' + (winner.make || '') : '',
       pts: final ? score.make : null
     },
@@ -284,47 +350,51 @@ export function raceDayView(ev, picks, now) {
 
 const api = () => (typeof window !== 'undefined' && window.agApiFetch) || fetch;
 
-function readChoice() { try { return localStorage.getItem(NASCAR_GROUP_KEY) || ''; } catch { return ''; } }
-function writeChoice(id) { try { localStorage.setItem(NASCAR_GROUP_KEY, String(id)); } catch { /* private mode */ } }
+function readChoice(series) { try { return localStorage.getItem(groupKey(series)) || ''; } catch { return ''; } }
+function writeChoice(id, series) { try { localStorage.setItem(groupKey(series), String(id)); } catch { /* private mode */ } }
 
-async function readEvent() {
+async function readEvent(series) {
   try {
-    const r = await api()('/api/nascar/current', { cache: 'no-store' });
-    if (!r.ok) return { event: null, noSample: true };
+    const r = await api()(feedUrl(series), { cache: 'no-store' });
+    if (!r.ok) return { event: null, noSample: true, series };
     const d = await r.json();
+    /* A feed that answers for another series is not this race. */
+    const ev = (d && d.event && (!d.series || d.series === series)) ? d.event : null;
     /* Off the real feed, so the app's "Sample data - made up" banner stays off
        (app.js reads fromFeed / noSample). Found signed in at 393px, 2026-09-13:
        the banner sat over the live WWT race. */
-    return { event: (d && d.event) || null, fromFeed: !!(d && d.event), noSample: true };
-  } catch { return { event: null, noSample: true }; }
+    return { event: ev, fromFeed: !!ev, noSample: true, series };
+  } catch { return { event: null, noSample: true, series }; }
 }
 
 /** One group's picks into `out`, and this phone's copy brought level. */
-async function playIn(out, g) {
-  const key = localKey(out.event.id);
+async function playIn(out, g, series) {
+  const key = localKey(out.event.id, series);
   const local = load(key);
   const res = await loadGroupPicks(api(), out.event, g, local, Date.now());
   if (res.stored) { try { localStorage.setItem(key, JSON.stringify(keepLocal(local, res.stored))); } catch { /* private mode */ } }
   return Object.assign(out, { groupId: g.id, picks: res.picks, status: res.status, moved: !!res.moved });
 }
 
-export async function previewData(fixtures, state) {
+/** `series` defaults to the route (location.hash); render's re-read passes its own. */
+export async function previewData(fixtures, state, series) {
   if (state && state !== 'ready') return {};
+  const s = seriesOf(series || currentSeries());
   let out = { event: null };
   /* Twice at most: a server already on the next race means the feed is read again. */
   for (let tries = 0; tries < 2; tries++) {
-    out = await readEvent();
+    out = await readEvent(s);
     if (!out.event) return out;
     /* myGroups() asks nothing of a phone that is not signed in, so a stranger
        never meets the sign-in sheet here. */
     const mine = await myGroups();
-    out.groups = nascarGroupsOf(mine && mine.groups);
+    out.groups = nascarGroupsOf(mine && mine.groups, s);
     out.signedIn = !!(mine && mine.signedIn);
     out.groupsError = (mine && mine.error) || null;
-    const g = chooseNascarGroup(out.groups, readChoice());
+    const g = chooseNascarGroup(out.groups, readChoice(s));
     if (!g) return out;
-    writeChoice(g.id);
-    await playIn(out, g);
+    writeChoice(g.id, s);
+    await playIn(out, g, s);
     if (!out.moved) break;
   }
   return out;
@@ -348,6 +418,19 @@ function ptsTag(n) {
   return p;
 }
 
+/** Cup · O'Reilly · Trucks - links, so the other races are one tap away. */
+function seriesNav(series) {
+  const nav = el('nav', 'nas-series');
+  nav.setAttribute('aria-label', 'NASCAR series');
+  for (const c of seriesChips(series)) {
+    const a = el('a', 'nas-chip', c.label);
+    a.href = c.href;
+    if (c.on) { a.dataset.on = 'true'; a.setAttribute('aria-current', 'page'); }
+    nav.appendChild(a);
+  }
+  return nav;
+}
+
 export function render(root, data, state) {
   root.classList.add('scr-nascar');
   root.innerHTML = '';
@@ -356,12 +439,16 @@ export function render(root, data, state) {
   root.appendChild(style);
 
   const d = data || {};
+  /* The series the data was read for; the route when there is none (loading). */
+  const series = seriesOf(d.series || currentSeries());
+  const S = SERIES[series];
   const ev = d.event;
   root.appendChild(pageHeader({
     title: 'Race day',
     noTitle: true,
-    sub: 'NASCAR Cup Series' + (ev && ev.track ? ' · ' + ev.track : '')
+    sub: subLine(series, ev)
   }));
+  root.appendChild(seriesNav(series));
   if (state === 'loading') {
     root.appendChild(stateBlock('loading', { rows: 4, body: 'Reading race day…' }));
     return;
@@ -369,12 +456,12 @@ export function render(root, data, state) {
   if (!ev) {
     root.appendChild(stateBlock('empty', {
       title: 'No race on the feed',
-      body: 'The next Cup race shows here as soon as ESPN lists it.'
+      body: emptyBody(series)
     }));
     return;
   }
 
-  const key = localKey(ev.id);
+  const key = localKey(ev.id, series);
   const groups = Array.isArray(d.groups) ? d.groups : [];
   const group = groups.find((g) => g.id === d.groupId) || null;
   /* In a group the picks are the group's, held on `d` across redraws; alone
@@ -387,7 +474,7 @@ export function render(root, data, state) {
   const mounted = () => !!root.querySelector('[data-nascar-race="' + ev.id + '"]');
   const writeLocal = (v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* private mode */ } };
   const reread = async () => {
-    const fresh = await previewData(null, 'ready');
+    const fresh = await previewData(null, 'ready', series);
     if (!mounted()) return;
     for (const k of Object.keys(d)) delete d[k];
     Object.assign(d, fresh);
@@ -448,7 +535,7 @@ export function render(root, data, state) {
       sel.addEventListener('change', () => {
         const g = groups.find((x) => x.id === sel.value);
         if (!g) return;
-        writeChoice(g.id);
+        writeChoice(g.id, series);
         d.groupId = g.id;
         d.picks = keepLocal(load(key), null);  /* this phone's, until the group answers */
         d.seq = (d.seq || 0) + 1;            /* drop any reply for the old group */
@@ -456,7 +543,7 @@ export function render(root, data, state) {
         redraw();
         const seq = d.seq;
         const next = { event: ev };
-        playIn(next, g).then(() => {
+        playIn(next, g, series).then(() => {
           if (seq !== d.seq) return;         /* switched again, or picked meanwhile */
           if (next.moved) { reread(); return; }
           Object.assign(d, { groupId: next.groupId, picks: next.picks, status: next.status });
@@ -484,7 +571,7 @@ export function render(root, data, state) {
       inv.textContent = 'Your groups did not load, so these picks are on this phone only.';
     } else {
       inv.appendChild(el('span', null, 'Pick race day with friends: '));
-      const a = el('a', null, 'start a NASCAR group');
+      const a = el('a', null, S.invite);
       a.href = '#/g';
       inv.appendChild(a);
     }
@@ -542,6 +629,8 @@ export function render(root, data, state) {
   const choices = (c, k, opts, result) => {
     const row = el('div', 'nas-choices');
     row.setAttribute('role', 'group');
+    /* Four makes (RAM in the Truck Series) sit two by two - nascar-picks.css. */
+    if (opts.length > 3) row.dataset.many = 'true';
     for (const [val, label] of opts) {
       const b = el('button', 'nas-choice', label);
       b.type = 'button';
@@ -572,7 +661,7 @@ export function render(root, data, state) {
   });
 
   const m = card('Winning make');
-  choices(m, 'make', MAKES.map((x) => [x, x]), resultRow(v.make.actualText, v.make.pts));
+  choices(m, 'make', makeChoices(ev), resultRow(v.make.actualText, v.make.pts));
 
   const p = card(v.poleWins.title);
   choices(p, 'poleWins', [['yes', 'Yes'], ['no', 'No']], resultRow(v.poleWins.actualText, v.poleWins.pts));
