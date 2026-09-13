@@ -244,6 +244,21 @@ test('a timeline from the older build is rebuilt, not served without its passes'
   assert.ok(Array.isArray(tl.passes));
 });
 
+test('a failed rebuild plays the old copy instead of an error - found live the night v2 shipped', async () => {
+  const env = { LIVE: fakeKV() };
+  const old = { ...TL, v: 1 };
+  delete old.passes;
+  await env.LIVE.put('f1:replay:11361', JSON.stringify(old));
+  const calls = [];
+  const limited = async (u) => { calls.push(u); return new Response('{"detail":"rate limit"}', { status: 429 }); };
+  const tl = await buildReplay(env, 11361, limited, AFTER, 0);
+  assert.equal(tl.laps, 53);
+  assert.deepEqual(tl.passes, [], 'the pass calls have nothing to settle on, and void');
+  assert.equal(calls.length, 2, 'one retry on a 429, then the old copy');
+  assert.equal(JSON.parse(env.LIVE.m.get('f1:replay:11361').v).v, 1, 'the old copy is not overwritten with a failure');
+  await assert.rejects(buildReplay({ LIVE: fakeKV() }, 11361, limited, AFTER, 0), /openf1 sessions 429/, 'with nothing cached, the error stands');
+});
+
 test('a race still inside its hour after the flag is not frozen', async () => {
   const { f } = fakeOpenF1();
   const env = { LIVE: fakeKV() };

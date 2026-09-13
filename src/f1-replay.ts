@@ -17,12 +17,17 @@ import { buildTimeline } from './lib/f1-live.ts';
 const API = 'https://api.openf1.org/v1/';
 const HOUR = 60 * 60;   // seconds - KV's unit
 
-async function get(ep: string, q: string, f: typeof fetch) {
-  const r = await f(API + ep + '?' + q, { headers: { accept: 'application/json', 'user-agent': 'AnyGiven/1 (+https://anygiven.app)' } });
-  if (!r.ok) throw new Error(`openf1 ${ep} ${r.status}`);
-  return r.json();
-}
 const pause = (n: number) => new Promise((res) => setTimeout(res, n));
+/* One retry on 429: two races rebuilding at once is 20 requests in a few
+   seconds, past OpenF1's 3 a second. */
+async function get(ep: string, q: string, f: typeof fetch, gap = 400) {
+  for (let i = 0; ; i++) {
+    const r = await f(API + ep + '?' + q, { headers: { accept: 'application/json', 'user-agent': 'AnyGiven/1 (+https://anygiven.app)' } });
+    if (r.ok) return r.json();
+    if (r.status !== 429 || i >= 1) throw new Error(`openf1 ${ep} ${r.status}`);
+    await pause(gap * 4);
+  }
+}
 
 /* A race is "finished" an hour after OpenF1 says the session ended - time
    for the last rows to land before a timeline is frozen forever. */
@@ -32,26 +37,36 @@ const isRace = (s: any) => s && (s.session_name === 'Race' || s.session_name ===
 export async function buildReplay(env: any, key: number, f: typeof fetch = fetch, now = Date.now(), gap = 400) {
   const kvKey = `f1:replay:${key}`;
   const hit = await env.LIVE.get(kvKey);
+  let stale: any = null;
   /* A timeline from an older build lacks what the newer calls read (v2 added
-     passes), so it is rebuilt, not served. */
-  if (hit) { try { const c = JSON.parse(hit); if (c && c.v === 2) return c; } catch { /* rebuild */ } }
+     passes), so it is rebuilt - and kept to fall back on if the rebuild fails. */
+  if (hit) { try { const c = JSON.parse(hit); if (c && c.v === 2) return c; stale = c; } catch { /* rebuild */ } }
 
-  const [session] = await get('sessions', `session_key=${key}`, f);
-  if (!isRace(session)) return null;
-  if (now < Date.parse(session.date_end) + SETTLE) return null;
-  await pause(gap);
-  const [meeting] = await get('meetings', `meeting_key=${session.meeting_key}`, f);
-  const rows: any = { session, meeting: meeting?.meeting_name || null };
-  for (const ep of ['drivers', 'laps', 'pit', 'race_control', 'position', 'intervals', 'session_result', 'overtakes']) {
+  try {
+    const [session] = await get('sessions', `session_key=${key}`, f, gap);
+    if (!isRace(session)) return null;
+    if (now < Date.parse(session.date_end) + SETTLE) return null;
     await pause(gap);
-    rows[ep] = await get(ep, `session_key=${key}`, f);
+    const [meeting] = await get('meetings', `meeting_key=${session.meeting_key}`, f, gap);
+    const rows: any = { session, meeting: meeting?.meeting_name || null };
+    for (const ep of ['drivers', 'laps', 'pit', 'race_control', 'position', 'intervals', 'session_result', 'overtakes']) {
+      await pause(gap);
+      rows[ep] = await get(ep, `session_key=${key}`, f, gap);
+    }
+    const tl = buildTimeline(rows);
+    if (session.session_name === 'Sprint') tl.meeting = (tl.meeting || '') + ' · Sprint';
+    /* Never freeze a race with no laps in it - the next request tries again. */
+    if (tl.laps < 1 || !tl.order[1] || !tl.order[1].length) throw new Error('openf1: race has no laps yet');
+    await env.LIVE.put(kvKey, JSON.stringify(tl));
+    return tl;
+  } catch (e) {
+    /* 🔴 FOUND LIVE 2026-09-12: the v2 deploy sent every cached race back to
+       OpenF1 at once, a rebuild failed, and the screen said "the timing
+       history did not answer" over a race that was sitting in KV. The old
+       copy plays; only the calls that need passes have none to settle on. */
+    if (stale) return { ...stale, passes: stale.passes || [] };
+    throw e;
   }
-  const tl = buildTimeline(rows);
-  if (session.session_name === 'Sprint') tl.meeting = (tl.meeting || '') + ' · Sprint';
-  /* Never freeze a race with no laps in it - the next request tries again. */
-  if (tl.laps < 1 || !tl.order[1] || !tl.order[1].length) throw new Error('openf1: race has no laps yet');
-  await env.LIVE.put(kvKey, JSON.stringify(tl));
-  return tl;
 }
 
 /** The finished races of a season, newest first. */
