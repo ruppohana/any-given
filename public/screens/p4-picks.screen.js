@@ -399,24 +399,33 @@ function clockFor(state, sat) {
 function chosenSport() {
   try {
     const v = JSON.parse(localStorage.getItem('ag.sport'));
-    /* Soccer joined 2026-09-13 - Jason: "add soccer to my picks". */
-    return v === 'nfl' || SOCCER.includes(v) ? v : 'college-football';
+    /* Soccer joined 2026-09-13 - Jason: "add soccer to my picks" - then every
+       other day sport: "add the other day sports to my picks". */
+    return v === 'nfl' || DAY_SPORT_IDS.includes(v) ? v : 'college-football';
   } catch { return 'college-football'; }
 }
 
-/* 🔴 SOCCER ON MY PICKS. Jason, 2026-09-13: "add soccer to my picks".
+/* 🔴 THE DAY SPORTS ON MY PICKS. Jason, 2026-09-13: "add soccer to my picks", then
+ * "add the other day sports to my picks".
  *
- * A soccer pool is played in a group, a day at a time (the slate's day bar), so
- * this card is YOUR PICKS IN YOUR SOCCER GROUP ON THE DAY THE SLATE IS SHOWING:
- * the day's matches from /api/day (the same games the slate draws), your picks
- * from the server's copy for that group merged over this phone's - the slate's
- * own bucket, so the two screens can never disagree about your card. With no
- * soccer group it reads the public slate's key, which is empty today.
+ * College basketball, the NBA, MLB, NHL, WNBA and soccer are played in a group, a
+ * day at a time (the slate's day bar), so this card is YOUR PICKS IN YOUR GROUP OF
+ * THAT SPORT ON THE DAY THE SLATE IS SHOWING: the day's games from /api/day (the
+ * same games the slate draws), your picks from the server's copy for that group
+ * merged over this phone's - the slate's own bucket, so the two screens can never
+ * disagree about your card. With no group of that sport it reads the public
+ * slate's key, which is empty today.
+ *
+ * Soccer differs in three places only: a draw is a side, there is never a spread,
+ * and a game is a "match". A basketball, baseball or hockey group can play against
+ * the spread, and this card honors its switch.
  *
  * The day rules are restated from p2-slate rather than imported, because the
  * tests load this module with its imports stripped. The day turns over at 6 AM
  * Eastern, as in src/lib/day.ts. */
 const SOCCER = ['epl', 'mls'];
+/* Every sport the pool plays a day at a time - src/lib/day.ts DAY_SPORTS. */
+const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'];
 function soccerToday(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -455,8 +464,9 @@ export function soccerSpecs(dayGames, sport, day, byId) {
     return {
       id: String(g.id), week, kickoffUtc: g.kickoffUtc,
       home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
-      /* A soccer group never picks against a spread. */
-      spread: null,
+      /* A soccer group never picks against a spread; the others keep the
+       * posted line, which a group with its spread switch on grades against. */
+      spread: SOCCER.includes(sport) ? null : (typeof g.spread === 'number' ? g.spread : null),
       homeScore: g.homeScore == null ? null : g.homeScore,
       awayScore: g.awayScore == null ? null : g.awayScore,
       /* Postponed or cancelled: the one void path, whatever the clock says. */
@@ -468,6 +478,9 @@ export function soccerSpecs(dayGames, sport, day, byId) {
 }
 
 async function soccerCard(byId, sport) {
+  const soccer = SOCCER.includes(sport);
+  /* The sides a pick may take - the same rule as src/lib/groups.ts pickSides. */
+  const sides = soccer ? ['home', 'away', 'draw'] : ['home', 'away'];
   const now = Date.now();
   const today = soccerToday(now);
   const day = soccerDay(sport, today);
@@ -501,7 +514,7 @@ async function soccerCard(byId, sport) {
       if (r && r.ok) {
         const j = await r.json();
         for (const p of (j && Array.isArray(j.picks) ? j.picks : [])) {
-          if (!p || !p.gameId || !['home', 'away', 'draw'].includes(p.side)) continue;
+          if (!p || !p.gameId || !sides.includes(p.side)) continue;
           saved[String(p.gameId)] = { ...(saved[String(p.gameId)] || {}), side: p.side };
         }
       }
@@ -510,19 +523,25 @@ async function soccerCard(byId, sport) {
     saved = loadPicks(sport, week);
   }
 
-  const specs = games.filter((g) => saved[g.id] && saved[g.id].side);
+  const specs = games.filter((g) => saved[g.id] && sides.includes(saved[g.id].side));
   const picks = {};
   for (const g of specs) {
     picks[g.id] = { gameId: g.id, side: saved[g.id].side, state: 'unpicked', lockedAt: g.kickoffUtc, crowd: null };
   }
+  /* A basketball, baseball or hockey group may play against the spread; soccer never does. */
+  const ats = !soccer && !!(group && group.ats);
   return {
     sport, mode: 'pool',
     pool: {
       id: group ? group.id : null, name: group ? group.name : 'No pool yet', commissionerId: null,
       scope: 'all', scopeArg: null, rankingSource: null,
-      ats: false, season: 2026, scopeLockedAt: null, memberCount: group ? (group.members || 0) : 0
+      ats, season: 2026, scopeLockedAt: null, memberCount: group ? (group.members || 0) : 0
     },
     week, dayLabel: soccerDayName(day, today),
+    /* The slate's own lines, and what a game is called in this sport. */
+    dayLine: soccer ? 'pick the winner or the draw · scored in points'
+      : ats ? 'against the spread · scored in points' : 'pick the winners · scored in points',
+    noun: soccer ? 'match' : 'game',
     /* A soccer slate is the group's; with no group, the way in is the group page. */
     slateHref: group ? '#/gpicks' : '#/g',
     slateSize: games.length,
@@ -623,8 +642,8 @@ export async function previewData(fixtures, state) {
   const all = Object.values(db);
 
   const sport = chosenSport();
-  /* Soccer is a day, not a week - its own card (soccerCard above). */
-  if (SOCCER.includes(sport)) return soccerCard(byId, sport);
+  /* A day sport is a day, not a week - its own card (soccerCard above). */
+  if (DAY_SPORT_IDS.includes(sport)) return soccerCard(byId, sport);
   const wk = WEEK[sport] || 1;
   const live = await realWeek(byId, sport);
   /* 🔴 THE FEED WINS WHEREVER THERE IS ONE, for either sport. The designed
@@ -1298,7 +1317,9 @@ export function render(root, data, state) {
      * id under the college path returns a real logo for the wrong team - 200 OK,
      * nothing logged, and only visible by looking. Found on the slate the same
      * day and fixed here before it could ship the same way. */
-    league: ['nfl', 'epl', 'mls'].includes(data.sport) ? data.sport : 'college-football',
+    /* The same league list the slate hands its chips - a pro crest is filed by
+       abbreviation and a college one by id (components/team-chip.js). */
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls'].includes(data.sport) ? data.sport : 'college-football',
     mode: data.mode || 'pool',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',
@@ -1344,7 +1365,7 @@ export function render(root, data, state) {
     /* ---- the parlay, pinned. POOL-SCREENS P4: "the parlay's state pinned where it
      * cannot be missed." Sticky, and it is the ONLY sticky thing on this screen - two
      * pinned elements is neither of them pinned. */
-    /* A soccer card is a GROUP's day, and a group's standings count picks only -
+    /* A day card is a GROUP's day, and a group's standings count picks only -
      * a parlay pinned there would promise points no board ever scores. */
     if (!data.dayLabel) host.appendChild(parlayPin());
 
@@ -1387,11 +1408,16 @@ export function render(root, data, state) {
         .sort((a, b) => a.kickoffUtc - b.kickoffUtc)[0];
       host.appendChild(stateBlock('empty', {
         title: 'You have not picked anything yet',
-        body: first
+        /* 🔴 A DAY WITH NO GAMES IS NOT A DAY THAT HAS KICKED. Found rendering the
+         * WNBA at 393px: with nothing on the feed that day, "every game that day
+         * has kicked" was said about zero games. */
+        body: data.dayLabel && !(data.slate || []).length
+          ? 'There are no ' + (data.noun === 'match' ? 'matches' : 'games') + ' on the slate for that day. Pick another day on the slate.'
+          : first
           ? 'The first game on this pool’s slate closes in ' + remainingLabel(first.kickoffUtc - ctx.now) +
             ', at ' + timeLabel(first.kickoffUtc) + '. Every pick stays editable until its own kickoff, so nothing is decided until then.'
           : data.dayLabel
-            ? 'Every match that day has kicked. Nothing can be picked now, and the day scored nothing.'
+            ? 'Every ' + (data.noun || 'game') + ' that day has kicked. Nothing can be picked now, and the day scored nothing.'
             : 'Every game this week has kicked. Nothing can be picked now, and the week scored nothing.',
         /* 🔴 A BUTTON WITH NO HANDLER IS A DEAD END WEARING A DOOR'S CLOTHES.
          * Jason, 2026-09-09: "Go to. Slate does not work." stateBlock only wires
@@ -1432,8 +1458,8 @@ export function render(root, data, state) {
       title: 'My picks',
       noTitle: true,
       sub: data.dayLabel
-        /* A soccer card is a day - the slate's own soccer line. */
-        ? data.dayLabel + ' · pick the winner or the draw · scored in points'
+        /* A day card - the slate's own line for that sport. */
+        ? data.dayLabel + ' · ' + data.dayLine
         : 'Week ' + (data.week || '')
         /* Matches the slate's line - Jason, 2026-09-10: "match my picks too". */
         + ((data.mode === 'week') ? ' · against the spread' : ' · pick the winners · scored in points'),
@@ -1619,7 +1645,8 @@ export function render(root, data, state) {
       box.appendChild(el('p', 'p4-footline num',
         'Your pool’s split is shown only where it cannot name anybody' +
         (hidden ? ' — it is held back on ' + hidden + (hidden === 1 ? ' game' : ' games') + ' here.' : '.')));
-      box.appendChild(el('p', 'p4-footline num',
+      /* No parlay on a day card (its pin is not drawn either), so no ladder under it. */
+      if (!data.dayLabel) box.appendChild(el('p', 'p4-footline num',
         'Parlay: 3 legs 3 points · 4 legs 6 · 5 legs 12 · 6 legs 20. A voided leg leaves the parlay and takes its worth down with it.'));
     }
     /* 🔴 SAYS PLAINLY WHAT IS REAL, AND IT HAS TO BE RIGHT IN BOTH DIRECTIONS.
@@ -1628,9 +1655,11 @@ export function render(root, data, state) {
      * which is the same failure as the sample-data banner and worse - a
      * disclaimer that is wrong is not caution, it is misinformation somebody
      * will believe precisely because it sounds careful. */
-    box.appendChild(el('p', 'p4-footline p4-real num', data.dayLabel
-      /* A soccer card has no line to name, and its picks are one group's own. */
-      ? data.captured + ' real matches off the feed. Your picks count in '
+    box.appendChild(el('p', 'p4-footline p4-real num', data.dayLabel && !data.captured
+      ? 'Nothing on the feed for that day.'
+      : data.dayLabel
+      /* A day card's picks are one group's own, never the world board's. */
+      ? data.captured + ' real ' + (data.noun === 'match' ? 'matches' : 'games') + ' off the feed. Your picks count in '
         + (data.pool && data.pool.id ? data.pool.name : 'no group yet') + '. Each one locks at its own kickoff.'
       : data.fromFeed
       ? data.captured + ' real games off the feed — real kickoffs, real lines with the book named. '

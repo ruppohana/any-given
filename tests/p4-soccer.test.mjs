@@ -87,12 +87,13 @@ test('My picks reads the soccer card: the slate\'s day, your picks on it, a day 
 });
 
 test('the header says the day, and the empty state and the slate button are soccer-aware', () => {
-  assert.ok(SRC.includes("? data.dayLabel + ' · pick the winner or the draw · scored in points'"));
+  assert.ok(SRC.includes("? data.dayLabel + ' · ' + data.dayLine"));
+  assert.ok(SRC.includes("dayLine: soccer ? 'pick the winner or the draw · scored in points'"));
   assert.ok(SRC.includes("location.hash = data.slateHref || '#/slate';"));
-  assert.ok(SRC.includes("return v === 'nfl' || SOCCER.includes(v) ? v : 'college-football';"));
+  assert.ok(SRC.includes("return v === 'nfl' || DAY_SPORT_IDS.includes(v) ? v : 'college-football';"));
   /* The footer names the group the picks count in - never "the world board" or a
-     betting line, which a soccer group card has neither of. */
-  assert.ok(SRC.includes("? data.captured + ' real matches off the feed. Your picks count in '"));
+     betting line, which a group's day card has neither of. */
+  assert.ok(SRC.includes("? data.captured + ' real ' + (data.noun === 'match' ? 'matches' : 'games') + ' off the feed. Your picks count in '"));
   /* No parlay on a soccer card: a group's standings score picks, never a parlay. */
   assert.ok(SRC.includes('if (!data.dayLabel) host.appendChild(parlayPin());'));
 });
