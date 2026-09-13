@@ -32,10 +32,19 @@ const numOrNull = (v: unknown) => {
 
 /* Read, never inferred - see src/feed/espn.ts. Postponed and cancelled are the
    one void path: the game did not happen, for everybody. */
-function statusOf(name: string): string {
+/* 🔴 A FINISHED GAME IS FINAL HOWEVER ESPN SPELLS IT. Soccer ends
+   STATUS_FULL_TIME (every EPL and MLS match on 2026-09-12), not STATUS_FINAL -
+   read by name alone, a soccer game would sit "in progress" forever and never
+   be graded. So the soccer finals are named, and past the names ESPN's own
+   `completed` flag decides; a postponed, cancelled or forfeited game is still
+   the one void path, whatever the flag says. */
+export function statusOf(name: string, completed = false): string {
   switch (name) {
     case 'STATUS_FINAL':
     case 'STATUS_FINAL_OVERTIME':
+    case 'STATUS_FULL_TIME':
+    case 'STATUS_FINAL_AET':
+    case 'STATUS_FINAL_PEN':
       return 'final';
     case 'STATUS_SCHEDULED':
       return 'scheduled';
@@ -45,7 +54,7 @@ function statusOf(name: string): string {
     case 'STATUS_FORFEIT':
       return 'void';
     default:
-      return 'in_progress';
+      return completed ? 'final' : 'in_progress';
   }
 }
 
@@ -63,7 +72,7 @@ export function parseDay(payload: any, sport: string, day: string): any[] {
     if (!Number.isFinite(kickoff)) continue;
 
     const statusName = String(comp.status?.type?.name || ev.status?.type?.name || 'STATUS_SCHEDULED');
-    const status = statusOf(statusName);
+    const status = statusOf(statusName, comp.status?.type?.completed === true || ev.status?.type?.completed === true);
     const started = status === 'in_progress' || status === 'final';
     const pn = Number(comp.status?.period);
     const period = Number.isFinite(pn) && pn > 0 ? pn : null;
