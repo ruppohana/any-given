@@ -138,17 +138,20 @@ export function marksOn(doc) {
  * Found by pointing the live screen at a real NFL game and looking at it, which
  * is the only way this class of bug is ever found. */
 const LEAGUE_PATH = { nfl: 'nfl', 'college-football': 'ncaa', ncaa: 'ncaa',
-  'mens-college-basketball': 'ncaa', nba: 'nba' };
+  'mens-college-basketball': 'ncaa', nba: 'nba', mlb: 'mlb', nhl: 'nhl', wnba: 'wnba' };
+/* The pro leagues ESPN files by ABBREVIATION (nba/500/bos.png) - an id there is a
+   different team in college. MLB, NHL and WNBA joined 2026-09-12. */
+const BY_ABBREV = new Set(['nba', 'mlb', 'nhl', 'wnba']);
 
 /* 🔴 AN NBA CREST COMES FROM ITS ABBREVIATION, NEVER ITS ID. ESPN files NBA
  * logos by abbreviation (nba/500/det.png) and an NBA team id is a different
  * school in college - 5 is Cleveland here - so the id path would draw a real
  * college crest on an NBA row and nothing would error. Not self-hosted yet:
  * ESPN's CDN directly, the same host the college fallback already uses. */
-function nbaLogo(team, variant) {
+function nbaLogo(team, variant, league = 'nba') {
   const ab = String(team.abbrev || team.abbreviation || '').toLowerCase();
   if (!ab) return null;
-  return `https://a.espncdn.com/i/teamlogos/nba/${variant === '500-dark' ? '500-dark' : '500'}/${ab}.png`;
+  return `https://a.espncdn.com/i/teamlogos/${league}/${variant === '500-dark' ? '500-dark' : '500'}/${ab}.png`;
 }
 
 /**
@@ -167,7 +170,7 @@ function nbaLogo(team, variant) {
  */
 export function logoUrl(team, league, variant) {
   if (!team || !team.id) return null;
-  if ((league || team.league) === 'nba') return nbaLogo(team, variant);
+  if (BY_ABBREV.has(league || team.league)) return nbaLogo(team, variant, league || team.league);
   const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
   return `/logos/${path}/${variant || '500'}/${team.id}.png`;
 }
@@ -176,7 +179,7 @@ export function logoUrl(team, league, variant) {
  *  local one 404s, so a school we have not scraped is never a hole. */
 export function cdnLogoUrl(team, league, variant) {
   if (!team || !team.id) return null;
-  if ((league || team.league) === 'nba') return nbaLogo(team, variant);
+  if (BY_ABBREV.has(league || team.league)) return nbaLogo(team, variant, league || team.league);
   const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
   return `https://a.espncdn.com/i/teamlogos/${path}/${variant || '500'}/${team.id}.png`;
 }

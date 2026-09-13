@@ -82,9 +82,14 @@ export function parseDay(payload: any, sport: string, day: string): any[] {
         short: t.shortDisplayName || t.name || '',
         primary: col(t.color), secondary: col(t.alternateColor),
         rank: Number.isFinite(rk) && rk >= 1 && rk <= 25 ? rk : null,
+        /* CONF_SHORT is COLLEGE's table, keyed by ESPN's conferenceId - a pro
+           league must never be looked up in it (an MLB or NHL id there would name
+           a college conference). Only the NBA has a table of its own. */
         conference: sport === 'nba'
           ? (NBA_CONF[String(t.id)] || null)
-          : (gameConf || CONF_SHORT[String(t.conferenceId)] || null),
+          : sport === 'mens-college-basketball'
+            ? (gameConf || CONF_SHORT[String(t.conferenceId)] || null)
+            : null,
         /* The feed's own crest URL. An NBA team's ESPN id is a different team
            in college (5 is Cleveland here and a school there), so the chip
            must never build an NBA crest from the id. */

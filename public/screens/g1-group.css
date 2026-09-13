@@ -126,9 +126,11 @@
   background: var(--card); color: var(--fg); font-size: var(--t-body); font-weight: 600;
 }
 .scr-g1-group .g1-seg-b[aria-checked="true"] { border-color: var(--accent); color: var(--accent); font-weight: 800; }
-/* The sport: five, two across - football, then basketball - and Formula 1 the
-   full width under them (Jason, 2026-09-12: "do all the sports for the pool"). */
-.scr-g1-group .g1-seg--sport .g1-seg-b:last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* The sport: nine, in one native select grouped by family (Football, Basketball,
+   Baseball, Hockey, Racing) - one 44px row at 393px, where nine buttons were five.
+   It is a .g1-input, so it carries the 44px, the hairline and the radius; this
+   only makes the chosen sport read as the answer, not as a placeholder. */
+.scr-g1-group .g1-sport { font-weight: 700; }
 .scr-g1-group .g1-seg-b[hidden] { display: none; }
 /* Which games: three across, the conference list under them when it is chosen.
    College basketball has no conference, so its two sit in the plain 2-column seg. */

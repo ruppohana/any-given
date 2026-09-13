@@ -66,6 +66,10 @@ test('a basketball card offers winner, spread and total only, with no live link 
 
 test('an NBA crest is built from the abbreviation, never the id (5 is Cleveland and a school)', () => {
   const TC = readFileSync(new URL('../public/components/team-chip.js', import.meta.url), 'utf8');
-  assert.ok(TC.includes("if ((league || team.league) === 'nba') return nbaLogo(team, variant);"), 'both the local and CDN paths');
-  assert.ok(TC.includes("return `https://a.espncdn.com/i/teamlogos/nba/${variant === '500-dark' ? '500-dark' : '500'}/${ab}.png`;"));
+  /* Widened 2026-09-12: MLB, NHL and WNBA are filed the same way (nhl/500/tor.png),
+     so the NBA rule became a set of leagues - the NBA is still in it. */
+  assert.ok(TC.includes("const BY_ABBREV = new Set(['nba', 'mlb', 'nhl', 'wnba']);"));
+  assert.equal(TC.split("if (BY_ABBREV.has(league || team.league)) return nbaLogo(team, variant, league || team.league);").length - 1, 2,
+    'both the local and CDN paths');
+  assert.ok(TC.includes("return `https://a.espncdn.com/i/teamlogos/${league}/${variant === '500-dark' ? '500-dark' : '500'}/${ab}.png`;"));
 });

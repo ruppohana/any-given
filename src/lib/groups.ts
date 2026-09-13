@@ -57,11 +57,18 @@ export function cleanName(n: unknown, max = LIMITS.nameMax): string {
  *  basketball group picks a day at a time - its "week" is the day, YYYYMMDD);
  *  F1 plays the race weekend in points (src/f1-pool.ts). Anything else is a
  *  college football group, which is what every group was before this list. */
-export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1'] as const;
+/* NASCAR added 2026-09-12 - Jason: "do nascar next". A NASCAR group plays race
+   day in points (src/lib/nascar.ts), the way an F1 group plays the weekend. */
+export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
+  /* 2026-09-12, "making it larger": three more day-at-a-time leagues (src/lib/day.ts). */
+  'mlb', 'nhl', 'wnba'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
 }
+/** A racing sport is scored in points over each race and never carries a spread:
+ *  F1, and every NASCAR national series (Cup, O'Reilly, Truck - src/nascar-feed.ts). */
+export const isRacingSport = (s: unknown) => s === 'f1' || String(s).startsWith('nascar');
 /** A college sport chooses its games; a pro league and F1 play everything. */
 export const isCollegeSport = (s: string) => s === 'college-football' || s === 'mens-college-basketball';
 /** The world board of a sport, for picks made outside any group. */

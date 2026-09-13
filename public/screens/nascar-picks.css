@@ -1,0 +1,74 @@
+/* NASCAR race day - #/nascar. One card per question, a 44px reach on every
+   control, the running total pinned. The same shape as the F1 weekend
+   (f1-picks.css), scoped to this screen. */
+.scr-nascar { display: grid; gap: 12px; padding-bottom: 96px; }
+.scr-nascar .nas-total {
+  position: sticky; top: 0; z-index: 2; text-align: center;
+  font-weight: 800; font-size: var(--t-emph); color: var(--accent);
+  padding: 10px 8px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.scr-nascar .nas-rule { margin: 0 4px; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.scr-nascar .nas-lock { margin: -8px 4px 0; font-size: 12px; font-weight: 700; color: var(--dim); }
+.scr-nascar .nas-card { display: grid; gap: 8px; padding: 12px; min-width: 0; }
+.scr-nascar .nas-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
+.scr-nascar .nas-title { font-weight: 800; font-size: var(--t-emph); min-width: 0; overflow-wrap: anywhere; }
+.scr-nascar .nas-when { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.scr-nascar .nas-row {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 8px; min-height: 44px;
+}
+.scr-nascar .nas-row-one { grid-template-columns: minmax(0, 1fr) auto auto; }
+.scr-nascar .nas-pos { font-weight: 800; color: var(--dim); }
+.scr-nascar .nas-sel {
+  font: inherit; width: 100%; min-width: 0; min-height: 44px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-nascar .nas-tag {
+  min-width: 0; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-nascar .nas-actual { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.scr-nascar .nas-pts { font-weight: 800; min-width: 28px; text-align: right; color: var(--dim); }
+.scr-nascar .nas-pts[data-hit="true"] { color: var(--accent); }
+.scr-nascar .nas-res { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.scr-nascar .nas-choices { display: flex; gap: 8px; }
+.scr-nascar .nas-choice {
+  flex: 1 1 0; min-width: 0; font: inherit; font-weight: 700; min-height: 44px; padding: 0 6px;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg);
+}
+.scr-nascar .nas-choice[data-on="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.scr-nascar .nas-choice:disabled { opacity: .7; }
+.scr-nascar .nas-choice[data-on="true"]:disabled { opacity: 1; }
+.scr-nascar .nas-note { font-size: 12px; color: var(--dim); margin: 0; }
+.scr-nascar .nas-foot { margin: 4px; }
+/* Playing in - the group this race is picked for, its save line, its board. */
+.scr-nascar .nas-group { gap: 6px; }
+.scr-nascar .nas-grow {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  align-items: center; gap: 10px; min-height: 44px;
+}
+.scr-nascar .nas-glabel {
+  font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--dim); white-space: nowrap;
+}
+.scr-nascar .nas-grow .nas-sel { min-width: 0; font-weight: 700; }
+.scr-nascar .nas-gname {
+  min-width: 0; font-weight: 800; font-size: var(--t-emph);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-nascar .nas-gstatus { margin: 0; font-size: 12px; line-height: 1.4; color: var(--dim); overflow-wrap: anywhere; }
+.scr-nascar .nas-gstatus:empty { display: none; }
+.scr-nascar .nas-gstatus[data-tone="err"] { color: var(--down); }
+.scr-nascar .nas-glink {
+  display: flex; align-items: center; justify-content: center; min-height: 44px;
+  font-weight: 800; color: var(--accent); text-decoration: none;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+}
+/* No group yet - one line, and the link is a full 44px reach. */
+.scr-nascar .nas-invite {
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px;
+  margin: 0 4px; font-size: 12px; color: var(--dim);
+}
+.scr-nascar .nas-invite a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 800; color: var(--accent); }

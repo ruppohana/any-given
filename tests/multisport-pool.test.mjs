@@ -22,8 +22,10 @@ const SPAIN = parseF1(load('feed/espn-f1-scoreboard-260912.json'));
 const ITALY = parseF1(load('feed/espn-f1-scoreboard-260906.json'));
 const ITALY_X = raceExtras(load('f1/italian-gp-2026-race-core.json'));
 
-test('five sports, and anything else is a college football group', () => {
-  assert.deepEqual([...POOL_SPORTS], ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1']);
+test('nine sports, and anything else is a college football group', () => {
+  /* NASCAR joined 2026-09-12 ("do nascar next"), then MLB, NHL and WNBA ("keep
+     working on making it larger"). */
+  assert.deepEqual([...POOL_SPORTS], ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba']);
   for (const s of POOL_SPORTS) assert.equal(poolSport(s), s);
   assert.equal(poolSport('curling'), 'college-football');
   assert.equal(poolSport(undefined), 'college-football');

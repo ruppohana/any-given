@@ -28,7 +28,8 @@ import { handleAuth, requireIdentity, sessionAccount } from './auth.ts';
 import { icsFromQuery, icsDeadline } from './lib/ics.ts';
 import { handleContact } from './contact.ts';
 import { handleGroups } from './groups.ts';
-import { handleF1Pool, f1Standings } from './f1-pool.ts';
+import { handleF1Pool, racingStandings, RACING } from './f1-pool.ts';
+import { serveNascar, NASCAR_SERIES } from './nascar-feed.ts';
 import { poolSport, worldPoolId } from './lib/groups.ts';
 
 export interface Env {
@@ -209,9 +210,15 @@ export default {
       /* F1: keep the current weekend fresh, so a finished one is archived for
          the group season board (src/f1-feed.ts). A no-op while it is fresh. */
       try { await serveF1(env); } catch { /* the next tick tries again */ }
+      /* The same for every NASCAR series (src/nascar-feed.ts) - one fails, the rest still run. */
+      for (const series of Object.keys(NASCAR_SERIES)) {
+        try { await serveNascar(env, Date.now(), fetch, series); } catch { /* the next tick tries again */ }
+      }
       for (const sport of Object.keys(DAY_SPORTS)) {
         const today = dayOf(Date.now());
-        for (const day of [today, addDays(today, 1)]) {
+        /* Yesterday too: a game that went final after the last run of its own day
+           is still written to D1 and graded (src/slate-day.ts writeDayGames). */
+        for (const day of [addDays(today, -1), today, addDays(today, 1)]) {
           try {
             const r = await captureDay(env, sport, day);
             console.log('cron', sport, day, r.wrote, (r as any).skipped || '');
@@ -494,6 +501,32 @@ export default {
          Anthropic key, 2026-09-11). This answers it without anybody seeing a
          key: set or not, the length, and whether a known public prefix is
          there. Lengths and prefixes are not secrets; values never leave. */
+      /* ---- how fresh every feed is - no secrets, no people, just ages and counts.
+       * Jason, 2026-09-12: "making it ... more robust". One look says which sport's
+       * data has gone stale or stopped writing results. ---- */
+      if (p === '/api/health/feeds') {
+        const now = Date.now();
+        const today = dayOf(now);
+        const out: Record<string, any> = { today, at: new Date(now).toISOString() };
+        const age = (d: any) => Math.round((now - Number(d && d.fetchedAt || 0)) / 1000);
+        for (const sport of Object.keys(DAY_SPORTS)) {
+          let doc: any = null;
+          try { doc = JSON.parse((await env.LIVE.get('day:' + sport + ':' + today)) || 'null'); } catch { doc = null; }
+          out[sport] = doc ? { games: (doc.games || []).length, live: (doc.games || []).filter((x: any) => x.status === 'in_progress').length, ageSec: age(doc) } : { games: null };
+        }
+        for (const [k, key] of [['f1', 'f1:current'], ...Object.keys(NASCAR_SERIES).map((s) => [s, s + ':current'])]) {
+          let doc: any = null;
+          try { doc = JSON.parse((await env.LIVE.get(key)) || 'null'); } catch { doc = null; }
+          const e = doc && doc.event;
+          out[k] = e ? { event: e.name, state: e.state || (e.sessions || []).map((s: any) => s.abbr + ':' + s.state).join(' '), ageSec: age(doc) } : { event: null };
+        }
+        try {
+          const r = await env.DB.prepare('SELECT sport, COUNT(*) AS games, SUM(CASE WHEN status = ' + "'final'" + ' THEN 1 ELSE 0 END) AS finals FROM game GROUP BY sport').all();
+          out.results = r.results || [];
+        } catch { out.results = null; }
+        return new Response(JSON.stringify(out), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+      }
+
       if (p === '/api/health/secrets') {
         const e = env as any;
         /* Every secret-shaped binding the Worker holds, by name - so a key set
@@ -511,6 +544,15 @@ export default {
       }
 
       /* ---- F1: the current Grand Prix, its sessions and results (src/f1-feed.ts) ---- */
+      /* ---- NASCAR: the current Cup race, its cars and its result (src/nascar-feed.ts) ---- */
+      if (p === '/api/nascar/current') {
+        /* ?series=nascar-oreilly or nascar-truck; the Cup when absent or unknown. */
+        const doc = await serveNascar(env, Date.now(), fetch, url.searchParams.get('series') || 'nascar');
+        const head = { 'content-type': 'application/json', 'cache-control': 'no-store' };
+        if (!doc) return new Response(JSON.stringify({ error: 'no NASCAR race on the feed' }), { status: 404, headers: head });
+        return new Response(JSON.stringify(doc), { headers: head });
+      }
+
       if (p === '/api/f1/current') {
         const doc = await serveF1(env);
         const head = { 'content-type': 'application/json', 'cache-control': 'no-store' };
@@ -756,6 +798,12 @@ export default {
         const g = await env.DB.prepare('SELECT kickoff_utc FROM game WHERE id = ?')
           .bind(String(b.gameId)).first<{ kickoff_utc: number }>();
         const kickoff = g ? g.kickoff_utc : Number(b.kickoffUtc) || 0;
+        /* 🔴 A DAY SPORT'S GAME MUST BE ONE WE HAVE. Its lock and its grade both come
+           from the `game` row the day capture writes; a pick for a game with no row
+           would lock at whatever time the phone sent and never be graded. */
+        if (!g && isDaySport(sport)) {
+          return json({ error: 'unknown_game', message: 'That game is not on the schedule yet. Try again in a minute.' }, 409);
+        }
         if (kickoff && Date.now() >= kickoff) {
           return json({ error: 'that game has kicked off', message: 'That game has kicked off. Picks lock at kickoff.', locked: true }, 409);
         }
@@ -994,10 +1042,10 @@ export default {
         const sport = poolSport(url.searchParams.get('sport'));
         let week = Number(url.searchParams.get('week')) || 0;
         const poolId = url.searchParams.get('pool') || worldPoolId(sport);
-        /* F1 scores a weekend in points, not winners (src/f1-pool.ts). */
-        if (sport === 'f1') {
+        /* F1 and NASCAR score a race in points, not winners (src/f1-pool.ts). */
+        if (RACING.includes(sport)) {
           return json({ pool: poolId, sport, week: 0, ats: false, unit: 'points',
-                        rows: await f1Standings(env, poolId), fetchedAt: Date.now() });
+                        rows: await racingStandings(env, poolId, sport), fetchedAt: Date.now() });
         }
 
         /* 🔴 SCORED IN THE QUERY, FROM RESULTS THE CLIENT CANNOT WRITE. A client

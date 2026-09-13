@@ -63,20 +63,84 @@ export function viewFor(mine) {
   return 'ready';
 }
 
-/* 🔴 FIVE SPORTS, IN THIS ORDER. Jason, 2026-09-12: "complete the pool revision,
- * but do all the sports for the pool". The ids are src/lib/groups.ts POOL_SPORTS;
- * anything else is a college football group, as the server reads it. */
+/* 🔴 NINE SPORTS, IN THIS ORDER. Jason, 2026-09-12: "complete the pool revision,
+ * but do all the sports for the pool", then "do nascar next", then "keep working
+ * on making it larger and more robust" - MLB, the NHL and the WNBA. The ids are
+ * src/lib/groups.ts POOL_SPORTS; anything else is a college football group, as
+ * the server reads it. */
 export const SPORTS = [
   ['college-football', 'College football'],
   ['nfl', 'NFL'],
   ['mens-college-basketball', 'College basketball'],
   ['nba', 'NBA'],
-  ['f1', 'Formula 1']
+  ['f1', 'Formula 1'],
+  ['nascar', 'NASCAR'],
+  ['mlb', 'MLB'],
+  ['nhl', 'NHL'],
+  ['wnba', 'WNBA']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
+/* How the Sport control groups them - one native <select>, one <optgroup> a
+ * family. Nine buttons in a grid was five rows of a 393px phone before the name
+ * field; a select is one 44px row, reads "MLB" at a glance when closed, and the
+ * phone's own picker does the long list. Every sport is in exactly one family. */
+export const SPORT_FAMILIES = [
+  ['Football', ['college-football', 'nfl']],
+  ['Basketball', ['mens-college-basketball', 'nba', 'wnba']],
+  ['Baseball', ['mlb']],
+  ['Hockey', ['nhl']],
+  ['Racing', ['f1', 'nascar']]
+];
+
 export function poolSport(s) {
   return SPORT_IDS.includes(s) ? s : 'college-football';
+}
+
+/** F1 and NASCAR are races: scored in points, no spread, no which-games choice. */
+export function isRacing(s) {
+  const p = poolSport(s);
+  return p === 'f1' || p === 'nascar';
+}
+
+/* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME - the group's "week" is
+ * the day (YYYYMMDD). src/lib/day.ts DAY_SPORTS is the server's copy; a browser
+ * module with its imports stripped cannot read it, so tests/g1-group.test.mjs
+ * holds the two equal. */
+export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl'];
+
+/** Picks a day at a time: basketball, baseball, hockey. */
+export function isDaySport(s) {
+  return DAY_SPORTS.includes(poolSport(s));
+}
+
+/** The moment a game starts, which is the moment its picks lock. The races lock
+ *  by session and by the green flag, so they have no one word. */
+export function lockWord(s) {
+  const p = poolSport(s);
+  if (p === 'mlb') return 'first pitch';
+  if (p === 'nhl') return 'puck drop';
+  if (isDaySport(p)) return 'tip-off';
+  if (isRacing(p)) return '';
+  return 'kickoff';
+}
+
+/** What the spread is called in a sport whose line has its own name. MLB's run
+ *  line and the NHL's puck line are what ESPN carries as the spread. */
+export function spreadNote(s) {
+  const p = poolSport(s);
+  if (p === 'mlb') return 'In MLB the spread is the run line.';
+  if (p === 'nhl') return 'In the NHL the spread is the puck line.';
+  return '';
+}
+
+/** The line under the Sport control: how the chosen sport is played. */
+export function sportNote(s) {
+  const p = poolSport(s);
+  if (p === 'f1') return 'Pick the race weekend, scored in points. Each pick locks when its session starts.';
+  if (p === 'nascar') return 'Pick the race, scored in points. Every pick locks at the green flag.';
+  if (isDaySport(p)) return 'Pick the winners a day at a time. Every pick locks at ' + lockWord(p) + '.';
+  return 'Pick the winners each week. Every pick locks at kickoff.';
 }
 
 /** Which-games choices a sport offers. College basketball has no conference
@@ -103,8 +167,9 @@ export function canCreate(form) {
 }
 
 /** What Create sends. `pledge: true` is only ever sent from a ticked box. A college
- *  group also sends which games it picks from; NFL, NBA and F1 are all games. An
- *  F1 group is scored in points, so against the spread is never sent on for one. */
+ *  group also sends which games it picks from; NFL, NBA and the races are all
+ *  games. An F1 or NASCAR group is scored in points, so against the spread is
+ *  never sent on for one. */
 export function createPayload(form) {
   const sport = poolSport(form && form.sport);
   const choices = scopeValues(sport);
@@ -113,7 +178,7 @@ export function createPayload(form) {
     name: String((form && form.name) || ''),
     sport,
     pledge: true,
-    ats: sport !== 'f1' && !!(form && form.ats),
+    ats: !isRacing(sport) && !!(form && form.ats),
     ...(choices.length ? { scope, scopeArg: scope === 'conference' ? String(form.scopeArg || '') : null } : {})
   };
 }
@@ -128,18 +193,21 @@ export function basketballScopeNote(scope) {
     + ' A college basketball day can have 150 games.';
 }
 
-/** The middle of the group's meta line. A basketball group's `week` is the day
+/** The middle of the group's meta line. A day sport's `week` is the day
  *  (YYYYMMDD), so it is never printed as a week number. */
 export function periodLabel(sport, week) {
   const s = poolSport(sport);
   if (s === 'f1') return 'Race weekends';
-  if (s === 'nba' || s === 'mens-college-basketball') return 'A day at a time';
+  if (s === 'nascar') return 'Race days';
+  if (isDaySport(s)) return 'A day at a time';
   return week != null ? 'Week ' + week : 'Week not set';
 }
 
 /** How the group's picks count, in one line. */
 export function picksLine(g) {
-  if (g && poolSport(g.sport) === 'f1') return 'Race weekend picks, scored in points';
+  const s = g && poolSport(g.sport);
+  if (s === 'f1') return 'Race weekend picks, scored in points';
+  if (s === 'nascar') return 'Race day picks, scored in points';
   return g && g.ats ? 'Picks against the spread' : 'Picks straight up - who wins';
 }
 
@@ -182,7 +250,8 @@ export function prefillCode(pending) {
 export function shareText(groupName, code, sport) {
   const s = poolSport(sport);
   const how = s === 'f1' ? 'Pick the race weekend, scored in points.'
-    : s === 'nba' || s === 'mens-college-basketball' ? 'Pick the winners each day, scored in points.'
+    : s === 'nascar' ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
+    : isDaySport(s) ? 'Pick the winners each day, scored in points.'
     : 'Pick the winners each week, scored in points.';
   return 'Join my group ' + groupName + ' on Any Given. ' + how + ' Code ' + code;
 }
@@ -370,7 +439,7 @@ function onboarding(host, data, mode) {
     const intro = el('div', 'g1-intro');
     intro.appendChild(el('h2', 'g1-h', 'Start a group or join one'));
     intro.appendChild(el('p', 'g1-p',
-      'A group is friends who pick the winners each week, scored in points against each other. '
+      'A group is friends who pick the winners - a week, a day or a race at a time - scored in points against each other. '
       + 'Nothing else rides on it. Start one and invite people, or join with the code someone sent you.'));
     wrap.appendChild(intro);
   }
@@ -426,29 +495,38 @@ function startForm(host, data) {
   name.addEventListener('input', () => { form.name = name.value; nameCount.textContent = counterText(name.value.length, NAME_MAX); });
   c.append(nameRow, name);
 
-  /* The sport - all five (Jason, 2026-09-12). Two across, football then
-   * basketball, Formula 1 the full width under them. */
-  c.appendChild(el('span', 'g1-label', 'Sport'));
-  const seg = el('div', 'g1-seg g1-seg--sport');
-  seg.setAttribute('role', 'radiogroup');
-  seg.setAttribute('aria-label', 'Sport');
-  const segBtns = [];
+  /* The sport - all nine (Jason, 2026-09-12), in one native select grouped by
+   * family: Football, Basketball, Baseball, Hockey, Racing. One 44px row, a real
+   * <label>, and the phone's own picker - see SPORT_FAMILIES. */
+  const sportId = 'g1-sport-' + Math.random().toString(36).slice(2, 7);
+  const sportLab = el('label', 'g1-label', 'Sport');
+  sportLab.setAttribute('for', sportId);
+  const sportSel = el('select', 'g1-input g1-sport');
+  sportSel.id = sportId;
+  for (const [fam, ids] of SPORT_FAMILIES) {
+    const og = document.createElement('optgroup');
+    og.label = fam;
+    for (const v of ids) {
+      const o = el('option', '', sportLabel(v));
+      o.value = v;
+      og.appendChild(o);
+    }
+    sportSel.appendChild(og);
+  }
+  sportSel.value = form.sport;
+  const sportLine = el('p', 'g1-note', '');
+  sportLine.id = sportId + '-note';
+  sportSel.setAttribute('aria-describedby', sportLine.id);
   /* Each college sport keeps its own which-games choice while you look around. */
   const scopeBy = { [form.sport]: form.scope };
-  for (const [v, t] of SPORTS) {
-    const b = btn('g1-seg-b', t, () => {
-      form.sport = v;
-      form.scope = scopeBy[v] || defaultScope(v);
-      paintSeg(); paintScope(); paintAts();
-    });
-    b.setAttribute('role', 'radio');
-    b.dataset.v = v;
-    segBtns.push(b);
-    seg.appendChild(b);
-  }
-  const paintSeg = () => { for (const b of segBtns) b.setAttribute('aria-checked', String(b.dataset.v === form.sport)); };
-  paintSeg();
-  c.appendChild(seg);
+  sportSel.addEventListener('change', () => {
+    form.sport = poolSport(sportSel.value);
+    form.scope = scopeBy[form.sport] || defaultScope(form.sport);
+    paintSport(); paintScope(); paintAts();
+  });
+  function paintSport() { sportLine.textContent = sportNote(form.sport); }
+  paintSport();
+  c.append(sportLab, sportSel, sportLine);
 
   /* WHICH GAMES - a college group only. Jason, 2026-09-11: "All games is fine for
    * NFL. But it is tough for NCAA. We need a toggle for when setting up the group." */
@@ -502,8 +580,8 @@ function startForm(host, data) {
   /* The commissioner's option - Jason, 2026-09-11: "the comish has the option."
    * `/api/pool/standings` scores the cover when it is on, against the line the
    * pick was made at. */
-  swText.appendChild(el('span', 'g1-note', 'Off: pick who wins. On: your team has to cover the '
-    + 'spread you picked at. The commissioner can change it later.'));
+  const swNote = el('span', 'g1-note', '');
+  swText.appendChild(swNote);
   const swB = btn('g1-switch', '', () => { form.ats = !form.ats; swB.setAttribute('aria-checked', String(form.ats)); });
   swB.setAttribute('role', 'switch');
   swB.setAttribute('aria-checked', 'false');
@@ -511,8 +589,13 @@ function startForm(host, data) {
   swB.appendChild(el('span', 'g1-knob'));
   sw.append(swText, swB);
   c.appendChild(sw);
-  /* F1 is scored in points - there is no spread to pick against. */
-  function paintAts() { sw.hidden = form.sport === 'f1'; }
+  /* F1 and NASCAR are scored in points - there is no spread to pick against.
+   * MLB and the NHL name their spread, so the note says what it is called. */
+  function paintAts() {
+    sw.hidden = isRacing(form.sport);
+    swNote.textContent = ['Off: pick who wins. On: your team has to cover the spread you picked at.',
+      spreadNote(form.sport), 'The commissioner can change it later.'].filter(Boolean).join(' ');
+  }
   paintAts();
 
   /* THE KINDNESS PLEDGE. The API's own sentence, never a paraphrase of it. */

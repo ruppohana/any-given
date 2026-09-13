@@ -15,7 +15,14 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
   'mens-college-basketball': { path: 'basketball/mens-college-basketball', groups: '50', label: 'College basketball', periods: 2 },
   /* The NBA - Jason, 2026-09-12: "Yes" to "pro" on page 2 for opening night,
      Oct 20. 30 teams, no filter; four quarters. */
-  nba: { path: 'basketball/nba', groups: '', label: 'NBA', periods: 4 }
+  nba: { path: 'basketball/nba', groups: '', label: 'NBA', periods: 4 },
+  /* Jason, 2026-09-12: "keep working on making it larger". Three more leagues that
+     play every day and read exactly like the NBA on ESPN's scoreboard - pool picks
+     a day at a time (src/lib/groups.ts POOL_SPORTS). Probed 2026-09-12: MLB 15
+     games that day, the WNBA in its playoffs, the NHL from Sep 19. */
+  mlb: { path: 'baseball/mlb', groups: '', label: 'MLB', periods: 9 },
+  nhl: { path: 'hockey/nhl', groups: '', label: 'NHL', periods: 3 },
+  wnba: { path: 'basketball/wnba', groups: '', label: 'WNBA', periods: 4 }
 };
 
 export function isDaySport(sport: unknown): boolean {

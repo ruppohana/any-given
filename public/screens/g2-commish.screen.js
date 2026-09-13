@@ -11,8 +11,8 @@
  *   THE PROMISE   the kindness line the commissioner accepted, shown first,
  *                 because every control below it is how the promise is kept
  *   THE NAME      rename, 40 characters (src/lib/groups.ts LIMITS.nameMax)
- *   THE SPREAD    the group's against-the-spread setting (never for F1, which
- *                 is scored in points)
+ *   THE SPREAD    the group's against-the-spread setting (never for F1 or
+ *                 NASCAR, which are scored in points)
  *   WHICH GAMES   college football and college basketball only; conferences are
  *                 football's alone
  *   INVITES      the code and link to share, and an email box
@@ -74,19 +74,32 @@ function el(tag, cls, text) {
 
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 
-/* THE FIVE SPORTS a group can play (Jason, 2026-09-12: "do all the sports for the
- * pool"). A sport the server does not name is a college football group, as
- * src/lib/groups.ts poolSport reads it. */
+/* THE NINE SPORTS a group can play, in src/lib/groups.ts POOL_SPORTS order
+ * (Jason, 2026-09-12: "do all the sports for the pool", "do nascar next", then
+ * "keep working on making it larger" - MLB, the NHL, the WNBA). A sport the
+ * server does not name is a college football group, as poolSport reads it. MLB,
+ * the NHL and the WNBA are run exactly like the NBA: every game, the spread
+ * allowed, no which-games choice. */
 const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
-  'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1' };
+  'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
+  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
+/** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
+export const isRacing = (s) => { const p = poolSport(s); return p === 'f1' || p === 'nascar'; };
 /** Which-games choices a sport offers: conferences are football's only; the pro
- *  leagues and F1 play every game. */
+ *  leagues and the races play every game. */
 export const scopeValues = (s) => {
   const p = poolSport(s);
   return p === 'college-football' ? ['all', 'top25', 'conference']
     : p === 'mens-college-basketball' ? ['all', 'top25'] : [];
+};
+/** What the spread is called where the line has its own name: MLB's run line and
+ *  the NHL's puck line are what ESPN carries as the spread. '' everywhere else. */
+export const spreadNote = (s) => {
+  const p = poolSport(s);
+  return p === 'mlb' ? 'In MLB the spread is the run line.'
+    : p === 'nhl' ? 'In the NHL the spread is the puck line.' : '';
 };
 const at = (name) => '@' + String(name || '');
 
@@ -319,8 +332,8 @@ export function render(root, data, state) {
     }
 
     host.appendChild(nameSection(group, flashFor('name')));
-    /* An F1 group is scored in points - there is no spread to switch. */
-    if (poolSport(group.sport) !== 'f1') host.appendChild(atsSection(group, flashFor('ats')));
+    /* An F1 or NASCAR group is scored in points - there is no spread to switch. */
+    if (!isRacing(group.sport)) host.appendChild(atsSection(group, flashFor('ats')));
     if (scopeValues(group.sport).length) host.appendChild(scopeSection(group, d.conferences || [], flashFor('scope')));
     if (detail.invite) host.appendChild(inviteSection(group, detail.invite));
     host.appendChild(membersSection(group, members, flashFor('members')));
@@ -408,7 +421,8 @@ export function render(root, data, state) {
     sw.appendChild(track);
     /* Worded to what the server does today - see the header of this file. */
     const note = el('p', 'g2-note',
-      'On: a pick counts when its team covers the spread it was picked at, and a spread that lands exactly counts for nobody. Off: pick who wins.');
+      ['On: a pick counts when its team covers the spread it was picked at, and a spread that lands exactly counts for nobody. Off: pick who wins.',
+        spreadNote(group.sport)].filter(Boolean).join(' '));
     const m = msgLine();
     sw.addEventListener('click', async () => {
       if (sw.disabled) return;

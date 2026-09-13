@@ -23,7 +23,7 @@
  */
 import { sessionAccount } from './auth.ts';
 import { sendMail, mailerReady } from './mail.ts';
-import { newCode, normCode, cleanName, cleanScope, parseEmails, cleanBody, inviteMail, messageMail, LIMITS, KINDNESS, poolSport } from './lib/groups.ts';
+import { newCode, normCode, cleanName, cleanScope, parseEmails, cleanBody, inviteMail, messageMail, LIMITS, KINDNESS, poolSport, isRacingSport } from './lib/groups.ts';
 
 type Json = (body: unknown, status?: number, ttl?: number) => Response;
 
@@ -100,7 +100,8 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     if (!name) return json({ error: 'name_required', message: 'Give the group a name.' }, 400);
     /* Every sport the pool plays - src/lib/groups.ts POOL_SPORTS. */
     const sport = poolSport(b.sport);
-    const ats = b.ats ? 1 : 0;
+    /* No spread in a race - an F1 or NASCAR group never picks against one. */
+    const ats = b.ats && !isRacingSport(sport) ? 1 : 0;
     /* Which games - college groups choose, an NFL group is all games. */
     const sc = cleanScope(sport, b.scope, b.scopeArg);
     if (!sc) return json({ error: 'scope_required', message: 'Pick the conference.' }, 400);
@@ -219,7 +220,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     if (!isCommish) return onlyCommish();
     const name = b.name == null ? null : cleanName(b.name);
     if (name === '') return json({ error: 'name_required', message: 'A group needs a name.' }, 400);
-    const ats = b.ats == null ? null : (b.ats ? 1 : 0);
+    const ats = b.ats == null ? null : (b.ats && !isRacingSport(g.sport) ? 1 : 0);
     /* Which games: the commissioner's to change, and it takes effect on the slate
      * at once. Picks already made are not deleted - they still count. */
     let sc: { scope: string; arg: string | null } | null = null;

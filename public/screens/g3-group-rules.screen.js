@@ -64,13 +64,60 @@ function el(tag, cls, text) {
   return e;
 }
 
-/* THE FIVE SPORTS a group can play (Jason, 2026-09-12: "do all the sports for the
- * pool"). A sport the server does not name is a college football group, as
- * src/lib/groups.ts poolSport reads it. */
+/* THE NINE SPORTS a group can play, in src/lib/groups.ts POOL_SPORTS order
+ * (Jason, 2026-09-12: "do all the sports for the pool", "do nascar next", then
+ * "keep working on making it larger" - MLB, the NHL, the WNBA). A sport the
+ * server does not name is a college football group, as poolSport reads it. */
 const LEAGUES = { 'college-football': 'College football', nfl: 'NFL',
-  'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1' };
+  'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
+  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA' };
 function leagueOf(s) { return Object.prototype.hasOwnProperty.call(LEAGUES, s) ? s : 'college-football'; }
-function isHoops(s) { return s === 'nba' || s === 'mens-college-basketball'; }
+/* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME. src/lib/day.ts DAY_SPORTS
+ * is the server's copy; tests/g3-group-rules.test.mjs holds the two equal. */
+export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl'];
+export function isDaySport(s) { return DAY_SPORTS.includes(s); }
+/** F1 and NASCAR are races: scored in points, with no spread anywhere. */
+function isRacing(s) { return s === 'f1' || s === 'nascar'; }
+
+/** The moment a day-sport game starts - the word its picks lock at - and the
+ *  clause that says it: basketball tips off, baseball throws the first pitch,
+ *  hockey drops the puck. */
+const DAY_WORDS = {
+  basketball: { lock: 'tip-off', until: 'that game tips off' },
+  baseball: { lock: 'first pitch', until: 'that game’s first pitch' },
+  hockey: { lock: 'puck drop', until: 'the puck drops on that game' }
+};
+function dayFamily(s) { return s === 'mlb' ? 'baseball' : s === 'nhl' ? 'hockey' : 'basketball'; }
+export function lockWord(s) { return DAY_WORDS[dayFamily(s)].lock; }
+
+/** What the spread is called where the line has its own name: MLB's run line and
+ *  the NHL's puck line are what ESPN carries as the spread. '' everywhere else. */
+export function spreadNote(s) {
+  return s === 'mlb' ? 'In MLB the spread is the run line.'
+    : s === 'nhl' ? 'In the NHL the spread is the puck line.' : '';
+}
+
+/** The picking rules of a day sport, as words. Pure, so the test can read the
+ *  sentences each sport actually gets; sPicking turns them into the card. */
+export function dayPicking(s) {
+  const fam = dayFamily(s);
+  const w = DAY_WORDS[fam];
+  return {
+    lead: 'Every pick is editable until ' + w.until + ', and locks at ' + w.lock + '.',
+    bullets: [
+      'A ' + fam + ' group picks a day at a time. Each day, pick a side in the games you ' +
+        'want. There is no minimum.',
+      'The ' + w.lock + ' time is the server’s, not your phone’s, so a pick cannot slip in late.',
+      'Pick the same game again before ' + w.lock + ' and the new pick replaces the old one.',
+      'Only members can pick in a group. Picking never joins you to one.'
+    ]
+  };
+}
+
+/** The group card's line for a day sport. */
+export function dayCardLine(s) {
+  return 'This group picks a day at a time. Every pick locks at ' + lockWord(s) + '.';
+}
 
 function para(text) { return el('p', 'g3-p', text); }
 function lead(text) { return el('p', 'g3-lead', text); }
@@ -145,8 +192,8 @@ function sHow() {
   box.appendChild(lead('A group is invite only. There is no list of groups to browse.'));
   box.appendChild(bullets([
     'Whoever starts a group is its commissioner.',
-    'A group plays one sport - college football, the NFL, college basketball, the NBA ' +
-      'or Formula 1 - chosen when it starts.',
+    'A group plays one sport - college football, the NFL, college basketball, the NBA, ' +
+      'the WNBA, MLB, the NHL, Formula 1 or NASCAR - chosen when it starts.',
     'You join with the code from an invite. The invite link carries the same code, ' +
       'and the code works in any case, with or without spaces.',
     'You need to be signed in with your email, with a handle, to start or join one.',
@@ -177,15 +224,30 @@ function sPicking(sport) {
       'In two groups you can pick the same weekend two different ways.'));
     return box;
   }
-  if (isHoops(sport)) {
-    box.appendChild(lead('Every pick is editable until that game tips off, and locks at tip-off.'));
+  if (sport === 'nascar') {
+    /* src/lib/nascar.ts isLocked: every pick locks with the race - the green flag.
+     * src/f1-pool.ts savePicks cleans against the server's Date.now(). */
+    box.appendChild(lead('Every race day pick is editable until the green flag, and locks ' +
+      'when the race starts.'));
     box.appendChild(bullets([
-      'A basketball group picks a day at a time. Each day, pick a side in the games you ' +
-        'want. There is no minimum.',
-      'The tip-off time is the server’s, not your phone’s, so a pick cannot slip in late.',
-      'Pick the same game again before tip-off and the new pick replaces the old one.',
+      'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, ' +
+        'scored in points.',
+      'Pick whether the pole-sitter wins, yes or no.',
+      'A dark horse is a driver who starts 11th or worse. Pick one you think finishes in ' +
+        'the top ten.',
+      'The start time is the server’s, not your phone’s, so a pick cannot slip in late.',
       'Only members can pick in a group. Picking never joins you to one.'
     ]));
+    box.appendChild(subHead('Your picks belong to one group'));
+    box.appendChild(para('A pick you make in one group is not a pick in any other group. ' +
+      'In two groups you can pick the same race two different ways.'));
+    return box;
+  }
+  if (isDaySport(sport)) {
+    /* Basketball, baseball, hockey: the same rules, each in its own start word. */
+    const d = dayPicking(sport);
+    box.appendChild(lead(d.lead));
+    box.appendChild(bullets(d.bullets));
     box.appendChild(subHead('Your picks belong to one group'));
     box.appendChild(para('A pick you make in one group is not a pick in any other group, ' +
       'and it is not a pick on the public slate. In two groups you can pick the same game ' +
@@ -231,6 +293,27 @@ function sScoring(sport) {
     ]));
     return box;
   }
+  if (sport === 'nascar') {
+    /* src/lib/nascar.ts NPOINTS and scoreNascar; src/f1-pool.ts racingStandings.
+     * No spread - a NASCAR group is scored in points. */
+    box.appendChild(lead('A NASCAR group is scored in points over each race.'));
+    box.appendChild(bullets([
+      'A top-three pick scores for the right driver in the exact spot, and less for the ' +
+        'right driver in the wrong spot.',
+      'The winning make, whether the pole-sitter wins, and the dark horse each score when ' +
+        'you have them right.',
+      'A dark horse is right when your driver finishes in the top ten.',
+      'A wrong pick scores nothing and takes nothing away.',
+      'Every pick scores once the race is final.'
+    ]));
+    box.appendChild(subHead('The standings'));
+    box.appendChild(bullets([
+      'Ranked by points, added up over every race of the season.',
+      'Everyone in the group is on them from the day they join, picks or not.',
+      'A group’s standings count only the picks made in that group.'
+    ]));
+    return box;
+  }
   box.appendChild(lead('Every right pick is a point. A wrong pick scores nothing and ' +
     'takes nothing away.'));
   box.appendChild(para('Points are the only score in a group.'));
@@ -240,7 +323,8 @@ function sScoring(sport) {
    * `pick.spread_at` in /api/pool/standings - see the header. */
   box.appendChild(para('Straight up is the default: a pick is right when its team wins. ' +
     'When the commissioner turns against the spread on, a pick is right when its team ' +
-    'covers the spread it was picked at - the line on the game when you tapped it.'));
+    'covers the spread it was picked at - the line on the game when you tapped it.' +
+    (spreadNote(sport) ? ' ' + spreadNote(sport) : '')));
 
   box.appendChild(subHead('When a game does not count'));
   /* "No points won and none lost, for anybody who picked it" is s6-rules sVoid's
@@ -270,7 +354,7 @@ function sCommish(sport) {
   box.appendChild(para('The commissioner is responsible for keeping the group kind, and ' +
     'has the tools to do it:'));
   box.appendChild(bullets([
-    sport === 'f1' ? 'Rename the group.' : 'Rename the group, and switch against the spread on or off.',
+    isRacing(sport) ? 'Rename the group.' : 'Rename the group, and switch against the spread on or off.',
     'Send invites, by email through Any Given or by sharing the code or link.',
     'Mute a member. They still pick and stay on the standings, but cannot send ' +
       'messages in the group. A mute can be lifted.',
@@ -404,7 +488,9 @@ function groupCard(root, data) {
     render(root, Object.assign({}, data, { current: id }), 'ready');
   }));
   c.appendChild(kv([
-    ['Picks', sport === 'f1' ? 'Points, each race weekend' : g.ats ? 'Against the spread' : 'Straight up'],
+    ['Picks', sport === 'f1' ? 'Points, each race weekend'
+      : sport === 'nascar' ? 'Points, each race'
+      : g.ats ? 'Against the spread' : 'Straight up'],
     ['League', LEAGUES[sport]],
     ['Members', g.members == null ? '–' : g.members],
     ['You', g.role === 'commissioner' ? 'Commissioner' : 'Member']
@@ -412,10 +498,13 @@ function groupCard(root, data) {
   if (sport === 'f1') {
     c.appendChild(el('p', 'g3-p', 'This group plays the Formula 1 race weekend picks, ' +
       'scored in points over each race weekend.'));
-  } else if (isHoops(sport)) {
-    c.appendChild(el('p', 'g3-p', 'This group picks a day at a time. Every pick locks at tip-off.'));
+  } else if (sport === 'nascar') {
+    c.appendChild(el('p', 'g3-p', 'This group plays the NASCAR race day picks, ' +
+      'scored in points over each race.'));
+  } else if (isDaySport(sport)) {
+    c.appendChild(el('p', 'g3-p', dayCardLine(sport)));
   }
-  c.appendChild(el('p', 'g3-note', sport === 'f1' || isHoops(sport)
+  c.appendChild(el('p', 'g3-note', isRacing(sport) || isDaySport(sport)
     ? 'The rules below are the ones for this group’s sport. Only this card changes between groups.'
     : 'Everything below is the same in every group. Only this card changes.'));
   return c;
@@ -535,8 +624,8 @@ export function render(root, data, state) {
     }));
   }
 
-  /* The rules, in every state. They are not live data - but an F1 or a basketball
-   * group reads its own sport's version of them. */
+  /* The rules, in every state. They are not live data - but an F1, NASCAR or
+   * basketball group reads its own sport's version of them. */
   const sport = view === 'group' ? leagueOf(currentGroup(data).sport) : '';
   root.appendChild(indexBlock());
   SECTIONS.forEach(function (s) { root.appendChild(sectionCard(s, sport)); });

@@ -83,6 +83,7 @@ export const GROUP_COPY = {
   /* Every sport the pool plays (Jason, 2026-09-12). An F1 group plays the race
    * weekend on its own screen; a basketball group picks a day at a time. */
   f1: { title: 'This group plays Formula 1', body: 'Qualifying, the race, the fastest lap and more, picked each race weekend and scored in points.', cta: 'Pick this weekend', href: '#/f1' },
+  nascar: { title: 'This group plays NASCAR', body: 'The top three, the winning make, the pole-sitter and a dark horse, picked each race day and scored in points.', cta: 'Pick this race', href: '#/nascar' },
   emptyDay: { title: 'No games on this day', body: 'Pick another day above. Games show up as soon as they are scheduled.' },
   rules: { label: 'How it’s scored', href: '#/grules' },
   door: { label: 'Group info ›', href: '#/g' },
@@ -692,8 +693,8 @@ const WEEK = { 'college-football': 2, nfl: 1 };
  * the server stores the game (src/slate-day.ts writeDayGames). The day turns over
  * at 6 AM Eastern, as in src/lib/day.ts - restated here, not imported, because the
  * p2 tests load this module with its imports stripped. */
-const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1'];
+const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba'];
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -808,8 +809,8 @@ async function groupData(fixtures) {
   try { who = localStorage.getItem('ag.handle') || ''; } catch { who = ''; }
   const scope = who + '.' + group.id;
   const sport = POOL_SPORT_IDS.includes(group.sport) ? group.sport : 'college-football';
-  /* An F1 group plays the race weekend, not a slate - its door is Race weekend. */
-  if (sport === 'f1') return { ...base, groups, group, sport, groupState: 'f1' };
+  /* A racing group plays the race, not a slate - its door is its race screen. */
+  if (sport === 'f1' || sport === 'nascar') return { ...base, groups, group, sport, groupState: sport };
   const isDay = DAY_POOL_SPORTS.includes(sport);
   const today = poolDayOf(Date.now());
   const day = isDay ? chosenPoolDay(sport, today) : null;
@@ -1227,7 +1228,7 @@ function zone(ctx, game, side) {
      * paid for by taking something off the crest's line. At 44 it is the first
      * thing seen and the block reads top-down: WHO, then the numbers about them. */
     size: 44,
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba'].includes(ctx.sport) ? ctx.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba'].includes(ctx.sport) ? ctx.sport : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
 
@@ -2126,7 +2127,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2285,14 +2286,15 @@ function groupGate(root, data, state) {
     root.appendChild(card);
     return;
   }
-  if (gs === 'f1') {
+  if (gs === 'f1' || gs === 'nascar') {
+    const copy = GROUP_COPY[gs];
     groupBar(root, data, state);
     const card = el('div', 'p2-gcard');
-    card.dataset.gate = 'f1';
-    card.appendChild(el('p', 'p2-gcard-h', GROUP_COPY.f1.title));
-    card.appendChild(el('p', 'p2-gcard-b', GROUP_COPY.f1.body));
-    const a = el('a', 'p2-gcta', GROUP_COPY.f1.cta);
-    a.href = GROUP_COPY.f1.href;
+    card.dataset.gate = gs;
+    card.appendChild(el('p', 'p2-gcard-h', copy.title));
+    card.appendChild(el('p', 'p2-gcard-b', copy.body));
+    const a = el('a', 'p2-gcta', copy.cta);
+    a.href = copy.href;
     card.appendChild(a);
     root.appendChild(card);
     return;
