@@ -5,7 +5,6 @@ import { DAY_SPORTS, isDaySport, dayOf, addDays } from './lib/day.ts';
 import { serveF1 } from './f1-feed.ts';
 import { buildReplay, listReplays } from './f1-replay.ts';
 export { LivePoller } from './poller-do.ts';
-import { computeDue, nuggetAlertTick } from './nugget-due.ts';
 /* THE WORKER. One server polls the feed; the phone does not.
  *
  * That sentence is the whole reason the original exists and it is not negotiable
@@ -193,11 +192,6 @@ export default {
    * Both leagues, every run. The NFL and college seasons overlap all autumn
    * and there is no cheaper way to know which has a game on than to look. */
   async scheduled(event: any, env: any, ctx: any) {
-    /* The game-facts alert: an hourly look from 10 AM, one email a day at most,
-     * only when a game inside 48 hours has a team without current nuggets. */
-    ctx.waitUntil(nuggetAlertTick(env).then(
-      (r) => { if (!r || !(r as any).skipped) console.log('nuggets alert', JSON.stringify(r)); },
-      (e) => console.log('nuggets alert FAILED', String(e?.message || e))));
     const season = Number(env.SEASON) || 2026;
     ctx.waitUntil((async () => {
       for (const sport of ['nfl', 'college-football']) {
@@ -258,13 +252,6 @@ export default {
        * The token is a secret rather than a check on the caller's address,
        * because a Worker cannot trust an IP. */
       /* ---- email sign-in: /api/auth/start, /verify, /me, /logout ---- */
-      /* Which teams are due for nuggets, and which play inside 48 hours without
-       * them (src/nugget-due.ts). Read-only; the laptop run and the alert use it. */
-      if (p === '/api/nuggets/due' && req.method === 'GET') {
-        const days = Math.min(14, Math.max(1, Number(url.searchParams.get('days')) || 7));
-        return json(await computeDue(env, Date.now(), days));
-      }
-
       const authRes = await handleAuth(req, env, p, json);
       if (authRes) return authRes;
 

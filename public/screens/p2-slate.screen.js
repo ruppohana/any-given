@@ -1743,36 +1743,9 @@ export function openInfo(game, ctx) {
    * stupid note?" The card never shows the line - the row does - so the sentence
    * about whose line it is sat under a table with no line in it. */
 
-  /* 🔴 A FUN OR ODD FACT FOR EACH SIDE. Jason, 2026-09-11: "Can we come up with
-   * better info?" and "the fun facts need to be Fun or Odd facts. Not just boring
-   * facts." These are the researched, sourced facts behind the stoppage tile - a
-   * `fact`-kind one never shows here. Filled after the card opens, in a slot per
-   * side so the order holds; a team with no fun or odd fact simply has no line. */
-  const facts = el('div', 'p2-facts');
-  d.appendChild(facts);
-  const lg = ctx && ctx.sport === 'nfl' ? 'nfl' : 'ncaa';
-  /* 🔴 FACTS EXIST FOR FOOTBALL ONLY (public/nuggets/nfl and /ncaa, keyed by team
-   * id). A team id is only unique within its league - NBA 5, an MLB, NHL or WNBA
-   * id, or a soccer club under ncaa is a different team entirely, and its "fun
-   * fact" would be some college's. So any other sport's card asks for none. */
-  const footballCard = !(ctx && ctx.sport) || ctx.sport === 'nfl' || ctx.sport === 'college-football';
-  for (const side of (footballCard ? [A, H] : [])) {
-    if (!side || !side.id) continue;
-    const slot = el('div', 'p2-fact');
-    slot.hidden = true;
-    facts.appendChild(slot);
-    fetch('/nuggets/' + lg + '/' + encodeURIComponent(side.id) + '.json')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        const pool = ((j && j.nuggets) || []).filter((n) => n && n.text && (n.kind === 'fun' || n.kind === 'odd'));
-        if (!pool.length) return;
-        const n = pool[Math.floor(Math.random() * pool.length)];
-        slot.appendChild(el('span', 'p2-fact-t', side.short || side.name || ''));
-        slot.appendChild(el('p', 'p2-fact-b', n.text));
-        slot.hidden = false;
-      })
-      .catch(() => { /* no facts file: no line */ });
-  }
+  /* NO FUN FACTS (2026-09-13). Jason: "Stop getting and remove them. We do not
+   * use them any longer." The researched team facts that filled a line per side
+   * here are gone with public/nuggets/. */
 
   const close = el('button', 'p2-dlg-x', 'Close');
   close.onclick = () => d.close();

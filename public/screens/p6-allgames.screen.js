@@ -1469,13 +1469,13 @@ function gameCard(ctx, game) {
       abbr + ' ' + spreadText(game.spread, game.spread <= 0 ? 'home' : 'away')));
   }
   /* 🔴 "info" ON EVERY CARD. Jason, 2026-09-11: "...and an info word." The
-   * same card the pick'em slate opens - records, form, the last meeting and a
-   * fun or odd fact for each side. Inside a <summary>, so no fold. */
-  /* Not on basketball yet: the facts behind it are football's nuggets. */
+   * same card the pick'em slate opens - records, form and the last meeting.
+   * Inside a <summary>, so no fold. */
+  /* Not on the day sports yet. */
   if (!isDaySport(ctx.sport)) {
     const info = el('button', 'p6a-info', 'info');
     info.type = 'button';
-    info.setAttribute('aria-label', 'Records and facts for this game');
+    info.setAttribute('aria-label', 'Records and rank for this game');
     info.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); infoFor(game, ctx); });
     top.appendChild(info);
   }
