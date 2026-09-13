@@ -77,7 +77,9 @@ export const SPORTS = [
   ['nascar', 'NASCAR'],
   ['mlb', 'MLB'],
   ['nhl', 'NHL'],
-  ['wnba', 'WNBA']
+  ['wnba', 'WNBA'],
+  ['nascar-oreilly', 'NASCAR O’Reilly'],
+  ['nascar-truck', 'NASCAR Trucks']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -90,7 +92,7 @@ export const SPORT_FAMILIES = [
   ['Basketball', ['mens-college-basketball', 'nba', 'wnba']],
   ['Baseball', ['mlb']],
   ['Hockey', ['nhl']],
-  ['Racing', ['f1', 'nascar']]
+  ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']]
 ];
 
 export function poolSport(s) {
@@ -100,7 +102,8 @@ export function poolSport(s) {
 /** F1 and NASCAR are races: scored in points, no spread, no which-games choice. */
 export function isRacing(s) {
   const p = poolSport(s);
-  return p === 'f1' || p === 'nascar';
+  /* F1 and every NASCAR series - Cup, O'Reilly, Truck (2026-09-13). */
+  return p === 'f1' || p.startsWith('nascar');
 }
 
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME - the group's "week" is
@@ -138,7 +141,7 @@ export function spreadNote(s) {
 export function sportNote(s) {
   const p = poolSport(s);
   if (p === 'f1') return 'Pick the race weekend, scored in points. Each pick locks when its session starts.';
-  if (p === 'nascar') return 'Pick the race, scored in points. Every pick locks at the green flag.';
+  if (p.startsWith('nascar')) return 'Pick the race, scored in points. Every pick locks at the green flag.';
   if (isDaySport(p)) return 'Pick the winners a day at a time. Every pick locks at ' + lockWord(p) + '.';
   return 'Pick the winners each week. Every pick locks at kickoff.';
 }
@@ -198,7 +201,7 @@ export function basketballScopeNote(scope) {
 export function periodLabel(sport, week) {
   const s = poolSport(sport);
   if (s === 'f1') return 'Race weekends';
-  if (s === 'nascar') return 'Race days';
+  if (String(s).startsWith('nascar')) return 'Race days';
   if (isDaySport(s)) return 'A day at a time';
   return week != null ? 'Week ' + week : 'Week not set';
 }
@@ -207,7 +210,7 @@ export function periodLabel(sport, week) {
 export function picksLine(g) {
   const s = g && poolSport(g.sport);
   if (s === 'f1') return 'Race weekend picks, scored in points';
-  if (s === 'nascar') return 'Race day picks, scored in points';
+  if (String(s).startsWith('nascar')) return 'Race day picks, scored in points';
   return g && g.ats ? 'Picks against the spread' : 'Picks straight up - who wins';
 }
 
@@ -250,7 +253,7 @@ export function prefillCode(pending) {
 export function shareText(groupName, code, sport) {
   const s = poolSport(sport);
   const how = s === 'f1' ? 'Pick the race weekend, scored in points.'
-    : s === 'nascar' ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
+    : String(s).startsWith('nascar') ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
     : isDaySport(s) ? 'Pick the winners each day, scored in points.'
     : 'Pick the winners each week, scored in points.';
   return 'Join my group ' + groupName + ' on Any Given. ' + how + ' Code ' + code;

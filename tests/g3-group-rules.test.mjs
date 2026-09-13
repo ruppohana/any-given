@@ -322,16 +322,16 @@ function branch(fn, cond) {
 }
 const lits = (src) => (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((s) => s.slice(1, -1)).join('');
 
-test('the League row shows the nine labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
+test('the League row shows the eleven labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
   const m = CJS.match(/const LEAGUES = \{([^}]*)\}/);
   assert.ok(m, 'no LEAGUES map');
   const pairs = [...m[1].matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((x) => [x[1], x[2]]);
   assert.deepEqual(pairs.map((p) => p[0]), [...POOL_SPORTS]);
   assert.deepEqual(pairs.map((p) => p[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR',
-    'MLB', 'NHL', 'WNBA']);
+    'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks']);
   assert.match(CJS, /\['League', LEAGUES\[sport\]\]/);
   /* How a group starts says all nine too. */
-  assert.ok(FLAT.includes('A group plays one sport - college football, the NFL, college basketball, the NBA, the WNBA, MLB, the NHL, Formula 1 or NASCAR - chosen when it starts.'));
+  assert.ok(FLAT.includes('A group plays one sport - college football, the NFL, college basketball, the NBA, the WNBA, MLB, the NHL, Formula 1 or NASCAR (Cup, O’Reilly or Trucks) - chosen when it starts.'));
   assert.doesNotMatch(FLAT, /NFL or college football, chosen/);
 });
 
@@ -352,7 +352,8 @@ test('🔴 F1: scored in points over each race weekend, and nothing about spread
     assert.doesNotMatch(s, /spread|kickoff|kicks off/i, 'the F1 ' + name + ' section talks football');
   }
   assert.match(CJS, /isRacing\(sport\) \? 'Rename the group\.' : 'Rename the group, and switch against the spread on or off\.'/);
-  assert.match(CJS, /function isRacing\(s\) \{ return s === 'f1' \|\| s === 'nascar'; \}/);
+  /* Every NASCAR series is a race (O'Reilly and Truck joined 2026-09-13). */
+  assert.ok(CJS.includes("function isRacing(s) { return s === 'f1' || String(s).startsWith('nascar'); }"));
   /* No point value is typed (the 1 in "F1" is a name, not a number): the words
    * say which pick scores more, and the code holds that true. */
   assert.doesNotMatch(score, /\b\d/);
@@ -370,11 +371,12 @@ test('🔴 F1: scored in points over each race weekend, and nothing about spread
 
 test('🔴 NASCAR: scored in points over each race, locked at the green flag, nothing about spreads', () => {
   const card = CJS.slice(CJS.indexOf('function groupCard'), CJS.indexOf('function doorLine'));
-  assert.match(card, /sport === 'nascar' \? 'Points, each race'/);
+  /* Every NASCAR series - Cup, O'Reilly, Truck (2026-09-13) - takes the NASCAR rules. */
+  assert.ok(card.includes("String(sport).startsWith('nascar') ? 'Points, each race'"));
   assert.match(lits(card), /This group plays the NASCAR race day picks, scored in points over each race\./);
   assert.match(card, /isRacing\(sport\) \|\| isDaySport\(sport\)/, 'the NASCAR card still says the rules are its sport\'s');
-  const pick = lits(branch('sPicking', "sport === 'nascar'"));
-  const score = lits(branch('sScoring', "sport === 'nascar'"));
+  const pick = lits(branch('sPicking', "String(sport).startsWith('nascar')"));
+  const score = lits(branch('sScoring', "String(sport).startsWith('nascar')"));
   for (const [name, s] of [['picking', pick], ['scoring', score]]) {
     assert.doesNotMatch(s, /spread|kickoff|kicks off|tip-off|weekend|qualifying|sprint|fastest lap/i,
       'the NASCAR ' + name + ' section talks another sport');

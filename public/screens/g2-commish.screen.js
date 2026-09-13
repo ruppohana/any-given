@@ -82,11 +82,11 @@ const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
  * allowed, no which-games choice. */
 const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
-  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA' };
+  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
-export const isRacing = (s) => { const p = poolSport(s); return p === 'f1' || p === 'nascar'; };
+export const isRacing = (s) => { const p = poolSport(s); return p === 'f1' || p.startsWith('nascar'); };
 /** Which-games choices a sport offers: conferences are football's only; the pro
  *  leagues and the races play every game. */
 export const scopeValues = (s) => {

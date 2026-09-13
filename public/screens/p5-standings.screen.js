@@ -456,7 +456,9 @@ const SPORT_LABEL = {
   nascar: 'NASCAR',
   mlb: 'MLB',
   nhl: 'NHL',
-  wnba: 'WNBA'
+  wnba: 'WNBA',
+  'nascar-oreilly': 'NASCAR O’Reilly',
+  'nascar-truck': 'NASCAR Trucks'
 };
 
 /** A group's sport as one of the five; anything else is college football, as before. */
@@ -472,7 +474,7 @@ function sportLabel(s) { return SPORT_LABEL[groupSport(s)]; }
 function boardKind(s) {
   const k = groupSport(s);
   /* NASCAR too (2026-09-12): a race scored in points, one board. */
-  if (k === 'f1' || k === 'nascar') return 'points';
+  if (k === 'f1' || k.startsWith('nascar')) return 'points';
   /* Every league that picks a day at a time (MLB, NHL, WNBA joined 2026-09-12). */
   if (k === 'mens-college-basketball' || k === 'nba' || k === 'mlb' || k === 'nhl' || k === 'wnba') return 'season';
   return 'week';

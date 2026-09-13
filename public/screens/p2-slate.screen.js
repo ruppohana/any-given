@@ -694,7 +694,7 @@ const WEEK = { 'college-football': 2, nfl: 1 };
  * at 6 AM Eastern, as in src/lib/day.ts - restated here, not imported, because the
  * p2 tests load this module with its imports stripped. */
 const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck'];
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -810,7 +810,10 @@ async function groupData(fixtures) {
   const scope = who + '.' + group.id;
   const sport = POOL_SPORT_IDS.includes(group.sport) ? group.sport : 'college-football';
   /* A racing group plays the race, not a slate - its door is its race screen. */
-  if (sport === 'f1' || sport === 'nascar') return { ...base, groups, group, sport, groupState: sport };
+  /* Every NASCAR series shares one door, pointed at its own race day route. */
+  if (sport === 'f1' || sport.startsWith('nascar')) {
+    return { ...base, groups, group, sport, groupState: sport === 'f1' ? 'f1' : 'nascar', raceHref: '#/' + sport };
+  }
   const isDay = DAY_POOL_SPORTS.includes(sport);
   const today = poolDayOf(Date.now());
   const day = isDay ? chosenPoolDay(sport, today) : null;
@@ -2127,7 +2130,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2294,7 +2297,7 @@ function groupGate(root, data, state) {
     card.appendChild(el('p', 'p2-gcard-h', copy.title));
     card.appendChild(el('p', 'p2-gcard-b', copy.body));
     const a = el('a', 'p2-gcta', copy.cta);
-    a.href = copy.href;
+    a.href = data.raceHref || copy.href;
     card.appendChild(a);
     root.appendChild(card);
     return;

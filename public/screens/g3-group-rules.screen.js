@@ -70,14 +70,15 @@ function el(tag, cls, text) {
  * server does not name is a college football group, as poolSport reads it. */
 const LEAGUES = { 'college-football': 'College football', nfl: 'NFL',
   'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
-  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA' };
+  mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks' };
 function leagueOf(s) { return Object.prototype.hasOwnProperty.call(LEAGUES, s) ? s : 'college-football'; }
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME. src/lib/day.ts DAY_SPORTS
  * is the server's copy; tests/g3-group-rules.test.mjs holds the two equal. */
 export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl'];
 export function isDaySport(s) { return DAY_SPORTS.includes(s); }
 /** F1 and NASCAR are races: scored in points, with no spread anywhere. */
-function isRacing(s) { return s === 'f1' || s === 'nascar'; }
+/* F1 and every NASCAR series - Cup, O'Reilly, Truck (2026-09-13). */
+function isRacing(s) { return s === 'f1' || String(s).startsWith('nascar'); }
 
 /** The moment a day-sport game starts - the word its picks lock at - and the
  *  clause that says it: basketball tips off, baseball throws the first pitch,
@@ -193,7 +194,7 @@ function sHow() {
   box.appendChild(bullets([
     'Whoever starts a group is its commissioner.',
     'A group plays one sport - college football, the NFL, college basketball, the NBA, ' +
-      'the WNBA, MLB, the NHL, Formula 1 or NASCAR - chosen when it starts.',
+      'the WNBA, MLB, the NHL, Formula 1 or NASCAR (Cup, O’Reilly or Trucks) - chosen when it starts.',
     'You join with the code from an invite. The invite link carries the same code, ' +
       'and the code works in any case, with or without spaces.',
     'You need to be signed in with your email, with a handle, to start or join one.',
@@ -224,7 +225,7 @@ function sPicking(sport) {
       'In two groups you can pick the same weekend two different ways.'));
     return box;
   }
-  if (sport === 'nascar') {
+  if (String(sport).startsWith('nascar')) {
     /* src/lib/nascar.ts isLocked: every pick locks with the race - the green flag.
      * src/f1-pool.ts savePicks cleans against the server's Date.now(). */
     box.appendChild(lead('Every race day pick is editable until the green flag, and locks ' +
@@ -293,7 +294,7 @@ function sScoring(sport) {
     ]));
     return box;
   }
-  if (sport === 'nascar') {
+  if (String(sport).startsWith('nascar')) {
     /* src/lib/nascar.ts NPOINTS and scoreNascar; src/f1-pool.ts racingStandings.
      * No spread - a NASCAR group is scored in points. */
     box.appendChild(lead('A NASCAR group is scored in points over each race.'));
@@ -489,7 +490,7 @@ function groupCard(root, data) {
   }));
   c.appendChild(kv([
     ['Picks', sport === 'f1' ? 'Points, each race weekend'
-      : sport === 'nascar' ? 'Points, each race'
+      : String(sport).startsWith('nascar') ? 'Points, each race'
       : g.ats ? 'Against the spread' : 'Straight up'],
     ['League', LEAGUES[sport]],
     ['Members', g.members == null ? '–' : g.members],
@@ -498,7 +499,7 @@ function groupCard(root, data) {
   if (sport === 'f1') {
     c.appendChild(el('p', 'g3-p', 'This group plays the Formula 1 race weekend picks, ' +
       'scored in points over each race weekend.'));
-  } else if (sport === 'nascar') {
+  } else if (String(sport).startsWith('nascar')) {
     c.appendChild(el('p', 'g3-p', 'This group plays the NASCAR race day picks, ' +
       'scored in points over each race.'));
   } else if (isDaySport(sport)) {

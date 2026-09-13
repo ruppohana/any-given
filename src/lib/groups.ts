@@ -61,7 +61,10 @@ export function cleanName(n: unknown, max = LIMITS.nameMax): string {
    day in points (src/lib/nascar.ts), the way an F1 group plays the weekend. */
 export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
   /* 2026-09-12, "making it larger": three more day-at-a-time leagues (src/lib/day.ts). */
-  'mlb', 'nhl', 'wnba'] as const;
+  'mlb', 'nhl', 'wnba',
+  /* 2026-09-13, "add the O'Reilly and Truck series too": NASCAR's other two national
+     series, race day like the Cup (src/nascar-feed.ts NASCAR_SERIES). */
+  'nascar-oreilly', 'nascar-truck'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';

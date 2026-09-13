@@ -47,6 +47,9 @@ const ROUTES = [
   { id: 'f1live',    dest: 'slate',     screen: 'f1-live',         state: 'ready',       label: 'F1 race replay' },
   /* NASCAR race day - a NASCAR group's picks (Jason, 2026-09-12: "do nascar next"). */
   { id: 'nascar',    dest: 'slate',     screen: 'nascar-picks',    state: 'ready',       label: 'NASCAR race day' },
+  /* The same screen for NASCAR's other two national series - the route names the series. */
+  { id: 'nascar-oreilly', dest: 'slate', screen: 'nascar-picks',  state: 'ready',       label: "NASCAR O'Reilly race day" },
+  { id: 'nascar-truck', dest: 'slate',   screen: 'nascar-picks',    state: 'ready',       label: 'NASCAR Truck race day' },
   { id: 'picks',     dest: 'picks',     screen: 'p4-picks',        state: 'ready',       label: 'My picks' },
   { id: 'parlay',    dest: 'picks',      screen: 'p3-parlay',       state: 'valid',       label: 'The parlay (pool, points)' },
   /* 🔴 TWO PARLAYS, TWO ROUTES, AND THEY ARE NOT THE SAME PRODUCT. p3 is the
@@ -236,6 +239,8 @@ const TITLES = {
   f1: 'Race weekend',   /* F1's guidelines: the name may inform, never brand */
   f1live: 'Race replay',
   nascar: 'Race day',
+  'nascar-oreilly': 'Race day',
+  'nascar-truck': 'Race day',
   buildparlay: 'Build a parlay',
   slate: 'The slate',
   slate131: 'The slate',
