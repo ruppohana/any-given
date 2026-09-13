@@ -9,8 +9,8 @@
  * Two halves, both pure:
  *   buildTimeline(rows)   OpenF1's raw rows for one race -> a few KB: when the
  *                         leader finished each lap, the running order and gaps
- *                         at that moment, every stop, every new fastest lap,
- *                         every safety car and red flag.
+ *                         at that moment, every stop, every pass that stuck,
+ *                         every new fastest lap, every safety car and red flag.
  *   offers / settle       what can be called at lap L, and how a call made at
  *                         lap L stands at lap N - using nothing after lap N.
  *
@@ -20,15 +20,18 @@
  * 🔴 ONE VOID RULE, as everywhere in this app: a race stopped with a red flag
  * while a pick is open voids that pick - except the safety-car pick, which a
  * red flag answers "yes". A pick nobody can settle (no stop before the flag, a
- * driver in the pair retires) is void too. Void is never a miss.
+ * driver in the pair retires, a stop decides a pass) is void too. Void is
+ * never a miss.
  *
- * Tested on fixtures/f1/openf1-11361/ - the 2026 Italian GP, captured whole
- * from OpenF1 on 2026-09-12, red flag on lap 3 and a VSC on lap 28.
+ * Tested on fixtures/f1/openf1-11361/ (Monza 2026: red flag on lap 3, a VSC on
+ * lap 28, nine stops) and fixtures/f1/openf1-11342/ (Hungary 2026: 44 stops,
+ * the undercut race), both captured whole from OpenF1 on 2026-09-12.
  */
 
 export type TLDriver = { n: number; acr: string; name: string; team: string | null; color: string | null };
 export type Timeline = {
-  v: 1;
+  /** 2 added `passes`. A cached v1 is rebuilt, never served. */
+  v: 2;
   session: number; meeting: string; circuit: string | null; date: string | null;
   laps: number;
   drivers: TLDriver[];
@@ -39,6 +42,8 @@ export type Timeline = {
   /** gaps[L][i] = order[L][i]'s gap to the leader in seconds, null when lapped or unknown. */
   gaps: (number | null)[][];
   pits: { t: number; lap: number; d: number; lane: number | null; stop: number | null }[];
+  /** On-track passes that stuck: `by` took position `pos` from `on`. */
+  passes: { t: number; by: number; on: number; pos: number }[];
   bests: { t: number; lap: number; d: number; s: number }[];
   neutral: { t: number; lap: number; kind: 'SC' | 'VSC' | 'RED' }[];
   /** [red flag, restart] pairs - picks open across one are void. */
@@ -56,7 +61,7 @@ const PARKED = 120;
 
 export function buildTimeline(rows: {
   session: any; drivers: any[]; laps: any[]; pit: any[]; race_control: any[];
-  position: any[]; intervals: any[]; session_result: any[]; meeting?: string | null;
+  position: any[]; intervals: any[]; session_result: any[]; overtakes?: any[]; meeting?: string | null;
 }): Timeline {
   const s = rows.session || {};
   const drivers: TLDriver[] = (rows.drivers || []).map((d) => ({
@@ -157,6 +162,30 @@ export function buildTimeline(rows: {
   })).filter((p) => Number.isFinite(p.t) && !(p.lane != null && p.lane > PARKED) && !stopped(p.t))
     .sort((a, b) => a.t - b.t);
 
+  /* 🔴 OPENF1'S OVERTAKES ARE NOT ALL PASSES. Monza 2026 has 334 of them, and
+     measured against the same race: 25 fall within a minute of a stop by one
+     of the two cars (everybody "passes" LAW while LAW is in the pit lane), and
+     one pair swaps 17 times - PIA past HAM 9, HAM past PIA 8 - which is the
+     timing loops, not the race. So a pass counts only if no stop by either car
+     is near it, the race is not stopped, and the passer is still ahead of the
+     passed car on the timing screen at the next lap end. */
+  /* A pit row's time is the car LEAVING the lane, not entering it: LAW's
+     Monza stop reads 13:56:37, 28 s into his out-lap, and the raw feed has
+     cars "passing" him from 59 s before it. So the window runs back the lane
+     time plus half a minute, and half a minute on. */
+  const nearStop = (d: number, t: number) => pits.some((p) => p.d === d
+    && t >= p.t - ((p.lane ?? 30) + 30) * 1000 && t <= p.t + 30000);
+  const passes: Timeline['passes'] = [];
+  for (const o of (rows.overtakes || []).slice().sort((a, b) => ms(a.date) - ms(b.date))) {
+    const t = ms(o.date), by = Number(o.overtaking_driver_number), on = Number(o.overtaken_driver_number);
+    if (!(t > ends[0] && t <= ends[laps]) || stopped(t) || nearStop(by, t) || nearStop(on, t)) continue;
+    let L = 0;
+    while (L < laps && ends[L] < t + GRACE) L++;
+    const ord = order[L], i = ord.indexOf(by), j = ord.indexOf(on);
+    if (i < 0 || j < 0 || i > j) continue;
+    passes.push({ t, by, on, pos: Number(o.position) || 0 });
+  }
+
   const bests: Timeline['bests'] = [];
   let best = Infinity;
   for (const x of lapEnds.filter((x) => x.s != null).sort((a, b) => a.t - b.t)) {
@@ -164,19 +193,21 @@ export function buildTimeline(rows: {
   }
 
   return {
-    v: 1, session: Number(s.session_key) || 0,
+    v: 2, session: Number(s.session_key) || 0,
     meeting: rows.meeting || String(s.country_name || s.location || ''),
     circuit: s.circuit_short_name || null, date: s.date_start || null,
-    laps, drivers, ends, order, gaps, pits, bests, neutral, stops, result, retired
+    laps, drivers, ends, order, gaps, pits, passes, bests, neutral, stops, result, retired
   };
 }
 
 /* ---- calling it ---- */
 
-export type LiveKind = 'pitNext' | 'fastestNext' | 'neutral10' | 'leader10' | 'gap5';
+export type LiveKind = 'pitNext' | 'undercut' | 'fastestNext' | 'passNext' | 'pass5' | 'neutral10' | 'leader10' | 'gap5';
 /** What each call scores, on the card before the tap. A driver out of twenty
  *  is worth more than a yes or a no. */
-export const LIVE_POINTS: Record<LiveKind, number> = { pitNext: 3, fastestNext: 3, neutral10: 1, leader10: 1, gap5: 1 };
+export const LIVE_POINTS: Record<LiveKind, number> = {
+  pitNext: 3, undercut: 1, fastestNext: 3, passNext: 3, pass5: 1, neutral10: 1, leader10: 1, gap5: 1
+};
 export type LivePick = { kind: LiveKind; lap: number; choice: string };
 export type Offer = {
   kind: LiveKind; lap: number; q: string; note: string | null;
@@ -202,16 +233,38 @@ export function bestAt(tl: Timeline, t: number) {
   return b;
 }
 
-/** The pair to ask about: the first two adjacent cars in the top ten between
- *  one and three seconds apart - close enough that a second is a real question. */
-function pairAt(tl: Timeline, L: number): [number, number, number] | null {
+/** Adjacent cars in the top ten whose gap falls in [lo, hi] seconds - the
+ *  first such pair, as [ahead, behind, gap]. */
+function pairIn(tl: Timeline, L: number, lo: number, hi: number): [number, number, number] | null {
   const o = tl.order[L], g = tl.gaps[L];
   for (let i = 1; i < Math.min(o.length, 10); i++) {
     const a = g[i - 1], b = g[i];
     if (a == null || b == null) continue;
     const gap = b - a;
-    /* From 1.2, not 1: "Now 1.0 s - within 1 s?" is a question a rounding answers. */
-    if (gap >= 1.2 && gap <= 3) return [o[i - 1], o[i], gap];
+    if (gap >= lo && gap <= hi) return [o[i - 1], o[i], gap];
+  }
+  return null;
+}
+/* The gap call asks about 1.2 to 3 s - from 1.2, not 1, because "Now 1.0 s -
+   within 1 s?" is a question a rounding answers. The pass call asks about a
+   car already inside a second, where a pass is actually on. */
+const gapPair = (tl: Timeline, L: number) => pairIn(tl, L, 1.2, 3);
+const passPair = (tl: Timeline, L: number) => pairIn(tl, L, 0, 1);
+
+/** The undercut on offer at lap L: a car that stopped during lap L from
+ *  within 3.5 s behind a car that has not stopped this lap. */
+function undercutAt(tl: Timeline, L: number): { d: number; r: number; t: number } | null {
+  if (L < 1) return null;
+  const prev = tl.order[L - 1], g = tl.gaps[L - 1];
+  for (const p of tl.pits) {
+    if (p.t <= tl.ends[L - 1] || p.t > tl.ends[L]) continue;
+    const i = prev.indexOf(p.d);
+    if (i < 1) continue;
+    const r = prev[i - 1];
+    const gap = g[i] != null && g[i - 1] != null ? (g[i] as number) - (g[i - 1] as number) : null;
+    if (gap == null || gap > 3.5) continue;
+    if (tl.pits.some((x) => x.d === r && x.t > tl.ends[L - 1] && x.t <= p.t)) continue;
+    return { d: p.d, r, t: p.t };
   }
   return null;
 }
@@ -226,11 +279,25 @@ export function offers(tl: Timeline, L: number): Offer[] {
     out.push({ kind: 'pitNext', lap: L, q: 'Who pits next?', note: 'No stop before the flag is void.',
       options: drv, points: LIVE_POINTS.pitNext, by: null });
   }
+  const u = undercutAt(tl, L);
+  if (u) {
+    out.push({ kind: 'undercut', lap: L, q: 'Undercut: ' + acr(tl, u.d) + ' stopped behind ' + acr(tl, u.r) + '. Ahead once ' + acr(tl, u.r) + ' stops?',
+      note: 'If ' + acr(tl, u.r) + ' does not stop, it is void.', options: yn, points: LIVE_POINTS.undercut, by: null });
+  }
   const b = bestAt(tl, tl.ends[L]);
   if (b && L >= 1) {
     out.push({ kind: 'fastestNext', lap: L, q: 'Who sets the next fastest lap?',
       note: 'To beat: ' + acr(tl, b.d) + ' ' + lapTime(b.s) + ' (lap ' + b.lap + ')',
       options: [...drv, ['none', 'Nobody beats it']], points: LIVE_POINTS.fastestNext, by: null });
+  }
+  if (L >= 1 && running.length) {
+    out.push({ kind: 'passNext', lap: L, q: 'Who makes the next pass in the top ten?',
+      note: 'On track - places won in the pits do not count.', options: drv, points: LIVE_POINTS.passNext, by: null });
+  }
+  const pp = L >= 1 && L + 5 <= tl.laps ? passPair(tl, L) : null;
+  if (pp) {
+    out.push({ kind: 'pass5', lap: L, q: 'Does ' + acr(tl, pp[1]) + ' pass ' + acr(tl, pp[0]) + ' by lap ' + (L + 5) + '?',
+      note: 'Now ' + pp[2].toFixed(1) + ' s behind. A stop by either is void.', options: yn, points: LIVE_POINTS.pass5, by: L + 5 });
   }
   if (L + 10 <= tl.laps) {
     out.push({ kind: 'neutral10', lap: L, q: 'Safety car, VSC or red flag by lap ' + (L + 10) + '?',
@@ -240,7 +307,7 @@ export function offers(tl: Timeline, L: number): Offer[] {
     out.push({ kind: 'leader10', lap: L, q: 'Does ' + acr(tl, running[0]) + ' still lead after lap ' + (L + 10) + '?',
       note: null, options: yn, points: LIVE_POINTS.leader10, by: L + 10 });
   }
-  const pair = L >= 1 && L + 5 <= tl.laps ? pairAt(tl, L) : null;
+  const pair = L >= 1 && L + 5 <= tl.laps ? gapPair(tl, L) : null;
   if (pair) {
     out.push({ kind: 'gap5', lap: L, q: 'After lap ' + (L + 5) + ', is ' + acr(tl, pair[1]) + ' within 1 s of ' + acr(tl, pair[0]) + '?',
       note: 'Now ' + pair[2].toFixed(1) + ' s', options: yn, points: LIVE_POINTS.gap5, by: L + 5 });
@@ -259,6 +326,7 @@ export function settle(tl: Timeline, pick: LivePick, nowLap: number): Settled {
     ({ state: hit ? 'hit' : 'miss', points: hit ? pts : 0, answer, at: lapOf(tl, t) });
   const redIn = (to: number) => tl.stops.find(([a]) => a > from && a <= to);
   const voided = (t: number, why: string): Settled => ({ state: 'void', points: 0, answer: null, at: lapOf(tl, t), why });
+  const passes = tl.passes || [];
 
   /* The moment the pick would settle, or Infinity if the race has not got there. */
   let decided: Settled | null = null, when = Infinity;
@@ -267,10 +335,39 @@ export function settle(tl: Timeline, pick: LivePick, nowLap: number): Settled {
     const p = tl.pits.find((x) => x.t > from);
     if (p) { when = p.t; decided = done(String(p.d) === pick.choice, acr(tl, p.d), p.t); }
     else { when = tl.ends[tl.laps]; decided = voided(when, 'No stop before the flag'); }
+  } else if (pick.kind === 'undercut') {
+    const u = undercutAt(tl, pick.lap);
+    const rp = u ? tl.pits.find((x) => x.d === u.r && x.t > u.t) : null;
+    if (!u) { when = from; decided = voided(from, 'No undercut to settle'); }
+    else if (!rp) { when = tl.ends[tl.laps]; decided = voided(when, acr(tl, u.r) + ' did not stop'); }
+    else {
+      const L2 = Math.min(lapOf(tl, rp.t) + 1, tl.laps);
+      when = tl.ends[L2];
+      const i = tl.order[L2].indexOf(u.d), j = tl.order[L2].indexOf(u.r);
+      if (i < 0 || j < 0) decided = voided(when, 'A car is out');
+      else decided = done((i < j) === (pick.choice === 'yes'),
+        i < j ? acr(tl, u.d) + ' came out ahead' : acr(tl, u.r) + ' stayed ahead', when);
+    }
   } else if (pick.kind === 'fastestNext') {
     const b = tl.bests.find((x) => x.t > from);
     if (b) { when = b.t; decided = done(String(b.d) === pick.choice, acr(tl, b.d) + ' ' + lapTime(b.s), b.t); }
     else { when = tl.ends[tl.laps]; decided = done(pick.choice === 'none', 'Nobody', when); }
+  } else if (pick.kind === 'passNext') {
+    const p = passes.find((x) => x.t > from && x.pos <= 10);
+    if (p) { when = p.t; decided = done(String(p.by) === pick.choice, acr(tl, p.by) + ' past ' + acr(tl, p.on), p.t); }
+    else { when = tl.ends[tl.laps]; decided = voided(when, 'No pass before the flag'); }
+  } else if (pick.kind === 'pass5') {
+    const pair = passPair(tl, pick.lap);
+    const end = tl.ends[Math.min(pick.lap + 5, tl.laps)];
+    if (!pair) { when = end; decided = voided(end, 'No pair to settle'); }
+    else {
+      const [ahead, behind] = pair;
+      const p = passes.find((x) => x.t > from && x.t <= end && x.by === behind && x.on === ahead);
+      const stop = tl.pits.find((x) => (x.d === ahead || x.d === behind) && x.t > from && x.t <= end);
+      if (stop && (!p || stop.t < p.t)) { when = stop.t; decided = voided(stop.t, 'A stop decided it'); }
+      else if (p) { when = p.t; decided = done(pick.choice === 'yes', acr(tl, behind) + ' passed', p.t); }
+      else { when = end; decided = done(pick.choice === 'no', 'No pass', end); }
+    }
   } else if (pick.kind === 'neutral10') {
     const end = tl.ends[Math.min(pick.lap + 10, tl.laps)];
     const n = tl.neutral.find((x) => x.t > from && x.t <= end);
@@ -284,7 +381,7 @@ export function settle(tl: Timeline, pick: LivePick, nowLap: number): Settled {
     when = tl.ends[L2];
     decided = done((was === now) === (pick.choice === 'yes'), acr(tl, now) + ' leads', when);
   } else if (pick.kind === 'gap5') {
-    const pair = pairAt(tl, pick.lap);
+    const pair = gapPair(tl, pick.lap);
     const L2 = Math.min(pick.lap + 5, tl.laps);
     when = tl.ends[L2];
     if (!pair) decided = voided(when, 'No pair to settle');

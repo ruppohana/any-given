@@ -32,7 +32,9 @@ const isRace = (s: any) => s && (s.session_name === 'Race' || s.session_name ===
 export async function buildReplay(env: any, key: number, f: typeof fetch = fetch, now = Date.now(), gap = 400) {
   const kvKey = `f1:replay:${key}`;
   const hit = await env.LIVE.get(kvKey);
-  if (hit) { try { return JSON.parse(hit); } catch { /* rebuild */ } }
+  /* A timeline from an older build lacks what the newer calls read (v2 added
+     passes), so it is rebuilt, not served. */
+  if (hit) { try { const c = JSON.parse(hit); if (c && c.v === 2) return c; } catch { /* rebuild */ } }
 
   const [session] = await get('sessions', `session_key=${key}`, f);
   if (!isRace(session)) return null;
@@ -40,7 +42,7 @@ export async function buildReplay(env: any, key: number, f: typeof fetch = fetch
   await pause(gap);
   const [meeting] = await get('meetings', `meeting_key=${session.meeting_key}`, f);
   const rows: any = { session, meeting: meeting?.meeting_name || null };
-  for (const ep of ['drivers', 'laps', 'pit', 'race_control', 'position', 'intervals', 'session_result']) {
+  for (const ep of ['drivers', 'laps', 'pit', 'race_control', 'position', 'intervals', 'session_result', 'overtakes']) {
     await pause(gap);
     rows[ep] = await get(ep, `session_key=${key}`, f);
   }

@@ -1,41 +1,54 @@
-/* F1 LIVE PICKS - built, settled and replayed off a real race.
+/* F1 LIVE PICKS - built, settled and replayed off real races.
  *
  * fixtures/f1/openf1-11361/        the 2026 Italian GP, every OpenF1 endpoint
  *                                  the timeline reads, captured 2026-09-12
+ * fixtures/f1/openf1-11342/        the 2026 Hungarian GP (44 stops - the
+ *                                  undercut race), captured the same day
  * fixtures/f1/openf1-2026-race-sessions.json   OpenF1's 2026 race list, same day
- * fixtures/f1/italian-gp-2026-race-core.json   ESPN's documents for the same race
+ * fixtures/f1/italian-gp-2026-race-core.json   ESPN's documents for Monza
  *
  * Nothing here is written by hand: the one cross-check is two sources agreeing
  * (OpenF1's lap times and ESPN's fastest-lap stat name the same driver).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { buildTimeline, offers, settle, scoreLive, lapOf, LIVE_POINTS } from '../src/lib/f1-live.ts';
 import { buildReplay, listReplays } from '../src/f1-replay.ts';
 import { parseF1, raceExtras } from '../src/lib/f1.ts';
 
 const at = (p) => new URL('../fixtures/f1/' + p, import.meta.url);
-const j = (n) => JSON.parse(readFileSync(at('openf1-11361/' + n + '.json'), 'utf8'));
-const ROWS = {
-  session: j('session')[0], drivers: j('drivers'), laps: j('laps'), pit: j('pit'),
-  race_control: j('race_control'), position: j('position'), session_result: j('session_result'),
-  intervals: JSON.parse(gunzipSync(readFileSync(at('openf1-11361/intervals.json.gz')))),
-  meeting: j('meetings')[0].meeting_name
+/* A file over 500 KB was captured gzipped. */
+const race = (key) => {
+  const j = (n) => {
+    const plain = at(`openf1-${key}/${n}.json`);
+    return existsSync(plain) ? JSON.parse(readFileSync(plain, 'utf8'))
+      : JSON.parse(gunzipSync(readFileSync(at(`openf1-${key}/${n}.json.gz`))));
+  };
+  return {
+    session: j('session')[0], drivers: j('drivers'), laps: j('laps'), pit: j('pit'),
+    race_control: j('race_control'), position: j('position'), session_result: j('session_result'),
+    intervals: j('intervals'), overtakes: j('overtakes'), meetings: j('meetings'), meeting: j('meetings')[0].meeting_name
+  };
 };
+const ROWS = race(11361);
 const TL = buildTimeline(ROWS);
-const n = (acr) => TL.drivers.find((d) => d.acr === acr).n;
+const HU_ROWS = race(11342);
+const HU = buildTimeline(HU_ROWS);
+const numOf = (tl) => (acr) => tl.drivers.find((d) => d.acr === acr).n;
+const n = numOf(TL), h = numOf(HU);
 
 test('Monza 2026: 53 laps in time order, and the order at the flag is the classification', () => {
   assert.equal(TL.laps, 53);
+  assert.equal(TL.v, 2);
   assert.equal(TL.meeting, 'Italian Grand Prix');
   assert.ok(TL.ends.every((t, i) => i === 0 || t >= TL.ends[i - 1]), 'lap ends never go backwards');
   assert.deepEqual(TL.order[53].slice(0, 3), TL.result.slice(0, 3));
   assert.deepEqual(TL.result.slice(0, 3), [n('ANT'), n('RUS'), n('VER')]);
   const flag = ROWS.race_control.find((m) => m.flag === 'CHEQUERED');
   assert.ok(Math.abs(Date.parse(flag.date) - TL.ends[53]) < 2000, 'the leader\'s last lap ends at the chequered flag');
-  assert.ok(JSON.stringify(TL).length < 30000, 'the phone gets a few KB, not the 3 MB of intervals');
+  assert.ok(JSON.stringify(TL).length < 40000, 'the phone gets a few KB, not the 3 MB of intervals');
 });
 
 test('the fastest lap agrees with ESPN: Antonelli, 1:23.504 on the last lap', () => {
@@ -62,9 +75,24 @@ test('"CHEQUERED FLAG" is not a red flag', () => {
   assert.ok(TL.stops.every(([a, b]) => Number.isFinite(a) && Number.isFinite(b)), 'no Infinity - it would reach the phone as null');
 });
 
+test('OpenF1\'s overtakes are cleaned: no pass beside a stop, and every pass sticks to the next lap end', () => {
+  assert.equal(ROWS.overtakes.length, 334);
+  assert.ok(TL.passes.length < ROWS.overtakes.length);
+  const byLaw = ROWS.overtakes.filter((o) => o.overtaken_driver_number === n('LAW'));
+  const lawStop = TL.pits.find((p) => p.d === n('LAW'));
+  assert.ok(byLaw.some((o) => Math.abs(Date.parse(o.date) - lawStop.t) < 60000), 'the raw feed has cars "passing" LAW in the pit lane');
+  assert.equal(TL.passes.some((p) => p.on === n('LAW') && Math.abs(p.t - lawStop.t) < 60000), false, 'the timeline does not');
+  for (const p of TL.passes) {
+    let L = 0;
+    while (L < TL.laps && TL.ends[L] < p.t + 1000) L++;
+    assert.ok(TL.order[L].indexOf(p.by) < TL.order[L].indexOf(p.on));
+  }
+});
+
 test('what is on offer: the leader named, a close pair asked about, nothing past the flag', () => {
   const o20 = offers(TL, 20);
-  assert.deepEqual(o20.map((o) => o.kind), ['pitNext', 'fastestNext', 'neutral10', 'leader10', 'gap5']);
+  const kinds = o20.map((o) => o.kind);
+  for (const k of ['pitNext', 'fastestNext', 'passNext', 'neutral10', 'leader10', 'gap5']) assert.ok(kinds.includes(k), k);
   const leader = TL.drivers.find((d) => d.n === TL.order[20][0]).acr;
   assert.ok(o20.find((o) => o.kind === 'leader10').q.includes(leader));
   assert.ok(o20.every((o) => o.points === LIVE_POINTS[o.kind]), 'the card says what it is worth');
@@ -86,6 +114,8 @@ test('a red flag voids the calls open across it - except the safety-car call, wh
   assert.equal(pit.points, 0);
   const sc = settle(TL, { kind: 'neutral10', lap: 1, choice: 'yes' }, 10);
   assert.deepEqual([sc.state, sc.answer, sc.at], ['hit', 'SC', 3]);
+  const pass = settle(TL, { kind: 'pass5', lap: 2, choice: 'yes' }, 10);
+  assert.equal(pass.state, 'void', 'the pass call open across the lap-3 stoppage');
 });
 
 test('a whole replay adds up', () => {
@@ -105,6 +135,56 @@ test('a whole replay adds up', () => {
   assert.equal(end.total, 9);
 });
 
+/* ---- the undercut and the passes, on Hungary ---- */
+
+test('Hungary 2026: 70 laps, 44 stops, the classification at the flag', () => {
+  assert.equal(HU.laps, 70);
+  assert.equal(HU.meeting, 'Hungarian Grand Prix');
+  assert.equal(HU.pits.length, 44);
+  assert.deepEqual(HU.order[70].slice(0, 3), HU.result.slice(0, 3));
+});
+
+test('the undercut is offered on the lap a car stops from close behind, and settles once the rival stops', () => {
+  const o = offers(HU, 9).find((x) => x.kind === 'undercut');
+  assert.ok(o, 'STR stopped behind SAI on lap 9');
+  assert.equal(o.q, 'Undercut: STR stopped behind SAI. Ahead once SAI stops?');
+  assert.equal(o.points, LIVE_POINTS.undercut);
+  const pick = { kind: 'undercut', lap: 9, choice: 'yes' };
+  const saiStop = HU.pits.find((p) => p.d === h('SAI') && p.t > HU.ends[9]);
+  const L2 = lapOf(HU, saiStop.t) + 1;
+  assert.equal(settle(HU, pick, L2 - 1).state, 'open', 'not before SAI has stopped and run a lap');
+  assert.deepEqual([settle(HU, pick, L2).state, settle(HU, pick, L2).answer, settle(HU, pick, L2).at], ['hit', 'STR came out ahead', 20]);
+  const hv = settle(HU, { kind: 'undercut', lap: 14, choice: 'yes' }, 70);
+  assert.deepEqual([hv.state, hv.answer], ['miss', 'VER stayed ahead'], 'HAM\'s undercut on VER failed');
+  const none = settle(HU, { kind: 'undercut', lap: 40, choice: 'no' }, 70);
+  assert.deepEqual([none.state, none.why], ['void', 'LIN did not stop']);
+  assert.equal(offers(HU, 8).some((x) => x.kind === 'undercut'), false, 'no stop on lap 8, no undercut card');
+});
+
+test('next pass in the top ten: the first clean pass after the call, and only on track', () => {
+  const r = settle(TL, { kind: 'passNext', lap: 15, choice: String(n('HAM')) }, 53);
+  assert.deepEqual([r.state, r.points, r.answer, r.at], ['hit', 3, 'HAM past PIA', 16]);
+  const p = TL.passes.find((x) => x.t > TL.ends[15] && x.pos <= 10);
+  assert.equal(settle(TL, { kind: 'passNext', lap: 15, choice: String(n('HAM')) }, lapOf(TL, p.t) - 1).state, 'open');
+});
+
+test('does X pass Y: a car inside a second, settled by a pass, by no pass, or voided by a stop', () => {
+  const o = offers(HU, 1).find((x) => x.kind === 'pass5');
+  assert.equal(o.q, 'Does NOR pass PIA by lap 6?');
+  assert.deepEqual([settle(HU, { kind: 'pass5', lap: 1, choice: 'no' }, 6).state, settle(HU, { kind: 'pass5', lap: 1, choice: 'no' }, 6).answer], ['hit', 'No pass']);
+  assert.equal(settle(HU, { kind: 'pass5', lap: 1, choice: 'no' }, 5).state, 'open', 'no-pass is only known at lap 6');
+  const hit = settle(TL, { kind: 'pass5', lap: 1, choice: 'yes' }, 53);
+  assert.deepEqual([hit.state, hit.answer], ['hit', 'RUS passed']);
+  let voidedByStop = null;
+  for (let L = 1; L < HU.laps - 5 && !voidedByStop; L++) {
+    if (!offers(HU, L).some((x) => x.kind === 'pass5')) continue;
+    const r = settle(HU, { kind: 'pass5', lap: L, choice: 'yes' }, HU.laps);
+    if (r.why === 'A stop decided it') voidedByStop = r;
+  }
+  assert.ok(voidedByStop, 'a pit stop inside the window voids the pass call');
+  assert.equal(voidedByStop.points, 0);
+});
+
 /* ---- the Worker side: fetch once, keep forever, never freeze an unfinished race ---- */
 
 const SESSIONS = JSON.parse(readFileSync(at('openf1-2026-race-sessions.json'), 'utf8'));
@@ -117,8 +197,6 @@ function fakeOpenF1() {
     const q = url.searchParams;
     let body;
     if (ep === 'sessions') body = q.get('session_key') ? [ROWS.session] : SESSIONS;
-    else if (ep === 'meetings') body = j('meetings');
-    else if (ep === 'intervals') body = ROWS.intervals;
     else body = ROWS[ep];
     return new Response(JSON.stringify(body || []), { status: body ? 200 : 404 });
   };
@@ -138,19 +216,32 @@ function fakeKV() {
     }
   };
 }
+const AFTER = Date.parse(ROWS.session.date_end) + 2 * 60 * 60 * 1000;
 
 test('the Worker builds a race once from OpenF1, keeps it with no expiry, and serves it after', async () => {
   const { f, calls } = fakeOpenF1();
   const env = { LIVE: fakeKV() };
-  const after = Date.parse(ROWS.session.date_end) + 2 * 60 * 60 * 1000;
-  const tl = await buildReplay(env, 11361, f, after, 0);
+  const tl = await buildReplay(env, 11361, f, AFTER, 0);
   assert.equal(tl.laps, 53);
   assert.equal(tl.meeting, 'Italian Grand Prix');
-  assert.equal(calls.length, 9);
+  assert.equal(tl.passes.length, TL.passes.length, 'overtakes fetched');
+  assert.equal(calls.length, 10);
   assert.equal(env.LIVE.m.get('f1:replay:11361').o, undefined, 'a finished race never changes - no TTL');
-  const again = await buildReplay(env, 11361, f, after, 0);
-  assert.equal(calls.length, 9, 'the second request is KV, not OpenF1');
+  const again = await buildReplay(env, 11361, f, AFTER, 0);
+  assert.equal(calls.length, 10, 'the second request is KV, not OpenF1');
   assert.deepEqual(again.result, tl.result);
+});
+
+test('a timeline from the older build is rebuilt, not served without its passes', async () => {
+  const { f, calls } = fakeOpenF1();
+  const env = { LIVE: fakeKV() };
+  const old = { ...TL, v: 1 };
+  delete old.passes;
+  await env.LIVE.put('f1:replay:11361', JSON.stringify(old));
+  const tl = await buildReplay(env, 11361, f, AFTER, 0);
+  assert.equal(calls.length, 10);
+  assert.equal(tl.v, 2);
+  assert.ok(Array.isArray(tl.passes));
 });
 
 test('a race still inside its hour after the flag is not frozen', async () => {
