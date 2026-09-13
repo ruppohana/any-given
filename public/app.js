@@ -116,11 +116,32 @@ function ensureCss(name) {
   document.head.appendChild(l);
 }
 
+/* 🔴 100% POOL. Jason, 2026-09-12: "100% pool" - after the money research found
+ * nothing that pays for the betting side short of sportsbook referrals
+ * (Swing Route/Any Given/wiki/decisions/any-given-is-100-percent-pool-2026-09-12.md).
+ * The Games (every market, parlays in Marbles), the live call board and F1 are
+ * HIDDEN, not deleted: their routes fall back to Home, Home offers only The
+ * Pools, the rules and settings drop the Marbles lines, and a phone still
+ * holding the betting side is moved to the pool. POOL_ONLY = false brings all
+ * of it back. Screens read it as globalThis.AG_POOL_ONLY, so a screen rendered
+ * without this shell - as every test does - is unchanged. */
+const POOL_ONLY = true;
+globalThis.AG_POOL_ONLY = POOL_ONLY;
+const BETTING_ROUTES = new Set(['allgames', 'buildparlay', 'f1', 'f1live', 'live', 'now', 'landed', 'missed',
+  'game', 'board', 'delay', 'cold', 'alerts', 'share']);
+if (POOL_ONLY) {
+  try {
+    const m = JSON.parse(localStorage.getItem('ag.mode') || 'null');
+    if (m && m !== 'pool') localStorage.setItem('ag.mode', JSON.stringify('pool'));
+  } catch { /* private mode */ }
+}
+
 function currentRoute() {
   /* 🔴 THE FALLBACK IS THE GAME, not the first row of the ROUTES table. An
    * unknown or empty hash used to land on the college slate, which is how the
    * real domain opened on a design surface instead of on the product. */
   const id = (location.hash || '#/home').replace(/^#\//, '');
+  if (POOL_ONLY && BETTING_ROUTES.has(id)) return ROUTES.find((r) => r.id === 'home') || ROUTES[0];
   return ROUTES.find((r) => r.id === id) || ROUTES.find((r) => r.id === 'home') || ROUTES[0];
 }
 

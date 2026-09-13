@@ -208,7 +208,7 @@ const RANKING_LABEL = { ap: 'the AP poll', cfp: 'the CFP rankings' };
  * Each entry: an anchor id, the question a person actually arrives with, a short
  * heading for the card, and a body builder.
  */
-const SECTIONS = [
+const ALL_SECTIONS = [
   { id: 'void',    q: 'My game was cancelled. What happens to my pick?', h: 'When a game does not happen', build: sVoid },
   { id: 'scoring', q: 'How many points is a pick worth?',                h: 'How the pool scores',          build: sScoring },
   { id: 'ties',    q: 'Two of us finished level. Who wins?',             h: 'How a tie breaks',             build: sTies },
@@ -219,6 +219,11 @@ const SECTIONS = [
   { id: 'delay',   q: 'Why is the app behind my television?',            h: 'Behind on purpose',            build: sDelay },
   { id: 'age',     q: 'Is this gambling?',                               h: '18+, and what that is not',    build: sAge }
 ];
+/* 🔴 100% POOL (2026-09-12): the Marbles, price, delay and gambling questions
+ * describe the hidden betting side, so the pool-only shell asks only the pool's
+ * four. app.js sets the flag before any screen module loads. */
+const POOL_SECTIONS = new Set(['void', 'scoring', 'ties', 'scope']);
+const SECTIONS = globalThis.AG_POOL_ONLY === true ? ALL_SECTIONS.filter((s) => POOL_SECTIONS.has(s.id)) : ALL_SECTIONS;
 
 /* -------------------------------------------------------------------- 1 VOID */
 
@@ -275,7 +280,8 @@ function sVoid(data, opts) {
     ' legs survive, the parlay itself did not happen either — the same rule ' +
     'again, one level up. It is not a loss.'));
 
-  box.appendChild(para('s6-p',
+  /* The live layer's half of the rule - hidden with the live layer (app.js, 100% POOL). */
+  if (globalThis.AG_POOL_ONLY !== true) box.appendChild(para('s6-p',
     'A snap that turns out to be a kick, a penalty or anything other than a run ' +
     'or a pass is the same idea in the live layer: the offense never chose, so ' +
     'your stake comes back untouched.'));

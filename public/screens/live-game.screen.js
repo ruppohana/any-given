@@ -3831,7 +3831,9 @@ function modeCard(wrap, compact) {
     { id: 'allgames', h: 'The Games', b: 'Every game this week - bet it, parlay it, or open a live one and call it snap by snap. A price before every tap.' },
     { id: 'pool', h: 'The Pools', b: 'People you know, a week at a time, scored in points. Nothing staked.' }
   ];
-  for (const o of opts) {
+  /* 🔴 100% POOL (2026-09-12): The Games stays in the list and off the screen -
+   * app.js says why, and flipping POOL_ONLY there brings the door back. */
+  for (const o of opts.filter((x) => globalThis.AG_POOL_ONLY !== true || x.id === 'pool')) {
     const b = el('button', 'lg-mode');
     /* Each door carries its mark - Jason, 2026-09-11: "we have live and group,
      * come up with one for all games." Only on the front door; the compact hub

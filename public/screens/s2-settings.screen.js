@@ -677,7 +677,8 @@ export function render(root, data, state) {
   root.appendChild(themeSection(data));
   root.appendChild(densitySection(data));
   root.appendChild(alertsSection(data));
-  root.appendChild(balanceSection());
+  /* 100% POOL (2026-09-12): no balance in a pool-only app - app.js. */
+  if (globalThis.AG_POOL_ONLY !== true) root.appendChild(balanceSection());
   root.appendChild(homeScreenSection());
   root.appendChild(rulesSection());
 }
