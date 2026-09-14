@@ -226,6 +226,11 @@ export type VoidReason =
 export function resolveGame(game: SlateGame, ats: boolean): GameOutcome {
   if (game.status === 'void') return 'void';
   if (game.status !== 'final') return null;
+  /* A fight or a cricket match has no score to read: ESPN's winner flag decides, and a
+     finish with no winner (a draw, a no contest, no result) is the one void path. */
+  if (game.sport === 'ufc' || game.sport === 'cricket') {
+    return game.winner === 'home' || game.winner === 'away' ? game.winner : 'void';
+  }
   if (game.homeScore === null || game.awayScore === null) return null;
 
   /* 🔴 SOCCER: A LEVEL FINAL IS A DRAW, A RESULT SOMEBODY CAN PICK - not the

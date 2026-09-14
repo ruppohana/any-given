@@ -18,6 +18,124 @@
  */
 import { DAY_SPORTS, CONF_SHORT, NBA_CONF, dayOf, addDays, isSoccerDay } from './lib/day.ts';
 
+/* 🔴 WINNER-FLAG DAYS - UFC and cricket (Jason, 2026-09-13: "do the ufc and cricket next").
+ * Neither has a score the pool can grade: a fight has none, and a cricket score is text
+ * ("151/8 (20 ov, target 151)"). ESPN flags the winner on each side - a boolean for a
+ * fighter, the STRING "true"/"false" for a cricket side (read on the real feeds) - and
+ * the grade reads that flag (`game.winner`). A bout that ends with no winner (a draw, a
+ * no contest) and a match with no result are the one void path. Both return the same
+ * game shape as parseDay, so the slate draws them with the code it has. */
+
+/** One UFC card: every bout as a game. The fighter listed first (order 1) is "home" -
+ *  the red corner - and the bout locks at its card segment's start (prelims, main card). */
+export function parseUfcDay(payload: any, day: string): any[] {
+  const out: any[] = [];
+  for (const ev of payload?.events || []) {
+    const bouts = ev.competitions || [];
+    const starts = bouts.map((c: any) => Date.parse(c.date || c.startDate || ev.date)).filter((n: number) => Number.isFinite(n));
+    const mainAt = starts.length ? Math.max(...starts) : NaN;
+    for (const comp of bouts) {
+      const cs = comp.competitors || [];
+      const h = cs.find((c: any) => Number(c.order) === 1) || cs[0];
+      const a = cs.find((c: any) => Number(c.order) === 2) || cs[1];
+      if (!h || !a || h === a) continue;
+      const kickoff = Date.parse(comp.date || comp.startDate || ev.date);
+      if (!Number.isFinite(kickoff)) continue;
+      const statusName = String(comp.status?.type?.name || 'STATUS_SCHEDULED');
+      let status = statusOf(statusName, comp.status?.type?.completed === true);
+      const winner = h.winner === true ? 'home' : a.winner === true ? 'away' : null;
+      if (status === 'final' && !winner) status = 'void';
+      const fighter = (c: any) => {
+        const at = c.athlete || {};
+        const nm = String(at.displayName || at.fullName || '');
+        const last = nm.split(' ').slice(-1)[0] || nm;
+        return {
+          id: 'f' + String(c.id), abbrev: last.slice(0, 3).toUpperCase(), name: nm, short: last,
+          primary: null, secondary: null, rank: null, conference: null,
+          /* The fighter's country flag stands in for a crest. */
+          logo: typeof at.flag?.href === 'string' ? at.flag.href : null, country: at.flag?.alt || null,
+          record: (c.records || []).find((r: any) => r?.type === 'total')?.summary || null, form: null
+        };
+      };
+      const home = fighter(h), away = fighter(a);
+      out.push({
+        id: String(comp.id), sport: 'ufc', day,
+        season: Number(ev.season?.year) || null, week: 0, kickoffUtc: kickoff,
+        tbd: comp.timeValid === false,
+        name: `${home.name} vs. ${away.name}`, shortName: `${home.short} vs. ${away.short}`,
+        event: ev.name || null, weightClass: comp.type?.abbreviation || null,
+        card: kickoff >= mainAt ? 'Main card' : 'Prelims',
+        status, statusName, period: null, clock: null,
+        homeTeamId: home.id, awayTeamId: away.id, homeScore: null, awayScore: null,
+        spread: null, spreadProvider: null, total: null, moneylineHome: null, moneylineAway: null,
+        venue: comp.venue?.fullName || null, broadcast: null, neutral: true, lastMeeting: null,
+        teams: [home, away], rankHome: null, rankAway: null, conferences: [],
+        periodsHome: null, periodsAway: null, winner, penHome: null, penAway: null
+      });
+    }
+  }
+  return out.sort((x, y) => x.kickoffUtc - y.kickoffUtc);
+}
+
+/** One cricket competition's day. Limited-overs only - a five-day Test is not a day's
+ *  pick. Final with a winner, or void: "No result (abandoned with a toss)" (the real
+ *  CPL match of 2026-08-30) and any finish with no side flagged. */
+export function parseCricketDay(payload: any, day: string): any[] {
+  const out: any[] = [];
+  const league = payload?.leagues?.[0]?.name || null;
+  for (const ev of payload?.events || []) {
+    const comp = (ev.competitions || [])[0];
+    if (!comp) continue;
+    const cls = comp.class || {};
+    if (String(cls.generalClassId) === '1' || /test/i.test(String(cls.eventType || ''))) continue;
+    const cs = comp.competitors || [];
+    const h = cs.find((c: any) => c.homeAway === 'home') || cs[0];
+    const a = cs.find((c: any) => c.homeAway === 'away') || cs[1];
+    if (!h || !a || h === a) continue;
+    const kickoff = Date.parse(comp.date || ev.date);
+    if (!Number.isFinite(kickoff)) continue;
+    const st = ev.status?.type || comp.status?.type || {};
+    const state = String(st.state || 'pre');
+    const won = (c: any) => c.winner === true || c.winner === 'true';
+    const winner = won(h) ? 'home' : won(a) ? 'away' : null;
+    const status = state === 'post' ? (winner ? 'final' : 'void') : state === 'in' ? 'in_progress' : 'scheduled';
+    const side = (c: any) => {
+      const t = c.team || {};
+      return {
+        id: String(t.id), abbrev: t.abbreviation || '', name: t.displayName || '', short: t.name || t.displayName || '',
+        primary: col(t.color), secondary: col(t.alternateColor), rank: null, conference: null,
+        logo: typeof t.logo === 'string' ? t.logo : null, record: null, form: null
+      };
+    };
+    const home = side(h), away = side(a);
+    const started = status !== 'scheduled';
+    const text = (c: any) => (started && typeof c.score === 'string' && c.score.trim() ? c.score.trim() : null);
+    out.push({
+      id: String(ev.id), sport: 'cricket', day,
+      season: Number(ev.season?.year) || null, week: 0, kickoffUtc: kickoff,
+      tbd: comp.timeValid === false,
+      name: ev.name, shortName: ev.shortName, competition: league, format: cls.eventType || null,
+      status, statusName: String(st.description || st.detail || ''), period: null, clock: null,
+      /* The result line ESPN writes - "Tridents won by 2 wkts (0b rem)", "No result". */
+      summary: typeof ev.status?.summary === 'string' ? ev.status.summary : null,
+      homeTeamId: home.id, awayTeamId: away.id, homeScore: null, awayScore: null,
+      homeScoreText: text(h), awayScoreText: text(a),
+      spread: null, spreadProvider: null, total: null, moneylineHome: null, moneylineAway: null,
+      venue: comp.venue?.fullName || null, broadcast: null, neutral: !!comp.neutralSite, lastMeeting: null,
+      teams: [home, away], rankHome: null, rankAway: null, conferences: [],
+      periodsHome: null, periodsAway: null, winner, penHome: null, penAway: null
+    });
+  }
+  return out.sort((x, y) => x.kickoffUtc - y.kickoffUtc);
+}
+
+/** The day parser for a sport. */
+export function parseAnyDay(payload: any, sport: string, day: string): any[] {
+  if (sport === 'ufc') return parseUfcDay(payload, day);
+  if (sport === 'cricket') return parseCricketDay(payload, day);
+  return parseDay(payload, sport, day);
+}
+
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
   + ' (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
@@ -176,11 +294,23 @@ const DAY_TTL = 60 * 60 * 24 * 14;   // seconds - KV's unit, never milliseconds
 export async function captureDay(env: any, sport: string, day: string, fetchImpl: typeof fetch = fetch, now = Date.now()) {
   const cfg = DAY_SPORTS[sport];
   if (!cfg) throw new Error('not a day sport: ' + sport);
-  const url = `https://site.web.api.espn.com/apis/site/v2/sports/${cfg.path}/scoreboard`
-    + `?dates=${day}${cfg.groups ? '&groups=' + cfg.groups : ''}&limit=400`;
-  const res = await fetchImpl(url, { headers: { 'user-agent': UA, accept: 'application/json' } });
-  if (!res.ok) throw new Error(`espn ${res.status}`);
-  const games = parseDay(await res.json(), sport, day);
+  /* Cricket's day is gathered from every competition in season (DAY_SPORTS.cricket.
+     leagues); one that fails costs its own games, never the others. */
+  const paths = cfg.leagues ? cfg.leagues.map((id) => `${cfg.path}/${id}`) : [cfg.path];
+  const games: any[] = [];
+  let answered = 0, lastErr = '';
+  for (const path of paths) {
+    const url = `https://site.web.api.espn.com/apis/site/v2/sports/${path}/scoreboard`
+      + `?dates=${day}${cfg.groups ? '&groups=' + cfg.groups : ''}&limit=400`;
+    try {
+      const res = await fetchImpl(url, { headers: { 'user-agent': UA, accept: 'application/json' } });
+      if (!res.ok) { lastErr = `espn ${res.status}`; continue; }
+      answered++;
+      games.push(...parseAnyDay(await res.json(), sport, day));
+    } catch (e: any) { lastErr = String(e?.message || e); }
+  }
+  if (!answered) throw new Error(lastErr || 'espn: no answer');
+  games.sort((x, y) => x.kickoffUtc - y.kickoffUtc);
   const key = `day:${sport}:${day}`;
   if (!games.length) {
     try {

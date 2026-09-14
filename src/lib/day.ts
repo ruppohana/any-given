@@ -9,7 +9,7 @@
  * can never disagree about which day "today" is.
  */
 
-export const DAY_SPORTS: Record<string, { path: string; groups: string; label: string; periods: number }> = {
+export const DAY_SPORTS: Record<string, { path: string; groups: string; label: string; periods: number; leagues?: string[] }> = {
   /* groups=50 is Division I - without it ESPN returns a featured handful
      (15 of 92 games on 2026-03-07). Two halves. */
   'mens-college-basketball': { path: 'basketball/mens-college-basketball', groups: '50', label: 'College basketball', periods: 2 },
@@ -43,8 +43,28 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
   'mens-college-hockey': { path: 'hockey/mens-college-hockey', groups: '', label: 'College hockey', periods: 3 },
   /* Jason, 2026-09-13: "add women's college basketball too". groups=50 is Division I
      (72 games on 2026-03-07; without it ESPN returns 10). Four ten-minute quarters. */
-  'womens-college-basketball': { path: 'basketball/womens-college-basketball', groups: '50', label: "Women's college basketball", periods: 4 }
+  'womens-college-basketball': { path: 'basketball/womens-college-basketball', groups: '50', label: "Women's college basketball", periods: 4 },
+  /* 🔴 WINNER-FLAG SPORTS - Jason, 2026-09-13: "do the ufc and cricket next". Neither
+     is graded by a score: a fight has no score, and a cricket score is text ("151/8
+     (20 ov)"). ESPN flags the winner on each side, and a bout drawn or ruled no
+     contest, or a match with no result, has no winner - the one void path
+     (src/slate-day.ts parseUfcDay / parseCricketDay, src/lib/groups.ts gradeSql). */
+  /* A UFC day is its card: every bout, locked at its card segment's start. */
+  ufc: { path: 'mma/ufc', groups: '', label: 'UFC', periods: 3 },
+  /* Cricket has no one league: ESPN files each competition and each tour under its
+     own id, so a day is gathered from every one in season (checked 2026-09-13):
+     the Caribbean Premier League, the Asian Games, India in New Zealand, England
+     in Australia, the Women's Big Bash, New Zealand in Australia, England in South
+     Africa, the Big Bash, SA20 and the IPL. Limited-overs only - a five-day Test is
+     not a day's pick. */
+  cricket: { path: 'cricket', groups: '', label: 'Cricket', periods: 2,
+    leagues: ['8623', '22547', '24469', '24273', '21284', '24270', '24198', '8044', '21275', '8048'] }
 };
+
+/** A sport graded by ESPN's winner flag rather than by a score. */
+export function isWinnerDay(sport: unknown): boolean {
+  return sport === 'ufc' || sport === 'cricket';
+}
 
 /** The soccer day sports - src/lib/groups.ts isSoccerSport says the same. */
 export const SOCCER_DAY = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
@@ -127,6 +147,8 @@ export function dayClock(sport: string, period: number, clock: string | null, st
   if (statusName === 'STATUS_HALFTIME') return 'Halftime';
   /* A soccer clock counts UP and already says what it is - "67'", "45'+2'". */
   if (isSoccerDay(sport)) return clock || '';
+  /* A fight and a cricket innings have no game clock worth showing on a row. */
+  if (isWinnerDay(sport)) return '';
   const p = Number(period);
   if (!Number.isFinite(p) || p < 1) return '';
   const ORD = ['1st', '2nd', '3rd', '4th'];
