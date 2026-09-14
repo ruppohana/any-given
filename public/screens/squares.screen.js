@@ -538,7 +538,7 @@ async function reloadGrid(host, d, status, card) {
     const shown = Number(r.j.card) || 1;
     saveSheet(d.groupId, shown);
     /* Another sheet has its own limit and its own draw. */
-    if (shown !== was) { d.draft = null; d.confirmDraw = null; }
+    if (shown !== was) { d.draft = null; d.confirmDraw = null; d.lockedSettingsOpen = false; }
   }
   d.status = status || (r.ok ? null : { tone: 'err', text: sheetText(r, 'The sheet did not load.', d.sq && d.sq.maxCards) });
   draw(host, d, 'ready');
@@ -659,14 +659,17 @@ function drawReady(host, d) {
   if (d.status) st.dataset.tone = d.status.tone;
   host.appendChild(st);
 
-  /* The commissioner's settings: everything before the draw, the name after it. */
-  if (isCommish) host.appendChild(commishPanel(host, d, !locked));
-
   const m = gridModel(sq);
   const kicked = !(now() < Number(sq.lockAt));
   const priced = Number(sq.boxPrice) > 0;
+  /* The commissioner's settings sit behind one row under the sheet header, closed by
+     default, so the grid they came to see is on screen: everything before the draw, the
+     name after it. */
   host.appendChild(board(m, { mode: locked ? 'locked' : 'open', busy: d.busy || {}, onTap: (i) => tapCell(host, d, i),
-    sheet: sheetOf(sq) }));
+    sheet: sheetOf(sq), settings: isCommish ? sheetSettings(host, d, !locked) : null }));
+  /* The commissioner's main action, never behind the settings: directly under the grid,
+     while the sheet is undrawn and before kickoff. */
+  if (isCommish && !locked) host.appendChild(drawBlock(host, d));
   host.appendChild(el('p', 'sq-rules', !locked
     ? 'Tap an empty square to claim it; tap one of yours to let it go. Yours are filled in. The numbers are drawn at '
       + 'kickoff, or earlier when the commissioner draws this sheet.'
@@ -734,6 +737,7 @@ function board(m, opts) {
     hd.appendChild(el('p', 'sq-sheetmeta num', priceLine(o.sheet.boxPrice)));
     wrap.appendChild(hd);
   }
+  if (o.settings) wrap.appendChild(o.settings);
 
   const away = el('div', 'sq-axis sq-axis--away', m.away.name);
   wrap.appendChild(away);
@@ -822,6 +826,29 @@ function resultsBlock(sq) {
 
 /* ------------------------------------------------------ the commissioner */
 
+/** The commissioner's closed settings row: "Sheet settings · 5 marbles a square ·
+ *  25/25/25/25", "Sheet settings · Points only", or once the sheet is drawn (`open`
+ *  false) "Sheet settings · name only". */
+export function settingsLine(sq, open) {
+  if (open === false || (open === undefined && sq && sq.locked)) return 'Sheet settings · name only';
+  const n = Number(sq && sq.boxPrice) || 0;
+  if (!(n > 0)) return 'Sheet settings · Points only';
+  const split = sq && Array.isArray(sq.split) && sq.split.length === 4 ? sq.split : DEFAULT_SPLIT;
+  return 'Sheet settings · ' + priceLine(n) + ' · ' + split.join('/');
+}
+
+const SETTINGS_KEY = 'ag.sqSettings.';
+
+/** Whether the commissioner left a group's sheet settings open on this phone - closed
+ *  when it never did, or storage is blocked. */
+export function savedSettingsOpen(groupId) {
+  try { return localStorage.getItem(SETTINGS_KEY + groupId) === '1'; } catch { return false; }
+}
+
+export function saveSettingsOpen(groupId, on) {
+  try { localStorage.setItem(SETTINGS_KEY + groupId, on ? '1' : '0'); } catch { /* a blocked store just forgets */ }
+}
+
 const SPLIT_LABEL = { q1: '1st qtr', half: 'Half', q3: '3rd qtr', final: 'Final' };
 
 /** The commissioner's sheet settings. Before the draw (`open`): the sheet's name, its box
@@ -831,9 +858,10 @@ const SPLIT_LABEL = { q1: '1st qtr', half: 'Half', q3: '3rd qtr', final: 'Final'
 function commishPanel(host, d, open) {
   const sq = d.sq;
   const card = Number(sq.card) || 1;
-  const panel = el('section', 'card sq-card sq-commish');
-  panel.setAttribute('aria-label', 'Commissioner');
-  panel.appendChild(el('h2', 'sq-h', showsSheets(sq) ? 'Commissioner · ' + sheetName(sheetOf(sq)) : 'Commissioner'));
+  const panel = el('div', 'sq-commish sq-setbody');
+  panel.id = 'sq-settings';
+  panel.setAttribute('role', 'region');
+  panel.setAttribute('aria-label', 'Sheet settings');
   if (!d.draft) d.draft = draftOf(sq);
   const dr = d.draft;
   const err = el('p', 'sq-err');
@@ -954,8 +982,34 @@ function commishPanel(host, d, open) {
     ? 'The price, the split and squares per person can change until this sheet’s numbers are drawn; the name, any time.'
     : 'The numbers are drawn, so only the name can change.'));
   paint();
-  if (open) panel.appendChild(drawBlock(host, d));
   return panel;
+}
+
+/** The row that opens the commissioner's sheet settings - a real button, aria-expanded
+ *  and aria-controls, closed by default. The open state is remembered per group on this
+ *  phone (and in memory, so a redraw mid-draw keeps it). A drawn sheet always starts
+ *  closed - "name only" - and opening it there remembers nothing. */
+function sheetSettings(host, d, open) {
+  const box = el('div', 'sq-set');
+  if (open && d.settingsOpen == null) d.settingsOpen = savedSettingsOpen(d.groupId);
+  const on = open ? !!d.settingsOpen : !!d.lockedSettingsOpen;
+  const row = btn('sq-setrow', null);
+  row.setAttribute('aria-controls', 'sq-settings');
+  row.setAttribute('aria-expanded', String(on));
+  row.appendChild(el('span', 'sq-setrow-t', settingsLine(d.sq, open)));
+  const chev = el('span', 'sq-chev');
+  chev.setAttribute('aria-hidden', 'true');
+  row.appendChild(chev);
+  const body = commishPanel(host, d, open);
+  body.hidden = !on;
+  row.addEventListener('click', () => {
+    const next = row.getAttribute('aria-expanded') !== 'true';
+    row.setAttribute('aria-expanded', String(next));
+    body.hidden = !next;
+    if (open) { d.settingsOpen = next; saveSettingsOpen(d.groupId, next); } else d.lockedSettingsOpen = next;
+  });
+  box.append(row, body);
+  return box;
 }
 
 /** "a way to randomize the numbers": draw this sheet's numbers now. Two taps - the
@@ -965,11 +1019,9 @@ function drawBlock(host, d) {
   const sq = d.sq;
   const n = Number(sq.card) || 1;
   const box = el('div', 'sq-draw');
-  box.appendChild(el('p', 'sq-label', 'The numbers'));
   if (d.confirmDraw !== n) {
-    box.appendChild(el('p', 'sq-note', 'Draw this sheet’s numbers now, or they are drawn at kickoff. '
-      + 'They are drawn at random - nobody chooses them.'));
-    box.appendChild(btn('sq-ghost sq-draw-start', 'Draw the numbers', () => {
+    /* Under the grid, full width: "Draw Sheet 2’s numbers", the sheet's own name. */
+    box.appendChild(btn('sq-ghost sq-draw-start', 'Draw ' + sheetName(sheetOf(sq)) + '’s numbers', () => {
       d.confirmDraw = n;
       d.status = null;
       draw(host, d, 'ready');
@@ -1004,6 +1056,8 @@ async function drawSheet(host, d) {
   const r = await call(apiFn(), '/api/squares/draw', { pool: d.groupId, card: n });
   d.drawing = false;
   d.confirmDraw = null;
+  /* A drawn sheet's settings start closed - they would sit open over a closed sheet. */
+  d.lockedSettingsOpen = false;
   if (r.ok) { reloadGrid(host, d, { tone: 'ok', text: name + '’s numbers are drawn. The sheet is closed.' }); return; }
   const status = { tone: r.j && r.j.error === 'already_drawn' ? 'ok' : 'err', text: sheetText(r, 'The numbers were not drawn.') };
   /* Drawn already, or kickoff came: read the sheet again. */
@@ -1015,14 +1069,17 @@ async function drawSheet(host, d) {
 /* ------------------------------------------------------------ the sheets */
 
 /** A segmented row of the group's sheets - "Sheet 2 · 3 yours", the one on show
- *  pressed - and, for the commissioner before kickoff, "+ Add a sheet". It scrolls
- *  inside itself; the page never scrolls sideways. */
+ *  pressed. Only the tabs scroll, inside themselves; the page never scrolls sideways.
+ *  For the commissioner before kickoff a compact "+ Sheet" chip is pinned to the row's
+ *  right end, outside the scrolling part, so it never looks clipped. */
 function sheetSwitcher(host, d) {
   const sq = d.sq;
   const cur = Number(sq.card) || 1;
   const row = el('div', 'sq-sheets');
   row.setAttribute('role', 'group');
   row.setAttribute('aria-label', 'Sheets');
+  const tabs = el('div', 'sq-sheets-tabs');
+  row.appendChild(tabs);
   for (const c of sheetsOf(sq)) {
     const n = Number(c.card) || 1;
     const b = btn('sq-sheet', sheetLabel(c), () => { if (n !== cur) switchSheet(host, d, n); });
@@ -1030,18 +1087,21 @@ function sheetSwitcher(host, d) {
     b.setAttribute('aria-pressed', String(n === cur));
     b.setAttribute('aria-label', sheetName(c) + ', ' + (Number(c.mine) || 0) + ' of your squares' + (c.drawn ? ', numbers drawn' : ''));
     if (c.drawn) b.dataset.drawn = 'true';
-    row.appendChild(b);
+    tabs.appendChild(b);
   }
   if (sq.canAddCard) {
-    const add = btn('sq-sheet sq-addsheet', d.adding ? 'Adding…' : '+ Add a sheet', () => addSheet(host, d));
+    const add = btn('sq-addsheet', '+ Sheet', () => addSheet(host, d));
+    add.setAttribute('aria-label', 'Add a sheet');
     add.disabled = !!d.adding;
     row.appendChild(add);
   }
   /* The one on show stays in view when there are more than fit. */
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(() => {
-      const on = row.querySelector('[aria-pressed="true"]');
-      if (on && on.offsetLeft + on.offsetWidth > row.clientWidth) row.scrollLeft = on.offsetLeft - 8;
+      const on = tabs.querySelector('[aria-pressed="true"]');
+      if (!on) return;
+      const r = on.getBoundingClientRect(), t = tabs.getBoundingClientRect();
+      if (r.right > t.right || r.left < t.left) tabs.scrollLeft += r.left - t.left - 8;
     });
   }
   return row;

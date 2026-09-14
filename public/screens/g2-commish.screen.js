@@ -281,7 +281,7 @@ export function render(root, data, state) {
     /* A questions group is run from its questions page: load a set, add, answer. */
     if (isProps(sport)) nav.appendChild(door('#/props', 'The questions', 'Load a ready set, add questions, and enter the answers.'));
     /* A squares group is run from its grid: squares per person, before kickoff. */
-    if (isSquares(sport)) nav.appendChild(door('#/squares', 'The grid', 'Set squares per person before kickoff, and see who holds what.'));
+    if (isSquares(sport)) nav.appendChild(door('#/squares', 'The sheets', 'Add sheets, set each one up and draw its numbers, and see who holds what.'));
     nav.appendChild(door('#/g', 'Group page', 'Members, messages and the group’s home.'));
     nav.appendChild(door('#/grules', 'Group rules', 'How picks in this group are scored.'));
     return nav;

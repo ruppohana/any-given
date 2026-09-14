@@ -434,7 +434,11 @@ test('sheets: the commissioner adds one from the switcher and lands on it; each 
   const sw = root.querySelector('.sq-sheets');
   assert.ok(sw, 'the commissioner may add one, so the switcher shows with a single sheet');
   assert.deepEqual([sw.getAttribute('role'), sw.getAttribute('aria-label')], ['group', 'Sheets']);
-  assert.deepEqual(sw.querySelectorAll('button').map((b) => b.textContent), ['Sheet 1 · 2 yours', '+ Add a sheet']);
+  assert.deepEqual(sw.querySelectorAll('button').map((b) => b.textContent), ['Sheet 1 · 2 yours', '+ Sheet']);
+  /* "+ Sheet" is pinned to the row's right end, outside the tabs that scroll. */
+  const chip = sw.querySelector('.sq-addsheet');
+  assert.deepEqual([chip.getAttribute('aria-label'), chip.parentNode === sw, sw.querySelector('.sq-sheets-tabs .sq-addsheet'),
+    sw.children.map((c) => c.className)], ['Add a sheet', true, null, ['sq-sheets-tabs', 'sq-addsheet']]);
   assert.equal(sw.querySelector('[aria-pressed="true"]').dataset.sheet, '1');
   assert.match(root.querySelector('.sq-total').textContent, /^You hold 2 of 10 · 3 of 100 taken · /, 'one sheet: no name in the line');
 
@@ -445,7 +449,9 @@ test('sheets: the commissioner adds one from the switcher and lands on it; each 
   assert.equal(root.querySelector('.sq-status').textContent, 'Sheet 2 is added. Its squares are open.');
   assert.equal(STORE.get('ag.sqSheet.SQRS01'), '2');
   assert.deepEqual(root.querySelectorAll('.sq-sheet').map((b) => [b.textContent, b.getAttribute('aria-pressed')]),
-    [['Sheet 1 · 2 yours', 'false'], ['Sheet 2 · 0 yours', 'true'], ['+ Add a sheet', null]]);
+    [['Sheet 1 · 2 yours', 'false'], ['Sheet 2 · 0 yours', 'true']]);
+  assert.equal(root.querySelector('.sq-sheets > .sq-addsheet') || root.querySelector('.sq-addsheet'), root.querySelector('.sq-sheets').children[1],
+    'still pinned after the new sheet');
   assert.match(root.querySelector('.sq-total').textContent, /^Sheet 2 · You hold 0 of 10 · 0 of 100 taken · Locks /, 'the line names the sheet');
   assert.equal(root.querySelector('.sq-sheetname').textContent, 'Sheet 2');
   assert.equal(cell(root, 5).dataset.taken, undefined, 'the same square on another sheet is another square');
@@ -500,8 +506,13 @@ test('the draw: two taps - the first names what it does, Cancel sends nothing, D
   as('u-com', [G_SQC]);
   STORE.set('ag.sqSheet.SQRS01', '2');
   const root = draw(await P.loadSquares(api));
-  assert.equal(root.querySelector('.sq-commish .sq-h').textContent, 'Commissioner · Sheet 2');
-  assert.equal(root.querySelector('.sq-draw-start').textContent, 'Draw the numbers');
+  assert.equal(root.querySelector('.sq-commish').hidden, true, 'the settings start closed');
+  /* The main action is never behind them: directly under the grid, the sheet's own name on it. */
+  assert.equal(root.querySelector('.sq-commish .sq-draw-start'), null, 'not inside the settings');
+  const kids = root.querySelector('.sq').children;
+  const at = kids.findIndex((k) => k.classList.contains('sq-board'));
+  assert.ok(at > 0 && kids[at + 1].classList.contains('sq-draw'), 'directly under the grid');
+  assert.equal(root.querySelector('.sq-draw-start').textContent, 'Draw Sheet 2’s numbers');
   CALLS = [];
   await root.querySelector('.sq-draw-start').click();
   assert.deepEqual(posts(), [], 'the first tap only asks');
@@ -536,11 +547,69 @@ test('the draw: two taps - the first names what it does, Cancel sends nothing, D
   /* Sheet 1 is still open: "+" on every square, and its own draw. */
   await root.querySelector('.sq-sheet[data-sheet="1"]').click(); await settle(40);
   assert.equal(root.querySelector('.sq-board').dataset.drawn, 'false');
-  assert.ok(root.querySelector('.sq-draw-start'));
+  assert.equal(root.querySelector('.sq-draw-start').textContent, 'Draw Sheet 1’s numbers');
   assert.equal(root.querySelectorAll('.sq-plus').length, 100);
 
   as('u-mem', [G_SQ]);
   assert.equal(draw(await P.loadSquares(api)).querySelector('.sq-draw-start'), null, 'a member never draws');
+});
+
+test('the commissioner’s sheet settings sit behind one row under the sheet header - a real button, closed by default, open state remembered per group; a drawn sheet reads "name only" and starts closed', async () => {
+  assert.deepEqual([P.settingsLine({ boxPrice: 0 }, true), P.settingsLine({ boxPrice: 5, split: [25, 25, 25, 25] }, true),
+    P.settingsLine({ boxPrice: 1 }, true), P.settingsLine({ boxPrice: 5, locked: true })],
+    ['Sheet settings · Points only', 'Sheet settings · 5 marbles a square · 25/25/25/25', 'Sheet settings · 1 marble a square · 25/25/25/25',
+     'Sheet settings · name only']);
+  as('u-com', [G_SQC]);
+  const root = draw(await P.loadSquares(api));
+  const board = root.querySelector('.sq-board');
+  assert.deepEqual(board.children.slice(0, 2).map((c) => c.className), ['sq-sheethd', 'sq-set'], 'under the sheet header, above the grid');
+  const row = root.querySelector('.sq-setrow');
+  assert.deepEqual([row.tagName, row.type, row.textContent], ['BUTTON', 'button', 'Sheet settings · Points only']);
+  assert.deepEqual([row.getAttribute('aria-expanded'), row.getAttribute('aria-controls')], ['false', 'sq-settings']);
+  const body = root.querySelector('.sq-commish');
+  assert.deepEqual([body.id, body.hidden, body.getAttribute('aria-label')], ['sq-settings', true, 'Sheet settings'], 'closed by default');
+  for (const s of ['[id="sq-name"]', '[id="sq-price"]', '[data-split]', '.sq-quickb', '.sq-preview', '[id="sq-max"]', '.sq-save']) {
+    assert.ok(body.querySelector(s), s + ' is behind the row');
+  }
+  assert.deepEqual([body.querySelector('.sq-draw-start'), !!root.querySelector('.sq-draw-start')], [null, true],
+    'the draw stays out, visible with the settings closed');
+  assert.equal(root.querySelector('.sq-commish .sq-h'), null, 'the row names it; no second heading');
+  await row.click();
+  assert.deepEqual([row.getAttribute('aria-expanded'), body.hidden, STORE.get('ag.sqSettings.SQRS01')], ['true', false, '1']);
+
+  /* Remembered for the group: the next visit opens it; closing it is remembered too. */
+  const again = draw(await P.loadSquares(api));
+  assert.deepEqual([again.querySelector('.sq-setrow').getAttribute('aria-expanded'), again.querySelector('.sq-commish').hidden], ['true', false]);
+  await again.querySelector('.sq-setrow').click();
+  assert.deepEqual([STORE.get('ag.sqSettings.SQRS01'), again.querySelector('.sq-commish').hidden], ['0', true]);
+  const real = globalThis.localStorage;
+  globalThis.localStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() {} };
+  try {
+    assert.equal(P.savedSettingsOpen('SQRS01'), false, 'blocked storage: closed');
+    assert.doesNotThrow(() => P.saveSettingsOpen('SQRS01', true));
+  } finally { globalThis.localStorage = real; }
+
+  /* The row carries the price and split. */
+  await P.call(api, '/api/squares/settings', { pool: 'SQRS01', card: 1, boxPrice: 5, split: [20, 20, 20, 40] });
+  const dr = draw(await P.loadSquares(api));
+  assert.equal(dr.querySelector('.sq-setrow').textContent, 'Sheet settings · 5 marbles a square · 20/20/20/40');
+  /* Opened, the draw's first tap redraws the screen - it stays open; the draw closes it. */
+  await dr.querySelector('.sq-setrow').click();
+  await dr.querySelector('.sq-draw-start').click();
+  assert.deepEqual([dr.querySelector('.sq-commish').hidden, !!dr.querySelector('.sq-draw-ask')], [false, true]);
+  await dr.querySelector('.sq-draw-go').click(); await settle(80);
+  const r2 = dr.querySelector('.sq-setrow');
+  assert.deepEqual([r2.textContent, r2.getAttribute('aria-expanded'), dr.querySelector('.sq-commish').hidden],
+    ['Sheet settings · name only', 'false', true], 'it does not sit open over a closed sheet');
+  assert.ok(dr.querySelector('.sq-commish [id="sq-name"]'));
+  assert.equal(dr.querySelector('.sq-commish [id="sq-price"]'), null);
+  await r2.click();
+  assert.deepEqual([dr.querySelector('.sq-commish').hidden, STORE.get('ag.sqSettings.SQRS01')], [false, '1'],
+    'opened on a drawn sheet: the name, and the group’s remembered state untouched');
+
+  as('u-mem', [G_SQ]);
+  assert.equal(draw(await P.loadSquares(api)).querySelector('.sq-setrow'), null, 'a member has no settings');
+  assert.match(CSS, /\.scr-squares \.sq-setrow\[aria-expanded="true"\] \.sq-chev \{/);
 });
 
 test('a sheet drawn behind your back: a Draw or a claim on it says so in the screen’s words, and the sheet is read again - closed', async () => {
@@ -626,7 +695,9 @@ test('yours are filled with the accent, initials in the on-accent color; somebod
   assert.match(CSS, /\.scr-squares \.sq-plus \{[^}]*color: var\(--dim\);[^}]*opacity: \.55;/);
   assert.match(CSS, /\.scr-squares \.sq-cell \{[^}]*min-height: 30px;/, 'the squares keep their size');
   assert.doesNotMatch(TOKENS.slice(TOKENS.indexOf('prefers-color-scheme: dark')), /--on-accent:/, 'one on-accent in both themes');
-  assert.match(CSS, /\.scr-squares \.sq-sheets \{[^}]*min-width: 0;[^}]*overflow-x: auto;/, 'the switcher scrolls inside itself');
+  assert.match(CSS, /\.scr-squares \.sq-sheets-tabs \{[^}]*min-width: 0;[^}]*overflow-x: auto;/, 'the tabs scroll inside themselves');
+  assert.match(CSS, /\.scr-squares \.sq-addsheet \{ flex: none;/, 'the add chip never shrinks or scrolls');
+  assert.doesNotMatch(CSS.match(/\.scr-squares \.sq-sheets \{[^}]*\}/)[0], /overflow/, 'the row itself does not scroll - only its tabs');
 
   assert.equal(draw({ view: 'signed-out', noSample: true }).querySelectorAll('.sq-plus').length, 100, 'the pool itself: all open');
   Date.now = () => KICKOFF + 1000;
@@ -730,8 +801,8 @@ test('marbles: the commissioner names a sheet and sets its box price, its split 
   assert.equal(root.querySelector('.sq-status').textContent, 'Name: The big one · 5 marbles a square · The pot splits 40% / 20% / 20% / 20%.');
   assert.deepEqual([root.querySelector('.sq-sheetname').textContent, root.querySelector('.sq-sheetmeta').textContent], ['The big one', '5 marbles a square']);
   assert.equal(q('.sq-preview').textContent, 'Pot 500 marbles · 1st quarter 200 · Halftime 100 · 3rd quarter 100 · Final 100');
-  assert.deepEqual(root.querySelectorAll('.sq-sheet').map((b) => b.textContent), ['Sheet 1 · 0 yours', 'The big one · 0 yours', '+ Add a sheet']);
-  assert.equal(q('.sq-h').textContent, 'Commissioner · The big one');
+  assert.deepEqual(root.querySelectorAll('.sq-sheet').map((b) => b.textContent), ['Sheet 1 · 0 yours', 'The big one · 0 yours']);
+  assert.equal(root.querySelector('.sq-setrow').textContent, 'Sheet settings · 5 marbles a square · 40/20/20/20');
   assert.deepEqual(panel().querySelectorAll('[data-split]').map((i) => i.value), ['40', '20', '20', '20'], 'read back from the server');
 
   /* Out of range or blank cannot be saved; back where it was is nothing to save. */
@@ -742,9 +813,10 @@ test('marbles: the commissioner names a sheet and sets its box price, its split 
   assert.equal(P.sheetText(await P.call(api, '/api/squares/settings', { pool: 'SQRS01', card: 2, boxPrice: -1 }), 'x'), 'A box costs 0 to 1,000 marbles.');
 
   /* Drawn: the price, the split, the limit and the draw are gone; the name still saves. */
-  await q('.sq-draw-start').click();
+  await root.querySelector('.sq-draw-start').click();
   await root.querySelector('.sq-draw-go').click(); await settle(80);
-  for (const s of ['[id="sq-price"]', '[id="sq-max"]', '[data-split]', '.sq-draw-start']) assert.equal(q(s), null, s + ' is gone');
+  for (const s of ['[id="sq-price"]', '[id="sq-max"]', '[data-split]']) assert.equal(q(s), null, s + ' is gone');
+  assert.equal(root.querySelector('.sq-draw-start'), null, 'no draw on a drawn sheet');
   CALLS = [];
   await typeIn(q('[id="sq-name"]'), 'Big one, drawn');
   await q('.sq-save').click(); await settle(80);
@@ -921,13 +993,17 @@ test('group create: "Big Game squares" in the Football family, kickoff, no sprea
     + '(overtime counts in the final). A square nobody claimed scores nobody.');
   assert.equal(P.RULES_FULL, G1.SQUARES_RULES, 'the grid and group create say the same rules');
   assert.ok(P.RULES_SHORT.includes('at kickoff, or earlier when the commissioner draws a sheet') && P.RULES_SHORT.includes('a drawn sheet is closed'));
-  assert.equal(G1.periodLabel('squares', 0), 'One grid, the Big Game');
-  assert.equal(G1.picksLine({ sport: 'squares', ats: true }), 'Squares on a 10 × 10 grid, scored in points');
+  assert.equal(G1.periodLabel('squares', 0), 'A 10 × 10 sheet on the Big Game - or several');
+  assert.equal(G1.picksLine({ sport: 'squares', ats: true }), 'Squares on 10 × 10 sheets, scored in points');
   assert.equal(G1.shareText('grid-x', 'BCD234', 'squares'),
-    'Join my group grid-x on Any Given. Claim your squares on the Big Game grid before kickoff, scored in points. Code BCD234');
+    'Join my group grid-x on Any Given. Claim your squares on the Big Game sheets before the numbers are drawn, scored in points. Code BCD234');
+  assert.ok(flat(G1_SRC).includes('Set up each sheet, and claim squares before the numbers are drawn.')
+    && flat(G1_SRC).includes('Claim squares before the numbers are drawn.'), 'the group page row, commissioner and member');
+  assert.ok(flat(P2_SRC).includes('A 10 × 10 sheet on the Big Game - or several. Claim squares until the numbers are drawn;'));
+  for (const s of [G1_SRC, G2_SRC, P2_SRC]) assert.doesNotMatch(flat(s), /One grid|One 10 × 10 grid|Big Game grid before kickoff|claim yours before kickoff/);
   const C = code(G1_SRC);
   assert.match(C, /if \(poolSport\(form\.sport\) === 'squares'\) \{ location\.hash = '#\/squares'; return; \}/);
-  assert.match(C, /if \(isSquares\(sport\)\) \{\s*rows\.push\(\['The grid'/, 'the group page opens the grid');
+  assert.match(C, /if \(isSquares\(sport\)\) \{\s*rows\.push\(\['The sheets'/, 'the group page opens the sheets');
   /* Pool first: a pool's Start or Join says which form this page opens - read once, signed in. */
   assert.match(C, /if \(view === 'ready' \|\| view === 'no-group'\) base\.openForm = readGroupForm\(\);/);
   assert.match(C, /else if \(data\.openForm === 'start' \|\| data\.openForm === 'join'\) show\(data\.openForm\);/);
@@ -939,7 +1015,9 @@ test('commissioner, group rules and standings: the label, no spread switch, the 
   assert.equal(H2.sportName('squares'), 'Big Game squares');
   assert.equal(H2.hasNoSpread('squares'), true);
   assert.match(code(G2_SRC), /if \(!hasNoSpread\(group\.sport\)\) host\.appendChild\(atsSection/);
-  assert.match(code(G2_SRC), /if \(isSquares\(sport\)\) nav\.appendChild\(door\('#\/squares', 'The grid'/);
+  assert.match(code(G2_SRC), /if \(isSquares\(sport\)\) nav\.appendChild\(door\('#\/squares', 'The sheets'/);
+  for (const s of [G1_SRC, G2_SRC]) assert.ok(!flat(s).includes('The grid'), 'the label is "The sheets"');
+  assert.ok(flat(G2_SRC).includes('Add sheets, set each one up and draw its numbers, and see who holds what.'));
 
   assert.equal(G3.hasNoSpread('squares'), true);
   assert.equal(G3.isDaySport('squares'), false);

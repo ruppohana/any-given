@@ -102,7 +102,7 @@ export const GROUP_COPY = {
    * group's is its race. */
   props: { title: 'This group plays questions', body: 'The commissioner writes the questions - an awards show, a finale, anything - and enters the answers. One pick a question, scored in points.', cta: 'Open the questions', href: '#/props' },
   /* Big Game squares (2026-09-13): its pool is its grid. */
-  squares: { title: 'This group plays Big Game squares', body: 'One 10 × 10 grid on the Big Game. Claim squares until kickoff; the square where the last digits of the score meet scores at each quarter.', cta: 'Open the grid', href: '#/squares' },
+  squares: { title: 'This group plays Big Game squares', body: 'A 10 × 10 sheet on the Big Game - or several. Claim squares until the numbers are drawn; the square where the last digits of the score meet scores at each quarter.', cta: 'Open the grid', href: '#/squares' },
   emptyDay: { title: 'No games on this day', body: 'Pick another day above. Games show up as soon as they are scheduled.' },
   emptyUfc: { title: 'No UFC card on this day', body: 'Pick another day above. A card shows up here as soon as it is scheduled.' },
   emptyCricket: { title: 'No cricket on this day', body: 'Pick another day above. Matches show up as soon as they are scheduled.' },

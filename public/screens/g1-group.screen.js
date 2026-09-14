@@ -317,7 +317,7 @@ export function basketballScopeNote(scope, sport) {
 export function periodLabel(sport, week) {
   const s = poolSport(sport);
   if (s === 'props') return 'Question by question';
-  if (s === 'squares') return 'One grid, the Big Game';
+  if (s === 'squares') return 'A 10 × 10 sheet on the Big Game - or several';
   if (s === 'f1') return 'Race weekends';
   if (String(s).startsWith('nascar')) return 'Race days';
   if (s === 'ufc') return 'A card at a time';
@@ -329,7 +329,7 @@ export function periodLabel(sport, week) {
 export function picksLine(g) {
   const s = g && poolSport(g.sport);
   if (s === 'props') return 'One pick a question, scored in points';
-  if (s === 'squares') return 'Squares on a 10 × 10 grid, scored in points';
+  if (s === 'squares') return 'Squares on 10 × 10 sheets, scored in points';
   if (s === 'f1') return 'Race weekend picks, scored in points';
   if (String(s).startsWith('nascar')) return 'Race day picks, scored in points';
   if (isSoccer(s)) return 'Picks straight up - who wins, or the draw';
@@ -379,7 +379,7 @@ export function prefillCode(pending) {
 export function shareText(groupName, code, sport) {
   const s = poolSport(sport);
   const how = s === 'props' ? 'Pick the answers before each question locks, scored in points.'
-    : s === 'squares' ? 'Claim your squares on the Big Game grid before kickoff, scored in points.'
+    : s === 'squares' ? 'Claim your squares on the Big Game sheets before the numbers are drawn, scored in points.'
     : s === 'f1' ? 'Pick the race weekend, scored in points.'
     : String(s).startsWith('nascar') ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
     : isSoccer(s) ? 'Pick the winner or the draw each day, scored in points.'
@@ -1078,8 +1078,8 @@ function doors(isCommish, sport) {
   }
   /* A squares group's pool is its grid. */
   if (isSquares(sport)) {
-    rows.push(['The grid', isCommish ? 'Set squares per person, and claim yours before kickoff.'
-      : 'Claim your squares before kickoff.', '#/squares']);
+    rows.push(['The sheets', isCommish ? 'Set up each sheet, and claim squares before the numbers are drawn.'
+      : 'Claim squares before the numbers are drawn.', '#/squares']);
   }
   if (isCommish) rows.push(['Commissioner tools', 'Invite by email, remove or mute members, change the settings.', '#/gcommish']);
   rows.push(['Group rules', 'How the group scores, when picks lock, and how ties break.', '#/grules']);
