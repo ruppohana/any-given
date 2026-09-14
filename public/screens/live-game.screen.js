@@ -6118,10 +6118,18 @@ const CSS = `
 .lg-homepanel[hidden], .lg-fam-row[hidden], .lg-fam-marks[hidden] { display: none; }
 .lg-fams { display: grid; gap: 8px; }
 .lg-fam { display: grid; gap: 8px; min-width: 0; }
+/* 🔴 ONE CARD PER FAMILY. Jason, 2026-09-13, looking at Racing open with its four tiles
+   floating under the header: "put the individual racing items in the same card as racing
+   itself". A roll-up is ONE card - the header row at its top, the leagues inside it when
+   open - and the tiles inside are a quieter surface, so they read as the card's contents
+   rather than four more cards. */
+.lg-fam:not(.is-solo) { gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-card); }
 .lg-fam-h { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 14px;
-  font: inherit; text-align: left; color: var(--fg); background: var(--card);
-  border: 1px solid var(--line); border-radius: var(--radius-card); cursor: pointer; }
-.lg-fam-h:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  font: inherit; text-align: left; color: var(--fg); background: transparent;
+  border: 0; border-radius: var(--radius-card); cursor: pointer; }
+.lg-fam-h:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lg-fam:not(.is-solo) .lg-fam-row { padding: 0 10px 10px; }
+.lg-fam:not(.is-solo) .lg-league:not(.is-mine) { background: color-mix(in srgb, var(--fg) 5%, var(--card)); border-color: transparent; }
 .lg-fam-t { flex: 1 1 auto; min-width: 0; font-size: var(--t-emph); font-weight: 800; }
 /* A one-league family is ONE row (Jason, 2026-09-13: "baseball should only be 1 line,
    right?"): a roll-up header's height and look - the name on the left, the league's mark
