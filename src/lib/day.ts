@@ -58,12 +58,19 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
      Africa, the Big Bash, SA20 and the IPL. Limited-overs only - a five-day Test is
      not a day's pick. */
   cricket: { path: 'cricket', groups: '', label: 'Cricket', periods: 2,
-    leagues: ['8623', '22547', '24469', '24273', '21284', '24270', '24198', '8044', '21275', '8048'] }
+    leagues: ['8623', '22547', '24469', '24273', '21284', '24270', '24198', '8044', '21275', '8048'] },
+  /* 🔴 TEAM MATCH PLAY - Jason, 2026-09-13: "do the ... presidents cup next". The
+     Presidents Cup (Sept 24-27, 2026) and the Ryder Cup (Sept 2027) are one event on
+     ESPN's golf scoreboard: its first competition is the team total, the rest are the
+     matches - foursomes, four-ball, singles - each with a winner flag and a score line
+     ("1 Up", "4 & 3", "Halved"). A halved match is a result, a draw somebody can pick
+     (src/slate-day.ts parseGolfCupDay). */
+  'golf-cup': { path: 'golf/pga', groups: '', label: 'Presidents Cup', periods: 1 }
 };
 
 /** A sport graded by ESPN's winner flag rather than by a score. */
 export function isWinnerDay(sport: unknown): boolean {
-  return sport === 'ufc' || sport === 'cricket';
+  return sport === 'ufc' || sport === 'cricket' || sport === 'golf-cup';
 }
 
 /** The soccer day sports - src/lib/groups.ts isSoccerSport says the same. */

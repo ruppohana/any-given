@@ -83,6 +83,8 @@ export const GROUP_COPY = {
   subSoccer: ' · pick the winner or the draw · scored in points',
   /* A UFC card: every bout a pick, graded by the winner ESPN flags (2026-09-13). */
   subUfc: ' · pick the winner of each bout · scored in points',
+  /* The Presidents Cup (2026-09-13): every match a pick, and halved is one of them. */
+  subGolfCup: ' · pick the winner of each match, or halved · scored in points',
   subNoWeek: 'Pick the winners · scored in points',
   /* Every sport the pool plays (Jason, 2026-09-12). An F1 group plays the race
    * weekend on its own screen; a basketball group picks a day at a time. */
@@ -94,6 +96,7 @@ export const GROUP_COPY = {
   emptyDay: { title: 'No games on this day', body: 'Pick another day above. Games show up as soon as they are scheduled.' },
   emptyUfc: { title: 'No UFC card on this day', body: 'Pick another day above. A card shows up here as soon as it is scheduled.' },
   emptyCricket: { title: 'No cricket on this day', body: 'Pick another day above. Matches show up as soon as they are scheduled.' },
+  emptyGolfCup: { title: 'No Presidents Cup matches on this day', body: 'Pick another day above. The matches show up here once the pairings are announced.' },
   rules: { label: 'How it’s scored', href: '#/grules' },
   door: { label: 'Group info ›', href: '#/g' },
   signedOut: {
@@ -166,6 +169,9 @@ export const WINDOW_SPLIT_MIN = 6;
 /** Day, then - only where the day is big enough to need it - kickoff window.
  *  ONE HEADER PER GROUP. NEVER ONE PER ROW. */
 export function groupsOf(games) {
+  /* A Presidents Cup day reads by session - the cup, then the foursomes, four-ball and
+   * singles in the order they tee off - never by the clock's windows (sessionGroupsOf). */
+  if ((games || []).some((g) => g && isHalvedSport(g.sport))) return sessionGroupsOf(games);
   const days = new Map();
   for (const g of games.slice().sort((a, b) => a.kickoffUtc - b.kickoffUtc)) {
     const dk = dayKeyOf(g.kickoffUtc);
@@ -314,20 +320,90 @@ export function isSoccerSport(s) { return SOCCER_SPORTS.includes(s); }
  * result - arrives as status 'void' (src/slate-day.ts parseUfcDay / parseCricketDay).
  * Restated here, not imported: the p2 tests load this module with its imports
  * stripped. tests/ufc-cricket-screens.test.mjs holds it to pool.ts on the real days. */
-export const WINNER_SPORTS = ['ufc', 'cricket'];
+/* The Presidents Cup joined 2026-09-13 ("do the ... presidents cup next") - src/lib/groups.ts
+ * isWinnerSport names it too. It differs in one thing, below: a halved match. */
+export const WINNER_SPORTS = ['ufc', 'cricket', 'golf-cup'];
 export function isWinnerSport(s) { return WINNER_SPORTS.includes(s); }
+
+/* 🔴 TEAM MATCH PLAY: A HALVED MATCH IS A RESULT, AND A THIRD PICK - like a soccer draw.
+ * src/slate-day.ts parseGolfCupDay stores a halve as winner 'draw', and src/lib/pool.ts
+ * resolveGame returns home, away or draw for a golf-cup final - 'void' only when none is
+ * set. The team total (the cup, `overall`) level on points is the same 'draw'. Restated
+ * here: the p2 tests load this module with its imports stripped. */
+export function isHalvedSport(s) { return s === 'golf-cup'; }
+
+/** A finished Presidents Cup match: 'home', 'away' or 'draw' (halved). Null until final. */
+export function cupResult(game) {
+  if (!game || game.status !== 'final') return null;
+  return game.winner === 'home' || game.winner === 'away' || game.winner === 'draw' ? game.winner : null;
+}
+
+/** The result line under a Presidents Cup row. ESPN writes a match's score on ONE side
+ *  - the winner's, or the leader's while it is on ("3 & 2", "1 Up") - and null on the
+ *  other; a halved match "Halved" on both; the cup its two totals ("18.5", "11.5"). So
+ *  it is said once, attributed, never as a blank on one side: "Matsuyama 1 Up",
+ *  "Halved", "USA 18.5 · International 11.5". Null before the first tee. */
+export function cupLine(game) {
+  if (!game || game.sport !== 'golf-cup' || game.status === 'scheduled') return null;
+  const txt = (s) => (typeof s === 'string' && s.trim() ? s.trim() : null);
+  const h = txt(game.homeScoreText), a = txt(game.awayScoreText);
+  if (h === 'Halved' || a === 'Halved') return 'Halved';
+  const nm = (t) => (t && (t.short || t.name || t.teamName)) || '';
+  if (h && a) return (nm(game.home) + ' ' + h + ' · ' + nm(game.away) + ' ' + a).trim();
+  if (h || a) {
+    const who = game.status === 'final' && (game.winner === 'home' || game.winner === 'away') ? game.winner : (h ? 'home' : 'away');
+    return (nm(game[who]) + ' ' + (h || a)).trim();
+  }
+  return null;
+}
+
+/** Under a Presidents Cup side's name: its team (USA, International, Europe) when the
+ *  name is its players. Null on the cup's own row, where the name already is the team. */
+export function cupTeamLine(team) {
+  const t = team && team.teamName;
+  return t && t !== (team.short || team.name) ? t : null;
+}
+
+/** The sub line of the team-total row: "USA vs International - the cup". Null for a match. */
+export function cupSub(game) {
+  if (!game || !game.overall || !game.home || !game.away) return null;
+  return (game.home.teamName || game.home.short || game.home.name) + ' vs '
+    + (game.away.teamName || game.away.short || game.away.name) + ' - the cup';
+}
+
+/* 🔴 A PRESIDENTS CUP DAY READS BY SESSION: the cup first (the team total rides on the
+ * first day and locks with the first match), then Foursomes, Four-ball and Singles in
+ * the order they tee off - a Saturday has both team formats. Matches inside a session
+ * in tee order. The label is the event and the session ("Presidents Cup · Four-ball"),
+ * the same shape as groupsOf and cardGroupsOf, so the day card draws it as it is. */
+export function sessionGroupsOf(games) {
+  const bySession = new Map();
+  for (const g of (games || []).slice().sort((a, b) => a.kickoffUtc - b.kickoffUtc)) {
+    const s = g.overall ? 'The cup' : (g.session || 'Matches');
+    if (!bySession.has(s)) bySession.set(s, []);
+    bySession.get(s).push(g);
+  }
+  const out = [];
+  for (const [s, list] of bySession) {
+    const ev = list[0].event || 'Presidents Cup';
+    out.push({ key: ev + '|' + s, dayKey: dayKeyOf(list[0].kickoffUtc), day: ev, window: s,
+      first: list[0].kickoffUtc, games: list });
+  }
+  return out.sort((a, b) => (a.window === 'The cup' ? 0 : 1) - (b.window === 'The cup' ? 0 : 1) || a.first - b.first);
+}
 
 /** What one game is called in a sport, for counts: a bout, a match, a game. */
 export function gameNoun(sport, n) {
-  const one = sport === 'ufc' ? 'bout' : sport === 'cricket' ? 'match' : 'game';
+  const one = sport === 'ufc' ? 'bout' : sport === 'cricket' || sport === 'golf-cup' ? 'match' : 'game';
   return n === 1 ? one : one === 'match' ? 'matches' : one + 's';
 }
 
 /** The fields a winner-sport game carries past the usual shape - the card and the
  *  weight class of a bout, the competition, format, result line and score text of
- *  a cricket match. Null where the feed had nothing. */
+ *  a cricket match, the session of a Presidents Cup match. Null where the feed had
+ *  nothing. */
 export const WINNER_FIELDS = ['event', 'weightClass', 'card', 'competition', 'format', 'summary',
-  'homeScoreText', 'awayScoreText', 'statusName'];
+  'homeScoreText', 'awayScoreText', 'statusName', 'session'];
 
 /* 🔴 A UFC DAY READS AS A FIGHT CARD: by event, then by the part of the card - the
  * Main card first, then the Prelims - never by the clock's kickoff windows. Inside a
@@ -373,7 +449,8 @@ export function cricketLine(game) {
 
 /** The sides a row offers, and so the sides a saved pick may carry. */
 export function sidesFor(sport) {
-  return isSoccerSport(sport) ? ['home', 'away', 'draw'] : ['home', 'away'];
+  /* A halved Presidents Cup match is the third side too (src/lib/groups.ts pickSides). */
+  return isSoccerSport(sport) || isHalvedSport(sport) ? ['home', 'away', 'draw'] : ['home', 'away'];
 }
 
 /** A finished soccer match: 'home', 'away' or 'draw'. Null until it is final.
@@ -398,7 +475,8 @@ export function pickStateOf(game, pick, now, mode) {
     /* A fight or a cricket match: the winner ESPN flagged, and a final with none is
      * the one void path - never a spread, never a score. */
     if (isWinnerSport(game.sport)) {
-      const w = winnerOf(game);
+      /* A halved Presidents Cup match is won by the Halved pick, never a void. */
+      const w = isHalvedSport(game.sport) ? cupResult(game) : winnerOf(game);
       return w == null ? 'void' : (w === side ? 'won' : 'lost');
     }
     /* Soccer first: a level final is the draw - won by whoever picked it, lost by
@@ -497,18 +575,21 @@ function slateGame(o) {
     /* 🔴 AND A KNOCKOUT'S WINNER TRAVELS TOO - this is an allow-list mapper, so a
      * field not named here does not exist on the slate. Without it a Champions
      * League final won on penalties would grade the draw pickers right. */
-    ...(o.winner === 'home' || o.winner === 'away'
+    /* A halved Presidents Cup match is winner 'draw', and it has to travel too. */
+    ...(o.winner === 'home' || o.winner === 'away' || (o.winner === 'draw' && o.sport === 'golf-cup')
       ? { winner: o.winner, penHome: o.penHome == null ? null : o.penHome, penAway: o.penAway == null ? null : o.penAway }
       : {}),
     /* 🔴 AND A FIGHT CARD'S AND A CRICKET MATCH'S OWN FIELDS - the card, the weight
      * class, the result line and the score text. Same allow-list hazard: a field
      * not named here does not exist on the slate. Spelled out rather than read off
      * WINNER_FIELDS, because the tests lift this function out on its own. */
-    ...(o.sport === 'ufc' || o.sport === 'cricket'
+    ...(o.sport === 'ufc' || o.sport === 'cricket' || o.sport === 'golf-cup'
       ? Object.fromEntries(['event', 'weightClass', 'card', 'competition', 'format', 'summary',
-          'homeScoreText', 'awayScoreText', 'statusName']
+          'homeScoreText', 'awayScoreText', 'statusName', 'session']
           .map((k) => [k, typeof o[k] === 'string' && o[k] ? o[k] : null]))
-      : {})
+      : {}),
+    /* The Presidents Cup's team total - the cup - is one row of the first day. */
+    ...(o.sport === 'golf-cup' ? { overall: o.overall === true } : {})
   };
 }
 
@@ -862,8 +943,10 @@ const WEEK = { 'college-football': 2, nfl: 1 };
  * basketball the same day. */
 /* UFC and cricket joined 2026-09-13 ("do the ufc and cricket next"): a UFC day is
  * its card, a cricket day every limited-overs match in season. */
-const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket'];
+/* The Presidents Cup joined 2026-09-13 ("do the ... presidents cup next"): a day is the
+ * matches teed off that day, the cup itself riding on the first. */
+const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup'];
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -922,6 +1005,8 @@ async function realSlate(byId, sport, weekArg, dayUrl) {
         /* A bout's card and weight class; a cricket match's competition, format,
            result line and score text (src/slate-day.ts parseUfcDay / parseCricketDay). */
         ...Object.fromEntries(WINNER_FIELDS.map((k) => [k, g[k]])),
+        /* The Presidents Cup's team total (src/slate-day.ts parseGolfCupDay). */
+        overall: g.overall === true,
         rankHome: g.rankHome, rankAway: g.rankAway, conferences: g.conferences,
         lastMeeting: g.lastMeeting || null,
         sport
@@ -965,7 +1050,8 @@ export async function refreshWinnerDay(games, sport, day) {
       const n = byId.get(String(g.id));
       if (!n) continue;
       if (['final', 'in_progress', 'void', 'scheduled'].includes(n.status)) g.status = n.status;
-      if (n.winner === 'home' || n.winner === 'away') g.winner = n.winner;
+      /* A halved Presidents Cup match finishes as winner 'draw' - kept, never dropped. */
+      if (n.winner === 'home' || n.winner === 'away' || (n.winner === 'draw' && isHalvedSport(sport))) g.winner = n.winner;
       else delete g.winner;
       for (const k of WINNER_FIELDS) if (typeof n[k] === 'string' && n[k]) g[k] = n[k];
     }
@@ -1441,7 +1527,7 @@ function zone(ctx, game, side) {
     size: 44,
     /* UFC and cricket (2026-09-13): the chip is told the league, so a fighter's flag
        and a cricket crest are looked up as theirs and never as a college school's. */
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'].includes(ctx.sport) ? ctx.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'].includes(ctx.sport) ? ctx.sport : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
 
@@ -1453,11 +1539,16 @@ function zone(ctx, game, side) {
    * because there is no score on the row to say who won. */
   if (isWinnerSport(game.sport || ctx.sport)) {
     const ufc = (game.sport || ctx.sport) === 'ufc';
-    const nm = el('div', 'p2-name' + (ufc ? ' p2-name--full' : ''));
+    /* A Presidents Cup side is a pair of players ("Cantlay / Schauffele"), so it may wrap
+     * to two lines like a fighter's name, and under it goes its team. Its score line is
+     * ESPN's on the winner's side only - so it is said once, under the row (cupLine). */
+    const golf = isHalvedSport(game.sport || ctx.sport);
+    const nm = el('div', 'p2-name' + (ufc || golf ? ' p2-name--full' : ''));
     nm.appendChild(el('span', 'p2-name-t', ufc ? (team.name || team.short) : (team.short || team.name)));
     b.appendChild(nm);
     const fact = ufc ? (team.record || null) : (side === 'home' ? game.homeScoreText : game.awayScoreText) || null;
-    b.appendChild(el('div', ufc ? 'p2-frec num' : 'p2-stext num', fact || ' '));
+    const shown = golf ? cupTeamLine(team) : fact;
+    b.appendChild(el('div', ufc ? 'p2-frec num' : 'p2-stext num', shown || ' '));
     const w = winnerOf(game);
     if (w) {
       b.dataset.outcome = w === side ? 'won' : 'lost';
@@ -1475,7 +1566,7 @@ function zone(ctx, game, side) {
     const wopen = wst === 'unpicked' || wst === 'picked';
     b.disabled = !wopen;
     b.setAttribute('aria-pressed', String(wmine));
-    b.setAttribute('aria-label', (team.name || team.short) + (fact ? ', ' + fact : '')
+    b.setAttribute('aria-label', (team.name || team.short) + (shown ? ', ' + shown : '')
       + (w ? (w === side ? ', won' : ', lost') : '') + (wopen ? '' : ' – locked'));
     if (wopen) b.addEventListener('click', () => ctx.onPick(game.id, side));
     return b;
@@ -1579,8 +1670,16 @@ function drawZone(ctx, game) {
   const pick = ctx.picks[game.id];
   const st = pickStateOf(game, pick, ctx.now, ctx.mode);
   const mine = !!(pick && pick.side === 'draw');
+  /* 🔴 A PRESIDENTS CUP MATCH: the same control, called Halved (2026-09-13). Its score is
+   * a line on one side ("3 & 2"), said once under the row (cupLine) - never two numbers
+   * in here. Its state sits over the word: Live, Final, or Void for a match with no result. */
+  const cup = isHalvedSport(game.sport);
   const started = game.status === 'in_progress' || game.status === 'final';
-  if (started) {
+  if (cup && (started || game.status === 'void')) {
+    const top = el('span', 'p2-c-lo', game.status === 'void' ? 'Void' : game.status === 'final' ? 'Final' : 'Live');
+    if (game.status === 'in_progress') top.dataset.live = 'true';
+    b.appendChild(top);
+  } else if (started) {
     const top = el('span', 'p2-c-lo', game.status === 'final' ? 'Final' : 'Live');
     if (game.status === 'in_progress') top.dataset.live = 'true';
     const w = winnerOf(game);
@@ -1592,8 +1691,9 @@ function drawZone(ctx, game) {
     sc.append(a, el('span', 'p2-sc-sep', '–'), h);
     b.append(top, sc);
   }
-  b.appendChild(el('span', 'p2-draw-t', 'Draw'));
+  b.appendChild(el('span', 'p2-draw-t', cup ? 'Halved' : 'Draw'));
   if (soccerResult(game) === 'draw') b.dataset.outcome = 'draw';
+  if (cup && cupResult(game) === 'draw') b.dataset.outcome = 'draw';
   if (mine && (st === 'won' || st === 'lost' || st === 'void')) {
     const m = el('div', 'p2-result');
     m.dataset.result = st;
@@ -1607,7 +1707,9 @@ function drawZone(ctx, game) {
   const score = started && game.awayScore != null && game.homeScore != null
     ? ', ' + (game.status === 'final' ? 'final ' : 'live ') + game.awayScore + '–' + game.homeScore : '';
   const pens = pensText(game);
-  b.setAttribute('aria-label', 'Draw' + score + (pens ? ', ' + pens : '') + (open ? '' : ' – locked'));
+  const cl = cup ? cupLine(game) : null;
+  b.setAttribute('aria-label', (cup ? 'Halved' + (cl ? ', ' + cl : '') : 'Draw' + score + (pens ? ', ' + pens : ''))
+    + (open ? '' : ' – locked'));
   if (open) b.addEventListener('click', () => ctx.onPick(game.id, 'draw'));
   return b;
 }
@@ -1835,7 +1937,11 @@ function row(ctx, game) {
   const subLine = winnerRow
     ? ((game.sport || ctx.sport) === 'ufc' ? game.weightClass : [game.competition, game.format].filter(Boolean).join(' · '))
     : game.broadcast;
-  if (subLine) when.appendChild(el('span', 'p2-chan', subLine));
+  /* A Presidents Cup match's session is its group's header; the team-total row says
+   * what it is: "USA vs International - the cup". */
+  const cupRow = isHalvedSport(game.sport || ctx.sport);
+  const sub = cupRow ? cupSub(game) : subLine;
+  if (sub) when.appendChild(el('span', 'p2-chan', sub));
   /* 🔴 NO PILL FOR "OPEN" OR "PICKED". Jason, 2026-09-09: "I don't need picked
    * or opens obvious."
    *
@@ -1888,6 +1994,17 @@ function row(ctx, game) {
    * corner, "home" in the feed) on the left, as "Van vs. Pantoja" is written - and a
    * cricket match the same, "Barbados Tridents v Jamaica Kingsmen". Neither is at
    * anybody's place in the way the "@" means, so there is no "@". */
+  /* 🔴 A PRESIDENTS CUP MATCH: billed first-named first like a fight - USA, the feed's
+   * home side, on the left - with Halved between the two sides, because a halved match
+   * is a pick (the soccer draw control, drawZone). The result goes under the row. */
+  if (cupRow) {
+    r.dataset.winner = 'golf-cup';
+    sides.append(zone(ctx, game, 'home'), drawZone(ctx, game), zone(ctx, game, 'away'));
+    r.appendChild(sides);
+    const cl = cupLine(game);
+    if (cl) r.appendChild(el('div', 'p2-summary', cl));
+    return r;
+  }
   if (winnerRow) {
     r.dataset.winner = (game.sport || ctx.sport);
     sides.append(zone(ctx, game, 'home'), winnerMid(game), zone(ctx, game, 'away'));
@@ -2368,7 +2485,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions', ufc: 'UFC', cricket: 'Cricket' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2395,7 +2512,7 @@ function head(root, data, _) {
   const gsub = data && data.groupMode
     ? (data.group && data.dayLabel ? data.dayLabel + (data.mode === 'ats' ? GROUP_COPY.subAts
       : isSoccerSport(data.sport) ? GROUP_COPY.subSoccer
-      : data.sport === 'ufc' ? GROUP_COPY.subUfc : GROUP_COPY.sub)
+      : data.sport === 'ufc' ? GROUP_COPY.subUfc : data.sport === 'golf-cup' ? GROUP_COPY.subGolfCup : GROUP_COPY.sub)
       : data.group && wk ? 'Week ' + wk + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub) : GROUP_COPY.subNoWeek)
     : null;
   root.appendChild(pageHeader({
@@ -2547,7 +2664,8 @@ function groupGate(root, data, state) {
     dayBar(root, data, state);
     root.appendChild(stateBlock('empty', !data.day ? GROUP_COPY.empty
       : data.sport === 'ufc' ? GROUP_COPY.emptyUfc
-      : data.sport === 'cricket' ? GROUP_COPY.emptyCricket : GROUP_COPY.emptyDay));
+      : data.sport === 'cricket' ? GROUP_COPY.emptyCricket
+      : data.sport === 'golf-cup' ? GROUP_COPY.emptyGolfCup : GROUP_COPY.emptyDay));
     return;
   }
   const c = gs === 'offline' ? GROUP_COPY.offline : GROUP_COPY.error;

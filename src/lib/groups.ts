@@ -77,7 +77,10 @@ export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball'
   'props',
   /* 2026-09-13, "do the ufc and cricket next": two day sports graded by ESPN's winner
      flag, not a score (src/slate-day.ts parseUfcDay / parseCricketDay). */
-  'ufc', 'cricket'] as const;
+  'ufc', 'cricket',
+  /* 2026-09-13, "do the ... presidents cup next": team match play, match by match,
+     a halved match a third pick (src/slate-day.ts parseGolfCupDay). */
+  'golf-cup'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
@@ -95,10 +98,11 @@ export const isRacingSport = (s: unknown) => s === 'f1' || String(s).startsWith(
 export const isSoccerSport = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(String(s));
 /** A race or a soccer match never picks against a spread. */
 /** A sport graded by ESPN's winner flag, not a score: a fight, a cricket match. */
-export const isWinnerSport = (s: unknown) => s === 'ufc' || s === 'cricket';
+export const isWinnerSport = (s: unknown) => s === 'ufc' || s === 'cricket' || s === 'golf-cup';
 export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s) || isWinnerSport(s) || s === 'props';
 /** The sides a pick may take. */
-export const pickSides = (s: unknown): string[] => isSoccerSport(s) ? ['home', 'away', 'draw'] : ['home', 'away'];
+/* A halved match-play match is a result like a soccer draw: the third side. */
+export const pickSides = (s: unknown): string[] => isSoccerSport(s) || s === 'golf-cup' ? ['home', 'away', 'draw'] : ['home', 'away'];
 
 /** The SQL that grades a pick against a final: `counted` says whether a final
  *  game counts as played, `result` names the winning side. Constants chosen
@@ -107,6 +111,8 @@ export const pickSides = (s: unknown): string[] => isSoccerSport(s) ? ['home', '
 export function gradeSql(sport: unknown, ats: boolean): { counted: string; result: string } {
   /* A fight or a cricket match: the winner ESPN flagged (`game.winner`), and one with no
      winner - a draw, a no contest, a match with no result - counts for nobody. */
+  /* Team match play: a halved match is stored as winner 'draw' - a result, counted. */
+  if (sport === 'golf-cup') return { counted: "g.winner IN ('home', 'away', 'draw')", result: 'g.winner' };
   if (isWinnerSport(sport)) return { counted: "g.winner IN ('home', 'away')", result: 'g.winner' };
   const margin = ats && !hasNoSpread(sport)
     ? '(g.home_score + COALESCE(p.spread_at, g.spread, 0) - g.away_score)'

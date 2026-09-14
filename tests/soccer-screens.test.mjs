@@ -219,7 +219,8 @@ test('group create: a Soccer family holds the five leagues, in POOL_SPORTS order
   /* Combat and Cricket (UFC and cricket, 2026-09-13) follow it, then the last family -
      Awards & TV (questions, 2026-09-13) - which is not a sport. */
   const fams = G1.SPORT_FAMILIES.map((f) => f[0]);
-  assert.deepEqual(fams.slice(fams.indexOf('Soccer')), ['Soccer', 'Combat', 'Cricket', 'Awards & TV']);
+  /* Golf (the Presidents Cup, 2026-09-13) after Cricket. */
+  assert.deepEqual(fams.slice(fams.indexOf('Soccer')), ['Soccer', 'Combat', 'Cricket', 'Golf', 'Awards & TV']);
   assert.deepEqual(G1.SPORT_FAMILIES[fams.indexOf('Soccer')], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]);
   assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 1], ['Awards & TV', ['props']]);
   const order = G1.SPORT_FAMILIES.find((f) => f[0] === 'Soccer')[1];

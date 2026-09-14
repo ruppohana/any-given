@@ -168,6 +168,34 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
     ]
   },
 
+  /* 🔴 THE ROAD WORLD CHAMPIONSHIPS, MONTREAL - Jason, 2026-09-13: "do the cycling worlds
+   * next". September 20-27, 2026; the five elite events, each locked at its own start,
+   * Eastern Daylight Time (UTC-4) as Wikipedia's schedule gives it, read 2026-09-13: the
+   * time trials Sunday the 20th (women 9:00, men 12:45), the mixed relay Tuesday the 22nd
+   * (8:30), the road races Saturday the 26th (women, 9:00) and Sunday the 27th (men, 9:00).
+   * No start lists are out yet, so each race lists the riders who led last year's results
+   * (Kigali 2025, Wikipedia's final classifications) and the obvious names beside them,
+   * plus "Someone else", which pays when the winner is nobody listed. Settles from the
+   * championships page's medal table (checked on the real 2024 and 2025 pages). */
+  'worlds-2026': {
+    id: 'worlds-2026',
+    name: 'Cycling Worlds 2026',
+    when: 'Montréal · September 20–27 · the road races Saturday and Sunday the 26th–27th',
+    source: { kind: 'wiki-medals', page: '2026_UCI_Road_World_Championships' },
+    questions: [
+      { text: "Who wins the women's time trial?", points: 2, lockAt: Date.UTC(2026, 8, 20, 13, 0, 0), key: "Women's time trial",
+        options: ['Marlen Reusser', 'Demi Vollering', 'Anna van der Breggen', 'Chloé Dygert', 'Antonia Niedermaier', 'Brodie Chapman', 'Lotte Kopecky', 'Someone else'] },
+      { text: "Who wins the men's time trial?", points: 2, lockAt: Date.UTC(2026, 8, 20, 16, 45, 0), key: "Men's time trial",
+        options: ['Remco Evenepoel', 'Tadej Pogačar', 'Jay Vine', 'Filippo Ganna', 'Joshua Tarling', 'Ilan Van Wilder', 'Isaac del Toro', 'Someone else'] },
+      { text: 'Which nation wins the mixed relay?', points: 1, lockAt: Date.UTC(2026, 8, 22, 12, 30, 0), key: 'relay',
+        options: ['Australia', 'Switzerland', 'Germany', 'Italy', 'France', 'Netherlands', 'Great Britain', 'Belgium', 'Canada', 'United States', 'Another nation'] },
+      { text: "Who wins the women's road race?", points: 3, lockAt: Date.UTC(2026, 8, 26, 13, 0, 0), key: "Women's road race",
+        options: ['Magdeleine Vallieres', 'Demi Vollering', 'Lotte Kopecky', 'Elisa Longo Borghini', 'Kasia Niewiadoma', 'Pauline Ferrand-Prévot', 'Marlen Reusser', 'Niamh Fisher-Black', 'Someone else'] },
+      { text: "Who wins the men's road race?", points: 5, lockAt: Date.UTC(2026, 8, 27, 13, 0, 0), key: "Men's road race",
+        options: ['Tadej Pogačar', 'Remco Evenepoel', 'Mathieu van der Poel', 'Tom Pidcock', 'Isaac del Toro', 'Juan Ayuso', 'Mattias Skjelmose', 'Ben Healy', 'Wout van Aert', 'Someone else'] }
+    ]
+  },
+
   'dwts-35': {
     id: 'dwts-35',
     name: 'Dancing with the Stars, season 35',

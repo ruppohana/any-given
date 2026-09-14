@@ -78,7 +78,7 @@ export type SlateGame = {
   sport?: string;
   /** A soccer knockout level after extra time and won on penalties: the side that
    *  won. Null for every other game - the score decides. */
-  winner?: 'home' | 'away' | null;
+  winner?: 'home' | 'away' | 'draw' | null;
 };
 
 /** 'draw' exists only in soccer - the one pool where a level final is a result. */
@@ -230,6 +230,11 @@ export function resolveGame(game: SlateGame, ats: boolean): GameOutcome {
      finish with no winner (a draw, a no contest, no result) is the one void path. */
   if (game.sport === 'ufc' || game.sport === 'cricket') {
     return game.winner === 'home' || game.winner === 'away' ? game.winner : 'void';
+  }
+  /* Team match play: a halved match is 'draw' - a result somebody can pick. */
+  if (game.sport === 'golf-cup') {
+    const w = (game as any).winner;
+    return w === 'home' || w === 'away' || w === 'draw' ? w : 'void';
   }
   if (game.homeScore === null || game.awayScore === null) return null;
 

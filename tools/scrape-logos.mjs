@@ -269,6 +269,27 @@ if (which === 'countries') {
   process.exit(0);
 }
 
+/* ------------------------------------------------------------ team match play
+ * The Presidents Cup and the Ryder Cup (2026-09-13): a side is USA, International
+ * or Europe, and its crest is that team's flag in ESPN's countries folder (usa,
+ * intl, eur - src/slate-day.ts parseGolfCupDay writes the same URL into
+ * team.logo). The codes come from every competitor on the captured cups in
+ * fixtures/feed/espn-golf-*.json, never typed. ESPN has no 500-dark intl.png;
+ * save() copies the light one, as it does for most NFL crests. */
+if (which === 'golf') {
+  const found = new Map();
+  for (const f of readdirSync(FEED).filter((n) => n.startsWith('espn-golf-') && n.endsWith('.json') && !n.endsWith('-players.json'))) {
+    const j = JSON.parse(readFileSync(FEED + f, 'utf8'));
+    for (const e of j.events || []) for (const c of e.competitions || []) for (const k of c.competitors || []) {
+      const code = String(k.team?.abbreviation || '').toLowerCase();
+      if (code) found.set(code, { id: code, abbr: code.toUpperCase(), name: k.team.displayName || code, hasLogo: true });
+    }
+  }
+  console.log(`  ${found.size} team flags on the captured cups: ${[...found.keys()].join(', ')}`);
+  await crests('team match play flags', 'countries', root + 'countries', [...found.values()], (t) => t.id);
+  process.exit(0);
+}
+
 /* ------------------------------------------------------------ cricket crests
  * A cricket team's logo is ESPN's file when it has one (teamlogos/cricket/500/
  * <id>.png, from team.logo in the feed). Several 404 - a CPL side in its first

@@ -159,6 +159,61 @@ export function matchOption(options: string[], winnerLine: string): string | nul
   return whole.length === 1 ? whole[0] : null;
 }
 
+/* 🔴 A MEDAL TABLE - the cycling Road World Championships (Jason, 2026-09-13: "do the
+ * cycling worlds next"). The championships page carries a "Medal summary" whose first
+ * table is the elite events: one row per event - the event's name (with a "details"
+ * link), then Gold (rider and nation, then a time), Silver, Bronze. Under-23 and junior
+ * tables follow with the same event names, so only the Elite table is read. The row
+ * exists only once the race is run. Read on the real 2024 and 2025 pages. */
+export function medalsFromWiki(html: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const clean = String(html || '').replace(/\sdata-mw='[^']*'/g, '').replace(/\sdata-mw="[^"]*"/g, '');
+  const at = clean.search(/>\s*Elite events\s*</i);
+  if (at < 0) return out;
+  const table = clean.slice(at).split(/<\/table>/i)[0];
+  for (const tr of table.split(/<tr\b[^>]*>/i).slice(1)) {
+    const cells = [...tr.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => m[1]);
+    if (cells.length < 2) continue;
+    const event = text(cells[0]).replace(/\s*details\s*$/i, '').trim();
+    const gold = text(cells[1]);
+    if (event && gold && !out.has(event)) out.set(event, gold);
+  }
+  return out;
+}
+
+/** The gold line for a question's event key: the same event name ("Men's road race"),
+ *  or for 'relay' whichever elite event is the mixed relay. */
+export function findEvent(medals: Map<string, string>, key: string): string | null {
+  const k = norm(key);
+  for (const [event, line] of medals) {
+    const n = norm(event);
+    if (n === k || (k === 'relay' && /\brelay\b/.test(n))) return line;
+  }
+  return null;
+}
+
+/* The catch-all option a race question carries, for a winner nobody listed. */
+export const OTHER_OPTION = /^(someone else|another nation)$/i;
+
+/** The option a result line settles: the option it names; or, when the question has a
+ *  catch-all ("Someone else") and the line names none of the listed riders, the
+ *  catch-all. 🔴 A listed rider's SURNAME in the line with no full match (a spelling the
+ *  page uses and the option does not - "Katarzyna" for "Kasia") answers nothing and
+ *  waits, rather than paying the catch-all for a rider who was on the list. */
+export function pickOption(options: string[], line: string): string | null {
+  const named = options.filter((o) => !OTHER_OPTION.test(o));
+  const hit = matchOption(named, line);
+  if (hit) return hit;
+  const other = options.find((o) => OTHER_OPTION.test(o));
+  if (!other) return null;
+  const l = ' ' + norm(line) + ' ';
+  const near = named.some((o) => {
+    const last = norm(String(o).split(',')[0]).split(' ').pop() || '';
+    return last.length >= 3 && l.includes(' ' + last + ' ');
+  });
+  return near ? null : other;
+}
+
 /** A category heading on the page for a question: the question's `source.key`, or its
  *  text. Headings on the page are full ("Outstanding Lead Actor in a Drama Series"). */
 export function findCategory(winners: Map<string, string>, key: string): string | null {

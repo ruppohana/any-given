@@ -226,7 +226,10 @@ export function cdnLogoUrl(team, league, variant) {
  * (tools/scrape-logos.mjs countries | cricket) saves it under that name. No URL,
  * or one of another shape, is null - the drawn chip, never a guess. Never a UFC
  * mark: the vault's Logos table allows none. */
-const FROM_LOGO = { ufc: 'countries', cricket: 'cricket' };
+/* The Presidents Cup (2026-09-13): a side's crest is its team's flag - usa, intl,
+ * eur - from team.logo (src/slate-day.ts parseGolfCupDay), the same folder a
+ * fighter's flag is in (tools/scrape-logos.mjs golf). */
+const FROM_LOGO = { ufc: 'countries', cricket: 'cricket', 'golf-cup': 'countries' };
 function fromLogo(team, variant, folder) {
   const m = /\/teamlogos\/(countries|cricket)\/500\/([a-z0-9]+)\.png$/i.exec(String(team.logo || ''));
   if (!m || m[1].toLowerCase() !== folder) return null;

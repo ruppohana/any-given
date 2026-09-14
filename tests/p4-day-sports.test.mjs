@@ -99,6 +99,7 @@ test('a day with nothing on it says so, instead of "every game has kicked"', () 
 });
 
 test('the chips get the day sport\'s own crests - a pro crest by abbreviation, a college one by id', () => {
-  /* UFC and cricket joined 2026-09-13: a fighter's flag and a cricket crest are theirs. */
-  assert.ok(SRC.includes("league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'].includes(data.sport) ? data.sport : 'college-football',"));
+  /* UFC and cricket joined 2026-09-13: a fighter's flag and a cricket crest are theirs.
+     Then the Presidents Cup, whose sides carry their team's flag. */
+  assert.ok(SRC.includes("league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'].includes(data.sport) ? data.sport : 'college-football',"));
 });

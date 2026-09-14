@@ -4099,7 +4099,11 @@ const HOME_FAMILIES = [
    * racing logos (2026-09-13); cricket stays words - ESPN's cricket marks are per
    * competition, not one for the sport. */
   { h: 'Combat', leagues: [['ufc', 'UFC']] },
-  { h: 'Cricket', leagues: [['cricket', 'Cricket']] }
+  { h: 'Cricket', leagues: [['cricket', 'Cricket']] },
+  /* The Presidents Cup, 2026-09-13 ("do the ... presidents cup next") - team match
+   * play, a day sport where a halved match is a third pick. One league, so a solo row
+   * with no roll-up, like Cricket; and words, like Cricket - no Presidents Cup mark. */
+  { h: 'Golf', leagues: [['golf-cup', 'Presidents Cup']] }
 ];
 /* 🔴 EVERY MARK FROM OUR ORIGIN. Jason, 2026-09-13: "are we not capturing the
  * rest of the logos?" - the NBA's was hot-linked and every league after it was
@@ -4166,21 +4170,47 @@ const HOME_SHOW_NAMES = {
   /* "Dancing with the Stars, season 35" is three lines on a half-width tile at
      393px; the date under it already says which night. */
   'dwts-35': 'Dancing with the Stars',
-  'traitors-new-blood': 'The Traitors'
+  'traitors-new-blood': 'The Traitors',
+  'worlds-2026': 'Cycling Worlds'
 };
 const HOME_OWN = {
   id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, cricket…'
 };
 
+/* 🔴 A READY SET THAT IS A SPORT GOES ON THE SPORTS TAB. Jason, 2026-09-13: "do the
+ * cycling worlds next". The Cycling Worlds are a questions set (src/lib/props.ts
+ * worlds-2026) - but a sport, so they are a family of their own on the Sports tab,
+ * one row like every one-league family (homeSetFamily), and never a Non-sports tile.
+ * [set id, family name], in the order they follow Golf. A set's family is there while
+ * the set is open and gone once its last question locks, as a show tile is. */
+const HOME_SPORT_SETS = [
+  ['worlds-2026', 'Cycling']
+];
+function isSportSet(id) {
+  return HOME_SPORT_SETS.some(([s]) => s === id);
+}
+
+/** A set's date, as a tile says it: its first lock (the broadcast, the first race). */
+function homeSetCap(id) {
+  const first = Math.min(...PROP_TEMPLATES[id].questions.map((q) => q.lockAt));
+  return new Date(first).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 /** The Awards & TV tiles at `now`: each open set, named short and dated by its
- *  first lock (the broadcast), then Your own questions. */
+ *  first lock (the broadcast), then Your own questions. A set that is a sport is on
+ *  the Sports tab instead (HOME_SPORT_SETS). */
 function homeShowList(now) {
-  const sets = templatesOpen(now).map((t) => {
-    const first = Math.min(...PROP_TEMPLATES[t.id].questions.map((q) => q.lockAt));
-    return { id: t.id, label: HOME_SHOW_NAMES[t.id] || t.name,
-             cap: new Date(first).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) };
-  });
+  const sets = templatesOpen(now).filter((t) => !isSportSet(t.id))
+    .map((t) => ({ id: t.id, label: HOME_SHOW_NAMES[t.id] || t.name, cap: homeSetCap(t.id) }));
   return [...sets, HOME_OWN];
+}
+
+/** The Sports tab's set families at `now`: each sport set still open, in HOME_SPORT_SETS
+ *  order - { id, h: the family, label, cap }. Empty once they have all locked. */
+function homeSetList(now) {
+  const open = new Set(templatesOpen(now).map((t) => t.id));
+  return HOME_SPORT_SETS.filter(([id]) => open.has(id) && PROP_TEMPLATES[id])
+    .map(([id, h]) => ({ id, h, label: HOME_SHOW_NAMES[id] || PROP_TEMPLATES[id].name, cap: homeSetCap(id) }));
 }
 
 function homeShows(now) {
@@ -4313,11 +4343,13 @@ function homeTabTo(c, id, save) {
  * remembered is open when you are in a group of one of its sports - which is only
  * known once the list lands, so markHomeGroups opens it then. A remembered choice
  * wins: somebody who closed their own family is not made to close it again. */
-function homeFamilies() {
+function homeFamilies(now) {
   const fams = el('div', 'lg-fams');
   fams.setAttribute('role', 'group');
   fams.setAttribute('aria-label', 'Which sport?');
   for (const f of HOME_FAMILIES) fams.appendChild(homeFamily(f));
+  /* Then a ready set that is a sport - the Cycling Worlds - while it is open. */
+  for (const s of homeSetList(now == null ? Date.now() : now)) fams.appendChild(homeSetFamily(s));
   return fams;
 }
 
@@ -4326,19 +4358,16 @@ function homeFamily(f) {
   const n = f.leagues.length;
   const fam = el('div', 'lg-fam');
   fam.dataset.fam = key;
-  /* 🔴 ONE LEAGUE, NO ROLL-UP. Jason, 2026-09-13: "baseball is only mlb so it does not
-     need a dropdown". A family with a single league - Baseball, Combat, Cricket - is its
-     heading and its one tile, always showing: a header that only hides one button is a
-     tap that buys nothing. */
+  /* 🔴 ONE LEAGUE, ONE ROW. Jason, 2026-09-13: "baseball is only mlb so it does not
+     need a dropdown", then, looking at a heading with a full-width tile under it:
+     "baseball should only be 1 line, right?". A family with a single league - Baseball,
+     Combat, Cricket, Golf - is ONE row, the height and look of a roll-up's header, and
+     the whole row is that league's button (soloTile). A header that only hides one
+     button is a tap that buys nothing; a heading over one tile is a line that says
+     nothing the tile could not. */
   if (n === 1) {
     fam.classList.add('is-solo');
-    fam.appendChild(el('div', 'lg-fam-solo-h', f.h));
-    const row = el('div', 'lg-fam-row n1');
-    row.id = 'lg-fam-p-' + key;
-    row.setAttribute('role', 'group');
-    row.setAttribute('aria-label', f.h);
-    const [id, label, cap] = f.leagues[0];
-    row.appendChild(leagueTile(id, label, cap));
+    const row = soloTile(f);
     fam.appendChild(row);
     fam.soloRow = row;
     return fam;
@@ -4428,6 +4457,67 @@ function leagueTile(id, label, cap) {
   b.appendChild(el('span', 'lg-league-yg', 'Your group'));
   mineMark(b);
   b.onclick = () => homeSportTap(id);
+  return b;
+}
+
+/** A one-league family's row: the family's name on the left; on the right, where a
+ *  roll-up shows its marks, the league's mark - or, with no mark, the league's name in
+ *  the tile's words, unless it only repeats the family's (Cricket). No chevron: nothing
+ *  opens. It IS the league's tile - the same class, label, "Your group" state and tap -
+ *  so everything that finds, marks or taps a tile treats it as one. */
+function soloTile(f) {
+  const [id, label] = f.leagues[0];
+  const b = el('button', 'lg-league lg-fam-solo');
+  b.type = 'button';
+  b.dataset.sport = id;
+  b.dataset.label = label;
+  b.appendChild(el('span', 'lg-fam-t', f.h));
+  /* Always there, shown by .is-mine - so marking a row never rebuilds it. */
+  b.appendChild(el('span', 'lg-league-yg', 'Your group'));
+  if (HOME_MARKS[id]) {
+    const marks = el('span', 'lg-fam-marks');
+    marks.setAttribute('aria-hidden', 'true');
+    const m = document.createElement('img');
+    m.className = 'lg-fam-mark';
+    m.alt = ''; m.width = 22; m.height = 22;
+    themeMark(m, HOME_MARKS[id], homeMarkDark(HOME_MARKS[id]));
+    marks.appendChild(m);
+    b.appendChild(marks);
+  } else if (label !== f.h) {
+    b.appendChild(el('span', 'lg-league-n', label));
+  }
+  mineMark(b);
+  b.onclick = () => homeSportTap(id);
+  return b;
+}
+
+/** A sport set's family (the Cycling Worlds): one row, as a one-league family is - the
+ *  family's name on the left; on the right the set's name and its date, the way a show
+ *  tile says them - and its tap is a show tile's: the set remembered, then the
+ *  questions pool (homeShowTap). */
+function homeSetFamily(s) {
+  const fam = el('div', 'lg-fam is-solo');
+  fam.dataset.fam = s.h.toLowerCase();
+  const row = setTile(s);
+  fam.appendChild(row);
+  fam.soloRow = row;
+  return fam;
+}
+
+function setTile(s) {
+  const b = el('button', 'lg-league lg-fam-solo');
+  b.type = 'button';
+  b.dataset.sport = 'props';
+  b.dataset.template = s.id;
+  b.dataset.label = s.label + ', ' + s.cap;
+  b.appendChild(el('span', 'lg-fam-t', s.h));
+  b.appendChild(el('span', 'lg-league-yg', 'Your group'));
+  const r = el('span', 'lg-fam-solo-r');
+  r.appendChild(el('span', 'lg-league-n', s.label));
+  r.appendChild(el('span', 'lg-show-c', s.cap));
+  b.appendChild(r);
+  mineMark(b);
+  b.onclick = () => homeShowTap(s.id);
   return b;
 }
 
@@ -5969,9 +6059,14 @@ const CSS = `
   border: 1px solid var(--line); border-radius: var(--radius-card); cursor: pointer; }
 .lg-fam-h:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .lg-fam-t { flex: 1 1 auto; min-width: 0; font-size: var(--t-emph); font-weight: 800; }
-/* A one-league family's heading: the same words as a roll-up's, but no button - its
-   one tile is always showing (Jason: "baseball is only mlb so it does not need a dropdown"). */
-.lg-fam-solo-h { padding: 6px 14px 2px; font-size: var(--t-emph); font-weight: 800; color: var(--fg); }
+/* A one-league family is ONE row (Jason, 2026-09-13: "baseball should only be 1 line,
+   right?"): a roll-up header's height and look - the name on the left, the league's mark
+   on the right - and the row is the league's own button. No chevron: nothing opens. */
+.lg-league.lg-fam-solo { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 48px;
+  padding: 6px 14px; text-align: left; }
+.lg-league.lg-fam-solo .lg-league-n { flex: none; }
+/* A sport set's row (the Cycling Worlds): its name over its date, on the right. */
+.lg-fam-solo-r { display: flex; flex-direction: column; align-items: flex-end; flex: none; text-align: right; }
 .lg-fam-marks { display: flex; align-items: center; gap: 8px; flex: none; }
 .lg-fam-mark { display: block; width: 22px; height: 22px; object-fit: contain; }
 /* The chevron: down while closed, up while open. */

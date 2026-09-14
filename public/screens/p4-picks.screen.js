@@ -231,7 +231,8 @@ export function gameAt(spec, now) {
      * penalties keeps its level score; resolveGame reads `winner` first, so the
      * side that went through is won and the draw is lost - but only if it is on
      * the game it grades. Only once the clock has reached the final. */
-    ...(settled && (spec.winner === 'home' || spec.winner === 'away')
+    /* A halved Presidents Cup match travels as winner 'draw' - the Halved pickers' win. */
+    ...(settled && (spec.winner === 'home' || spec.winner === 'away' || (spec.winner === 'draw' && spec.sport === 'golf-cup'))
       ? { winner: spec.winner, penHome: spec.penHome == null ? null : spec.penHome,
           penAway: spec.penAway == null ? null : spec.penAway }
       : {}),
@@ -240,16 +241,20 @@ export function gameAt(spec, now) {
      * on a game that has no score to print. resolveGame reads `winner` above. */
     ...(WINNER_IDS.includes(spec.sport)
       ? Object.fromEntries(['event', 'weightClass', 'card', 'competition', 'format', 'summary',
-          'homeScoreText', 'awayScoreText', 'statusName']
+          'homeScoreText', 'awayScoreText', 'statusName', 'session']
           .map((k) => [k, typeof spec[k] === 'string' && spec[k] ? spec[k] : null]))
-      : {})
+      : {}),
+    ...(spec.sport === 'golf-cup' ? { overall: spec.overall === true } : {})
   };
 }
 
 /* UFC and cricket (2026-09-13): graded by the winner ESPN flags, not a score -
  * src/lib/groups.ts isWinnerSport, restated because the tests load this module
  * with its imports stripped. */
-const WINNER_IDS = ['ufc', 'cricket'];
+/* The Presidents Cup joined 2026-09-13 ("do the ... presidents cup next"): graded by the
+ * winner flag too, and a halved match is winner 'draw' - a result the Halved pickers win
+ * (src/lib/pool.ts resolveGame). */
+const WINNER_IDS = ['ufc', 'cricket', 'golf-cup'];
 
 /** Line three of a fight or cricket row, and the words for a void one. A bout says
  *  who won and at what weight ("Jean Silva won · Featherweight"); a match gives
@@ -258,6 +263,13 @@ const WINNER_IDS = ['ufc', 'cricket'];
 export function winnerNotes(game, st) {
   if (!game || !WINNER_IDS.includes(game.sport)) return null;
   const ufc = game.sport === 'ufc';
+  /* A Presidents Cup match: the result line ("Matsuyama 1 Up", "Halved", or the cup's two
+   * totals) and its session. ESPN writes a match's score on the winner's side only. */
+  if (game.sport === 'golf-cup') {
+    if (st === 'void') return 'The match has no result. Nobody scored it.';
+    if (st !== 'won' && st !== 'lost') return null;
+    return [cupLine(game), game.session].filter(Boolean).join(' · ') || null;
+  }
   if (st === 'void') {
     if (ufc) {
       return /CANCEL|POSTPON/i.test(String(game.statusName || ''))
@@ -272,6 +284,27 @@ export function winnerNotes(game, st) {
   const score = (t, s) => (s ? (t.abbrev || t.short || t.name) + ' ' + s : null);
   return [game.summary, score(game.home, game.homeScoreText), score(game.away, game.awayScoreText)]
     .filter(Boolean).join(' · ') || null;
+}
+
+/** A Presidents Cup result line. ESPN writes a match's score on ONE side - the
+ *  winner's, or the leader's while it is on ("3 & 2", "1 Up") - and null on the other;
+ *  a halved match "Halved" on both; the cup its two totals ("18.5", "11.5"). So it is
+ *  said once, attributed: "Matsuyama 1 Up", "Halved", "USA 18.5 · International 11.5".
+ *  Null before the first tee. Restated from p2-slate (cupLine), because the tests load
+ *  this module with its imports stripped; tests/golf-cup-screens.test.mjs holds the two
+ *  equal on the real 2024 cup. */
+export function cupLine(game) {
+  if (!game || game.sport !== 'golf-cup' || game.status === 'scheduled') return null;
+  const txt = (s) => (typeof s === 'string' && s.trim() ? s.trim() : null);
+  const h = txt(game.homeScoreText), a = txt(game.awayScoreText);
+  if (h === 'Halved' || a === 'Halved') return 'Halved';
+  const nm = (t) => (t && (t.short || t.name || t.teamName)) || '';
+  if (h && a) return (nm(game.home) + ' ' + h + ' · ' + nm(game.away) + ' ' + a).trim();
+  if (h || a) {
+    const who = game.status === 'final' && (game.winner === 'home' || game.winner === 'away') ? game.winner : (h ? 'home' : 'away');
+    return (nm(game[who]) + ' ' + (h || a)).trim();
+  }
+  return null;
 }
 
 /** "PSG on penalties (4–3)" for a level soccer final one side still won, else
@@ -294,7 +327,8 @@ export function pensText(game) {
 /** What a pick is called on its row: the team, or "Draw" - soccer's third side,
  *  which is a result rather than a team. */
 export function pickLabel(game, side) {
-  if (side === 'draw') return 'Draw';
+  /* A Presidents Cup match's third side is a halve, not a draw (2026-09-13). */
+  if (side === 'draw') return game && game.sport === 'golf-cup' ? 'Halved' : 'Draw';
   const t = game && game[side];
   return t ? (t.short || t.name || '') : '';
 }
@@ -494,8 +528,9 @@ const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
 /* Every sport the pool plays a day at a time - src/lib/day.ts DAY_SPORTS. The
  * Champions League, La Liga, Liga MX, college hockey and women's college
  * basketball joined 2026-09-13. */
-/* UFC and cricket joined 2026-09-13 ("do the ufc and cricket next"). */
-const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'];
+/* UFC and cricket joined 2026-09-13 ("do the ufc and cricket next"), then the
+ * Presidents Cup ("do the ... presidents cup next"). */
+const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
 function soccerToday(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -543,7 +578,8 @@ export function soccerSpecs(dayGames, sport, day, byId) {
       voidAt: g.status === 'void' ? 0 : null,
       feedStatus: g.status === 'final' || g.status === 'in_progress' ? g.status : null,
       /* A level knockout's winner and its shootout - gameAt carries them on. */
-      winner: g.winner === 'home' || g.winner === 'away' ? g.winner : null,
+      /* ...and a halved Presidents Cup match, whose winner is 'draw' (parseGolfCupDay). */
+      winner: g.winner === 'home' || g.winner === 'away' || (g.winner === 'draw' && sport === 'golf-cup') ? g.winner : null,
       penHome: g.penHome == null ? null : g.penHome,
       penAway: g.penAway == null ? null : g.penAway,
       /* A fight or a cricket match: the winner above is the WHOLE grade, the feed
@@ -554,7 +590,9 @@ export function soccerSpecs(dayGames, sport, day, byId) {
         event: g.event || null, weightClass: g.weightClass || null, card: g.card || null,
         competition: g.competition || null, format: g.format || null, summary: g.summary || null,
         homeScoreText: g.homeScoreText || null, awayScoreText: g.awayScoreText || null,
-        statusName: g.statusName || null
+        statusName: g.statusName || null,
+        /* A Presidents Cup match's session, and whether it is the team total (the cup). */
+        session: g.session || null, overall: g.overall === true
       } : {}),
       real: true, sport
     };
@@ -564,7 +602,8 @@ export function soccerSpecs(dayGames, sport, day, byId) {
 async function soccerCard(byId, sport) {
   const soccer = SOCCER.includes(sport);
   /* The sides a pick may take - the same rule as src/lib/groups.ts pickSides. */
-  const sides = soccer ? ['home', 'away', 'draw'] : ['home', 'away'];
+  /* A halved Presidents Cup match is the third side too (pickSides, 2026-09-13). */
+  const sides = soccer || sport === 'golf-cup' ? ['home', 'away', 'draw'] : ['home', 'away'];
   const now = Date.now();
   const today = soccerToday(now);
   const day = soccerDay(sport, today);
@@ -627,8 +666,9 @@ async function soccerCard(byId, sport) {
     /* The slate's own lines, and what a game is called in this sport. */
     dayLine: soccer ? 'pick the winner or the draw · scored in points'
       : sport === 'ufc' ? 'pick the winner of each bout · scored in points'
+      : sport === 'golf-cup' ? 'pick the winner of each match, or halved · scored in points'
       : ats ? 'against the spread · scored in points' : 'pick the winners · scored in points',
-    noun: soccer || sport === 'cricket' ? 'match' : sport === 'ufc' ? 'bout' : 'game',
+    noun: soccer || sport === 'cricket' || sport === 'golf-cup' ? 'match' : sport === 'ufc' ? 'bout' : 'game',
     /* A soccer slate is the group's; with no group, the way in is the group page. */
     slateHref: group ? '#/gpicks' : '#/g',
     slateSize: games.length,
@@ -1037,6 +1077,9 @@ function row(ctx, spec) {
   /* A soccer draw is a side of its own, with no "other" team. */
   const draw = side === 'draw';
   const other = side === 'home' ? 'away' : 'home';
+  /* A Presidents Cup match (2026-09-13): its draw side is Halved, it is billed USA
+   * first (the feed's home side), and it tees off rather than kicking off. */
+  const cup = game.sport === 'golf-cup';
   /* Graded through pool.ts with `sport` on the game (gameAt), so a level soccer
    * final is 'won' for a draw pick rather than a void. */
   const st = pickState(side, game, ctx.pool.ats, ctx.now);
@@ -1092,11 +1135,13 @@ function row(ctx, spec) {
     /* 🔴 A DRAW PICK READS "Draw". It is not a team, so no crest leads the row;
      * both teams sit under it, away at home - the slate's order. */
     l1.appendChild(el('span', 'p4-team', pickLabel(game, side)));
-    l2.appendChild(teamChip(game.away, { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game.home }));
-    l2.appendChild(el('span', 'p4-opp', game.away.short || game.away.name));
-    l2.appendChild(el('span', 'p4-over', 'at'));
-    l2.appendChild(teamChip(game.home, { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game.away }));
-    l2.appendChild(el('span', 'p4-opp', game.home.short || game.home.name));
+    /* Soccer is away at home; a Presidents Cup match is USA v the visitors. */
+    const [one, two] = cup ? ['home', 'away'] : ['away', 'home'];
+    l2.appendChild(teamChip(game[one], { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game[two] }));
+    l2.appendChild(el('span', 'p4-opp', game[one].short || game[one].name));
+    l2.appendChild(el('span', 'p4-over', cup ? 'v' : 'at'));
+    l2.appendChild(teamChip(game[two], { size: 14, withAbbrev: false, league: ctx.league, adjacentTo: game[one] }));
+    l2.appendChild(el('span', 'p4-opp', game[two].short || game[two].name));
   } else {
     l1.appendChild(teamChip(game[side], { size: 18, league: ctx.league, adjacentTo: game[other] }));
     l1.appendChild(el('span', 'p4-team', pickLabel(game, side)));
@@ -1119,7 +1164,7 @@ function row(ctx, spec) {
   /* A fight or a cricket match has no score to print: "Final", and line three
    * says who won (winnerNotes). And neither kicks off - it starts. */
   const winnerGame = WINNER_IDS.includes(game.sport);
-  const started = winnerGame ? 'Started ' : 'Kicked ';
+  const started = cup ? 'Teed off ' : winnerGame ? 'Started ' : 'Kicked ';
   if ((st === 'won' || st === 'lost') && winnerGame) {
     s1.textContent = 'Final';
     s2.appendChild(resultMark(st));
@@ -1147,7 +1192,7 @@ function row(ctx, spec) {
     /* OPEN. The remaining window, in words, and the kickoff it closes at. */
     s1.textContent = 'Closes in ' + remainingLabel(left);
     s1.dataset.kind = 'open';
-    s2.textContent = timeLabel(game.kickoffUtc) + (winnerGame ? ' start' : ' kickoff');
+    s2.textContent = timeLabel(game.kickoffUtc) + (cup ? ' tee time' : winnerGame ? ' start' : ' kickoff');
   }
   status.append(s1, s2);
 
@@ -1227,7 +1272,9 @@ function row(ctx, spec) {
   }
 
   r.setAttribute('aria-label', [
-    draw ? 'Draw, ' + (game.away.name || game.away.short) + ' at ' + (game.home.name || game.home.short)
+    draw ? pickLabel(game, side) + ', ' + (cup
+      ? (game.home.name || game.home.short) + ' v ' + (game.away.name || game.away.short)
+      : (game.away.name || game.away.short) + ' at ' + (game.home.name || game.home.short))
       : (game[side].name || game[side].short) + ' over ' + (game[other].name || game[other].short),
     STATE_WORD[st] || st,
     pens ? 'final ' + game.awayScore + '–' + game.homeScore + ', ' + pens : null,
@@ -1425,7 +1472,7 @@ export function render(root, data, state) {
      * day and fixed here before it could ship the same way. */
     /* The same league list the slate hands its chips - a pro crest is filed by
        abbreviation and a college one by id (components/team-chip.js). */
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'].includes(data.sport) ? data.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'].includes(data.sport) ? data.sport : 'college-football',
     mode: data.mode || 'pool',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',
@@ -1751,6 +1798,8 @@ export function render(root, data, state) {
            "kickoff" is football's word (found on the UFC and cricket cards, 2026-09-13). */
         data.noun === 'bout'
           ? 'Every pick is editable until its part of the card starts - prelims or main card - and locks then. One rule, no exceptions, per bout.'
+          : data.sport === 'golf-cup'
+            ? 'Every pick is editable until its match tees off, and locks at the first tee. One rule, no exceptions, per match.'
           : data.noun === 'match' && data.sport === 'cricket'
             ? 'Every pick is editable until its match starts, and locks at the first ball. One rule, no exceptions, per match.'
             : 'Every pick is editable until that game kicks, and locks at kickoff. One rule, no exceptions, and it is per game rather than per week.'));

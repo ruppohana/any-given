@@ -781,7 +781,8 @@ export default {
           side?: string; sport?: string; week?: number; spread?: number | null;
           kickoffUtc?: number;
         };
-        /* A draw is a side only in soccer (src/lib/groups.ts pickSides). */
+        /* A draw is a side only in soccer and team match play, where it is a halved
+           match (src/lib/groups.ts pickSides). */
         if (!b.gameId || !pickSides(poolSport(b.sport)).includes(String(b.side))) {
           return json({ error: 'gameId and a side are required' }, 400);
         }

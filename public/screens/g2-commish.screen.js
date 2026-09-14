@@ -93,7 +93,10 @@ const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   props: 'Questions',
   /* 2026-09-13, "do the ufc and cricket next": graded by the winner ESPN flags, so
      no spread to switch and no which-games (src/lib/groups.ts isWinnerSport). */
-  ufc: 'UFC', cricket: 'Cricket' };
+  ufc: 'UFC', cricket: 'Cricket',
+  /* 2026-09-13, "do the ... presidents cup next": team match play, graded by the
+     winner ESPN flags or a halved match - no spread and no which-games either. */
+  'golf-cup': 'Presidents Cup' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
@@ -104,9 +107,10 @@ export const isSoccer = (s) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].include
 const isCollegeHoops = (s) => { const p = poolSport(s); return p === 'mens-college-basketball' || p === 'womens-college-basketball'; };
 /** A questions group (src/props-pool.ts). */
 export const isProps = (s) => poolSport(s) === 'props';
-/** UFC and cricket: graded by the winner ESPN flags, never a score (src/lib/groups.ts isWinnerSport). */
-export const isWinner = (s) => { const p = poolSport(s); return p === 'ufc' || p === 'cricket'; };
-/** No spread to switch: the races, soccer, questions, UFC and cricket (src/lib/groups.ts hasNoSpread). */
+/** UFC, cricket and the Presidents Cup: graded by the winner ESPN flags (or a halved
+ *  match), never a score (src/lib/groups.ts isWinnerSport). */
+export const isWinner = (s) => { const p = poolSport(s); return p === 'ufc' || p === 'cricket' || p === 'golf-cup'; };
+/** No spread to switch: the races, soccer, questions, UFC, cricket and the Presidents Cup (src/lib/groups.ts hasNoSpread). */
 export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s);
 /** Which-games choices a sport offers: conferences are football's only; the pro
  *  leagues and the races play every game. */

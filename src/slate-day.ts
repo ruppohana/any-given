@@ -129,10 +129,131 @@ export function parseCricketDay(payload: any, day: string): any[] {
   return out.sort((x, y) => x.kickoffUtc - y.kickoffUtc);
 }
 
+/* 🔴 TEAM MATCH PLAY - the Presidents Cup and the Ryder Cup (Jason, 2026-09-13: "do the
+ * ... presidents cup next"). One event on ESPN's golf scoreboard; competition type 1 is
+ * the team total, 5 foursomes, 4 four-ball, 3 singles (read on the real 2024 Presidents
+ * Cup and 2025 Ryder Cup). A match's sides are pairs (or players in singles), each flagged
+ * winner, the score a line ("1 Up", "4 & 3"); a HALVED match has no winner and both
+ * scores "Halved" - a result, stored as winner 'draw', a third pick like a soccer draw.
+ * A pair's players are not on the scoreboard: they come from ESPN's core API (see
+ * golfCupPlayers) and are passed in. The day's games are the matches teed off that
+ * (Eastern, 6 AM rollover) day; the team total rides on the first day. */
+const CUP_SESSION: Record<string, string> = { '1': 'The cup', '5': 'Foursomes', '4': 'Four-ball', '3': 'Singles' };
+const isCupEvent = (ev: any) => /presidents cup|ryder cup/i.test(String(ev?.name || ''));
+
+export function parseGolfCupDay(payload: any, day: string, players: Record<string, string[]> | null = null): any[] {
+  const out: any[] = [];
+  for (const ev of payload?.events || []) {
+    if (!isCupEvent(ev)) continue;
+    const comps = ev.competitions || [];
+    const starts = comps.map((c: any) => Date.parse(c.date)).filter((n: number) => Number.isFinite(n));
+    const first = starts.length ? Math.min(...starts) : Date.parse(ev.date);
+    for (const comp of comps) {
+      const cs = comp.competitors || [];
+      const h = cs.find((c: any) => c.homeAway === 'home') || cs[0];
+      const a = cs.find((c: any) => c.homeAway === 'away') || cs[1];
+      if (!h || !a || h === a) continue;
+      const typeId = String(comp.type?.id || '');
+      const overall = typeId === '1';
+      /* The team total locks with the first match of the week. */
+      const kickoff = overall ? first : Date.parse(comp.date || ev.date);
+      if (!Number.isFinite(kickoff) || dayOf(kickoff) !== day) continue;
+      const statusName = String(comp.status?.type?.name || 'STATUS_SCHEDULED');
+      let status = statusOf(statusName, comp.status?.type?.completed === true);
+      const won = (c: any) => c.winner === true || c.winner === 'true';
+      let winner: string | null = won(h) ? 'home' : won(a) ? 'away' : null;
+      if (status === 'final' && !winner) {
+        const level = overall
+          ? Number(h.score) === Number(a.score)
+          : String(h.score) === 'Halved' || String(a.score) === 'Halved';
+        if (level) winner = 'draw';
+      }
+      if (status === 'final' && !winner) status = 'void';
+      const side = (c: any) => {
+        const t = c.team || {};
+        const code = String(t.abbreviation || '');
+        const teamName = String(t.shortDisplayName || t.displayName || code);
+        const names: string[] = c.type === 'athlete' ? [String(c.athlete?.displayName || '')]
+          : c.type === 'pair' ? ((players && players[String(c.id)]) || []) : [];
+        const real = names.filter(Boolean);
+        return {
+          id: 'g' + String(c.id), abbrev: code.slice(0, 4), team: code, teamName,
+          name: real.length ? real.join(' / ') : teamName,
+          short: real.length ? real.map((n) => n.split(' ').slice(-1)[0]).join(' / ') : teamName,
+          primary: null, secondary: null, rank: null, conference: null,
+          /* The team's flag stands in for a crest - usa.png, intl.png, eur.png. */
+          logo: code ? `https://a.espncdn.com/i/teamlogos/countries/500/${code.toLowerCase()}.png` : null,
+          record: null, form: null
+        };
+      };
+      const home = side(h), away = side(a);
+      const started = status !== 'scheduled';
+      const line = (c: any) => (started && typeof c.score === 'string' && c.score.trim() ? c.score.trim() : null);
+      out.push({
+        id: String(comp.id), sport: 'golf-cup', day,
+        season: Number(ev.season?.year) || null, week: 0, kickoffUtc: kickoff, tbd: false,
+        name: `${home.name} vs. ${away.name}`, shortName: `${home.short} vs. ${away.short}`,
+        event: ev.name || null, session: CUP_SESSION[typeId] || null, overall,
+        status, statusName, period: null, clock: null,
+        homeTeamId: home.id, awayTeamId: away.id, homeScore: null, awayScore: null,
+        homeScoreText: line(h), awayScoreText: line(a),
+        spread: null, spreadProvider: null, total: null, moneylineHome: null, moneylineAway: null,
+        venue: comp.venue?.fullName || null, broadcast: null, neutral: false, lastMeeting: null,
+        teams: [home, away], rankHome: null, rankAway: null, conferences: [],
+        periodsHome: null, periodsAway: null, winner, penHome: null, penAway: null
+      });
+    }
+  }
+  return out.sort((x, y) => x.kickoffUtc - y.kickoffUtc);
+}
+
+/** The players in every pair of a match-play event, from ESPN's core API (the pair's
+ *  roster, then each athlete), cached in KV - a pair for 30 days, a golfer's name for
+ *  60 - so a day's capture asks once. { "<pair competitor id>": ["Name", "Name"] }. */
+export async function golfCupPlayers(env: any, payload: any, fetchImpl: typeof fetch = fetch): Promise<Record<string, string[]>> {
+  const CORE = 'https://sports.core.api.espn.com/v2/sports/golf';
+  const out: Record<string, string[]> = {};
+  const kvGet = async (k: string) => { try { return env?.LIVE ? await env.LIVE.get(k) : null; } catch { return null; } };
+  const kvPut = async (k: string, v: string, ttl: number) => { try { if (env?.LIVE) await env.LIVE.put(k, v, { expirationTtl: ttl }); } catch { /* fine */ } };
+  for (const ev of payload?.events || []) {
+    if (!isCupEvent(ev)) continue;
+    for (const comp of ev.competitions || []) {
+      for (const c of comp.competitors || []) {
+        if (c.type !== 'pair') continue;
+        const key = 'golfcup:pair:' + String(c.id);
+        let names: string[] = [];
+        try { names = JSON.parse((await kvGet(key)) || '[]'); } catch { names = []; }
+        if (!names.length) {
+          try {
+            const r = await fetchImpl(`${CORE}/leagues/pga/events/${ev.id}/competitions/${comp.id}/competitors/${c.id}/roster`,
+              { headers: { 'user-agent': UA, accept: 'application/json' } });
+            const j: any = r.ok ? await r.json() : null;
+            for (const e of j?.entries || []) {
+              const id = String(e.playerId);
+              let nm = await kvGet('golf:athlete:' + id);
+              if (!nm) {
+                const ar = await fetchImpl(`${CORE}/athletes/${id}`, { headers: { 'user-agent': UA, accept: 'application/json' } });
+                const aj: any = ar.ok ? await ar.json() : null;
+                nm = aj?.displayName || aj?.fullName || '';
+                if (nm) await kvPut('golf:athlete:' + id, nm, 60 * 60 * 24 * 60);
+              }
+              if (nm) names.push(nm);
+            }
+            if (names.length) await kvPut(key, JSON.stringify(names), 60 * 60 * 24 * 30);
+          } catch { names = []; }
+        }
+        if (names.length) out[String(c.id)] = names;
+      }
+    }
+  }
+  return out;
+}
+
 /** The day parser for a sport. */
-export function parseAnyDay(payload: any, sport: string, day: string): any[] {
+export function parseAnyDay(payload: any, sport: string, day: string, extra: any = null): any[] {
   if (sport === 'ufc') return parseUfcDay(payload, day);
   if (sport === 'cricket') return parseCricketDay(payload, day);
+  if (sport === 'golf-cup') return parseGolfCupDay(payload, day, extra);
   return parseDay(payload, sport, day);
 }
 
@@ -306,7 +427,10 @@ export async function captureDay(env: any, sport: string, day: string, fetchImpl
       const res = await fetchImpl(url, { headers: { 'user-agent': UA, accept: 'application/json' } });
       if (!res.ok) { lastErr = `espn ${res.status}`; continue; }
       answered++;
-      games.push(...parseAnyDay(await res.json(), sport, day));
+      const payload = await res.json();
+      /* Team match play names a pair's players only on the core API. */
+      const extra = sport === 'golf-cup' ? await golfCupPlayers(env, payload, fetchImpl) : null;
+      games.push(...parseAnyDay(payload, sport, day, extra));
     } catch (e: any) { lastErr = String(e?.message || e); }
   }
   if (!answered) throw new Error(lastErr || 'espn: no answer');
@@ -360,8 +484,9 @@ export async function writeDayGames(env: any, sport: string, day: string, games:
       g.homeScore == null ? null : Number(g.homeScore),
       g.awayScore == null ? null : Number(g.awayScore),
       sport,
-      /* A level soccer knockout's winner (migration 0010); null for everything else. */
-      g.winner === 'home' || g.winner === 'away' ? g.winner : null
+      /* A level soccer knockout's winner (migration 0010), a fight's or a cricket
+         match's, a match-play match's - 'draw' for a halved one; null otherwise. */
+      g.winner === 'home' || g.winner === 'away' || g.winner === 'draw' ? g.winner : null
     )));
   }
   return rows.length;

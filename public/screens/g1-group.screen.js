@@ -100,7 +100,11 @@ export const SPORTS = [
    * No spread, no which-games, no draw pick - a drawn bout or a match with no
    * result counts for nobody. */
   ['ufc', 'UFC'],
-  ['cricket', 'Cricket']
+  ['cricket', 'Cricket'],
+  /* 2026-09-13, "do the ... presidents cup next": team match play, match by match,
+   * a day at a time (src/slate-day.ts parseGolfCupDay). A halved match is a third
+   * pick, like a soccer draw. No spread, no which-games. */
+  ['golf-cup', 'Presidents Cup']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -119,6 +123,8 @@ export const SPORT_FAMILIES = [
    * one family that is not a sport. */
   ['Combat', ['ufc']],
   ['Cricket', ['cricket']],
+  /* The Presidents Cup (2026-09-13) - team match play, after cricket as in POOL_SPORTS. */
+  ['Golf', ['golf-cup']],
   ['Awards & TV', ['props']]
 ];
 
@@ -156,13 +162,14 @@ export function isProps(s) {
 }
 
 /** A sport graded by the winner ESPN flags, not a score: a UFC bout, a cricket
- *  match (src/lib/groups.ts isWinnerSport). */
+ *  match, a Presidents Cup match (src/lib/groups.ts isWinnerSport). */
 export function isWinner(s) {
   const p = poolSport(s);
-  return p === 'ufc' || p === 'cricket';
+  return p === 'ufc' || p === 'cricket' || p === 'golf-cup';
 }
 
-/** No spread to pick against: the races, soccer, questions, UFC and cricket. The
+/** No spread to pick against: the races, soccer, questions, UFC, cricket and the
+ *  Presidents Cup. The
  *  server's copy is src/lib/groups.ts hasNoSpread, which refuses a spread for the
  *  same ones. */
 export function hasNoSpread(s) {
@@ -174,9 +181,10 @@ export function hasNoSpread(s) {
  * module with its imports stripped cannot read it, so tests/g1-group.test.mjs
  * holds the two equal. */
 export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls',
-  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'];
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
 
-/** Picks a day at a time: basketball, baseball, hockey, soccer, a UFC card, cricket. */
+/** Picks a day at a time: basketball, baseball, hockey, soccer, a UFC card, cricket,
+ *  the Presidents Cup. */
 export function isDaySport(s) {
   return DAY_SPORTS.includes(poolSport(s));
 }
@@ -194,6 +202,8 @@ export function lockWord(s) {
    * the prelims, then the main card); a cricket match at its first ball. */
   if (p === 'ufc') return 'the start of its card';
   if (p === 'cricket') return 'the first ball';
+  /* A Presidents Cup match locks when it tees off. */
+  if (p === 'golf-cup') return 'the first tee';
   if (isDaySport(p)) return 'tip-off';
   /* A question locks at its own time, so a questions group has no one word. */
   if (isRacing(p) || isProps(p)) return '';
@@ -219,6 +229,7 @@ export function sportNote(s) {
   if (isSoccer(p)) return 'Pick the winner or the draw, a day at a time. Every pick locks at kickoff.';
   if (p === 'ufc') return 'Pick the winner of each bout, a card at a time. Each bout locks when its part of the card - the prelims or the main card - starts.';
   if (p === 'cricket') return 'Pick the winner of each match, a day at a time. Every pick locks at the first ball.';
+  if (p === 'golf-cup') return 'Pick the winner of each match - or that it is halved - a day at a time. Every pick locks at the first tee.';
   if (isDaySport(p)) return 'Pick the winners a day at a time. Every pick locks at ' + lockWord(p) + '.';
   return 'Pick the winners each week. Every pick locks at kickoff.';
 }
@@ -302,6 +313,7 @@ export function picksLine(g) {
   /* No spread in either, whatever the group row says. */
   if (s === 'ufc') return 'Picks straight up - who wins each bout';
   if (s === 'cricket') return 'Picks straight up - who wins each match';
+  if (s === 'golf-cup') return 'Picks straight up - who wins each match, or halved';
   return g && g.ats ? 'Picks against the spread' : 'Picks straight up - who wins';
 }
 
@@ -349,6 +361,7 @@ export function shareText(groupName, code, sport) {
     : isSoccer(s) ? 'Pick the winner or the draw each day, scored in points.'
     : s === 'ufc' ? 'Pick the winner of every bout on the card, scored in points.'
     : s === 'cricket' ? 'Pick the winner of each match, scored in points.'
+    : s === 'golf-cup' ? 'Pick the winner of each Presidents Cup match, or that it is halved, scored in points.'
     : isDaySport(s) ? 'Pick the winners each day, scored in points.'
     : 'Pick the winners each week, scored in points.';
   return 'Join my group ' + groupName + ' on Any Given. ' + how + ' Code ' + code;

@@ -475,7 +475,10 @@ const SPORT_LABEL = {
   /* 2026-09-13, "do the ufc and cricket next": a day at a time, graded by the
    * winner ESPN flags - so the season board, like every day sport. */
   ufc: 'UFC',
-  cricket: 'Cricket'
+  cricket: 'Cricket',
+  /* 2026-09-13, "do the ... presidents cup next": team match play, a day at a time,
+   * a halved match a result - so the season board, like every day sport. */
+  'golf-cup': 'Presidents Cup'
 };
 
 /** The soccer leagues - src/lib/groups.ts isSoccerSport. */
@@ -505,6 +508,8 @@ function boardKind(s) {
   if (['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(k)) return 'season';
   /* A UFC card and a cricket day too (2026-09-13): their "week" is a date. */
   if (k === 'ufc' || k === 'cricket') return 'season';
+  /* The Presidents Cup too (2026-09-13): its "week" is the day. */
+  if (k === 'golf-cup') return 'season';
   return 'week';
 }
 
@@ -1144,6 +1149,10 @@ export function render(root, data, state) {
           ? 'A point for every winner you pick, once the bout is over. A draw, a no contest or a bout called off counts for nobody.'
         : d.sport === 'cricket'
           ? 'A point for every winner you pick, once the match has a result. A match with no result counts for nobody.'
+        /* The Presidents Cup (2026-09-13): a halved match is a result (src/lib/groups.ts
+         * gradeSql counts winner 'draw' as played), so the Halved pickers score it. */
+        : d.sport === 'golf-cup'
+          ? 'A point for every right pick, once the match is over. A halved match counts: everybody who picked Halved scores it. A match with no result counts for nobody.'
         : 'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
     host.appendChild(foot);
   }

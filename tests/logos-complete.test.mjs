@@ -37,9 +37,10 @@ const homeMarkDark = pick('homeMarkDark');
 
 test('every league mark Home draws is on our origin, light and dark', () => {
   const ids = HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id));
-  /* Words: only cricket - ESPN's cricket marks are per competition, not one for the
-     sport. F1 and UFC carry their marks since Jason asked (2026-09-13: "racing logos?"). */
-  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket']);
+  /* Words: cricket - ESPN's cricket marks are per competition, not one for the sport -
+     and the Presidents Cup, which has no mark here (2026-09-13). F1 and UFC carry their
+     marks since Jason asked (2026-09-13: "racing logos?"). */
+  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket', 'golf-cup']);
   for (const [id, src] of Object.entries(HOME_MARKS)) {
     assert.match(src, /^\/logos\/leagues\/[a-z0-9]+-500\.(png|svg)$/, id + ' is a local league mark');
     assert.ok(onDisk(src), src + ' is on disk');

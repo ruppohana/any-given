@@ -73,12 +73,12 @@ const LEAGUES = { 'college-football': 'College football', nfl: 'NFL',
   mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks',
   epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX',
   'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball',
-  props: 'Questions', ufc: 'UFC', cricket: 'Cricket' };
+  props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup' };
 function leagueOf(s) { return Object.prototype.hasOwnProperty.call(LEAGUES, s) ? s : 'college-football'; }
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME. src/lib/day.ts DAY_SPORTS
  * is the server's copy; tests/g3-group-rules.test.mjs holds the two equal. */
 export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls',
-  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'];
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
 export function isDaySport(s) { return DAY_SPORTS.includes(s); }
 /** F1 and NASCAR are races: scored in points, with no spread anywhere. */
 /* F1 and every NASCAR series - Cup, O'Reilly, Truck (2026-09-13). */
@@ -92,8 +92,11 @@ export function isProps(s) { return s === 'props'; }
 /** UFC and cricket (2026-09-13): graded by the winner ESPN flags, not a score -
  *  src/lib/groups.ts isWinnerSport and gradeSql. A bout drawn or ruled no contest,
  *  or a match with no result, counts for nobody. */
-export function isWinner(s) { return s === 'ufc' || s === 'cricket'; }
-/** No spread anywhere: the races, soccer, questions, UFC and cricket (src/lib/groups.ts hasNoSpread). */
+export function isWinner(s) { return s === 'ufc' || s === 'cricket' || s === 'golf-cup'; }
+/** The Presidents Cup (2026-09-13): team match play. src/lib/groups.ts gradeSql counts
+ *  a halved match (winner 'draw') as played and scores the Halved pickers right. */
+export function isGolfCup(s) { return s === 'golf-cup'; }
+/** No spread anywhere: the races, soccer, questions, UFC, cricket and the Presidents Cup (src/lib/groups.ts hasNoSpread). */
 export function hasNoSpread(s) { return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s); }
 
 /** The moment a day-sport game starts - the word its picks lock at - and the
@@ -107,11 +110,14 @@ const DAY_WORDS = {
   /* A bout locks when its part of the card starts (src/slate-day.ts parseUfcDay
      locks each bout at its segment's start); a cricket match at its first ball. */
   UFC: { lock: 'the start of its card', until: 'its part of the card starts' },
-  cricket: { lock: 'the first ball', until: 'the first ball of that match' }
+  cricket: { lock: 'the first ball', until: 'the first ball of that match' },
+  /* A Presidents Cup match locks when it tees off; the cup itself with the first match. */
+  golf: { lock: 'the first tee', until: 'that match tees off' }
 };
 function dayFamily(s) {
   return s === 'mlb' ? 'baseball' : s === 'nhl' || s === 'mens-college-hockey' ? 'hockey'
-    : isSoccer(s) ? 'soccer' : s === 'ufc' ? 'UFC' : s === 'cricket' ? 'cricket' : 'basketball';
+    : isSoccer(s) ? 'soccer' : s === 'ufc' ? 'UFC' : s === 'cricket' ? 'cricket'
+    : s === 'golf-cup' ? 'golf' : 'basketball';
 }
 export function lockWord(s) { return DAY_WORDS[dayFamily(s)].lock; }
 
@@ -150,6 +156,23 @@ export function dayPicking(s) {
           'There is no minimum.',
         'The start time is the server’s, not your phone’s, so a pick cannot slip in late.',
         'Pick the same match again before the first ball and the new pick replaces the old one.',
+        'Only members can pick in a group. Picking never joins you to one.'
+      ]
+    };
+  }
+  /* 🔴 THE PRESIDENTS CUP: three picks a match, and halved is one of them. The team
+   * total - the cup - rides on the first day and locks with the first match
+   * (src/slate-day.ts parseGolfCupDay). */
+  if (fam === 'golf') {
+    return {
+      lead: 'Every pick is editable until ' + w.until + ', and locks at ' + w.lock + '.',
+      bullets: [
+        'A Presidents Cup group picks a day at a time. Each day, pick the winner of the matches ' +
+          'you want, or that a match is halved. There is no minimum.',
+        'The cup itself - which team wins on points - is a pick on the first day, and locks ' +
+          'with the first match.',
+        'The tee time is the server’s, not your phone’s, so a pick cannot slip in late.',
+        'Pick the same match again before it tees off and the new pick replaces the old one.',
         'Only members can pick in a group. Picking never joins you to one.'
       ]
     };
@@ -251,7 +274,7 @@ function sHow() {
      * 2026-09-13) - named once here so the old name is recognized. */
     'A group plays one sport - college football, the NFL, men’s or women’s college basketball, ' +
       'the NBA, the WNBA, MLB, the NHL, college hockey, the Premier League, MLS, the Champions ' +
-      'League, La Liga, Liga MX, UFC, cricket, Formula 1 or NASCAR (Cup, Trucks or O’Reilly, ' +
+      'League, La Liga, Liga MX, UFC, cricket, the Presidents Cup, Formula 1 or NASCAR (Cup, Trucks or O’Reilly, ' +
       'formerly Xfinity) - chosen when it starts.',
     'Or it plays questions instead - an awards show, a TV finale, anything the commissioner writes.',
     'You join with the code from an invite. The invite link carries the same code, ' +
@@ -431,6 +454,35 @@ function sScoring(sport) {
     box.appendChild(subHead('When a game does not count'));
     box.appendChild(para('A match counts once it is final, level or not. A match that is ' +
       'cancelled never counts. No points won and none lost, for anybody who picked it.'));
+    box.appendChild(subHead('The standings'));
+    box.appendChild(bullets([
+      'Ranked by right picks.',
+      'Everyone in the group is on them from the day they join, picks or not.',
+      'A group’s standings count only the picks made in that group.'
+    ]));
+    return box;
+  }
+  if (isGolfCup(sport)) {
+    /* 🔴 A HALVED MATCH IS A RESULT. src/lib/groups.ts gradeSql counts a Presidents
+     * Cup match as played when g.winner is home, away or 'draw', and the Halved
+     * pickers are right on a halve; src/lib/pool.ts resolveGame returns 'void' only
+     * for a finish with none of the three. hasNoSpread keeps it off the spread. */
+    box.appendChild(lead('Every right pick is a point. A wrong pick scores nothing and ' +
+      'takes nothing away.'));
+    box.appendChild(para('Points are the only score in a group.'));
+    box.appendChild(subHead('Halved is a pick'));
+    box.appendChild(bullets([
+      'Every match has three picks: one side, the other side, or halved.',
+      'A halved match is a result. It scores a point for everybody who picked Halved, and ' +
+        'nothing for anybody who picked a side - and it counts as played.',
+      'The cup is picked the same way: the team that wins it on points, or halved if the ' +
+        'points finish level.',
+      'There is no spread in a Presidents Cup group. Every pick is straight up.'
+    ]));
+    box.appendChild(subHead('When a game does not count'));
+    box.appendChild(para('A match counts once it is over, halved or not. A match with no ' +
+      'result - called off, or never finished - counts for nobody. No points won and none ' +
+      'lost, for anybody who picked it.'));
     box.appendChild(subHead('The standings'));
     box.appendChild(bullets([
       'Ranked by right picks.',
@@ -651,6 +703,7 @@ function groupCard(root, data) {
       : sport === 'f1' ? 'Points, each race weekend'
       : String(sport).startsWith('nascar') ? 'Points, each race'
       : isSoccer(sport) ? 'Straight up, or the draw'
+      : isGolfCup(sport) ? 'Straight up, or halved'
       : g.ats ? 'Against the spread' : 'Straight up'],
     ['League', LEAGUES[sport]],
     ['Members', g.members == null ? '–' : g.members],

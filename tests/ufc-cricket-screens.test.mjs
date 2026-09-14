@@ -99,7 +99,9 @@ test('every screen knows UFC and cricket: the lists, the labels, the day sports,
   assert.deepEqual(arr(P2_SRC, 'POOL_SPORT_IDS'), [...POOL_SPORTS]);
   assert.deepEqual([...arr(P2_SRC, 'DAY_POOL_SPORTS')].sort(), Object.keys(SERVER_DAY).sort());
   assert.deepEqual([...arr(P4_SRC, 'DAY_SPORT_IDS')].sort(), Object.keys(SERVER_DAY).sort());
-  assert.deepEqual(P2.WINNER_SPORTS, ['ufc', 'cricket']);
+  /* The Presidents Cup joined 2026-09-13 - src/lib/groups.ts isWinnerSport names it too
+     (tests/golf-cup-screens.test.mjs holds its halved match). */
+  assert.deepEqual(P2.WINNER_SPORTS, ['ufc', 'cricket', 'golf-cup']);
   for (const s of ['ufc', 'cricket']) {
     assert.deepEqual(P2.sidesFor(s), pickSides(s), s + ': two sides, no draw pick');
     assert.ok(P2_SRC.includes(s + ": '" + (s === 'ufc' ? 'UFC' : 'Cricket') + "'"), 'SPORT_NAME ' + s);
@@ -113,7 +115,8 @@ test('every screen knows UFC and cricket: the lists, the labels, the day sports,
 });
 
 test('group create: a Combat family and a Cricket family, in POOL_SPORTS order - no spread, no which-games', () => {
-  assert.deepEqual(G1.SPORTS.slice(-2), [['ufc', 'UFC'], ['cricket', 'Cricket']]);
+  /* The Presidents Cup follows them (2026-09-13). */
+  assert.deepEqual(G1.SPORTS.slice(-3), [['ufc', 'UFC'], ['cricket', 'Cricket'], ['golf-cup', 'Presidents Cup']]);
   assert.deepEqual(G1.SPORTS.map((s) => s[0]), [...POOL_SPORTS]);
   const fam = Object.fromEntries(G1.SPORT_FAMILIES);
   assert.deepEqual(fam.Combat, ['ufc']);
