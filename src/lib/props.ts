@@ -99,6 +99,12 @@ const DWTS_35 = ['Tatyana Ali', 'Tyler Cameron', 'Giada De Laurentiis', 'Jenna D
   'Taylor Hanson', 'Maura Higgins', 'Conner Leavitt', 'Ciara Miller', 'Sarah Jane Nader', 'Jackson Olson',
   'Guillermo Rodriguez', 'Harry Shum Jr.', 'Julia Stiles', 'Connor Wood'];
 
+/* Big Brother 28's HouseGuests as its Wikipedia page lists them, read 2026-09-13: the seven
+   still in the house, then the ten evicted or eliminated. */
+const BB_28_IN = ['Barrett Pfeiffer', 'Dee Valladares', 'Drew Campbell', 'Melody Morris', 'Rick Devens', 'Taylor Brown', 'Yash Patel'];
+const BB_28_ALL = [...BB_28_IN, 'Angela Murray', 'La Trice Verrett', 'Haley Thogmartin', 'Mallory Aurichio', 'Kamu Kirk',
+  'Chuk Anyanwu', 'Lyric Medeiros', 'Jason De Puy', 'Rome Seymour', 'Ashley Trail'];
+
 export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: string; questions: any[]; source?: { kind: string; page: string } }> = {
   'emmys-2026': {
     id: 'emmys-2026',
@@ -193,6 +199,25 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
         options: ['Magdeleine Vallieres', 'Demi Vollering', 'Lotte Kopecky', 'Elisa Longo Borghini', 'Kasia Niewiadoma', 'Pauline Ferrand-Prévot', 'Marlen Reusser', 'Niamh Fisher-Black', 'Someone else'] },
       { text: "Who wins the men's road race?", points: 5, lockAt: Date.UTC(2026, 8, 27, 13, 0, 0), key: "Men's road race",
         options: ['Tadej Pogačar', 'Remco Evenepoel', 'Mathieu van der Poel', 'Tom Pidcock', 'Isaac del Toro', 'Juan Ayuso', 'Mattias Skjelmose', 'Ben Healy', 'Wout van Aert', 'Someone else'] }
+    ]
+  },
+
+  /* 🔴 THE BIG BROTHER 28 FINALE - Jason, 2026-09-13: "do the big brother finale set next".
+   * CBS; Wikipedia's "Big Brother 28 (American season)" page, read 2026-09-13: it "is scheduled
+   * to conclude on October 1, 2026", finale time TBD - every episode this season aired at 8 PM,
+   * so all three lock at 8 PM Eastern, 2026-10-02T00:00:00Z. Seven HouseGuests were still in
+   * the house ("Participating") to win and be runner-up; all seventeen can be America's
+   * Favorite HouseGuest. Settles from the season's infobox (checked on the real Big Brother 27
+   * page). "Kamu Kirk" is how the page writes Kamuela "Kamu" Kirk either way. */
+  'big-brother-28': {
+    id: 'big-brother-28',
+    name: 'Big Brother 28 finale',
+    when: 'Thursday, October 1 · CBS',
+    source: { kind: 'wiki-bb', page: 'Big_Brother_28_(American_season)' },
+    questions: [
+      { text: 'Who wins Big Brother 28?', points: 5, lockAt: Date.UTC(2026, 9, 2, 0, 0, 0), options: BB_28_IN, key: 'winner' },
+      { text: 'Who is the runner-up?', points: 3, lockAt: Date.UTC(2026, 9, 2, 0, 0, 0), options: BB_28_IN, key: 'runner-up' },
+      { text: "Who is America's Favorite HouseGuest?", points: 2, lockAt: Date.UTC(2026, 9, 2, 0, 0, 0), options: BB_28_ALL, key: 'afh' }
     ]
   },
 

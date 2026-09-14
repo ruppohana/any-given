@@ -173,8 +173,8 @@ test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once',
 test('Awards & TV: each open ready set, soonest first, dated by its broadcast, then Your own questions', () => {
   const { homeShowList } = load();
   const on13 = homeShowList(SEP13);
-  assert.deepEqual(on13.map((s) => s.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'survivor-51', ''], 'four sets are open on the 13th');
-  assert.deepEqual(on13.map((s) => s.label), ['The Emmys', 'Dancing with the Stars', 'The Traitors', 'Survivor 51', 'Your own questions']);
+  assert.deepEqual(on13.map((s) => s.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'survivor-51', 'big-brother-28', ''], 'five sets are open on the 13th');
+  assert.deepEqual(on13.map((s) => s.label), ['The Emmys', 'Dancing with the Stars', 'The Traitors', 'Survivor 51', 'Big Brother', 'Your own questions']);
   /* The Emmys lock 2026-09-15T00:00Z, Dancing with the Stars 2026-09-16T00:00Z, The Traitors
      2026-09-18T00:00Z, Survivor 51 2026-09-24T00:00Z. */
   assert.equal(on13[0].cap, dayOf(PROP_TEMPLATES['emmys-2026'].questions[0].lockAt));
@@ -187,11 +187,14 @@ test('Awards & TV: each open ready set, soonest first, dated by its broadcast, t
     assert.equal(on13[2].cap, 'Thu, Sep 17');
     assert.equal(on13[3].cap, 'Wed, Sep 23');
   }
-  assert.match(on13[4].cap, /Oscars/);
-  /* Each set leaves the list as it locks; after all four, only your own. */
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 15, 0, 0, 1)).map((s) => s.id), ['dwts-35', 'traitors-new-blood', 'survivor-51', '']);
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 16, 0, 0, 1)).map((s) => s.id), ['traitors-new-blood', 'survivor-51', '']);
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 25)).map((s) => s.id), ['']);
+  /* The Big Brother finale locks 2026-10-02T00:00Z - Thursday the 1st in the Americas. */
+  assert.equal(on13[4].cap, dayOf(PROP_TEMPLATES['big-brother-28'].questions[0].lockAt));
+  assert.match(on13[5].cap, /Oscars/);
+  /* Each set leaves the list as it locks; after all of them, only your own. */
+  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 15, 0, 0, 1)).map((s) => s.id), ['dwts-35', 'traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
+  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 16, 0, 0, 1)).map((s) => s.id), ['traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
+  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 25)).map((s) => s.id), ['big-brother-28', '']);
+  assert.deepEqual(homeShowList(Date.UTC(2026, 9, 3)).map((s) => s.id), ['']);
   /* The same list src/lib/props.ts offers a commissioner - less the Cycling Worlds, a
      sport, which are on the Sports tab (2026-09-13, "do the cycling worlds next"). */
   assert.ok(templatesOpen(SEP13).some((t) => t.id === 'worlds-2026'), 'the server offers the Worlds on the 13th');
@@ -201,19 +204,20 @@ test('Awards & TV: each open ready set, soonest first, dated by its broadcast, t
 
 test('Awards & TV layout: two across, and Your own questions fills an odd row or takes its own', () => {
   const { homeShows } = load();
-  /* Four sets on the 13th (even): Your own questions takes its own row. */
+  /* Five sets on the 13th (odd): Your own questions fills the last pair - six, three rows of two. */
   const three = homeShows(SEP13);
   assert.deepEqual(byClass(three, 'lg-fam-row').map((r) => [r.className, r.children.length]),
-    [['lg-fam-row n2', 4], ['lg-fam-row n1', 1]]);
-  /* Three after the Emmys (odd): it fills the last pair. */
+    [['lg-fam-row n2', 6]]);
+  /* Four after the Emmys (even): Your own questions takes its own row. */
   const two = homeShows(Date.UTC(2026, 8, 15, 1));
-  assert.deepEqual(byClass(two, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n2', 4]]);
-  /* Two after Dancing with the Stars locks (even): its own row again. */
+  assert.deepEqual(byClass(two, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n2', 4], ['lg-fam-row n1', 1]]);
+  /* Three after Dancing with the Stars locks (odd): it fills the last pair again - four, two rows of two. */
   const one = homeShows(Date.UTC(2026, 8, 16));
   assert.deepEqual(byClass(one, 'lg-fam-row').map((r) => [r.className, r.children.length]),
-    [['lg-fam-row n2', 2], ['lg-fam-row n1', 1]]);
-  assert.deepEqual(showTiles(one).map((b) => b.dataset.template), ['traitors-new-blood', 'survivor-51', '']);
-  const none = homeShows(Date.UTC(2026, 8, 25));
+    [['lg-fam-row n2', 4]]);
+  assert.deepEqual(showTiles(one).map((b) => b.dataset.template), ['traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
+  /* After the Big Brother finale locks (Oct 1, 8 PM ET) no set is open. */
+  const none = homeShows(Date.UTC(2026, 9, 3));
   assert.deepEqual(byClass(none, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n1', 1]]);
   for (const b of showTiles(three)) assert.equal(b.dataset.sport, 'props', 'every Awards & TV tile is a questions group');
 });

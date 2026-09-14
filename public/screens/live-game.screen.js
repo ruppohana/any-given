@@ -4207,7 +4207,8 @@ const HOME_SHOW_NAMES = {
      393px; the date under it already says which night. */
   'dwts-35': 'Dancing with the Stars',
   'traitors-new-blood': 'The Traitors',
-  'worlds-2026': 'Cycling Worlds'
+  'worlds-2026': 'Cycling Worlds',
+  'big-brother-28': 'Big Brother'
 };
 const HOME_OWN = {
   id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, anything…'

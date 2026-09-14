@@ -82,8 +82,8 @@ test('the ready sets: the 2026 Emmys (14, lock at the broadcast) and Survivor 51
   assert.equal(sv.questions[0].options.length, 21);
   /* Soonest first: the Emmys lock Sept 15, Dancing with the Stars Sept 16, Survivor Sept 24. */
   /* The cycling Worlds (tests/props-worlds.test.mjs) first lock Sept 20: between The Traitors and Survivor. */
-  assert.deepEqual(templatesOpen(NOW).map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51']);
-  assert.deepEqual(templatesOpen(Date.UTC(2026, 8, 20)).map((t) => t.id), ['worlds-2026', 'survivor-51'], 'a set is not offered once it has locked');
+  assert.deepEqual(templatesOpen(NOW).map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28']);
+  assert.deepEqual(templatesOpen(Date.UTC(2026, 8, 20)).map((t) => t.id), ['worlds-2026', 'survivor-51', 'big-brother-28'], 'a set is not offered once it has locked');
 });
 
 test('scoring: a right answer scores its points; void and unsettled score nobody', () => {
@@ -114,7 +114,7 @@ test('the commissioner loads the Emmys; a member picks; only the commissioner wr
   try {
     const empty = await call(env, 'u-com', '/api/props?pool=EMMYS1');
     assert.deepEqual(empty.body.questions, []);
-    assert.deepEqual(empty.body.templates.map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51']);
+    assert.deepEqual(empty.body.templates.map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28']);
     assert.deepEqual((await call(env, 'u-mem', '/api/props?pool=EMMYS1')).body.templates, [], 'a member is not offered the sets');
 
     assert.equal((await call(env, 'u-mem', '/api/props/template', { pool: 'EMMYS1', template: 'emmys-2026' })).status, 403);

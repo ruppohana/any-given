@@ -132,6 +132,30 @@ export function answersFromCast(kind: string, rows: { name: string; status: stri
   return out;
 }
 
+/* 🔴 AN INFOBOX'S RESULT ROWS - Big Brother (Jason, 2026-09-13: "do the big brother finale
+ * set next"). A finished season's page names its winner, its runner-up and America's Favorite
+ * HouseGuest in the infobox - "Winner Ashley Hollis", "Runner-up Vince Panaro", "America's
+ * Favorite Houseguest Keanu Soto" on the real Big Brother 27 page - and a season still running
+ * has none of those rows, so nothing is answered before the finale. The first infobox only. */
+export function infoboxAnswers(html: string): Record<string, string> {
+  const clean = String(html || '').replace(/\sdata-mw='[^']*'/g, '').replace(/\sdata-mw="[^"]*"/g, '');
+  const box = clean.match(/<table\b[^>]*class="[^"]*\binfobox\b[^"]*"[^>]*>([\s\S]*?)<\/table>/i);
+  const out: Record<string, string> = {};
+  if (!box) return out;
+  for (const tr of box[1].split(/<tr\b[^>]*>/i).slice(1)) {
+    const th = tr.match(/<th\b[^>]*>([\s\S]*?)<\/th>/i);
+    const td = tr.match(/<td\b[^>]*>([\s\S]*?)<\/td>/i);
+    if (!th || !td) continue;
+    const label = norm(text(th[1]));
+    const value = text(td[1].replace(/<sup\b[\s\S]*?<\/sup>/gi, ''));
+    if (!value) continue;
+    if (label === 'winner') out.winner = value;
+    else if (label === 'runner up') out['runner-up'] = value;
+    else if (/^america'?s favorite house ?guest$/.test(label)) out.afh = value;
+  }
+  return out;
+}
+
 /** Every category heading on an awards page, winner or not - so a ready set can be
  *  checked against the page before the night: each of its keys must be a heading. */
 export function categoriesFromWikiAwards(html: string): string[] {
