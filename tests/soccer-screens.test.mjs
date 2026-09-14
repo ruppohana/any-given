@@ -216,8 +216,11 @@ test('standings: the two league labels, and the season board a day sport gets', 
 test('group create: a Soccer family holds the five leagues, in POOL_SPORTS order', () => {
   assert.deepEqual(G1.SPORTS.filter(([id]) => isSoccerSport(id)), [['epl', 'Premier League'], ['mls', 'MLS'],
     ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX']]);
-  /* The last SPORTS family - Awards & TV (questions, 2026-09-13) follows it, and is not a sport. */
-  assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 2], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]);
+  /* Combat and Cricket (UFC and cricket, 2026-09-13) follow it, then the last family -
+     Awards & TV (questions, 2026-09-13) - which is not a sport. */
+  const fams = G1.SPORT_FAMILIES.map((f) => f[0]);
+  assert.deepEqual(fams.slice(fams.indexOf('Soccer')), ['Soccer', 'Combat', 'Cricket', 'Awards & TV']);
+  assert.deepEqual(G1.SPORT_FAMILIES[fams.indexOf('Soccer')], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]);
   assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 1], ['Awards & TV', ['props']]);
   const order = G1.SPORT_FAMILIES.find((f) => f[0] === 'Soccer')[1];
   assert.deepEqual(order, POOL_SPORTS.filter((s) => isSoccerSport(s)));
@@ -285,7 +288,8 @@ test('group rules: the draw is a pick, a level final scores the draw pickers, an
 test('Home: a Soccer family with all five league tiles, and the same tap as every tile', () => {
   const H = new Function([lift(HOME_SRC, 'const HOME_FAMILIES = ['), lift(HOME_SRC, 'function homeSportDest('),
     'return { HOME_FAMILIES, homeSportDest };'].join('\n'))();
-  assert.deepEqual(H.HOME_FAMILIES[H.HOME_FAMILIES.length - 1],
+  /* By name, not by position: Combat and Cricket followed it on 2026-09-13. */
+  assert.deepEqual(H.HOME_FAMILIES.find((f) => f.h === 'Soccer'),
     { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'],
       ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] });
   const G = [{ id: 'SOCCR1', sport: 'epl' }, { id: 'NFL1', sport: 'nfl' }];

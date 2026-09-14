@@ -266,17 +266,18 @@ const POOL_SPORTS = ((code(LIB).match(/POOL_SPORTS\s*=\s*\[([^\]]+)\]/) || [])[1
 const HAS = { name: 'A-Test', pledged: true };
 const NEW3 = ['mlb', 'nhl', 'wnba'];
 
-test('the Sport control offers all nineteen, in POOL_SPORTS order, with their labels', () => {
+test('the Sport control offers all twenty-one, in POOL_SPORTS order, with their labels', () => {
   /* NASCAR's O'Reilly and Truck series joined 2026-09-13, then the Premier League and MLS,
      then the Champions League, La Liga, Liga MX, college hockey and women's college basketball,
-     then a questions group ('props' - awards, TV, anything). */
+     then a questions group ('props' - awards, TV, anything), then UFC and cricket. */
   assert.deepEqual(POOL_SPORTS, ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
     'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls',
-    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props']);
+    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket']);
   assert.deepEqual(mod.SPORTS.map((s) => s[0]), POOL_SPORTS, 'the screen and the server disagree on the sports');
   assert.deepEqual(mod.SPORTS.map((s) => s[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1',
     'NASCAR', 'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
-    'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions']);
+    'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions',
+    'UFC', 'Cricket']);
   for (const [id, label] of mod.SPORTS) assert.equal(mod.sportLabel(id), label);
   assert.equal(mod.sportLabel('curling'), 'College football', 'an unknown sport reads as the server reads it');
   assert.equal(mod.sportLabel(undefined), 'College football');
@@ -290,6 +291,9 @@ test('one native select, grouped by family - every sport in exactly one', () => 
     ['Hockey', ['nhl', 'mens-college-hockey']],
     ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']],
     ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']],
+    /* 2026-09-13: a fight card and a cricket match, each a family of one. */
+    ['Combat', ['ufc']],
+    ['Cricket', ['cricket']],
     /* Not a sport - its own family, and the option says what it is for. */
     ['Awards & TV', ['props']]
   ]);
@@ -439,7 +443,7 @@ test('the spread switch names MLB\'s run line and the NHL\'s puck line', () => {
 
 test('MLB, NHL and WNBA play like the NBA: a day at a time, through one helper', () => {
   assert.deepEqual(POOL_SPORTS.filter(mod.isDaySport), ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls',
-    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball']);
+    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket']);
   assert.deepEqual([...mod.DAY_SPORTS].sort(), Object.keys(SERVER_DAY).sort(),
     'the screen and src/lib/day.ts disagree on which sports pick a day at a time');
   assert.equal(mod.isDaySport('curling'), false, 'an unknown sport is college football, not a day sport');
@@ -459,7 +463,9 @@ test('picks lock at the sport\'s own word: tip-off, first pitch, puck drop, kick
   const want = { 'college-football': 'kickoff', nfl: 'kickoff', 'mens-college-basketball': 'tip-off', nba: 'tip-off',
     wnba: 'tip-off', mlb: 'first pitch', nhl: 'puck drop', f1: '', nascar: '', 'nascar-oreilly': '', 'nascar-truck': '',
     epl: 'kickoff', mls: 'kickoff', ucl: 'kickoff', laliga: 'kickoff', ligamx: 'kickoff',
-    'mens-college-hockey': 'puck drop', 'womens-college-basketball': 'tip-off', props: '' };
+    'mens-college-hockey': 'puck drop', 'womens-college-basketball': 'tip-off', props: '',
+    /* 2026-09-13: a bout locks with its part of the card; a cricket match at its first ball. */
+    ufc: 'the start of its card', cricket: 'the first ball' };
   for (const s of POOL_SPORTS) assert.equal(mod.lockWord(s), want[s], s);
   assert.equal(mod.sportNote('mlb'), 'Pick the winners a day at a time. Every pick locks at first pitch.');
   assert.equal(mod.sportNote('nhl'), 'Pick the winners a day at a time. Every pick locks at puck drop.');

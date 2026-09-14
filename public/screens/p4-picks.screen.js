@@ -186,6 +186,11 @@ export function statusAt(spec, now) {
    * finished - a match ends in about two hours, well inside the football window
    * below. Only a feed that has not moved yet falls through to the clock. */
   if (spec.feedStatus === 'final' || spec.feedStatus === 'in_progress') return spec.feedStatus;
+  /* 🔴 A FIGHT OR A CRICKET MATCH IS FINAL ONLY WHEN THE FEED SAYS SO. Graded by the
+   * winner ESPN flags, the clock can never finish one: a bout "final" by the clock
+   * would carry no winner and read as a void. Until the feed moves it is shut and
+   * waiting - `locked` - which is the truth. */
+  if (spec.feedOnly) return 'scheduled';
   /* 🔴 `lagMs` IS THE `locked` ROW STATE'S ONLY ROUTE, AND IT WAS MISSING UNTIL THE
    * routes were counted in the browser: won, lost, void, in_progress and picked were
    * all drawn and `locked` was drawn nowhere, because a game that has kicked went
@@ -229,8 +234,44 @@ export function gameAt(spec, now) {
     ...(settled && (spec.winner === 'home' || spec.winner === 'away')
       ? { winner: spec.winner, penHome: spec.penHome == null ? null : spec.penHome,
           penAway: spec.penAway == null ? null : spec.penAway }
+      : {}),
+    /* 🔴 A FIGHT'S AND A CRICKET MATCH'S OWN FIELDS RIDE ON TOO - the card and weight
+     * class, the result line and the score text - so the row can say what happened
+     * on a game that has no score to print. resolveGame reads `winner` above. */
+    ...(WINNER_IDS.includes(spec.sport)
+      ? Object.fromEntries(['event', 'weightClass', 'card', 'competition', 'format', 'summary',
+          'homeScoreText', 'awayScoreText', 'statusName']
+          .map((k) => [k, typeof spec[k] === 'string' && spec[k] ? spec[k] : null]))
       : {})
   };
+}
+
+/* UFC and cricket (2026-09-13): graded by the winner ESPN flags, not a score -
+ * src/lib/groups.ts isWinnerSport, restated because the tests load this module
+ * with its imports stripped. */
+const WINNER_IDS = ['ufc', 'cricket'];
+
+/** Line three of a fight or cricket row, and the words for a void one. A bout says
+ *  who won and at what weight ("Jean Silva won · Featherweight"); a match gives
+ *  ESPN's result line and both score texts. A void says why nobody scored it. Pure,
+ *  so the test reads the words each real game gets. Null when there is nothing. */
+export function winnerNotes(game, st) {
+  if (!game || !WINNER_IDS.includes(game.sport)) return null;
+  const ufc = game.sport === 'ufc';
+  if (st === 'void') {
+    if (ufc) {
+      return /CANCEL|POSTPON/i.test(String(game.statusName || ''))
+        ? 'The bout was called off. Nobody scored it.'
+        : 'The bout ended with no winner - a draw or a no contest. Nobody scored it.';
+    }
+    return (game.summary || 'No result') + '. Nobody scored it.';
+  }
+  if (st !== 'won' && st !== 'lost') return null;
+  const w = game.winner === 'home' || game.winner === 'away' ? game[game.winner] : null;
+  if (ufc) return [w ? (w.name || w.short) + ' won' : null, game.weightClass].filter(Boolean).join(' · ') || null;
+  const score = (t, s) => (s ? (t.abbrev || t.short || t.name) + ' ' + s : null);
+  return [game.summary, score(game.home, game.homeScoreText), score(game.away, game.awayScoreText)]
+    .filter(Boolean).join(' · ') || null;
 }
 
 /** "PSG on penalties (4–3)" for a level soccer final one side still won, else
@@ -453,7 +494,8 @@ const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
 /* Every sport the pool plays a day at a time - src/lib/day.ts DAY_SPORTS. The
  * Champions League, La Liga, Liga MX, college hockey and women's college
  * basketball joined 2026-09-13. */
-const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
+/* UFC and cricket joined 2026-09-13 ("do the ufc and cricket next"). */
+const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'];
 function soccerToday(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -504,6 +546,16 @@ export function soccerSpecs(dayGames, sport, day, byId) {
       winner: g.winner === 'home' || g.winner === 'away' ? g.winner : null,
       penHome: g.penHome == null ? null : g.penHome,
       penAway: g.penAway == null ? null : g.penAway,
+      /* A fight or a cricket match: the winner above is the WHOLE grade, the feed
+         alone finishes it, and its card, weight class, result line and score text
+         ride along for the row (src/slate-day.ts parseUfcDay / parseCricketDay). */
+      ...(WINNER_IDS.includes(sport) ? {
+        feedOnly: true,
+        event: g.event || null, weightClass: g.weightClass || null, card: g.card || null,
+        competition: g.competition || null, format: g.format || null, summary: g.summary || null,
+        homeScoreText: g.homeScoreText || null, awayScoreText: g.awayScoreText || null,
+        statusName: g.statusName || null
+      } : {}),
       real: true, sport
     };
   }).filter((g) => g.home && g.away);
@@ -560,8 +612,10 @@ async function soccerCard(byId, sport) {
   for (const g of specs) {
     picks[g.id] = { gameId: g.id, side: saved[g.id].side, state: 'unpicked', lockedAt: g.kickoffUtc, crowd: null };
   }
-  /* A basketball, baseball or hockey group may play against the spread; soccer never does. */
-  const ats = !soccer && !!(group && group.ats);
+  /* A basketball, baseball or hockey group may play against the spread; soccer, UFC
+   * and cricket never do. */
+  const winner = WINNER_IDS.includes(sport);
+  const ats = !soccer && !winner && !!(group && group.ats);
   return {
     sport, mode: 'pool',
     pool: {
@@ -572,8 +626,9 @@ async function soccerCard(byId, sport) {
     week, dayLabel: soccerDayName(day, today),
     /* The slate's own lines, and what a game is called in this sport. */
     dayLine: soccer ? 'pick the winner or the draw · scored in points'
+      : sport === 'ufc' ? 'pick the winner of each bout · scored in points'
       : ats ? 'against the spread · scored in points' : 'pick the winners · scored in points',
-    noun: soccer ? 'match' : 'game',
+    noun: soccer || sport === 'cricket' ? 'match' : sport === 'ufc' ? 'bout' : 'game',
     /* A soccer slate is the group's; with no group, the way in is the group page. */
     slateHref: group ? '#/gpicks' : '#/g',
     slateSize: games.length,
@@ -1061,7 +1116,15 @@ function row(ctx, spec) {
   const s1 = el('div', 'p4-s1 num');
   const s2 = el('div', 'p4-s2 num');
 
-  if (st === 'won' || st === 'lost') {
+  /* A fight or a cricket match has no score to print: "Final", and line three
+   * says who won (winnerNotes). And neither kicks off - it starts. */
+  const winnerGame = WINNER_IDS.includes(game.sport);
+  const started = winnerGame ? 'Started ' : 'Kicked ';
+  if ((st === 'won' || st === 'lost') && winnerGame) {
+    s1.textContent = 'Final';
+    s2.appendChild(resultMark(st));
+    s2.appendChild(el('span', 'p4-pts num', st === 'won' ? '+1 pt' : '0 pts'));
+  } else if (st === 'won' || st === 'lost') {
     s1.appendChild(score(game));
     s2.appendChild(resultMark(st));
     s2.appendChild(el('span', 'p4-pts num', st === 'won' ? '+1 pt' : '0 pts'));
@@ -1073,18 +1136,18 @@ function row(ctx, spec) {
   } else if (st === 'in_progress') {
     const live = el('span', 'p4-live', 'Live');
     s1.appendChild(live);
-    s2.textContent = 'Kicked ' + timeLabel(game.kickoffUtc);
+    s2.textContent = started + timeLabel(game.kickoffUtc);
   } else if (st === 'locked') {
     const lk = el('span', 'p4-locked');
     lk.appendChild(icon('lock', 12));
     lk.appendChild(el('span', null, 'Locked'));
     s1.appendChild(lk);
-    s2.textContent = 'Kicked ' + timeLabel(game.kickoffUtc);
+    s2.textContent = started + timeLabel(game.kickoffUtc);
   } else {
     /* OPEN. The remaining window, in words, and the kickoff it closes at. */
     s1.textContent = 'Closes in ' + remainingLabel(left);
     s1.dataset.kind = 'open';
-    s2.textContent = timeLabel(game.kickoffUtc) + ' kickoff';
+    s2.textContent = timeLabel(game.kickoffUtc) + (winnerGame ? ' start' : ' kickoff');
   }
   status.append(s1, s2);
 
@@ -1126,11 +1189,14 @@ function row(ctx, spec) {
    * a Draw pick crossed out on a 1-1 reads as a grading bug. */
   const pens = pensText(game);
   if (pens && (st === 'won' || st === 'lost')) notes.push(pens);
-  if (st === 'won' || st === 'lost') {
+  /* A fight or a cricket match: who won, or why nobody scored it - never a cover. */
+  const wn = winnerGame ? winnerNotes(game, st) : null;
+  if (wn) notes.push(wn);
+  if ((st === 'won' || st === 'lost') && !winnerGame) {
     const c = coverText(game, side);
     if (c) notes.push(c);
   }
-  if (st === 'void') {
+  if (st === 'void' && !winnerGame) {
     /* ONE VOID PATH. The two void rows on this screen have different CAUSES - one
      * game was cancelled, one landed exactly on the line - and they are drawn
      * IDENTICALLY, score nought for everybody, and differ by one clause. Naming the
@@ -1359,7 +1425,7 @@ export function render(root, data, state) {
      * day and fixed here before it could ship the same way. */
     /* The same league list the slate hands its chips - a pro crest is filed by
        abbreviation and a college one by id (components/team-chip.js). */
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'].includes(data.sport) ? data.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'].includes(data.sport) ? data.sport : 'college-football',
     mode: data.mode || 'pool',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',
@@ -1452,7 +1518,7 @@ export function render(root, data, state) {
          * WNBA at 393px: with nothing on the feed that day, "every game that day
          * has kicked" was said about zero games. */
         body: data.dayLabel && !(data.slate || []).length
-          ? 'There are no ' + (data.noun === 'match' ? 'matches' : 'games') + ' on the slate for that day. Pick another day on the slate.'
+          ? 'There are no ' + (data.noun === 'match' ? 'matches' : data.noun === 'bout' ? 'bouts' : 'games') + ' on the slate for that day. Pick another day on the slate.'
           : first
           ? 'The first game on this pool’s slate closes in ' + remainingLabel(first.kickoffUtc - ctx.now) +
             ', at ' + timeLabel(first.kickoffUtc) + '. Every pick stays editable until its own kickoff, so nothing is decided until then.'
@@ -1699,7 +1765,7 @@ export function render(root, data, state) {
       ? 'Nothing on the feed for that day.'
       : data.dayLabel
       /* A day card's picks are one group's own, never the world board's. */
-      ? data.captured + ' real ' + (data.noun === 'match' ? 'matches' : 'games') + ' off the feed. Your picks count in '
+      ? data.captured + ' real ' + (data.noun === 'match' ? 'matches' : data.noun === 'bout' ? 'bouts' : 'games') + ' off the feed. Your picks count in '
         + (data.pool && data.pool.id ? data.pool.name : 'no group yet') + '. Each one locks at its own kickoff.'
       : data.fromFeed
       ? data.captured + ' real games off the feed — real kickoffs, real lines with the book named. '

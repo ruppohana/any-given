@@ -64,12 +64,20 @@ test('a basketball card offers winner, spread and total only, with no live link 
   assert.ok(P6.includes("league: ctx.sport === 'nfl' ? 'nfl' : ctx.sport === 'nba' ? 'nba' : 'college-football',"), 'an NBA row asks for NBA crests');
 });
 
-test('an NBA crest is built from the abbreviation, never the id (5 is Cleveland and a school)', () => {
+test('an NBA crest is built from the abbreviation, never the id (5 is Cleveland and a school)', async () => {
   const TC = readFileSync(new URL('../public/components/team-chip.js', import.meta.url), 'utf8');
   /* Widened 2026-09-12: MLB, NHL and WNBA are filed the same way (nhl/500/tor.png),
      so the NBA rule became a set of leagues - the NBA is still in it. */
   assert.ok(TC.includes("const BY_ABBREV = new Set(['nba', 'mlb', 'nhl', 'wnba']);"));
-  assert.equal(TC.split("if (BY_ABBREV.has(league || team.league)) return nbaLogo(team, variant, league || team.league);").length - 1, 2,
-    'both the local and CDN paths');
-  assert.ok(TC.includes("return `https://a.espncdn.com/i/teamlogos/${league}/${variant === '500-dark' ? '500-dark' : '500'}/${ab}.png`;"));
+  /* 🔴 Self-hosted 2026-09-13: our origin first, the CDN second - the same
+     abbreviation file name on both, only the host differs. */
+  const { logoUrl, cdnLogoUrl } = await import('../public/components/team-chip.js');
+  const cle = { id: '5', abbrev: 'CLE' };
+  assert.equal(logoUrl(cle, 'nba', '500'), '/logos/nba/500/cle.png', 'our origin, by abbreviation');
+  assert.equal(logoUrl(cle, 'nba', '500-dark'), '/logos/nba/500-dark/cle.png');
+  assert.equal(cdnLogoUrl(cle, 'nba', '500'), 'https://a.espncdn.com/i/teamlogos/nba/500/cle.png', 'the CDN fallback');
+  for (const lg of ['mlb', 'nhl', 'wnba']) {
+    assert.equal(logoUrl({ id: '10', abbrev: 'TOR' }, lg, '500-dark'), `/logos/${lg}/500-dark/tor.png`, lg);
+  }
+  assert.ok(!logoUrl(cle, 'nba', '500').includes('/5.png'), 'never the id');
 });

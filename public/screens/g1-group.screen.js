@@ -94,7 +94,13 @@ export const SPORTS = [
   /* 2026-09-13, "non sports, golf, oscars, everything": a QUESTIONS group. The
    * commissioner writes the questions (or loads a ready set) and enters the
    * answers - src/props-pool.ts. Not a sport, so it has a family of its own. */
-  ['props', 'Questions']
+  ['props', 'Questions'],
+  /* 2026-09-13, "do the ufc and cricket next": two day sports graded by the
+   * winner ESPN flags, not a score (src/slate-day.ts parseUfcDay / parseCricketDay).
+   * No spread, no which-games, no draw pick - a drawn bout or a match with no
+   * result counts for nobody. */
+  ['ufc', 'UFC'],
+  ['cricket', 'Cricket']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -109,6 +115,10 @@ export const SPORT_FAMILIES = [
   ['Hockey', ['nhl', 'mens-college-hockey']],
   ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']],
   ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']],
+  /* A fight card and a cricket match (2026-09-13), with the sports, before the
+   * one family that is not a sport. */
+  ['Combat', ['ufc']],
+  ['Cricket', ['cricket']],
   ['Awards & TV', ['props']]
 ];
 
@@ -145,10 +155,18 @@ export function isProps(s) {
   return poolSport(s) === 'props';
 }
 
-/** No spread to pick against: the races, soccer and questions. The server's copy
- *  is src/lib/groups.ts hasNoSpread, which refuses a spread for the same ones. */
+/** A sport graded by the winner ESPN flags, not a score: a UFC bout, a cricket
+ *  match (src/lib/groups.ts isWinnerSport). */
+export function isWinner(s) {
+  const p = poolSport(s);
+  return p === 'ufc' || p === 'cricket';
+}
+
+/** No spread to pick against: the races, soccer, questions, UFC and cricket. The
+ *  server's copy is src/lib/groups.ts hasNoSpread, which refuses a spread for the
+ *  same ones. */
 export function hasNoSpread(s) {
-  return isRacing(s) || isSoccer(s) || isProps(s);
+  return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s);
 }
 
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME - the group's "week" is
@@ -156,9 +174,9 @@ export function hasNoSpread(s) {
  * module with its imports stripped cannot read it, so tests/g1-group.test.mjs
  * holds the two equal. */
 export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls',
-  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'];
 
-/** Picks a day at a time: basketball, baseball, hockey, soccer. */
+/** Picks a day at a time: basketball, baseball, hockey, soccer, a UFC card, cricket. */
 export function isDaySport(s) {
   return DAY_SPORTS.includes(poolSport(s));
 }
@@ -172,6 +190,10 @@ export function lockWord(s) {
   if (p === 'nhl' || p === 'mens-college-hockey') return 'puck drop';
   /* A soccer match kicks off - a day sport, but not a tip-off. */
   if (isSoccer(p)) return 'kickoff';
+  /* A bout locks when its part of the card starts (src/slate-day.ts parseUfcDay:
+   * the prelims, then the main card); a cricket match at its first ball. */
+  if (p === 'ufc') return 'the start of its card';
+  if (p === 'cricket') return 'the first ball';
   if (isDaySport(p)) return 'tip-off';
   /* A question locks at its own time, so a questions group has no one word. */
   if (isRacing(p) || isProps(p)) return '';
@@ -195,6 +217,8 @@ export function sportNote(s) {
   if (p === 'f1') return 'Pick the race weekend, scored in points. Each pick locks when its session starts.';
   if (p.startsWith('nascar')) return 'Pick the race, scored in points. Every pick locks at the green flag.';
   if (isSoccer(p)) return 'Pick the winner or the draw, a day at a time. Every pick locks at kickoff.';
+  if (p === 'ufc') return 'Pick the winner of each bout, a card at a time. Each bout locks when its part of the card - the prelims or the main card - starts.';
+  if (p === 'cricket') return 'Pick the winner of each match, a day at a time. Every pick locks at the first ball.';
   if (isDaySport(p)) return 'Pick the winners a day at a time. Every pick locks at ' + lockWord(p) + '.';
   return 'Pick the winners each week. Every pick locks at kickoff.';
 }
@@ -263,6 +287,7 @@ export function periodLabel(sport, week) {
   if (s === 'props') return 'Question by question';
   if (s === 'f1') return 'Race weekends';
   if (String(s).startsWith('nascar')) return 'Race days';
+  if (s === 'ufc') return 'A card at a time';
   if (isDaySport(s)) return 'A day at a time';
   return week != null ? 'Week ' + week : 'Week not set';
 }
@@ -274,6 +299,9 @@ export function picksLine(g) {
   if (s === 'f1') return 'Race weekend picks, scored in points';
   if (String(s).startsWith('nascar')) return 'Race day picks, scored in points';
   if (isSoccer(s)) return 'Picks straight up - who wins, or the draw';
+  /* No spread in either, whatever the group row says. */
+  if (s === 'ufc') return 'Picks straight up - who wins each bout';
+  if (s === 'cricket') return 'Picks straight up - who wins each match';
   return g && g.ats ? 'Picks against the spread' : 'Picks straight up - who wins';
 }
 
@@ -319,6 +347,8 @@ export function shareText(groupName, code, sport) {
     : s === 'f1' ? 'Pick the race weekend, scored in points.'
     : String(s).startsWith('nascar') ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
     : isSoccer(s) ? 'Pick the winner or the draw each day, scored in points.'
+    : s === 'ufc' ? 'Pick the winner of every bout on the card, scored in points.'
+    : s === 'cricket' ? 'Pick the winner of each match, scored in points.'
     : isDaySport(s) ? 'Pick the winners each day, scored in points.'
     : 'Pick the winners each week, scored in points.';
   return 'Join my group ' + groupName + ' on Any Given. ' + how + ' Code ' + code;
@@ -657,8 +687,9 @@ function startForm(host, data) {
   swB.appendChild(el('span', 'g1-knob'));
   sw.append(swText, swB);
   c.appendChild(sw);
-  /* F1 and NASCAR are scored in points and soccer picks the result, draw and
-   * all - there is no spread to pick against in any of them. MLB and the NHL
+  /* F1 and NASCAR are scored in points, soccer picks the result, draw and all,
+   * and a fight or a cricket match has no score to spread - there is no spread
+   * to pick against in any of them. MLB and the NHL
    * name their spread, so the note says what it is called. */
   function paintAts() {
     sw.hidden = hasNoSpread(form.sport);

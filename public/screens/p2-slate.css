@@ -644,6 +644,25 @@
 .scr-p2-slate .p2-pens { text-align: center; font-size: var(--t-micro); font-weight: 700;
   color: var(--fg); margin-top: -2px; }
 
+/* 🔴 UFC AND CRICKET (2026-09-13) - graded by the winner ESPN flags, so no score
+   column and no spread line. A fighter goes by the full name and may wrap to two
+   lines rather than be cut; under it, the record. A cricket side's score text
+   ("151/8 (20 ov, target 151)") sits where a score would, under its name. The
+   winner is marked in words for everybody - fact weight, never the result colors,
+   which belong to YOUR pick's resolved state alone. */
+.scr-p2-slate .p2-name.p2-name--full { white-space: normal; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15; }
+.scr-p2-slate .p2-frec, .scr-p2-slate .p2-stext { font-size: var(--t-micro); font-weight: 700;
+  color: var(--dim); line-height: 1.2; max-width: 100%; }
+.scr-p2-slate .p2-wmark { font-size: 9px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--fg); }
+.scr-p2-slate .p2-zone[data-outcome="lost"] .p2-name { opacity: .55; }
+.scr-p2-slate .p2-vs-t { font-size: var(--t-body); font-weight: 700; color: var(--dim); }
+/* The cricket result line - or the toss while it is live - one centered line under
+   the two sides, as the penalties line is. */
+.scr-p2-slate .p2-summary { text-align: center; font-size: var(--t-micro); font-weight: 700;
+  color: var(--fg); margin-top: -2px; }
+
 /* The invite line's styles left with the line itself - an invite opens #/g now
    (CONTRACT-GROUPS §1, amended 2026-09-11). */
 

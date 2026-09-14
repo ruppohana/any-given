@@ -90,7 +90,10 @@ const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball',
   /* 2026-09-13: a QUESTIONS group - the commissioner writes them and enters the
      answers on #/props. No spread and no which-games. */
-  props: 'Questions' };
+  props: 'Questions',
+  /* 2026-09-13, "do the ufc and cricket next": graded by the winner ESPN flags, so
+     no spread to switch and no which-games (src/lib/groups.ts isWinnerSport). */
+  ufc: 'UFC', cricket: 'Cricket' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
@@ -101,8 +104,10 @@ export const isSoccer = (s) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].include
 const isCollegeHoops = (s) => { const p = poolSport(s); return p === 'mens-college-basketball' || p === 'womens-college-basketball'; };
 /** A questions group (src/props-pool.ts). */
 export const isProps = (s) => poolSport(s) === 'props';
-/** No spread to switch: the races, soccer and questions (src/lib/groups.ts hasNoSpread). */
-export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s);
+/** UFC and cricket: graded by the winner ESPN flags, never a score (src/lib/groups.ts isWinnerSport). */
+export const isWinner = (s) => { const p = poolSport(s); return p === 'ufc' || p === 'cricket'; };
+/** No spread to switch: the races, soccer, questions, UFC and cricket (src/lib/groups.ts hasNoSpread). */
+export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s);
 /** Which-games choices a sport offers: conferences are football's only; the pro
  *  leagues and the races play every game. */
 export const scopeValues = (s) => {
@@ -351,8 +356,9 @@ export function render(root, data, state) {
     }
 
     host.appendChild(nameSection(group, flashFor('name')));
-    /* An F1 or NASCAR group is scored in points, and a soccer group picks the
-     * result with the draw as a side - there is no spread to switch in either. */
+    /* An F1 or NASCAR group is scored in points, a soccer group picks the result
+     * with the draw as a side, and a UFC or cricket group picks the winner ESPN
+     * flags - there is no spread to switch in any of them. */
     if (!hasNoSpread(group.sport)) host.appendChild(atsSection(group, flashFor('ats')));
     if (scopeValues(group.sport).length) host.appendChild(scopeSection(group, d.conferences || [], flashFor('scope')));
     if (detail.invite) host.appendChild(inviteSection(group, detail.invite));

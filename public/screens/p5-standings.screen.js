@@ -471,7 +471,11 @@ const SPORT_LABEL = {
   'womens-college-basketball': 'Women’s college basketball',
   /* 2026-09-13: a QUESTIONS group - the Emmys, Survivor, anything. Scored in
    * points, one board (src/props-pool.ts propsStandings). */
-  props: 'Questions'
+  props: 'Questions',
+  /* 2026-09-13, "do the ufc and cricket next": a day at a time, graded by the
+   * winner ESPN flags - so the season board, like every day sport. */
+  ufc: 'UFC',
+  cricket: 'Cricket'
 };
 
 /** The soccer leagues - src/lib/groups.ts isSoccerSport. */
@@ -499,6 +503,8 @@ function boardKind(s) {
   if (k === 'mens-college-hockey' || k === 'womens-college-basketball') return 'season';
   /* Every soccer league picks a day at a time too: its "week" is a date. */
   if (['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(k)) return 'season';
+  /* A UFC card and a cricket day too (2026-09-13): their "week" is a date. */
+  if (k === 'ufc' || k === 'cricket') return 'season';
   return 'week';
 }
 
@@ -1132,6 +1138,12 @@ export function render(root, data, state) {
       : isSoccerBoard(d.sport)
         ? 'A point for every right pick - a winner or the draw - once the match is final. A void game counts for nobody.'
           + ' A knockout decided on penalties counts for the side that went through.'
+        /* UFC and cricket (2026-09-13): graded by the winner ESPN flags (src/lib/groups.ts
+         * gradeSql), and a finish with no winner is the one void path. */
+        : d.sport === 'ufc'
+          ? 'A point for every winner you pick, once the bout is over. A draw, a no contest or a bout called off counts for nobody.'
+        : d.sport === 'cricket'
+          ? 'A point for every winner you pick, once the match has a result. A match with no result counts for nobody.'
         : 'A point for every winner you pick, once the game is final. A tie or a void game counts for nobody.'));
     host.appendChild(foot);
   }

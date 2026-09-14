@@ -81,6 +81,8 @@ export const GROUP_COPY = {
   subAts: ' · against the spread · scored in points',
   /* Soccer: three picks a match, and the draw is one of them. */
   subSoccer: ' · pick the winner or the draw · scored in points',
+  /* A UFC card: every bout a pick, graded by the winner ESPN flags (2026-09-13). */
+  subUfc: ' · pick the winner of each bout · scored in points',
   subNoWeek: 'Pick the winners · scored in points',
   /* Every sport the pool plays (Jason, 2026-09-12). An F1 group plays the race
    * weekend on its own screen; a basketball group picks a day at a time. */
@@ -90,6 +92,8 @@ export const GROUP_COPY = {
    * group's is its race. */
   props: { title: 'This group plays questions', body: 'The commissioner writes the questions - an awards show, a finale, anything - and enters the answers. One pick a question, scored in points.', cta: 'Open the questions', href: '#/props' },
   emptyDay: { title: 'No games on this day', body: 'Pick another day above. Games show up as soon as they are scheduled.' },
+  emptyUfc: { title: 'No UFC card on this day', body: 'Pick another day above. A card shows up here as soon as it is scheduled.' },
+  emptyCricket: { title: 'No cricket on this day', body: 'Pick another day above. Matches show up as soon as they are scheduled.' },
   rules: { label: 'How it’s scored', href: '#/grules' },
   door: { label: 'Group info ›', href: '#/g' },
   signedOut: {
@@ -251,6 +255,10 @@ export function coversSpread(game, side) {
 }
 
 export function winnerOf(game) {
+  /* A fight or a cricket match has no score to read: the winner ESPN flagged. */
+  if (isWinnerSport(game.sport)) {
+    return game.status === 'final' && (game.winner === 'home' || game.winner === 'away') ? game.winner : null;
+  }
   if (game.status !== 'final' || game.homeScore == null || game.awayScore == null) return null;
   /* A soccer knockout level after extra time still has a winner - see knockoutWinner. */
   if (game.homeScore === game.awayScore) return knockoutWinner(game);
@@ -299,6 +307,70 @@ export function knockoutLine(game) {
 export const SOCCER_SPORTS = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
 export function isSoccerSport(s) { return SOCCER_SPORTS.includes(s); }
 
+/* 🔴 UFC AND CRICKET ARE GRADED BY THE WINNER ESPN FLAGS, NOT A SCORE (2026-09-13,
+ * "do the ufc and cricket next"). A fight has no score and a cricket score is text
+ * ("151/8 (20 ov, target 151)"), so src/lib/pool.ts resolveGame reads `game.winner`
+ * for both, and a finish with no winner - a draw, a no contest, a match with no
+ * result - arrives as status 'void' (src/slate-day.ts parseUfcDay / parseCricketDay).
+ * Restated here, not imported: the p2 tests load this module with its imports
+ * stripped. tests/ufc-cricket-screens.test.mjs holds it to pool.ts on the real days. */
+export const WINNER_SPORTS = ['ufc', 'cricket'];
+export function isWinnerSport(s) { return WINNER_SPORTS.includes(s); }
+
+/** What one game is called in a sport, for counts: a bout, a match, a game. */
+export function gameNoun(sport, n) {
+  const one = sport === 'ufc' ? 'bout' : sport === 'cricket' ? 'match' : 'game';
+  return n === 1 ? one : one === 'match' ? 'matches' : one + 's';
+}
+
+/** The fields a winner-sport game carries past the usual shape - the card and the
+ *  weight class of a bout, the competition, format, result line and score text of
+ *  a cricket match. Null where the feed had nothing. */
+export const WINNER_FIELDS = ['event', 'weightClass', 'card', 'competition', 'format', 'summary',
+  'homeScoreText', 'awayScoreText', 'statusName'];
+
+/* 🔴 A UFC DAY READS AS A FIGHT CARD: by event, then by the part of the card - the
+ * Main card first, then the Prelims - never by the clock's kickoff windows. Inside a
+ * part, the feed lists the bouts in the order they are fought, so the main event is
+ * last; it is turned round so the headliner leads, the way every fight card prints.
+ * The label is the event and the part ("UFC 331: Van vs. Pantoja 2 · Main card").
+ * The same shape as groupsOf, so the day card draws it with the code it has. */
+export const CARD_ORDER = ['Main card', 'Prelims'];
+export function cardGroupsOf(games) {
+  const events = new Map();
+  for (const g of (games || []).slice().sort((a, b) => a.kickoffUtc - b.kickoffUtc)) {
+    const ev = g.event || 'UFC';
+    if (!events.has(ev)) events.set(ev, { first: g.kickoffUtc, cards: new Map() });
+    const e = events.get(ev);
+    const part = CARD_ORDER.includes(g.card) ? g.card : 'Prelims';
+    if (!e.cards.has(part)) e.cards.set(part, []);
+    e.cards.get(part).push(g);
+  }
+  const out = [];
+  for (const [ev, e] of [...events].sort((a, b) => a[1].first - b[1].first)) {
+    for (const part of CARD_ORDER) {
+      const list = e.cards.get(part);
+      if (!list || !list.length) continue;
+      const bouts = list.slice().reverse();
+      out.push({ key: ev + '|' + part, dayKey: dayKeyOf(list[0].kickoffUtc), day: ev, window: part,
+        first: Math.min(...list.map((x) => x.kickoffUtc)), games: bouts });
+    }
+  }
+  return out;
+}
+
+/** A cricket result line worth a row of its own: the result once the match is on
+ *  or over ("Tridents won by 2 wkts (0b rem)", "No result (abandoned with a toss)"),
+ *  and the toss while it is live or about to be ("Tridents won toss & fielded").
+ *  Before the toss ESPN writes "Starts at 20:00 local time", which the time on the
+ *  row already says. */
+export function cricketLine(game) {
+  const s = game && typeof game.summary === 'string' ? game.summary.trim() : '';
+  if (!s) return null;
+  if (game.status !== 'scheduled') return s;
+  return /toss/i.test(s) ? s : null;
+}
+
 /** The sides a row offers, and so the sides a saved pick may carry. */
 export function sidesFor(sport) {
   return isSoccerSport(sport) ? ['home', 'away', 'draw'] : ['home', 'away'];
@@ -323,6 +395,12 @@ export function pickStateOf(game, pick, now, mode) {
   const started = game.status !== 'scheduled' || now >= game.kickoffUtc;
   if (!side) return started ? 'locked' : 'unpicked';
   if (game.status === 'final') {
+    /* A fight or a cricket match: the winner ESPN flagged, and a final with none is
+     * the one void path - never a spread, never a score. */
+    if (isWinnerSport(game.sport)) {
+      const w = winnerOf(game);
+      return w == null ? 'void' : (w === side ? 'won' : 'lost');
+    }
     /* Soccer first: a level final is the draw - won by whoever picked it, lost by
      * both sides - never the void path, and never graded on a spread. The game
      * carries its own `sport`, so the grade cannot depend on which screen asks. */
@@ -421,6 +499,15 @@ function slateGame(o) {
      * League final won on penalties would grade the draw pickers right. */
     ...(o.winner === 'home' || o.winner === 'away'
       ? { winner: o.winner, penHome: o.penHome == null ? null : o.penHome, penAway: o.penAway == null ? null : o.penAway }
+      : {}),
+    /* 🔴 AND A FIGHT CARD'S AND A CRICKET MATCH'S OWN FIELDS - the card, the weight
+     * class, the result line and the score text. Same allow-list hazard: a field
+     * not named here does not exist on the slate. Spelled out rather than read off
+     * WINNER_FIELDS, because the tests lift this function out on its own. */
+    ...(o.sport === 'ufc' || o.sport === 'cricket'
+      ? Object.fromEntries(['event', 'weightClass', 'card', 'competition', 'format', 'summary',
+          'homeScoreText', 'awayScoreText', 'statusName']
+          .map((k) => [k, typeof o[k] === 'string' && o[k] ? o[k] : null]))
       : {})
   };
 }
@@ -773,8 +860,10 @@ const WEEK = { 'college-football': 2, nfl: 1 };
 /* Soccer joined 2026-09-13: the Premier League and MLS pick a day at a time too,
  * then the Champions League, La Liga, Liga MX, college hockey and women's college
  * basketball the same day. */
-const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props'];
+/* UFC and cricket joined 2026-09-13 ("do the ufc and cricket next"): a UFC day is
+ * its card, a cricket day every limited-overs match in season. */
+const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket'];
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -810,7 +899,12 @@ async function realSlate(byId, sport, weekArg, dayUrl) {
     if (!Array.isArray(d.games) || !d.games.length) return null;
     /* A day game with no tip time yet, or postponed, is not pickable - the server
        has no lock time for it. */
-    const list = d.games.filter((g) => !dayUrl || (g.status !== 'void' && !g.tbd)).map((g) => {
+    /* 🔴 EXCEPT A FIGHT OR A CRICKET MATCH THAT FINISHED WITH NO WINNER. A drawn
+       bout, a no contest or a washout arrives as status 'void' AFTER it was played
+       (src/slate-day.ts), and the people who picked it have to see it say so -
+       dropping it would make their pick vanish from the card. */
+    const winnerDay = isWinnerSport(sport);
+    const list = d.games.filter((g) => !dayUrl || (!g.tbd && (g.status !== 'void' || winnerDay))).map((g) => {
       /* Identity travels WITH the game, because the shipped team file is a
        * snapshot and the feed is not. Fall back to it only for what is missing. */
       for (const t of g.teams || []) if (t && t.id) byId[t.id] = { ...(byId[t.id] || {}), ...t };
@@ -820,10 +914,14 @@ async function realSlate(byId, sport, weekArg, dayUrl) {
         spreadProvider: g.spreadProvider || null,
         home: byId[g.homeTeamId] || null, away: byId[g.awayTeamId] || null,
         spread: typeof g.spread === 'number' ? g.spread : null,
-        status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress' : 'scheduled',
+        status: g.status === 'final' ? 'final' : g.status === 'in_progress' ? 'in_progress'
+          : g.status === 'void' && winnerDay ? 'void' : 'scheduled',
         homeScore: g.homeScore, awayScore: g.awayScore,
         /* A level knockout's winner and shootout (src/slate-day.ts parseDay). */
         winner: g.winner, penHome: g.penHome, penAway: g.penAway,
+        /* A bout's card and weight class; a cricket match's competition, format,
+           result line and score text (src/slate-day.ts parseUfcDay / parseCricketDay). */
+        ...Object.fromEntries(WINNER_FIELDS.map((k) => [k, g[k]])),
         rankHome: g.rankHome, rankAway: g.rankAway, conferences: g.conferences,
         lastMeeting: g.lastMeeting || null,
         sport
@@ -849,6 +947,30 @@ async function realSlate(byId, sport, weekArg, dayUrl) {
      * overlay fails for ANY reason, the slate's own values stand. */
     try { return await overlayLive(list, sport); } catch { return list; }
   } catch { return null; }
+}
+
+/** A fight card's or a cricket day's live refresh: the day again, with the fields a
+ *  winner-sport row is drawn from copied onto the games in play - the status (a
+ *  finish with no winner is 'void', never back to 'scheduled'), the winner ESPN
+ *  flagged, the result line and the score text. p6's refreshDay copies none of the
+ *  last three, so this does it here rather than there. Above render(), which never
+ *  fetches; render's live timer calls it. Never throws. */
+export async function refreshWinnerDay(games, sport, day) {
+  try {
+    const r = await fetch('/api/day/' + sport + '/' + day, { cache: 'no-store' });
+    if (!r.ok) return games;
+    const d = await r.json();
+    const byId = new Map((d.games || []).map((g) => [String(g.id), g]));
+    for (const g of games || []) {
+      const n = byId.get(String(g.id));
+      if (!n) continue;
+      if (['final', 'in_progress', 'void', 'scheduled'].includes(n.status)) g.status = n.status;
+      if (n.winner === 'home' || n.winner === 'away') g.winner = n.winner;
+      else delete g.winner;
+      for (const k of WINNER_FIELDS) if (typeof n[k] === 'string' && n[k]) g[k] = n[k];
+    }
+  } catch { /* the board's own values stand */ }
+  return games;
 }
 
 /** Is this one of the group's games? A college group picks from all games, the Top
@@ -1317,9 +1439,47 @@ function zone(ctx, game, side) {
      * paid for by taking something off the crest's line. At 44 it is the first
      * thing seen and the block reads top-down: WHO, then the numbers about them. */
     size: 44,
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'].includes(ctx.sport) ? ctx.sport : 'college-football',
+    /* UFC and cricket (2026-09-13): the chip is told the league, so a fighter's flag
+       and a cricket crest are looked up as theirs and never as a college school's. */
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket'].includes(ctx.sport) ? ctx.sport : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
+
+  /* 🔴 A FIGHT OR A CRICKET MATCH: the name, then the one fact under it - a
+   * fighter's record ("18-3-0"), or a side's score text once the match is on
+   * ("151/8 (20 ov, target 151)"). Never a spread: neither has one. A fighter goes
+   * by the FULL name - "Silva" alone is three men on one card - and may wrap to two
+   * lines rather than be cut. The winner is marked for everybody once it is final,
+   * because there is no score on the row to say who won. */
+  if (isWinnerSport(game.sport || ctx.sport)) {
+    const ufc = (game.sport || ctx.sport) === 'ufc';
+    const nm = el('div', 'p2-name' + (ufc ? ' p2-name--full' : ''));
+    nm.appendChild(el('span', 'p2-name-t', ufc ? (team.name || team.short) : (team.short || team.name)));
+    b.appendChild(nm);
+    const fact = ufc ? (team.record || null) : (side === 'home' ? game.homeScoreText : game.awayScoreText) || null;
+    b.appendChild(el('div', ufc ? 'p2-frec num' : 'p2-stext num', fact || ' '));
+    const w = winnerOf(game);
+    if (w) {
+      b.dataset.outcome = w === side ? 'won' : 'lost';
+      if (w === side) b.appendChild(el('div', 'p2-wmark', 'Winner'));
+    }
+    const wst = pickStateOf(game, ctx.picks[game.id], ctx.now, ctx.mode);
+    const wmine = !!(ctx.picks[game.id] && ctx.picks[game.id].side === side);
+    if (wmine && (wst === 'won' || wst === 'lost' || wst === 'void')) {
+      const m = el('div', 'p2-result');
+      m.dataset.result = wst;
+      m.appendChild(icon(wst === 'won' ? 'check' : wst === 'lost' ? 'cross' : 'dash'));
+      b.appendChild(m);
+    }
+    if (wmine) b.dataset.pick = 'on';
+    const wopen = wst === 'unpicked' || wst === 'picked';
+    b.disabled = !wopen;
+    b.setAttribute('aria-pressed', String(wmine));
+    b.setAttribute('aria-label', (team.name || team.short) + (fact ? ', ' + fact : '')
+      + (w ? (w === side ? ', won' : ', lost') : '') + (wopen ? '' : ' – locked'));
+    if (wopen) b.addEventListener('click', () => ctx.onPick(game.id, side));
+    return b;
+  }
 
   /* 🔴 THE RANK RIDES IN FRONT OF THE NAME. Jason, 2026-09-11: "I thought we had
    * the ranking on cards like this." It left the row with the context line on
@@ -1452,6 +1612,24 @@ function drawZone(ctx, game) {
   return b;
 }
 
+
+/** The middle of a fight or a cricket row: "vs" (UFC) or "v" (cricket, as the game
+ *  writes it), with the state over it once it has started - Live, Final, Void. No
+ *  score column: a fight has none, and a cricket score is text that sits under each
+ *  side's name instead. */
+function winnerMid(game) {
+  const c = el('div', 'p2-center p2-vs num');
+  const top = game.status === 'void' ? 'Void' : game.status === 'final' ? 'Final'
+    : game.status === 'in_progress' ? 'Live' : null;
+  if (top) {
+    const t = el('span', 'p2-c-lo', top);
+    if (game.status === 'in_progress') t.dataset.live = 'true';
+    c.appendChild(t);
+  }
+  if (game.status === 'void') c.dataset.kind = 'void';
+  c.appendChild(el('span', 'p2-vs-t', game.sport === 'cricket' ? 'v' : 'vs'));
+  return c;
+}
 
 /** The center column. AQB's move, and it is the elegant part of that screen: the kickoff
  *  time is REPLACED IN PLACE by the live state. Same slot, no badge, no extra column. */
@@ -1651,7 +1829,13 @@ function row(ctx, game) {
   const top = el('div', 'p2-top');
   const when = el('div', 'p2-when');
   when.appendChild(el('span', 'p2-time', timeLabel(game.kickoffUtc)));
-  if (game.broadcast) when.appendChild(el('span', 'p2-chan', game.broadcast));
+  /* The row's sub line: a bout's weight class, a cricket match's competition and
+   * format ("Caribbean Premier League · T20") - neither carries a channel. */
+  const winnerRow = isWinnerSport(game.sport || ctx.sport);
+  const subLine = winnerRow
+    ? ((game.sport || ctx.sport) === 'ufc' ? game.weightClass : [game.competition, game.format].filter(Boolean).join(' · '))
+    : game.broadcast;
+  if (subLine) when.appendChild(el('span', 'p2-chan', subLine));
   /* 🔴 NO PILL FOR "OPEN" OR "PICKED". Jason, 2026-09-09: "I don't need picked
    * or opens obvious."
    *
@@ -1700,6 +1884,18 @@ function row(ctx, game) {
    * match has started - see drawZone. */
   const soccer = isSoccerSport(ctx.sport) || isSoccerSport(game.sport);
   if (soccer) r.dataset.soccer = 'true';
+  /* 🔴 A FIGHT READS IN THE ORDER IT IS BILLED: the fighter listed first (the red
+   * corner, "home" in the feed) on the left, as "Van vs. Pantoja" is written - and a
+   * cricket match the same, "Barbados Tridents v Jamaica Kingsmen". Neither is at
+   * anybody's place in the way the "@" means, so there is no "@". */
+  if (winnerRow) {
+    r.dataset.winner = (game.sport || ctx.sport);
+    sides.append(zone(ctx, game, 'home'), winnerMid(game), zone(ctx, game, 'away'));
+    r.appendChild(sides);
+    const line = (game.sport || ctx.sport) === 'cricket' ? cricketLine(game) : null;
+    if (line) r.appendChild(el('div', 'p2-summary', line));
+    return r;
+  }
   const mid = soccer ? drawZone(ctx, game)
     : (game.status === 'in_progress' || game.status === 'final')
       ? center(ctx, game) : el('span', 'p2-at', '@');
@@ -1749,8 +1945,10 @@ export function openInfo(game, ctx) {
   d.className = 'p2-dlg';
 
   const head = el('div', 'p2-dlg-h');
-  head.appendChild(el('div', 'p2-dlg-t',
-    (game.away.short || game.away.name) + ' at ' + (game.home.short || game.home.name)));
+  /* A fight and a cricket match are billed first-named first, and neither side is at home. */
+  head.appendChild(el('div', 'p2-dlg-t', isWinnerSport(game.sport)
+    ? (game.home.name || game.home.short) + (game.sport === 'cricket' ? ' v ' : ' vs ') + (game.away.name || game.away.short)
+    : (game.away.short || game.away.name) + ' at ' + (game.home.short || game.home.name)));
   const meta = [timeLabel(game.kickoffUtc), dayLabel(game.kickoffUtc)];
   if (game.venue) meta.push(game.venue);
   if (game.broadcast) meta.push('on ' + game.broadcast);
@@ -2073,7 +2271,8 @@ export function render(root, data, state) {
   }
 
   const shown = data.games.filter((g) => gamePasses(g, filter));
-  const groups = groupsOf(shown);
+  /* A UFC day is a fight card: by event, Main card then Prelims (cardGroupsOf). */
+  const groups = ctx.sport === 'ufc' ? cardGroupsOf(shown) : groupsOf(shown);
   /* 🔴 THE DAY JUMP STRIP IS GONE. Jason, 2026-09-11, circling "Thu 10 · Fri 11 ·
    * Sat 12" under the filter pills: "i dont need the date/date on this page." The
    * day sections below already carry their own headers and roll up, so the strip
@@ -2146,7 +2345,7 @@ export function render(root, data, state) {
     const h = el('summary', 'p2-grp');
     h.dataset.key = g.key;
     const right = el('span', 'p2-grp-r');
-    right.append(el('span', 'p2-grp-n num', g.games.length + (g.games.length === 1 ? ' game' : ' games')),
+    right.append(el('span', 'p2-grp-n num', g.games.length + ' ' + gameNoun(ctx.sport, g.games.length)),
                  el('span', 'p2-chev', '⌄'));
     h.append(el('span', 'p2-grp-d', groupLabel(g)), right);
     day.appendChild(h);
@@ -2200,7 +2399,13 @@ export function render(root, data, state) {
       if (!document.body.contains(root) || !root.classList.contains('scr-p2-slate')) {
         clearInterval(window.__agPoolLiveTimer); window.__agPoolLiveTimer = null; return;
       }
-      try { await overlayLive(inPlay, fsport); } catch { return; }
+      /* A fight card or a cricket day has no per-game live state to overlay - the
+       * day itself is the live copy (the Worker refetches it every 45 seconds while
+       * a bout or a match is on), so it is read again and its result fields copied. */
+      try {
+        if (isWinnerSport(fsport) && data.day) await refreshWinnerDay(inPlay, fsport, data.day);
+        else await overlayLive(inPlay, fsport);
+      } catch { return; }
       for (const g of inPlay) {
         const old = root.querySelector('.p2-row[data-game-id="' + String(g.id).replace(/"/g, '') + '"]');
         if (old) old.replaceWith(row(ctx, g));
@@ -2209,7 +2414,9 @@ export function render(root, data, state) {
   }
 
   const tb = data.games.find((g) => g.id === (data.tiebreak && data.tiebreak.gameId)) || data.games[0];
-  if (tb) {
+  /* No tiebreak on a fight card or a cricket day: a bout has no points to add up,
+   * and a cricket total is text. */
+  if (tb && !isWinnerSport(ctx.sport)) {
     const card = el('div', 'card p2-tb');
     card.append(el('div', 'p2-tb-k', 'Tiebreaker'));
     const rowEl = el('label', 'p2-tb-row');
@@ -2241,10 +2448,11 @@ export function render(root, data, state) {
   const sourceNote = el('p', 'p2-note');
   sourceNote.textContent = 'The line is the market’s, not ours — read from the public feed. '
     + 'We never post a number of our own.';
-  root.appendChild(sourceNote);
+  /* A fight card and a cricket day carry no line at all, so the note has nothing to attribute. */
+  if (!isWinnerSport(ctx.sport)) root.appendChild(sourceNote);
 
   note.textContent = !data.synthetic
-    ? `${data.games.length} games, all captured from the feed`
+    ? `${data.games.length} ${gameNoun(ctx.sport, data.games.length)}, all captured from the feed`
     : cap
       ? `${data.games.length} games \u00b7 ${cap} captured from the feed, ${data.synthetic} paired from real team identities for this preview`
       : `${data.games.length} games \u00b7 real team identities, synthetic pairings and kickoff times. A real ${data.games.length}-game slate is a capture job`;
@@ -2264,7 +2472,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions', ufc: 'UFC', cricket: 'Cricket' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2290,7 +2498,8 @@ function head(root, data, _) {
   /* Group pools: its own sub line, and "How it's scored" opens the GROUP's rules. */
   const gsub = data && data.groupMode
     ? (data.group && data.dayLabel ? data.dayLabel + (data.mode === 'ats' ? GROUP_COPY.subAts
-      : isSoccerSport(data.sport) ? GROUP_COPY.subSoccer : GROUP_COPY.sub)
+      : isSoccerSport(data.sport) ? GROUP_COPY.subSoccer
+      : data.sport === 'ufc' ? GROUP_COPY.subUfc : GROUP_COPY.sub)
       : data.group && wk ? 'Week ' + wk + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub) : GROUP_COPY.subNoWeek)
     : null;
   root.appendChild(pageHeader({
@@ -2440,7 +2649,9 @@ function groupGate(root, data, state) {
   if (gs === 'empty') {
     groupBar(root, data, state);
     dayBar(root, data, state);
-    root.appendChild(stateBlock('empty', data.day ? GROUP_COPY.emptyDay : GROUP_COPY.empty));
+    root.appendChild(stateBlock('empty', !data.day ? GROUP_COPY.empty
+      : data.sport === 'ufc' ? GROUP_COPY.emptyUfc
+      : data.sport === 'cricket' ? GROUP_COPY.emptyCricket : GROUP_COPY.emptyDay));
     return;
   }
   const c = gs === 'offline' ? GROUP_COPY.offline : GROUP_COPY.error;
