@@ -22,6 +22,7 @@
  */
 import { sessionAccount } from './auth.ts';
 import { cleanQuestion, isOpen, scoreProps, PROP_TEMPLATES, templatesOpen, PROPS_LIMITS, VOID, type PropQuestion } from './lib/props.ts';
+import { settleReadySets } from './props-settle-run.ts';
 
 type Json = (body: unknown, status?: number, ttl?: number) => Response;
 
@@ -96,6 +97,10 @@ export async function handlePropsPool(req: Request, env: any, p: string, json: J
   const now = Date.now();
 
   if (p === '/api/props' && !post) {
+    /* A ready set whose questions have locked checks its source when somebody looks -
+       at most once a minute per set - so answers arrive minutes after they are
+       published, not at the next cron tick. Never fails the read. */
+    try { await settleReadySets(env, now); } catch { /* the cron tries again */ }
     const qs = await questionsOf(env, poolId);
     const mine = ((await env.DB.prepare('SELECT qid, choice FROM prop_pick WHERE pool_id = ? AND user_id = ?')
       .bind(poolId, uid).all()).results || []) as any[];

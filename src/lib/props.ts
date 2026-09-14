@@ -67,18 +67,36 @@ export function scoreProps(questions: PropQuestion[], picks: Record<string, stri
  * locks at the start of the broadcast: 2026-09-15T00:00:00Z. The big three are
  * worth 3; the acting awards 2; the rest 1. */
 const EMMYS_2026_LOCK = Date.UTC(2026, 8, 15, 0, 0, 0);
-const e = (text: string, points: number, options: string[]) => ({ text, points, options, lockAt: EMMYS_2026_LOCK });
+/* 🔴 EACH QUESTION'S `key` IS THE CATEGORY HEADING ON THE WIKIPEDIA PAGE - the settler
+   (src/props-settle-run.ts) reads the winner under it. Checked against the real 78th
+   page the night before (tests/props-settle.test.mjs). */
+const EMMY_KEYS: Record<string, string> = {
+  'Lead Actor, Drama': 'Outstanding Lead Actor in a Drama Series',
+  'Lead Actress, Drama': 'Outstanding Lead Actress in a Drama Series',
+  'Lead Actor, Comedy': 'Outstanding Lead Actor in a Comedy Series',
+  'Lead Actress, Comedy': 'Outstanding Lead Actress in a Comedy Series',
+  'Lead Actor, Limited Series or Movie': 'Outstanding Lead Actor in a Limited or Anthology Series or Movie',
+  'Lead Actress, Limited Series or Movie': 'Outstanding Lead Actress in a Limited or Anthology Series or Movie',
+  'Supporting Actor, Drama': 'Outstanding Supporting Actor in a Drama Series',
+  'Supporting Actress, Drama': 'Outstanding Supporting Actress in a Drama Series',
+  'Supporting Actor, Comedy': 'Outstanding Supporting Actor in a Comedy Series',
+  'Supporting Actress, Comedy': 'Outstanding Supporting Actress in a Comedy Series'
+};
+const e = (text: string, points: number, options: string[]) =>
+  ({ text, points, options, lockAt: EMMYS_2026_LOCK, key: EMMY_KEYS[text] || text });
 
 const SURVIVOR_51 = ['Rob Antonson', 'Brady Booker', 'Patt Cannaday', 'Linnea Capobianco', 'Cristian Chavez',
   'Sharonda Cox', 'Jenna Doore', 'Kristin Flickinger', 'Ori Jean-Charles', 'Lewis Kelly', 'Danny Kilby',
   'Carter Krull', 'Alexis Levine', 'Angelica "Jelly" Loblack', 'Eric Macksoud', 'Maggie Nestor',
   'Thien An Nguyen', 'Mike Pinsky', 'Aaliyah Puglia', 'Ana Sani', 'Devin Way'];
 
-export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: string; questions: any[] }> = {
+export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: string; questions: any[]; source?: { kind: string; page: string } }> = {
   'emmys-2026': {
     id: 'emmys-2026',
     name: 'The 2026 Emmys',
     when: 'Monday, September 14 · 8 PM ET / 5 PM PT · NBC and Peacock',
+    /* Settles itself from the winners Wikipedia's editors mark during the broadcast. */
+    source: { kind: 'wiki-awards', page: '78th_Primetime_Emmy_Awards' },
     questions: [
       e('Outstanding Drama Series', 3, ['The Diplomat', 'The Gilded Age', 'A Knight of the Seven Kingdoms', 'Paradise', 'The Pitt', 'Pluribus', 'Slow Horses', 'Your Friends & Neighbors']),
       e('Outstanding Comedy Series', 3, ['Abbott Elementary', 'The Bear', 'Hacks', "Margo's Got Money Troubles", 'Nobody Wants This', 'Only Murders in the Building', 'Shrinking', "Widow's Bay"]),

@@ -29,6 +29,7 @@ import { handleContact } from './contact.ts';
 import { handleGroups } from './groups.ts';
 import { handleF1Pool, racingStandings, RACING } from './f1-pool.ts';
 import { handlePropsPool, propsStandings } from './props-pool.ts';
+import { settleReadySets } from './props-settle-run.ts';
 import { serveNascar, NASCAR_SERIES } from './nascar-feed.ts';
 import { poolSport, worldPoolId, pickSides, gradeSql } from './lib/groups.ts';
 
@@ -209,6 +210,12 @@ export default {
       /* F1: keep the current weekend fresh, so a finished one is archived for
          the group season board (src/f1-feed.ts). A no-op while it is fresh. */
       try { await serveF1(env); } catch { /* the next tick tries again */ }
+      /* Ready question sets settle themselves from their published results - the Emmys
+         from Wikipedia's winners (src/props-settle-run.ts). Nobody enters anything. */
+      try {
+        const r = await settleReadySets(env, Date.now(), fetch, { force: true });
+        if (r.length) console.log('props settle', JSON.stringify(r));
+      } catch (e: any) { console.log('props settle FAILED', String(e?.message || e)); }
       /* The same for every NASCAR series (src/nascar-feed.ts) - one fails, the rest still run. */
       for (const series of Object.keys(NASCAR_SERIES)) {
         try { await serveNascar(env, Date.now(), fetch, series); } catch { /* the next tick tries again */ }
