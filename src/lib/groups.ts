@@ -80,7 +80,11 @@ export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball'
   'ufc', 'cricket',
   /* 2026-09-13, "do the ... presidents cup next": team match play, match by match,
      a halved match a third pick (src/slate-day.ts parseGolfCupDay). */
-  'golf-cup'] as const;
+  'golf-cup',
+  /* 2026-09-13, "for the super bowl, can we create squares people can pick?" - one
+     10 x 10 grid on the Big Game, digits drawn at kickoff (src/squares-pool.ts). The
+     app never says the game's name. */
+  'squares'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
@@ -99,7 +103,7 @@ export const isSoccerSport = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'li
 /** A race or a soccer match never picks against a spread. */
 /** A sport graded by ESPN's winner flag, not a score: a fight, a cricket match. */
 export const isWinnerSport = (s: unknown) => s === 'ufc' || s === 'cricket' || s === 'golf-cup';
-export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s) || isWinnerSport(s) || s === 'props';
+export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s) || isWinnerSport(s) || s === 'props' || s === 'squares';
 /** The sides a pick may take. */
 /* A halved match-play match is a result like a soccer draw: the third side. */
 export const pickSides = (s: unknown): string[] => isSoccerSport(s) || s === 'golf-cup' ? ['home', 'away', 'draw'] : ['home', 'away'];

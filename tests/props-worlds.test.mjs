@@ -1,23 +1,40 @@
 /* THE CYCLING WORLDS - a ready set that settles itself from Wikipedia's medal table.
  * Jason, 2026-09-13: "do the cycling worlds next". Montréal, September 20-27, 2026.
+ * Then "do the road worlds start lists when they're out": the riders are swapped for the
+ * real starters by a routine, and every group's open questions follow (syncReadyOptions).
  *
  * Real captures (Wikipedia REST HTML, read 2026-09-13):
  *   fixtures/props/wiki-worlds-2025.html   Kigali 2025, run: Pogačar, Evenepoel, Vallieres, Reusser, Australia
  *   fixtures/props/wiki-worlds-2024.html   Zurich 2024, run: Pogačar, Evenepoel, Kopecky, Grace Brown, Australia
  *   fixtures/props/wiki-worlds-2026.html   Montréal the week before: the schedule, no medal table yet
+ *
+ * 🔴 THE RIDER LISTS HERE ARE FROZEN (TEST INPUT) - the set's lists as first published,
+ * 2026-09-13. The live set's riders change when the start lists are out, and a test that
+ * read them would fail the deploy that changes them. The set itself is only checked for
+ * its shape: every race has a catch-all, last, and no more than 20 options.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { medalsFromWiki, findEvent, pickOption } from '../src/lib/props-settle.ts';
-import { PROP_TEMPLATES, templatesOpen } from '../src/lib/props.ts';
-import { settleReadySets, wikiHtmlUrl } from '../src/props-settle-run.ts';
+import { medalsFromWiki, findEvent, pickOption, mergeOptions } from '../src/lib/props-settle.ts';
+import { PROP_TEMPLATES, templatesOpen, PROPS_LIMITS } from '../src/lib/props.ts';
+import { settleReadySets, syncReadyOptions, wikiHtmlUrl } from '../src/props-settle-run.ts';
 
 const page = (n) => readFileSync(new URL('../fixtures/props/wiki-' + n + '.html', import.meta.url), 'utf8');
 const W24 = page('worlds-2024'), W25 = page('worlds-2025'), W26 = page('worlds-2026');
 const W = PROP_TEMPLATES['worlds-2026'];
 const Q = Object.fromEntries(W.questions.map((q) => [q.key, q]));
+const qidOf = (key) => 'worlds-2026-' + (W.questions.indexOf(Q[key]) + 1);
+
+/* TEST INPUT - the lists as first published. */
+const FROZEN = {
+  "Women's time trial": ['Marlen Reusser', 'Demi Vollering', 'Anna van der Breggen', 'Chloé Dygert', 'Antonia Niedermaier', 'Brodie Chapman', 'Lotte Kopecky', 'Someone else'],
+  "Men's time trial": ['Remco Evenepoel', 'Tadej Pogačar', 'Jay Vine', 'Filippo Ganna', 'Joshua Tarling', 'Ilan Van Wilder', 'Isaac del Toro', 'Someone else'],
+  relay: ['Australia', 'Switzerland', 'Germany', 'Italy', 'France', 'Netherlands', 'Great Britain', 'Belgium', 'Canada', 'United States', 'Another nation'],
+  "Women's road race": ['Magdeleine Vallieres', 'Demi Vollering', 'Lotte Kopecky', 'Elisa Longo Borghini', 'Kasia Niewiadoma', 'Pauline Ferrand-Prévot', 'Marlen Reusser', 'Niamh Fisher-Black', 'Someone else'],
+  "Men's road race": ['Tadej Pogačar', 'Remco Evenepoel', 'Mathieu van der Poel', 'Tom Pidcock', 'Isaac del Toro', 'Juan Ayuso', 'Mattias Skjelmose', 'Ben Healy', 'Wout van Aert', 'Someone else']
+};
 
 test('the medal table: the five elite golds, never an under-23 or junior row (real 2025 and 2024)', () => {
   const m = medalsFromWiki(W25);
@@ -34,23 +51,28 @@ test('the medal table: the five elite golds, never an under-23 or junior row (re
   assert.match(findEvent(m24, "Men's road race"), /^Tadej Pogačar/, "the men's key never reads the women's row");
 });
 
-test('Montréal the week before: no medals yet, and each race locks at its own start on the schedule', () => {
+test('Montréal the week before: no medals yet, each race locks at its own start, and every list has its catch-all', () => {
   assert.equal(medalsFromWiki(W26).size, 0, 'nothing is answered before a race is run');
   assert.deepEqual(W.source, { kind: 'wiki-medals', page: '2026_UCI_Road_World_Championships' });
+  assert.deepEqual(Object.keys(Q).sort(), Object.keys(FROZEN).sort(), 'the same five races');
   /* Eastern Daylight Time is UTC-4. */
   assert.equal(Q["Women's time trial"].lockAt, Date.UTC(2026, 8, 20, 13, 0), 'Sunday the 20th, 9:00');
   assert.equal(Q["Men's time trial"].lockAt, Date.UTC(2026, 8, 20, 16, 45), 'Sunday the 20th, 12:45');
   assert.equal(Q.relay.lockAt, Date.UTC(2026, 8, 22, 12, 30), 'Tuesday the 22nd, 8:30');
   assert.equal(Q["Women's road race"].lockAt, Date.UTC(2026, 8, 26, 13, 0), 'Saturday the 26th, 9:00');
   assert.equal(Q["Men's road race"].lockAt, Date.UTC(2026, 8, 27, 13, 0), 'Sunday the 27th, 9:00');
-  /* The schedule on the real page says so. */
   assert.match(W26.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '), /26 September 09:00 14:10 Elite women/);
-  for (const q of W.questions) assert.match(q.options.at(-1), /^(Someone else|Another nation)$/, 'every race has its catch-all, last');
+  for (const q of W.questions) {
+    assert.match(q.options.at(-1), /^(Someone else|Another nation)$/, 'every race has its catch-all, last');
+    assert.equal(q.options.filter((o) => /^(Someone else|Another nation)$/.test(o)).length, 1);
+    assert.ok(q.options.length >= 3 && q.options.length <= PROPS_LIMITS.options, q.key + ': 3 to 20 options');
+    assert.equal(new Set(q.options).size, q.options.length, q.key + ': no rider twice');
+  }
   assert.ok(templatesOpen(Date.UTC(2026, 8, 13)).some((t) => t.id === 'worlds-2026'));
 });
 
 test('a result settles the rider it names, the catch-all for a winner nobody listed, and waits on a near miss', () => {
-  const men = Q["Men's road race"].options, women = Q["Women's road race"].options, relay = Q.relay.options;
+  const men = FROZEN["Men's road race"], women = FROZEN["Women's road race"], relay = FROZEN.relay;
   assert.equal(pickOption(men, 'Tadej Pogačar Slovenia'), 'Tadej Pogačar');
   assert.equal(pickOption(men, 'Tadej Pogacar Slovenia'), 'Tadej Pogačar', 'accents or not');
   assert.equal(pickOption(men, "Ben O'Connor Australia"), 'Someone else');
@@ -62,7 +84,22 @@ test('a result settles the rider it names, the catch-all for a winner nobody lis
   assert.equal(pickOption(['Yes', 'No'], 'Maybe'), null, 'no catch-all, no guess');
 });
 
-/* D1 on SQLite, with the real table. */
+test('new riders merge in; nobody\'s pick is taken away; the catch-all stays last; never past 20', () => {
+  const set = ['A One', 'B Two', 'C Three', 'Someone else'];
+  assert.deepEqual(mergeOptions(set, []), set);
+  assert.deepEqual(mergeOptions(set, ['B Two']), set, 'a pick still on the list changes nothing');
+  assert.deepEqual(mergeOptions(set, ['Old Name']), ['A One', 'B Two', 'C Three', 'Old Name', 'Someone else'],
+    'a rider dropped from the list stays for the group that picked him, just before the catch-all');
+  assert.deepEqual(mergeOptions(set, ['Someone else']), set);
+  const big = Array.from({ length: 19 }, (_, i) => 'Rider ' + (i + 1)).concat('Someone else');
+  const m = mergeOptions(big, ['Old Name', 'Rider 19'], 20);
+  assert.equal(m.length, 20);
+  assert.ok(m.includes('Old Name') && m.includes('Rider 19'), 'both picks kept');
+  assert.ok(!m.includes('Rider 18'), 'the last unpicked name makes room');
+  assert.equal(m.at(-1), 'Someone else');
+});
+
+/* D1 on SQLite, with the real tables; a group that loaded the set with the FROZEN lists. */
 function db() {
   const d = new DatabaseSync(':memory:');
   d.exec(readFileSync(new URL('../migrations/0011_props.sql', import.meta.url), 'utf8'));
@@ -73,12 +110,13 @@ function db() {
     run: async () => ({ meta: { changes: Number(d.prepare(sql).run(...args).changes) } })
   });
   const ins = d.prepare('INSERT INTO prop_question VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0)');
-  W.questions.forEach((q, i) => ins.run('PELOTON', 'worlds-2026-' + (i + 1), i + 1, q.text, JSON.stringify(q.options), q.points, q.lockAt));
-  const ans = (key) => d.prepare('SELECT answer FROM prop_question WHERE qid = ?').get('worlds-2026-' + (W.questions.indexOf(Q[key]) + 1)).answer;
-  return { ans, DB: { prepare: (sql) => stmt(sql), batch: async (l) => { for (const s of l) await s.run(); } } };
+  W.questions.forEach((q, i) => ins.run('PELOTON', 'worlds-2026-' + (i + 1), i + 1, q.text, JSON.stringify(FROZEN[q.key]), q.points, q.lockAt));
+  const ans = (key) => d.prepare('SELECT answer FROM prop_question WHERE qid = ?').get(qidOf(key)).answer;
+  const opts = (key) => JSON.parse(d.prepare('SELECT options FROM prop_question WHERE qid = ?').get(qidOf(key)).options);
+  return { d, ans, opts, DB: { prepare: (sql) => stmt(sql), batch: async (l) => { for (const s of l) await s.run(); } } };
 }
 
-test('the settler writes each race once it has locked, from the page - last year\'s standing in', async () => {
+test('the settler writes each race once it has locked, against the group\'s own list - last year\'s page standing in', async () => {
   const { ans, DB } = db();
   const urls = [];
   const fake = async (u) => { urls.push(String(u)); return new Response(W25); };
@@ -102,4 +140,28 @@ test('a winner nobody listed pays the catch-all through the same run (the real 2
   assert.equal(ans("Women's time trial"), 'Someone else', 'Grace Brown is not on the list');
   assert.equal(ans("Women's road race"), 'Lotte Kopecky');
   assert.equal(ans('relay'), 'Australia');
+});
+
+test('when the set\'s riders change, a group\'s open questions follow - a pick stays, a locked race is left alone', async () => {
+  const { d, opts, DB } = db();
+  /* TEST INPUT: this group's women's road race once listed a rider the set no longer
+     lists, and a member picked her. */
+  const wrr = qidOf("Women's road race");
+  d.prepare('UPDATE prop_question SET options = ? WHERE qid = ?')
+    .run(JSON.stringify(['Grace Brown', ...FROZEN["Women's road race"]]), wrr);
+  d.prepare('INSERT INTO prop_pick VALUES (?, ?, ?, ?, ?)').run('PELOTON', 'u1', wrr, 'Grace Brown', 1);
+  const kv = new Map();
+  const env = { DB, LIVE: { get: async (k) => kv.get(k) ?? null, put: async (k, v, o) => { assert.ok(o.expirationTtl > 0 && o.expirationTtl < 2 ** 31); kv.set(k, v); } } };
+  /* Monday the 21st: the time trials have locked. */
+  const now = Date.UTC(2026, 8, 21, 4, 0);
+  const before = opts("Women's time trial");
+  const r = await syncReadyOptions(env, now);
+  assert.ok(r.find((x) => x.template === 'worlds-2026'));
+  const w = opts("Women's road race");
+  for (const o of Q["Women's road race"].options) assert.ok(w.includes(o), 'the set\'s rider is offered: ' + o);
+  assert.ok(w.includes('Grace Brown'), 'the member\'s pick is never taken away');
+  assert.equal(w.at(-1), 'Someone else');
+  assert.deepEqual(opts("Women's time trial"), before, 'a locked race is never touched');
+  /* Nothing changed in the set since: the next pass reads only the signature. */
+  assert.equal((await syncReadyOptions(env, now)).find((x) => x.template === 'worlds-2026'), undefined);
 });

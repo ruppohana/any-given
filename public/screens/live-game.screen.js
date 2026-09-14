@@ -4076,7 +4076,10 @@ function heroBlock() {
 const HOME_FAMILIES = [
   /* 🔴 THE NCAA LAST IN EVERY FAMILY. Jason, 2026-09-13: "put the ncaa logo last in the
    * list". The pro league first, the college shield after it. */
-  { h: 'Football', leagues: [['nfl', 'NFL'], ['college-football', 'College football']] },
+  /* Big Game squares (2026-09-13, "do the big game squares next") - one grid on the
+   * Big Game, a words tile between the two shields (the NCAA stays last), captioned
+   * with the game's day and gone a day after kickoff (HOME_DATED). */
+  { h: 'Football', leagues: [['nfl', 'NFL'], ['squares', 'Big Game squares'], ['college-football', 'College football']] },
   /* Two NCAA shields in one family: each carries a caption under it, Men and
    * Women (2026-09-13), so the two college basketball tiles cannot be confused.
    * The third element is that caption; the second is still the accessible name. */
@@ -4139,6 +4142,26 @@ const HOME_MARKS = {
   'ligamx': '/logos/leagues/ligamx-500.png'
 };
 
+/* A LEAGUE WITH A DATE. Big Game squares is one game, so its tile says the day and
+ * leaves Home a day after kickoff. The time is src/lib/squares.ts BIG_GAME.kickoffUtc,
+ * written out here rather than imported (tests lift these pieces out of the file);
+ * tests/squares-screen.test.mjs holds the two equal. */
+const HOME_DATED = {
+  squares: Date.UTC(2027, 1, 14, 23, 30)
+};
+
+/** A family's leagues on Home at `now`: a dated one only until a day after its date. */
+function homeLeaguesAt(f, now) {
+  const t = now == null ? Date.now() : now;
+  return f.leagues.filter(([id]) => !Object.prototype.hasOwnProperty.call(HOME_DATED, id) || t < HOME_DATED[id] + 86400000);
+}
+
+/** A dated league's caption: its day, in the phone's time zone - "Sun, Feb 14". */
+function homeDatedCap(id) {
+  if (!Object.prototype.hasOwnProperty.call(HOME_DATED, id)) return '';
+  return new Date(HOME_DATED[id]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 /** The dark-ground file beside a mark: nhl-500.png -> nhl-500-dark.png. The NHL's
  *  light shield is black and sinks into --bg without it. */
 function homeMarkDark(src) {
@@ -4152,8 +4175,17 @@ function homeSportDest(sport, groups, currentId) {
   const mine = (Array.isArray(groups) ? groups : [])
     .filter((g) => g && g.id && (g.sport || 'college-football') === sport);
   const g = mine.find((x) => x.id === currentId) || mine[0];
-  /* A questions group's pool is its questions page, not a slate. */
-  return g ? { sport, groupId: g.id, hash: sport === 'props' ? '#/props' : '#/gpicks' } : { sport, groupId: '', hash: '#/g' };
+  /* A questions group's pool is its questions page, a squares group's its grid. */
+  const own = { props: '#/props', squares: '#/squares' };
+  if (g) return { sport, groupId: g.id, hash: own[sport] || '#/gpicks' };
+  /* 🔴 POOL FIRST. Jason, 2026-09-13: with no group of that sport - signed in or out -
+   * the tap lands on the pool itself, never on the group page's forms. Each pool
+   * carries its own Start / Join pair, and its first pick asks. Football keeps its
+   * public slate and world board; the races and the two pools with screens of their
+   * own go there; every day sport goes to #/pool (p2-slate's browse state). */
+  const pool = { props: '#/props', squares: '#/squares', f1: '#/f1', nascar: '#/nascar',
+    'nascar-oreilly': '#/nascar-oreilly', 'nascar-truck': '#/nascar-truck', nfl: '#/slate', 'college-football': '#/slate' };
+  return { sport, groupId: '', hash: pool[sport] || '#/pool' };
 }
 
 /* 🔴 TWO SECTIONS: SPORTS, AND AWARDS & TV. Jason, 2026-09-13: "add cricket too,
@@ -4174,7 +4206,7 @@ const HOME_SHOW_NAMES = {
   'worlds-2026': 'Cycling Worlds'
 };
 const HOME_OWN = {
-  id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, cricket…'
+  id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, anything…'
 };
 
 /* 🔴 A READY SET THAT IS A SPORT GOES ON THE SPORTS TAB. Jason, 2026-09-13: "do the
@@ -4347,13 +4379,21 @@ function homeFamilies(now) {
   const fams = el('div', 'lg-fams');
   fams.setAttribute('role', 'group');
   fams.setAttribute('aria-label', 'Which sport?');
-  for (const f of HOME_FAMILIES) fams.appendChild(homeFamily(f));
+  const t = now == null ? Date.now() : now;
+  for (const f of HOME_FAMILIES) {
+    const fam = homeFamily(f, t);
+    fam.famsEl = fams;
+    fams.appendChild(fam);
+  }
   /* Then a ready set that is a sport - the Cycling Worlds - while it is open. */
-  for (const s of homeSetList(now == null ? Date.now() : now)) fams.appendChild(homeSetFamily(s));
+  for (const s of homeSetList(t)) fams.appendChild(homeSetFamily(s));
+  homeAccordion(fams);
   return fams;
 }
 
-function homeFamily(f) {
+function homeFamily(f0, now) {
+  /* The leagues on Home now - a dated one (Big Game squares) leaves after its day. */
+  const f = { ...f0, leagues: homeLeaguesAt(f0, now) };
   const key = f.h.toLowerCase();
   const n = f.leagues.length;
   const fam = el('div', 'lg-fam');
@@ -4396,29 +4436,48 @@ function homeFamily(f) {
   row.id = 'lg-fam-p-' + key;
   row.setAttribute('role', 'group');
   row.setAttribute('aria-labelledby', h.id);
-  for (const [id, label, cap] of f.leagues) row.appendChild(leagueTile(id, label, cap));
+  for (const [id, label, cap] of f.leagues) row.appendChild(leagueTile(id, label, cap || homeDatedCap(id)));
   fam.appendChild(row);
   fam.rollH = h; fam.rollRow = row; fam.rollMarks = marks;
-  homeFamOpen(fam, homeFamWanted(key, row));
+  /* Drawn closed; homeAccordion opens the one family that should be. */
+  homeFamOpen(fam, false);
   return fam;
 }
 
-/** What this phone remembers about each family, read once - and kept in memory,
- *  so a phone that cannot store still keeps its choices across a repaint. */
+/* 🔴 ONE FAMILY OPEN AT A TIME. Jason, 2026-09-13: "if you open a new drop down close
+ * any other open". Opening a family closes the one that was open; closing the open
+ * one leaves them all closed. ag.homeOpen is that one family's key, or '' for none -
+ * and absent when nothing has been chosen on this phone. */
+
+/** The family this phone keeps open: its key, '' for none, or null when nothing is
+ *  remembered. Read once and kept in memory, so a phone that cannot store keeps its
+ *  choice across a repaint. An older phone stored a map of every family - its first
+ *  open one is kept, or none. */
 function homeOpenMap() {
-  if (!S.homeOpen) {
+  if (S.homeOpen === undefined) {
     const v = store.get('homeOpen', null);
-    S.homeOpen = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    if (typeof v === 'string') S.homeOpen = v;
+    else if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length) {
+      S.homeOpen = Object.keys(v).find((k) => v[k] === true) || '';
+    } else S.homeOpen = null;
   }
   return S.homeOpen;
 }
 
-/** Open or closed as drawn: the remembered choice, else open when a tile in it
- *  says Your group. */
-function homeFamWanted(key, row) {
-  const saved = homeOpenMap()[key];
-  if (typeof saved === 'boolean') return saved;
-  return Array.from(row.children).some((b) => b.classList.contains('is-mine'));
+/** Which family is open as drawn: the remembered one; with nothing remembered, the
+ *  first in Home order holding a group of yours; else none (''). */
+function homeFamWanted(rolls) {
+  const saved = homeOpenMap();
+  if (saved !== null) return saved;
+  const f = rolls.find((x) => Array.from(x.rollRow.children).some((b) => b.classList.contains('is-mine')));
+  return f ? f.dataset.fam : '';
+}
+
+/** Open that one family and close every other roll-up in `fams`. */
+function homeAccordion(fams) {
+  const rolls = Array.from(fams.querySelectorAll('.lg-fam')).filter((f) => f.rollH);
+  const want = homeFamWanted(rolls);
+  for (const f of rolls) homeFamOpen(f, f.dataset.fam === want);
 }
 
 function homeFamOpen(fam, open) {
@@ -4430,17 +4489,21 @@ function homeFamOpen(fam, open) {
 
 function homeFamToggle(fam) {
   const open = fam.rollH.getAttribute('aria-expanded') !== 'true';
+  /* Opening one closes whichever other is open. */
+  if (open && fam.famsEl) {
+    for (const f of Array.from(fam.famsEl.querySelectorAll('.lg-fam'))) if (f !== fam && f.rollH) homeFamOpen(f, false);
+  }
   homeFamOpen(fam, open);
-  const m = homeOpenMap();
-  m[fam.dataset.fam] = open;
-  store.set('homeOpen', m);
+  S.homeOpen = open ? fam.dataset.fam : '';
+  store.set('homeOpen', S.homeOpen);
 }
 
 function leagueTile(id, label, cap) {
   const b = el('button', 'lg-league');
   b.type = 'button';
   b.dataset.sport = id;
-  b.dataset.label = label;
+  /* A dated league (Big Game squares) says its day aloud too. */
+  b.dataset.label = Object.prototype.hasOwnProperty.call(HOME_DATED, id) && cap ? label + ', ' + cap : label;
   if (HOME_MARKS[id]) {
     const img = document.createElement('img');
     img.className = 'lg-league-logo';
@@ -4452,6 +4515,8 @@ function leagueTile(id, label, cap) {
     if (cap) b.appendChild(el('span', 'lg-league-c', cap));
   } else {
     b.appendChild(el('span', 'lg-league-n', label));
+    /* A words tile with a date under its name - Big Game squares, "Sun, Feb 14". */
+    if (cap) b.appendChild(el('span', 'lg-league-c', cap));
   }
   /* Always there, shown by .is-mine - so marking a tile never rebuilds it. */
   b.appendChild(el('span', 'lg-league-yg', 'Your group'));
@@ -4530,11 +4595,10 @@ function mineMark(b) {
 
 function markHomeGroups(wrap) {
   for (const b of wrap.querySelectorAll('.lg-league')) mineMark(b);
-  /* A family with nothing remembered on this phone opens once the list says you
-   * are in a group of one of its sports. A remembered choice is left alone. */
-  for (const f of wrap.querySelectorAll('.lg-fam')) {
-    if (f.rollH && typeof homeOpenMap()[f.dataset.fam] !== 'boolean') homeFamOpen(f, homeFamWanted(f.dataset.fam, f.rollRow));
-  }
+  /* With nothing remembered on this phone, the first family holding a group of yours
+   * opens once the list lands - one, never more. A remembered choice, or one made on
+   * this visit, is left alone. */
+  if (homeOpenMap() === null) for (const fams of wrap.querySelectorAll('.lg-fams')) homeAccordion(fams);
 }
 
 /* Once per mount (each mount is a new wrap); a repaint of the same Home draws

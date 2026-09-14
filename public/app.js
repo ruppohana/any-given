@@ -79,6 +79,15 @@ const ROUTES = [
    * answers; everyone picks one option each. Under the group bar with Pool lit,
    * because it IS that group's pool. A pool route, never a betting route. */
   { id: 'props',      dest: 'g-pool',      nav: 'group', screen: 'props',          state: 'ready', label: 'Questions (awards, TV, anything)' },
+  /* BIG GAME SQUARES - a 'squares' group's pool (Jason, 2026-09-13: "do the big
+   * game squares next"). One 10 x 10 grid on the Big Game; members claim squares
+   * until kickoff. Under the group bar with Pool lit, like the questions. */
+  { id: 'squares',    dest: 'g-pool',      nav: 'group', screen: 'squares',        state: 'ready', label: 'Big Game squares' },
+  /* POOL FIRST (Jason, 2026-09-13): a sport's pool for somebody in no group of it -
+   * the games, a Start / Join pair, and the first pick asks. Home sends a sport
+   * with no group here (live-game.screen.js homeSportDest); football keeps its
+   * public slate and world board. */
+  { id: 'pool',       dest: 'g-pool',      nav: 'group', screen: 'p2-slate',       state: 'browse', label: 'A pool, before a group' },
   /* 🔴 THE ONLY ROUTE THAT IS NOT FIXTURES. It polls the Worker, holds what it
    * gets behind the user's own delay, and settles against the play that actually
    * happened. Everything else here is a design surface; this one is the product. */
@@ -262,6 +271,8 @@ const TITLES = {
   gcommish: 'Commissioner',
   grules: 'Group rules',
   props: 'Questions',
+  squares: 'Big Game squares',
+  pool: 'Pool',
   settings: 'Settings',
 };
 

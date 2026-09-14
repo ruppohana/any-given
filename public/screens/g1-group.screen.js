@@ -104,7 +104,11 @@ export const SPORTS = [
   /* 2026-09-13, "do the ... presidents cup next": team match play, match by match,
    * a day at a time (src/slate-day.ts parseGolfCupDay). A halved match is a third
    * pick, like a soccer draw. No spread, no which-games. */
-  ['golf-cup', 'Presidents Cup']
+  ['golf-cup', 'Presidents Cup'],
+  /* 2026-09-13, "do the big game squares next": one 10 x 10 grid on the Big Game,
+   * claimed until kickoff, the digits drawn at kickoff (src/squares-pool.ts). No
+   * spread, no which-games. The app never says the game's name. */
+  ['squares', 'Big Game squares']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -113,7 +117,8 @@ const SPORT_IDS = SPORTS.map((s) => s[0]);
  * field; a select is one 44px row, reads "MLB" at a glance when closed, and the
  * phone's own picker does the long list. Every sport is in exactly one family. */
 export const SPORT_FAMILIES = [
-  ['Football', ['college-football', 'nfl']],
+  /* Big Game squares (2026-09-13) is football's, after the NFL as in POOL_SPORTS. */
+  ['Football', ['college-football', 'nfl', 'squares']],
   ['Basketball', ['mens-college-basketball', 'womens-college-basketball', 'nba', 'wnba']],
   ['Baseball', ['mlb']],
   ['Hockey', ['nhl', 'mens-college-hockey']],
@@ -161,6 +166,11 @@ export function isProps(s) {
   return poolSport(s) === 'props';
 }
 
+/** A Big Game squares group - one grid, claimed until kickoff (2026-09-13). */
+export function isSquares(s) {
+  return poolSport(s) === 'squares';
+}
+
 /** A sport graded by the winner ESPN flags, not a score: a UFC bout, a cricket
  *  match, a Presidents Cup match (src/lib/groups.ts isWinnerSport). */
 export function isWinner(s) {
@@ -173,7 +183,7 @@ export function isWinner(s) {
  *  server's copy is src/lib/groups.ts hasNoSpread, which refuses a spread for the
  *  same ones. */
 export function hasNoSpread(s) {
-  return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s);
+  return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s);
 }
 
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME - the group's "week" is
@@ -204,6 +214,8 @@ export function lockWord(s) {
   if (p === 'cricket') return 'the first ball';
   /* A Presidents Cup match locks when it tees off. */
   if (p === 'golf-cup') return 'the first tee';
+  /* The squares lock at the Big Game's kickoff, when the digits are drawn. */
+  if (p === 'squares') return 'kickoff';
   if (isDaySport(p)) return 'tip-off';
   /* A question locks at its own time, so a questions group has no one word. */
   if (isRacing(p) || isProps(p)) return '';
@@ -220,10 +232,18 @@ export function spreadNote(s) {
   return '';
 }
 
+/** How a Big Game squares group plays, in the words the screens share - the
+ *  points are src/lib/squares.ts PERIODS. */
+export const SQUARES_RULES = 'Claim squares on a 10 × 10 grid until kickoff. At kickoff the numbers 0–9 are drawn '
+  + 'at random for each team. At the end of each quarter the square where the last digits of the two scores meet '
+  + 'scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 (overtime counts in the final). '
+  + 'A square nobody claimed scores nobody.';
+
 /** The line under the Sport control: how the chosen sport is played. */
 export function sportNote(s) {
   const p = poolSport(s);
   if (p === 'props') return 'You write the questions - an awards show, a finale, the Draft, anything - or load a ready set, and enter the answers. Each question locks at its own time.';
+  if (p === 'squares') return SQUARES_RULES;
   if (p === 'f1') return 'Pick the race weekend, scored in points. Each pick locks when its session starts.';
   if (p.startsWith('nascar')) return 'Pick the race, scored in points. Every pick locks at the green flag.';
   if (isSoccer(p)) return 'Pick the winner or the draw, a day at a time. Every pick locks at kickoff.';
@@ -296,6 +316,7 @@ export function basketballScopeNote(scope, sport) {
 export function periodLabel(sport, week) {
   const s = poolSport(sport);
   if (s === 'props') return 'Question by question';
+  if (s === 'squares') return 'One grid, the Big Game';
   if (s === 'f1') return 'Race weekends';
   if (String(s).startsWith('nascar')) return 'Race days';
   if (s === 'ufc') return 'A card at a time';
@@ -307,6 +328,7 @@ export function periodLabel(sport, week) {
 export function picksLine(g) {
   const s = g && poolSport(g.sport);
   if (s === 'props') return 'One pick a question, scored in points';
+  if (s === 'squares') return 'Squares on a 10 × 10 grid, scored in points';
   if (s === 'f1') return 'Race weekend picks, scored in points';
   if (String(s).startsWith('nascar')) return 'Race day picks, scored in points';
   if (isSoccer(s)) return 'Picks straight up - who wins, or the draw';
@@ -356,6 +378,7 @@ export function prefillCode(pending) {
 export function shareText(groupName, code, sport) {
   const s = poolSport(sport);
   const how = s === 'props' ? 'Pick the answers before each question locks, scored in points.'
+    : s === 'squares' ? 'Claim your squares on the Big Game grid before kickoff, scored in points.'
     : s === 'f1' ? 'Pick the race weekend, scored in points.'
     : String(s).startsWith('nascar') ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
     : isSoccer(s) ? 'Pick the winner or the draw each day, scored in points.'
@@ -387,12 +410,24 @@ function chosenSport() {
   catch { return 'college-football'; }
 }
 
+/* POOL FIRST (2026-09-13). A pool's Start a group / Join a group button
+ * (components/start-join.js) leaves 'start' or 'join' in ag.groupForm; this page
+ * opens that form. Read once and cleared - written out here rather than imported,
+ * because the test loads this module with its import lines stripped. */
+function readGroupForm() {
+  let v = '';
+  try { v = localStorage.getItem('ag.groupForm') || ''; localStorage.removeItem('ag.groupForm'); } catch { v = ''; }
+  return v === 'start' || v === 'join' ? v : '';
+}
+
 /** Everything the page shows, fetched. Never throws. */
 async function load(force) {
   let mine = await myGroups({ force: !!force });
   const base = { noSample: true, kindness: mine.kindness || '', prefill: prefillCode(readPending()),
                  sportDefault: chosenSport(), conferences: await collegeConferences() };
   let view = viewFor(mine);
+  /* Only once signed in, so a pool's Start or Join survives the sign-in on the way. */
+  if (view === 'ready' || view === 'no-group') base.openForm = readGroupForm();
   if (view !== 'ready') return Object.assign(base, { view });
 
   /* Twice at most: a cached list can name a group you were removed from or that
@@ -582,6 +617,8 @@ function onboarding(host, data, mode) {
 
   /* An invite link left a code behind: the Join form opens with it filled in. */
   if (mode === 'first' && data.prefill) show('join');
+  /* A pool's Start a group or Join a group button said which form to open. */
+  else if (data.openForm === 'start' || data.openForm === 'join') show(data.openForm);
   return wrap;
 }
 
@@ -760,6 +797,8 @@ function startForm(host, data) {
      * ready set or writes one - the Emmys go live the next evening. The invite
      * is one tap away there, and on Info. */
     if (poolSport(form.sport) === 'props') { location.hash = '#/props'; return; }
+    /* A squares group opens on its grid, where the commissioner sets squares per person. */
+    if (poolSport(form.sport) === 'squares') { location.hash = '#/squares'; return; }
     host.dataset.created = JSON.stringify({ id: j.group.id, invite: j.invite || null });
     refresh(host, j.group.name + ' is started. You are its commissioner.');
   });
@@ -1035,6 +1074,11 @@ function doors(isCommish, sport) {
   if (isProps(sport)) {
     rows.push(['The questions', isCommish ? 'Load a ready set or write your own, and enter the answers.'
       : 'Pick the answers before each question locks.', '#/props']);
+  }
+  /* A squares group's pool is its grid. */
+  if (isSquares(sport)) {
+    rows.push(['The grid', isCommish ? 'Set squares per person, and claim yours before kickoff.'
+      : 'Claim your squares before kickoff.', '#/squares']);
   }
   if (isCommish) rows.push(['Commissioner tools', 'Invite by email, remove or mute members, change the settings.', '#/gcommish']);
   rows.push(['Group rules', 'How the group scores, when picks lock, and how ties break.', '#/grules']);

@@ -266,19 +266,20 @@ const POOL_SPORTS = ((code(LIB).match(/POOL_SPORTS\s*=\s*\[([^\]]+)\]/) || [])[1
 const HAS = { name: 'A-Test', pledged: true };
 const NEW3 = ['mlb', 'nhl', 'wnba'];
 
-test('the Sport control offers all twenty-two, in POOL_SPORTS order, with their labels', () => {
+test('the Sport control offers all twenty-three, in POOL_SPORTS order, with their labels', () => {
   /* NASCAR's O'Reilly and Truck series joined 2026-09-13, then the Premier League and MLS,
      then the Champions League, La Liga, Liga MX, college hockey and women's college basketball,
      then a questions group ('props' - awards, TV, anything), then UFC and cricket, then the
-     Presidents Cup. */
+     Presidents Cup, then Big Game squares. */
   assert.deepEqual(POOL_SPORTS, ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
     'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls',
-    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup']);
+    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup',
+    'squares']);
   assert.deepEqual(mod.SPORTS.map((s) => s[0]), POOL_SPORTS, 'the screen and the server disagree on the sports');
   assert.deepEqual(mod.SPORTS.map((s) => s[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1',
     'NASCAR', 'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
     'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions',
-    'UFC', 'Cricket', 'Presidents Cup']);
+    'UFC', 'Cricket', 'Presidents Cup', 'Big Game squares']);
   for (const [id, label] of mod.SPORTS) assert.equal(mod.sportLabel(id), label);
   assert.equal(mod.sportLabel('curling'), 'College football', 'an unknown sport reads as the server reads it');
   assert.equal(mod.sportLabel(undefined), 'College football');
@@ -286,7 +287,8 @@ test('the Sport control offers all twenty-two, in POOL_SPORTS order, with their 
 
 test('one native select, grouped by family - every sport in exactly one', () => {
   assert.deepEqual(mod.SPORT_FAMILIES, [
-    ['Football', ['college-football', 'nfl']],
+    /* 2026-09-13: Big Game squares is football's, after the NFL. */
+    ['Football', ['college-football', 'nfl', 'squares']],
     ['Basketball', ['mens-college-basketball', 'womens-college-basketball', 'nba', 'wnba']],
     ['Baseball', ['mlb']],
     ['Hockey', ['nhl', 'mens-college-hockey']],
@@ -470,7 +472,9 @@ test('picks lock at the sport\'s own word: tip-off, first pitch, puck drop, kick
     /* 2026-09-13: a bout locks with its part of the card; a cricket match at its first ball. */
     ufc: 'the start of its card', cricket: 'the first ball',
     /* A Presidents Cup match locks when it tees off (2026-09-13). */
-    'golf-cup': 'the first tee' };
+    'golf-cup': 'the first tee',
+    /* Big Game squares lock at the game's kickoff, when the digits are drawn (2026-09-13). */
+    squares: 'kickoff' };
   for (const s of POOL_SPORTS) assert.equal(mod.lockWord(s), want[s], s);
   assert.equal(mod.sportNote('mlb'), 'Pick the winners a day at a time. Every pick locks at first pitch.');
   assert.equal(mod.sportNote('nhl'), 'Pick the winners a day at a time. Every pick locks at puck drop.');

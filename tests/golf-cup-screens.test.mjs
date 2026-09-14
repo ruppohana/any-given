@@ -373,7 +373,8 @@ test('Home: a Golf family after Cricket with one league, the Presidents Cup, as 
   assert.equal(H.HOME_MARKS['golf-cup'], undefined, 'no Presidents Cup mark - a text tile, like Cricket');
   const G = [{ id: 'CUP1', sport: 'golf-cup' }, { id: 'NFL1', sport: 'nfl' }];
   assert.deepEqual(H.homeSportDest('golf-cup', G, ''), { sport: 'golf-cup', groupId: 'CUP1', hash: '#/gpicks' });
-  assert.deepEqual(H.homeSportDest('golf-cup', [], ''), { sport: 'golf-cup', groupId: '', hash: '#/g' });
+  /* No group: the Presidents Cup's pool, not the group page (pool first, 2026-09-13). */
+  assert.deepEqual(H.homeSportDest('golf-cup', [], ''), { sport: 'golf-cup', groupId: '', hash: '#/pool' });
 });
 
 /* ------------------------------------------------------------ crests */

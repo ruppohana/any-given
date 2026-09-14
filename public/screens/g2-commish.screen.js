@@ -96,7 +96,10 @@ const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   ufc: 'UFC', cricket: 'Cricket',
   /* 2026-09-13, "do the ... presidents cup next": team match play, graded by the
      winner ESPN flags or a halved match - no spread and no which-games either. */
-  'golf-cup': 'Presidents Cup' };
+  'golf-cup': 'Presidents Cup',
+  /* 2026-09-13, "do the big game squares next": one grid on the Big Game. No spread and
+     no which-games; the commissioner sets squares per person on #/squares. */
+  squares: 'Big Game squares' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
@@ -110,8 +113,11 @@ export const isProps = (s) => poolSport(s) === 'props';
 /** UFC, cricket and the Presidents Cup: graded by the winner ESPN flags (or a halved
  *  match), never a score (src/lib/groups.ts isWinnerSport). */
 export const isWinner = (s) => { const p = poolSport(s); return p === 'ufc' || p === 'cricket' || p === 'golf-cup'; };
-/** No spread to switch: the races, soccer, questions, UFC, cricket and the Presidents Cup (src/lib/groups.ts hasNoSpread). */
-export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s);
+/** A Big Game squares group (src/squares-pool.ts). */
+export const isSquares = (s) => poolSport(s) === 'squares';
+/** No spread to switch: the races, soccer, questions, UFC, cricket, the Presidents Cup
+ *  and Big Game squares (src/lib/groups.ts hasNoSpread). */
+export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s);
 /** Which-games choices a sport offers: conferences are football's only; the pro
  *  leagues and the races play every game. */
 export const scopeValues = (s) => {
@@ -274,6 +280,8 @@ export function render(root, data, state) {
     nav.setAttribute('aria-label', 'Group');
     /* A questions group is run from its questions page: load a set, add, answer. */
     if (isProps(sport)) nav.appendChild(door('#/props', 'The questions', 'Load a ready set, add questions, and enter the answers.'));
+    /* A squares group is run from its grid: squares per person, before kickoff. */
+    if (isSquares(sport)) nav.appendChild(door('#/squares', 'The grid', 'Set squares per person before kickoff, and see who holds what.'));
     nav.appendChild(door('#/g', 'Group page', 'Members, messages and the group’s home.'));
     nav.appendChild(door('#/grules', 'Group rules', 'How picks in this group are scored.'));
     return nav;

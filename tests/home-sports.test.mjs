@@ -40,7 +40,8 @@ function lift(name) {
   return SRC.slice(start, SRC.indexOf('\n', from));
 }
 
-const PIECES = ['el', 'store', 'HOME_FAMILIES', 'HOME_MARKS', 'homeMarkDark', 'homeSportDest', 'HOME_SHOW_NAMES',
+const PIECES = ['el', 'store', 'HOME_FAMILIES', 'HOME_MARKS', 'HOME_DATED', 'homeLeaguesAt', 'homeDatedCap', 'homeAccordion',
+  'homeMarkDark', 'homeSportDest', 'HOME_SHOW_NAMES',
   'HOME_OWN', 'HOME_SPORT_SETS', 'isSportSet', 'homeSetCap', 'homeShowList', 'homeSetList', 'homeSetFamily', 'setTile', 'homeShows', 'showTile', 'homeShowTap', 'HOME_TABS', 'homeSports', 'homePanel',
   'homeTabNow', 'homeTabTo', 'homeFamilies', 'homeFamily', 'homeOpenMap', 'homeFamWanted', 'homeFamOpen',
   'homeFamToggle', 'leagueTile', 'soloTile', 'mineMark', 'markHomeGroups', 'loadHomeGroups', 'homeSportTap', 'homeScreen'];
@@ -141,8 +142,9 @@ test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once',
   assert.deepEqual(HOME_FAMILIES.map((f) => f.h),
     ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing', 'Soccer', 'Combat', 'Cricket', 'Golf']);
   assert.deepEqual(HOME_FAMILIES.map((f) => f.leagues), [
-    /* The NCAA last in every family - Jason, 2026-09-13: "put the ncaa logo last in the list". */
-    [['nfl', 'NFL'], ['college-football', 'College football']],
+    /* The NCAA last in every family - Jason, 2026-09-13: "put the ncaa logo last in the list".
+       Big Game squares (2026-09-13) between the two shields. */
+    [['nfl', 'NFL'], ['squares', 'Big Game squares'], ['college-football', 'College football']],
     /* The NCAA shields carry a caption each - Men, Women (2026-09-13). */
     [['nba', 'NBA'], ['wnba', 'WNBA'], ['mens-college-basketball', 'College basketball', 'Men'],
       ['womens-college-basketball', 'Women’s college basketball', 'Women']],
@@ -227,11 +229,11 @@ test('Awards & TV tap: remembers the set and goes where a sport tile goes - #/pr
     await emmys.onclick();
     assert.equal(mem.get('ag.sport'), JSON.stringify('props'));
     assert.equal(mem.get('ag.propsTemplate'), JSON.stringify('emmys-2026'));
-    assert.equal(loc.hash, '#/g', 'signed out: the group page, Start on questions');
+    assert.equal(loc.hash, '#/props', 'signed out: the questions pool itself - pool first');
   }
   await show(wrap, '').onclick();
   assert.equal(mem.get('ag.propsTemplate'), JSON.stringify(''), 'your own questions forgets any set');
-  assert.equal(loc.hash, '#/g');
+  assert.equal(loc.hash, '#/props');
 
   signIn();
   GROUP.forgetGroups();
@@ -251,13 +253,14 @@ test('Awards & TV tap: remembers the set and goes where a sport tile goes - #/pr
 
 /* 🔴 EVERY MARK FROM OUR ORIGIN (2026-09-13, "are we not capturing the rest of
  * the logos?"). The NBA's was hot-linked and every league after it was words. */
-test('every league with a mark shows it from our origin, light and dark; only cricket and the Presidents Cup are words', () => {
+test('every league with a mark shows it from our origin, light and dark; only cricket, the Presidents Cup and Big Game squares are words', () => {
   const { HOME_MARKS, HOME_FAMILIES, homeMarkDark } = load();
   const ids = HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id));
   /* Racing and combat carry marks since Jason asked (2026-09-13: "racing logos?"): F1's
      and UFC's own, NASCAR our drawn flag. Cricket: ESPN's marks are per competition. The
-     Presidents Cup (2026-09-13) has no mark: a text tile, the way Cricket's is. */
-  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket', 'golf-cup']);
+     Presidents Cup (2026-09-13) has no mark: a text tile, the way Cricket's is. Nor does
+     Big Game squares - the game's own mark is the NFL's trademark. */
+  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket', 'golf-cup', 'squares']);
   for (const [id, src] of Object.entries(HOME_MARKS)) {
     assert.match(src, /^\/logos\/leagues\/[a-z0-9]+-500\.(png|svg)$/, id);
     assert.ok(existsSync(new URL('../public' + src, import.meta.url)), src + ' is on disk');
@@ -310,30 +313,40 @@ test('Cycling Worlds: a one-row Cycling family on the Sports tab on Sept 13, gon
   await b.onclick();
   assert.equal(mem.get('ag.propsTemplate'), JSON.stringify('worlds-2026'));
   assert.equal(mem.get('ag.sport'), JSON.stringify('props'));
-  assert.equal(loc.hash, '#/g', 'signed out: the group page, Start on questions');
+  assert.equal(loc.hash, '#/props', 'signed out: the questions pool itself - pool first');
 });
 
 /* ------------------------------------------------------------ where a tap goes */
 
-test('homeSportDest: a group of that sport -> #/gpicks, none -> #/g', () => {
+/* 🔴 POOL FIRST (Jason, 2026-09-13): with no group of that sport the tap lands on the
+   pool itself - football's public slate, a race's picks, the questions, the squares
+   grid, and #/pool for every day sport - never on the group page's forms. */
+test('homeSportDest: a group of that sport -> #/gpicks; none -> that sport\'s pool, never #/g', () => {
   const { homeSportDest: d } = load();
   const G = [{ id: 'A', sport: 'nfl' }, { id: 'B', sport: 'nba' }, { id: 'C', sport: 'nfl' },
              { id: 'OLD', sport: null }, { id: 'R', sport: 'nascar-truck' }, { id: 'U', sport: 'ufc' }];
-  assert.deepEqual(d('nfl', [], ''), { sport: 'nfl', groupId: '', hash: '#/g' }, 'no groups');
-  assert.deepEqual(d('nfl', undefined, ''), { sport: 'nfl', groupId: '', hash: '#/g' }, 'not loaded');
-  assert.deepEqual(d('mlb', G, 'A'), { sport: 'mlb', groupId: '', hash: '#/g' }, 'groups, none of that sport');
+  assert.deepEqual(d('nfl', [], ''), { sport: 'nfl', groupId: '', hash: '#/slate' }, 'no groups: the NFL slate');
+  assert.deepEqual(d('nfl', undefined, ''), { sport: 'nfl', groupId: '', hash: '#/slate' }, 'not loaded');
+  assert.deepEqual(d('college-football', [], ''), { sport: 'college-football', groupId: '', hash: '#/slate' });
+  assert.deepEqual(d('mlb', G, 'A'), { sport: 'mlb', groupId: '', hash: '#/pool' }, 'groups, none of that sport: its pool');
+  for (const [s, h] of [['f1', '#/f1'], ['nascar', '#/nascar'], ['nascar-oreilly', '#/nascar-oreilly'], ['nascar-truck', '#/nascar-truck'],
+    ['props', '#/props'], ['squares', '#/squares'], ['nba', '#/pool'], ['epl', '#/pool'], ['golf-cup', '#/pool']]) {
+    assert.deepEqual(d(s, [], ''), { sport: s, groupId: '', hash: h }, s);
+  }
+  assert.deepEqual(d('squares', [{ id: 'SQ', sport: 'squares' }], ''), { sport: 'squares', groupId: 'SQ', hash: '#/squares' },
+    'a squares group\'s pool is its grid');
   assert.deepEqual(d('nfl', G, ''), { sport: 'nfl', groupId: 'A', hash: '#/gpicks' }, 'the first of that sport');
   assert.equal(d('nfl', G, 'C').groupId, 'C', 'the current group wins when it is of that sport');
   assert.equal(d('nfl', G, 'B').groupId, 'A', 'a current group of another sport does not');
   assert.equal(d('college-football', G, '').groupId, 'OLD', 'a row from before the sport column is college football');
   assert.deepEqual(d('nascar-truck', G, ''), { sport: 'nascar-truck', groupId: 'R', hash: '#/gpicks' }, 'a racing group');
   assert.deepEqual(d('ufc', G, ''), { sport: 'ufc', groupId: 'U', hash: '#/gpicks' }, 'a UFC group');
-  assert.deepEqual(d('cricket', G, ''), { sport: 'cricket', groupId: '', hash: '#/g' }, 'no cricket group');
+  assert.deepEqual(d('cricket', G, ''), { sport: 'cricket', groupId: '', hash: '#/pool' }, 'no cricket group');
 });
 
 /* ------------------------------------------------------------ the chooser */
 
-test('signed out: two tabs, every family rolled up with its marks small, no request, a tap goes to the group page', async () => {
+test('signed out: two tabs, every family rolled up with its marks small, no request, a tap goes to that sport\'s pool', async () => {
   globalThis.AG_POOL_ONLY = true;
   const M = load();
   const wrap = mk('div');
@@ -354,8 +367,9 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
   assert.equal(panel(wrap, 'sports').getAttribute('aria-labelledby'), 'lg-tab-sports');
 
   /* Then, while it is open, the ready set that is a sport - the Cycling Worlds, a questions group. */
+  /* A dated league (Big Game squares) is there until a day after its game. */
   assert.deepEqual(sportTiles(wrap).map((b) => b.dataset.sport),
-    [...M.HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id)), ...M.homeSetList(Date.now()).map(() => 'props')],
+    [...M.HOME_FAMILIES.flatMap((f) => M.homeLeaguesAt(f, Date.now()).map(([id]) => id)), ...M.homeSetList(Date.now()).map(() => 'props')],
     'every sport, in order');
   assert.equal(byClass(panel(wrap, 'sports'), 'lg-league').length, sportTiles(wrap).length, 'all on the Sports tab');
   assert.deepEqual(showTiles(wrap).map((b) => b.dataset.template),
@@ -403,8 +417,10 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
   assert.deepEqual(rightOf('golf-cup'), ['Presidents Cup'], 'no mark: the league in the tile\'s words');
   assert.equal(byClass(tile(wrap, 'mlb'), 'lg-fam-marks')[0].getAttribute('aria-hidden'), 'true');
   assert.equal(tile(wrap, 'mlb').getAttribute('aria-label'), 'MLB', 'the row is named for its league, as the tile was');
+  /* Football is three across while Big Game squares is on it, two after. */
+  const football = M.homeLeaguesAt(M.HOME_FAMILIES[0], Date.now()).length;
   assert.deepEqual(byClass(panel(wrap, 'sports'), 'lg-fam-row').map((r) => r.className),
-    ['lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n2'],
+    ['lg-fam-row n' + football, 'lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n2'],
     'two or three across - and a one-league family has no row of tiles at all');
   /* No group, no storage: every roll-up starts collapsed, marks showing. */
   assert.deepEqual(openFams(wrap), []);
@@ -458,11 +474,11 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
 
   await tile(wrap, 'college-football').onclick();
   assert.equal(mem.get('ag.sport'), JSON.stringify('college-football'), 'stored the way store.set stores it');
-  assert.equal(loc.hash, '#/g');
+  assert.equal(loc.hash, '#/slate', 'pool first: the college slate, not the group page');
   assert.equal(mem.has('ag.group'), false, 'no group chosen');
   await tile(wrap, 'ufc').onclick();
   assert.equal(mem.get('ag.sport'), JSON.stringify('ufc'));
-  assert.equal(loc.hash, '#/g');
+  assert.equal(loc.hash, '#/pool', 'a day sport\'s pool');
 });
 
 test('signed in: the first paint does not wait; once the list lands the tiles say "Your group" and their families open', async () => {
@@ -473,7 +489,9 @@ test('signed in: the first paint does not wait; once the list lands the tiles sa
   const M = load();
   const wrap = mk('div');
   M.homeScreen(wrap);
-  assert.equal(sportTiles(wrap).length, POOL_SPORTS.length - 1 + M.homeSetList(Date.now()).length, 'drawn while the request is still out');
+  /* Every pool sport but questions, less a dated league whose day has passed, plus a sport set. */
+  const gone = M.HOME_FAMILIES.reduce((n, f) => n + f.leagues.length - M.homeLeaguesAt(f, Date.now()).length, 0);
+  assert.equal(sportTiles(wrap).length, POOL_SPORTS.length - 1 - gone + M.homeSetList(Date.now()).length, 'drawn while the request is still out');
   assert.equal(tiles(wrap).some((b) => b.classList.contains('is-mine')), false, 'and nothing claimed yet');
   assert.deepEqual(openFams(wrap), [], 'and nothing opened yet');
   assert.deepEqual(CALLS, ['/api/group/mine']);
@@ -486,8 +504,11 @@ test('signed in: the first paint does not wait; once the list lands the tiles sa
   release(); await settle();
   assert.deepEqual(tiles(wrap).filter((b) => b.classList.contains('is-mine')).map((b) => b.dataset.sport),
     ['nfl', 'nascar-truck'], 'the answer is written into the tiles on screen now');
-  assert.deepEqual(openFams(wrap), ['football', 'racing'], 'a family with a group starts open');
+  /* 🔴 ONE family opens, not every one with a group (2026-09-13, the accordion): the
+     first in Home order that holds a group of yours. */
+  assert.deepEqual(openFams(wrap), ['football'], 'the first family with a group opens - one, never two');
   assert.equal(fam(wrap, 'football').rollMarks.hidden, true, 'an open family drops its small marks');
+  assert.equal(fam(wrap, 'racing').rollH.getAttribute('aria-expanded'), 'false', 'racing has a group too, and stays closed');
   assert.equal(tile(wrap, 'nfl').getAttribute('aria-label'), 'NFL, your group');
   assert.equal(tile(wrap, 'nba').getAttribute('aria-label'), 'NBA');
   assert.equal(mem.has('ag.homeOpen'), false, 'opened by the group, not a remembered choice');
@@ -495,49 +516,64 @@ test('signed in: the first paint does not wait; once the list lands the tiles sa
   /* A later mount draws from the loaded list: open on the first paint. */
   const w2 = mk('div');
   M.homeScreen(w2);
-  assert.deepEqual(openFams(w2), ['football', 'racing']);
+  assert.deepEqual(openFams(w2), ['football']);
 });
 
-test('a roll-up opens and closes on its header, and the choice is remembered per family', () => {
+/* 🔴 AN ACCORDION. Jason, 2026-09-13: "if you open a new drop down close any other open". */
+test('the roll-ups are an accordion: opening B closes A, closing the open one leaves none, and the one open is remembered', () => {
   globalThis.AG_POOL_ONLY = true;
   const M = load();
   const wrap = mk('div');
   M.homeScreen(wrap);
   const hk = fam(wrap, 'hockey');
+  const sc = fam(wrap, 'soccer');
   hk.rollH.onclick();
   assert.equal(isOpen(hk), true);
   assert.deepEqual([hk.rollRow.hidden, hk.rollMarks.hidden, hk.classList.contains('is-open')], [false, true, true]);
-  assert.equal(mem.get('ag.homeOpen'), JSON.stringify({ hockey: true }));
+  assert.equal(mem.get('ag.homeOpen'), JSON.stringify('hockey'));
+  sc.rollH.onclick();
+  assert.deepEqual(openFams(wrap), ['soccer'], 'opening soccer closed hockey');
+  assert.deepEqual([hk.rollRow.hidden, hk.rollMarks.hidden, hk.classList.contains('is-open')], [true, false, false]);
+  assert.equal(mem.get('ag.homeOpen'), JSON.stringify('soccer'));
+  sc.rollH.onclick();
+  assert.deepEqual(openFams(wrap), [], 'closing the open one leaves none');
+  assert.equal(mem.get('ag.homeOpen'), JSON.stringify(''));
   hk.rollH.onclick();
-  assert.equal(isOpen(hk), false);
-  assert.deepEqual([hk.rollRow.hidden, hk.rollMarks.hidden], [true, false]);
-  assert.equal(mem.get('ag.homeOpen'), JSON.stringify({ hockey: false }));
-  fam(wrap, 'soccer').rollH.onclick();
-  hk.rollH.onclick();
-  assert.deepEqual(JSON.parse(mem.get('ag.homeOpen')), { hockey: true, soccer: true });
-  assert.deepEqual(openFams(wrap), ['hockey', 'soccer']);
+  /* Every header says what it is. */
+  for (const f of byClass(wrap, 'lg-fam').filter((x) => x.rollH)) {
+    assert.equal(f.rollH.getAttribute('aria-expanded'), f.dataset.fam === 'hockey' ? 'true' : 'false', f.dataset.fam);
+    assert.equal(f.rollRow.hidden, f.dataset.fam !== 'hockey');
+  }
 
-  /* A fresh visit reads it back. */
-  const M2 = load();
+  /* A fresh visit reads the one back. */
   const w2 = mk('div');
-  M2.homeScreen(w2);
-  assert.deepEqual(openFams(w2), ['hockey', 'soccer']);
+  load().homeScreen(w2);
+  assert.deepEqual(openFams(w2), ['hockey']);
 });
 
-test('a family you closed stays closed even when you have a group in it; the others open for their groups', async () => {
+test('a remembered choice wins over a group: none stays none, one stays that one; an old map keeps its first open family', async () => {
   globalThis.AG_POOL_ONLY = true;
   signIn();
-  mem.set('ag.homeOpen', JSON.stringify({ football: false }));
   ANSWER = async () => reply([{ id: 'G-NFL', sport: 'nfl' }, { id: 'G-NHL', sport: 'nhl' }, { id: 'G-MLB', sport: 'mlb' }]);
-  const M = load();
-  const wrap = mk('div');
-  M.homeScreen(wrap);
-  await settle();
+  const draw = async () => { GROUP.forgetGroups(); const M = load(); const w = mk('div'); M.homeScreen(w); await settle(); return w; };
+
+  mem.set('ag.homeOpen', JSON.stringify(''));
+  let wrap = await draw();
   assert.equal(tile(wrap, 'nfl').classList.contains('is-mine'), true);
-  assert.deepEqual(openFams(wrap), ['hockey'], 'football remembered closed; hockey opened by its group');
+  assert.deepEqual(openFams(wrap), [], 'all closed was chosen: no family opens for a group');
   /* Baseball is one league - no roll-up to open; its one row is simply there, marked. */
   assert.equal(fam(wrap, 'baseball').soloRow.hidden, false);
   assert.equal(tile(wrap, 'mlb').classList.contains('is-mine'), true);
+
+  mem.set('ag.homeOpen', JSON.stringify('soccer'));
+  assert.deepEqual(openFams(await draw()), ['soccer'], 'the remembered one, not the families with groups');
+
+  /* The map an older build stored: its first open family, or none. */
+  mem.set('ag.homeOpen', JSON.stringify({ football: false, hockey: true, soccer: true }));
+  assert.deepEqual(openFams(await draw()), ['hockey']);
+  mem.set('ag.homeOpen', JSON.stringify({ football: false }));
+  assert.deepEqual(openFams(await draw()), [], 'a map with nothing open is none');
+  for (const f of byClass(wrap, 'lg-fam').filter((x) => x.rollH)) assert.ok(['true', 'false'].includes(f.rollH.getAttribute('aria-expanded')));
 });
 
 test('the tabs: Sports by default, a tap or an arrow key switches, and the choice is remembered', () => {
@@ -607,7 +643,7 @@ test('a tap with a group of that sport makes it current and opens its picks', as
   await tile(wrap, 'f1').onclick();
   assert.equal(mem.get('ag.sport'), JSON.stringify('f1'));
   assert.equal(mem.get('ag.group'), 'G-TRK', 'no F1 group: the current group is left alone');
-  assert.equal(loc.hash, '#/g', 'and the group page opens on F1');
+  assert.equal(loc.hash, '#/f1', 'and F1\'s own picks open - pool first');
 });
 
 test('a tap before the list lands waits for it rather than sending a member to the Start form', async () => {

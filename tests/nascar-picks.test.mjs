@@ -33,6 +33,7 @@ const PATHS = {
   "'/components/states.js'": href('../public/components/states.js'),
   "'/components/header.js'": href('../public/components/header.js'),
   "'/components/group.js'": href('../public/components/group.js'),
+  "'/components/start-join.js'": href('../public/components/start-join.js'),
   "'/src/lib/nascar.js'": href('../src/lib/nascar.ts')
 };
 let rebased = SRC;
@@ -472,8 +473,11 @@ test('render: the name, the doors, the disclaimer', () => {
   assert.ok(render.includes("gl.href = '#/gstandings';"), 'the group board');
   assert.ok(render.includes("gl.addEventListener('click', () => setCurrentGroupId(group.id));"),
     'the group section\'s current group is set to THIS group before the link is followed');
-  assert.ok(render.includes("a.href = '#/g';") && render.includes('S.invite'), 'no group: one line to #/g');
+  /* Pool first (2026-09-13): in no group of the series the screen shows the Start /
+     Join card, not a line to #/g - tests/pool-first.test.mjs taps it. */
+  assert.ok(render.includes('startJoinCard(series, soloCard(series))'), 'no group: the Start / Join card');
   assert.equal(NAS.SERIES.nascar.invite, 'start a NASCAR group', 'the Cup\'s line, word for word');
+  assert.ok(NAS.soloCard('nascar').body.includes('Start a NASCAR group'), 'the card names the Cup group');
   assert.equal(NAS.emptyBody('nascar'), 'The next Cup race shows here as soon as ESPN lists it.', 'the Cup\'s empty state, word for word');
   assert.ok(render.includes('Any Given is not associated in any way with NASCAR.'));
   assert.ok(render.includes("'Picks are saved on this phone. '"));
@@ -491,7 +495,9 @@ test('css: scoped, every control a 44px reach, nothing wider than a phone', () =
   const plain = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
   const selectors = plain.split('}').map((b) => b.split('{')[0].trim()).filter((s) => s && !s.startsWith('@'));
   for (const sel of selectors) for (const part of sel.split(',')) assert.ok(part.trim().startsWith('.scr-nascar'), 'unscoped: ' + part);
-  for (const ctl of ['.nas-grow', '.nas-glink', '.nas-invite a', '.nas-sel', '.nas-choice', '.nas-row']) {
+  /* '.nas-invite a' left with the link (2026-09-13, pool first): its Start / Join
+     buttons are START_JOIN_CSS's, held to 44px in tests/pool-first.test.mjs. */
+  for (const ctl of ['.nas-grow', '.nas-glink', '.nas-sel', '.nas-choice', '.nas-row']) {
     const m = plain.match(new RegExp('\\.scr-nascar ' + ctl.replace(/[.]/g, '\\.') + '\\s*\\{([^}]*)\\}'));
     assert.ok(m, 'no rule for ' + ctl);
     assert.match(m[1], /min-height:\s*44px/, ctl + ' is under 44px');

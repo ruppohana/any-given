@@ -295,7 +295,8 @@ test('Home: a Soccer family with all five league tiles, and the same tap as ever
       ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] });
   const G = [{ id: 'SOCCR1', sport: 'epl' }, { id: 'NFL1', sport: 'nfl' }];
   assert.deepEqual(H.homeSportDest('epl', G, ''), { sport: 'epl', groupId: 'SOCCR1', hash: '#/gpicks' });
-  assert.deepEqual(H.homeSportDest('mls', G, ''), { sport: 'mls', groupId: '', hash: '#/g' });
+  /* No MLS group: MLS's pool, not the group page (pool first, 2026-09-13). */
+  assert.deepEqual(H.homeSportDest('mls', G, ''), { sport: 'mls', groupId: '', hash: '#/pool' });
 });
 
 /* ------------------------------------------------------------ crests */

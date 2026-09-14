@@ -23,7 +23,8 @@
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { pageHeader, HEADER_CSS } from '/components/header.js';
 import { myGroups, currentGroupId, setCurrentGroupId, groupSwitcher, forgetGroups, GROUP_CSS } from '/components/group.js';
-import { cleanQuestion, isOpen, scoreProps, VOID, PROPS_LIMITS, PROP_TEMPLATES } from '/src/lib/props.js';
+import { startJoinCard, startJoinSheet, noGroupTap, START_JOIN_CSS } from '/components/start-join.js';
+import { cleanQuestion, isOpen, scoreProps, VOID, PROPS_LIMITS, PROP_TEMPLATES, templatesOpen } from '/src/lib/props.js';
 
 export const id = 'props';
 export const title = 'Questions - awards, TV, anything';
@@ -113,6 +114,23 @@ export function totalLine(questions, picks) {
     return { points: 0, text: answered ? answered + ' of ' + qs.length + ' picked · no answers in yet' : 'No picks yet' };
   }
   return { points: s.points, text: s.points + (s.points === 1 ? ' point' : ' points') + ' · ' + s.correct + ' of ' + s.settled + ' right' };
+}
+
+/** POOL FIRST (Jason, 2026-09-13). The ready set somebody with no questions group
+ *  is shown - signed out, or signed in with none: the set Home remembered while it
+ *  is still open, else the soonest open one (templatesOpen order); null when no set
+ *  is open. Its questions carry the qids a group's copy would (`<id>-<n>`), so a
+ *  pick made before signing in can go on into a group that has loaded the set. */
+export function previewSetOf(remembered, now) {
+  const open = templatesOpen(now);
+  const id = open.some((t) => t.id === remembered) ? remembered : (open[0] ? open[0].id : '');
+  const t = id ? PROP_TEMPLATES[id] : null;
+  if (!t) return null;
+  return {
+    id, name: t.name, when: t.when || '',
+    questions: t.questions.map((q, i) => ({ qid: id + '-' + (i + 1), position: i + 1, answer: null,
+      text: String(q.text), options: (q.options || []).map(String), points: Number(q.points) || 1, lockAt: Number(q.lockAt) }))
+  };
 }
 
 /** How many of a ready set are in this group - its questions are `<id>-1..n`. */
@@ -241,7 +259,7 @@ export function render(root, data, state) {
   root.innerHTML = '';
   root.classList.add('scr-props');
   const style = el('style');
-  style.textContent = [STATES_CSS, HEADER_CSS, GROUP_CSS].join('\n');
+  style.textContent = [STATES_CSS, HEADER_CSS, GROUP_CSS, START_JOIN_CSS].join('\n');
   root.appendChild(style);
   const host = el('div', 'pr');
   root.appendChild(host);
@@ -251,14 +269,16 @@ export function render(root, data, state) {
 let SEQ = 0;
 
 /** Load and draw again - after a tap, a switch, a sign-in. A slower answer that a
- *  newer one has replaced is dropped. */
-async function refresh(host, flash, loading) {
+ *  newer one has replaced is dropped. `then` runs on the fresh state (the pick a
+ *  signed-out tap was making). */
+async function refresh(host, flash, loading, then) {
   const seq = ++SEQ;
   if (loading) draw(host, { view: 'loading' }, 'loading');
   const next = await loadProps(apiFn(), { force: true });
   if (seq !== SEQ || !host.isConnected) return;
   if (flash) next.flash = flash;
   draw(host, next, 'ready');
+  if (then) then(next);
 }
 
 function draw(host, d, state) {
@@ -267,9 +287,10 @@ function draw(host, d, state) {
   const p = d.props || null;
   const sub = view === 'ready' && p
     ? (p.name || 'Your group') + ' · ' + p.questions.length + (p.questions.length === 1 ? ' question' : ' questions')
-    : { 'signed-out': 'Sign in to play', 'no-group': 'Awards, TV, anything', loading: 'Loading the questions…',
+    : { 'signed-out': 'Awards, TV, anything', 'no-group': 'Awards, TV, anything', loading: 'Loading the questions…',
         offline: 'Offline', error: 'Something went wrong' }[view] || '';
-  host.appendChild(pageHeader({ title: 'Questions', noTitle: true, sub }));
+  /* Signed out: a quiet Sign in in the header, for anybody who wants it before a tap. */
+  host.appendChild(pageHeader({ title: 'Questions', noTitle: true, sub, right: view === 'signed-out' ? signInLink(host) : null }));
 
   if (view === 'loading') { host.appendChild(stateBlock('loading', { rows: 4, body: 'Loading the questions…' })); return; }
   if (view === 'offline') {
@@ -282,43 +303,104 @@ function draw(host, d, state) {
       action: { label: 'Try again', onClick: () => refresh(host, null, true) } }));
     return;
   }
-  if (view === 'signed-out') { host.appendChild(signedOut(host)); return; }
-  if (view === 'no-group') { host.appendChild(noGroup(d)); return; }
+  if (view === 'signed-out' || view === 'no-group') { poolPreview(host, d, view === 'signed-out'); return; }
   drawReady(host, d);
 }
 
-function signedOut(host) {
-  const c = el('div', 'card pr-card pr-gate');
-  c.appendChild(el('h2', 'pr-h', 'Sign in to play questions'));
-  c.appendChild(el('p', 'pr-p', 'Questions groups are invite-only, so they go with your account. '
-    + 'Other members see your handle and nothing else.'));
-  const b = btn('pr-primary', 'Sign in', async () => {
-    if (typeof window === 'undefined' || !window.agOpenSignIn) return;
-    b.disabled = true;
-    const ok = await window.agOpenSignIn();
-    b.disabled = false;
-    if (ok) { forgetGroups(); refresh(host, null, true); }
+/* ------------------------------------------------------------ pool first
+ * 🔴 NO SIGN-IN WALL, NO START-FORM WALL. Jason, 2026-09-13, chose "Pool first":
+ * somebody signed out, or signed in with no questions group, sees a ready set's
+ * questions - the one Home remembered, else the soonest - with a Start a group /
+ * Join a group pair on it. The first tap on an option asks: signed out, the sign-in
+ * sheet (then the pick goes on if a group of theirs has the set); signed in with no
+ * group, a small inline Start / Join sheet. */
+
+function signInLink(host) {
+  return btn('pr-signin', 'Sign in', async () => {
+    if (typeof window === 'undefined' || typeof window.agOpenSignIn !== 'function') return;
+    if (await window.agOpenSignIn()) { forgetGroups(); refresh(host, null, true); }
   });
-  c.appendChild(b);
-  return c;
 }
 
-function noGroup(d) {
-  const t = d.template ? PROP_TEMPLATES[d.template] : null;
-  const c = el('div', 'card pr-card pr-gate');
-  c.appendChild(el('h2', 'pr-h', t ? 'Start a group for ' + t.name : 'Start a questions group'));
-  c.appendChild(el('p', 'pr-p', 'A questions group picks answers instead of games - the Emmys, Survivor, the Oscars, '
-    + 'the Draft, cricket, anything. The commissioner writes the questions or loads a ready set, and enters the answers. '
-    + 'Scored in points.'));
-  const a = el('a', 'pr-primary', t ? 'Start a group for ' + t.name : 'Start a questions group');
-  a.href = '#/g';
-  /* The group page's Start form opens on ag.sport (g1-group chosenSport). */
-  a.addEventListener('click', () => { try { localStorage.setItem('ag.sport', JSON.stringify(PROPS_SPORT)); } catch { /* private */ } });
-  c.appendChild(a);
-  const j = el('a', 'pr-link', 'Join one with a code');
-  j.href = '#/g';
-  c.appendChild(j);
-  return c;
+function rememberSet(id) { try { localStorage.setItem(TEMPLATE_KEY, JSON.stringify(id)); } catch { /* private */ } }
+
+function poolPreview(host, d, signedOut) {
+  const set = previewSetOf(d.template, Date.now());
+  host.appendChild(startJoinCard(PROPS_SPORT, {
+    title: set ? 'Play ' + set.name + ' with friends' : 'Play questions with friends',
+    body: 'Picks count in a questions group. Start one and invite people, or join with the code someone sent you.'
+  }));
+  const slot = el('div', 'pr-sheetslot');
+  host.appendChild(slot);
+  const openSheet = () => {
+    if (slot.firstChild) return;
+    const s = startJoinSheet(PROPS_SPORT, { title: 'Save it to a group',
+      body: 'A pick counts once you are in a questions group. Start one and invite people, or join with a code.',
+      onClose: () => { slot.innerHTML = ''; } });
+    slot.appendChild(s);
+    const first = s.querySelector && s.querySelector('button');
+    if (first && first.focus) first.focus();
+  };
+  if (d.openSheet) openSheet();
+  if (!set) {
+    host.appendChild(stateBlock('empty', { title: 'No ready set is open right now',
+      body: 'Start a group and write your own questions - an awards show, a finale, the Draft, anything.' }));
+    return;
+  }
+  const head = el('section', 'card pr-card pr-preview');
+  head.dataset.template = set.id;
+  head.appendChild(el('h2', 'pr-h', set.name));
+  if (set.when) head.appendChild(el('p', 'pr-p', set.when));
+  head.appendChild(el('p', 'pr-note', set.questions.length + ' questions. '
+    + (signedOut ? 'Tap an answer to play - you sign in first.' : 'Tap an answer to play - it saves in a group.')));
+  host.appendChild(head);
+  const now = Date.now();
+  for (const q of set.questions) {
+    const v = questionView(q, undefined, null, now);
+    const card = el('section', 'card pr-q');
+    card.dataset.qid = q.qid;
+    const h = el('div', 'pr-q-h');
+    h.appendChild(el('h3', 'pr-q-t', v.text));
+    h.appendChild(el('span', 'pr-q-pts num', pointsText(v.points)));
+    card.appendChild(h);
+    card.appendChild(el('p', 'pr-q-lock num', v.lock));
+    const list = el('div', 'pr-opts');
+    list.setAttribute('role', 'group');
+    list.setAttribute('aria-label', v.text);
+    for (const o of v.options) {
+      const b = el('button', 'pr-opt');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', 'false');
+      b.appendChild(el('span', 'pr-opt-l', o.label));
+      if (!v.open) b.disabled = true;
+      else b.addEventListener('click', () => previewTap(host, set, q, o.label, openSheet));
+      list.appendChild(b);
+    }
+    card.appendChild(list);
+    host.appendChild(card);
+  }
+  host.appendChild(el('p', 'pr-foot', 'A questions group picks answers instead of games - the Emmys, Survivor, the '
+    + 'Oscars, the Draft, anything. The commissioner loads a ready set like this one, which scores itself, or writes '
+    + 'their own. One pick a question, until it locks. Points are the only score.'));
+}
+
+/** The first tap on a preview answer. The set is remembered either way, so a group
+ *  started from here is offered it first. */
+async function previewTap(host, set, q, choice, openSheet) {
+  rememberSet(set.id);
+  const r = await noGroupTap();
+  if (r === 'no-group') { openSheet(); return; }
+  if (r !== 'signed-in') return;
+  forgetGroups();
+  refresh(host, null, true, async (next) => {
+    if (next.view === 'no-group') { next.openSheet = true; draw(host, next, 'ready'); return; }
+    if (next.view !== 'ready') return;
+    /* In a questions group with this set loaded: the pick goes on. */
+    const mine = next.props.questions.find((x) => x.qid === q.qid);
+    if (!mine || !isOpen(mine, Date.now() + (Number(next.skew) || 0)) || (next.props.picks && next.props.picks[q.qid])) return;
+    const res = await call(apiFn(), '/api/props/pick', { pool: next.groupId, qid: q.qid, choice });
+    refresh(host, res.ok ? 'Saved: ' + choice : failText(res, 'That pick did not go through.'));
+  });
 }
 
 function drawReady(host, d) {

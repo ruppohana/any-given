@@ -29,7 +29,8 @@ import { handleContact } from './contact.ts';
 import { handleGroups } from './groups.ts';
 import { handleF1Pool, racingStandings, RACING } from './f1-pool.ts';
 import { handlePropsPool, propsStandings } from './props-pool.ts';
-import { settleReadySets } from './props-settle-run.ts';
+import { settleReadySets, syncReadyOptions } from './props-settle-run.ts';
+import { handleSquaresPool, squaresStandings, drawDueGrids } from './squares-pool.ts';
 import { serveNascar, NASCAR_SERIES } from './nascar-feed.ts';
 import { poolSport, worldPoolId, pickSides, gradeSql } from './lib/groups.ts';
 
@@ -216,6 +217,17 @@ export default {
         const r = await settleReadySets(env, Date.now(), fetch, { force: true });
         if (r.length) console.log('props settle', JSON.stringify(r));
       } catch (e: any) { console.log('props settle FAILED', String(e?.message || e)); }
+      /* A ready set whose options changed (the cycling Worlds' start lists) brings every
+         group's open questions up to it, taking nobody's pick away (src/props-settle-run.ts). */
+      try {
+        const r = await syncReadyOptions(env, Date.now());
+        if (r.some((x) => x.changed)) console.log('props options', JSON.stringify(r));
+      } catch (e: any) { console.log('props options FAILED', String(e?.message || e)); }
+      /* Every squares grid past kickoff gets its random draw, even if nobody opens it. */
+      try {
+        const n = await drawDueGrids(env, Date.now());
+        if (n) console.log('squares drawn', n);
+      } catch (e: any) { console.log('squares draw FAILED', String(e?.message || e)); }
       /* The same for every NASCAR series (src/nascar-feed.ts) - one fails, the rest still run. */
       for (const series of Object.keys(NASCAR_SERIES)) {
         try { await serveNascar(env, Date.now(), fetch, series); } catch { /* the next tick tries again */ }
@@ -270,6 +282,9 @@ export default {
       /* ---- questions pools: /api/props* (src/props-pool.ts) - the Emmys, the Oscars, anything ---- */
       const propsRes = await handlePropsPool(req, env, p, json);
       if (propsRes) return propsRes;
+      /* ---- Big Game squares: /api/squares* (src/squares-pool.ts) ---- */
+      const squaresRes = await handleSquaresPool(req, env, p, json);
+      if (squaresRes) return squaresRes;
       const groupRes = await handleGroups(req, env, p, json);
       if (groupRes) return groupRes;
 
@@ -1052,6 +1067,11 @@ export default {
         if (sport === 'props') {
           return json({ pool: poolId, sport, week: 0, ats: false, unit: 'points',
                         rows: await propsStandings(env, poolId), fetchedAt: Date.now() });
+        }
+        /* Big Game squares score in points from the squares that hit (src/squares-pool.ts). */
+        if (sport === 'squares') {
+          return json({ pool: poolId, sport, week: 0, ats: false, unit: 'points',
+                        rows: await squaresStandings(env, poolId), fetchedAt: Date.now() });
         }
         if (RACING.includes(sport)) {
           return json({ pool: poolId, sport, week: 0, ats: false, unit: 'points',

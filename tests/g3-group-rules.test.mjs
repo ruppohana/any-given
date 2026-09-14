@@ -327,7 +327,7 @@ function branch(fn, cond) {
 }
 const lits = (src) => (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((s) => s.slice(1, -1)).join('');
 
-test('the League row shows the twenty-two labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
+test('the League row shows the twenty-three labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
   const m = CJS.match(/const LEAGUES = \{([^}]*)\}/);
   assert.ok(m, 'no LEAGUES map');
   const pairs = [...m[1].matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((x) => [x[1], x[2]]);
@@ -335,7 +335,7 @@ test('the League row shows the twenty-two labels, keyed by src/lib/groups.ts POO
   assert.deepEqual(pairs.map((p) => p[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR',
     'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
     'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions',
-    'UFC', 'Cricket', 'Presidents Cup']);
+    'UFC', 'Cricket', 'Presidents Cup', 'Big Game squares']);
   /* A questions group (2026-09-13) is said once, in its own sentence. */
   assert.ok(FLAT.includes('Or it plays questions instead - an awards show, a TV finale, anything the commissioner writes.'));
   assert.match(CJS, /\['League', LEAGUES\[sport\]\]/);

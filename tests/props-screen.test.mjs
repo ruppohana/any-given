@@ -31,6 +31,7 @@ const PATHS = {
   "'/components/states.js'": href('../public/components/states.js'),
   "'/components/header.js'": href('../public/components/header.js'),
   "'/components/group.js'": href('../public/components/group.js'),
+  "'/components/start-join.js'": href('../public/components/start-join.js'),
   "'/src/lib/props.js'": href('../src/lib/props.ts')
 };
 let rebased = SRC;
@@ -276,6 +277,78 @@ test('every write is the frozen contract\'s shape', async () => {
   const posted = [...new Set([...code(SRC).matchAll(/'(\/api\/props[a-z/]*)'/g)].map((m) => m[1]))].sort();
   assert.deepEqual(posted, ['/api/props/delete', '/api/props/pick', '/api/props/questions', '/api/props/settle', '/api/props/template']);
   assert.match(code(SRC), /'\/api\/props\?pool=' \+ encodeURIComponent\(g\.id\)/);
+});
+
+/* ------------------------------------------------------------ pool first
+ * Jason, 2026-09-13, chose "Pool first": signed out, or signed in with no questions
+ * group, the page is a ready set's questions with a Start / Join pair - the first tap
+ * asks. The old full-screen sign-in and start cards are gone. */
+
+test('pool first: the set Home remembered while it is open, else the soonest - with the qids a group\'s copy has', () => {
+  assert.equal(P.previewSetOf('survivor-51', SEP13).id, 'survivor-51');
+  assert.equal(P.previewSetOf('', SEP13).id, templatesOpen(SEP13)[0].id, 'the soonest open set');
+  assert.equal(P.previewSetOf('oscars-2027', SEP13).id, 'emmys-2026', 'a set the app does not have');
+  const s = P.previewSetOf('emmys-2026', SEP13);
+  assert.deepEqual([s.name, s.when, s.questions.length], [EMMYS.name, EMMYS.when, 14]);
+  assert.deepEqual(s.questions.map((q) => q.qid), EQ.map((q) => q.qid));
+  assert.deepEqual(s.questions[0].options, EMMYS.questions[0].options.map(String));
+  assert.equal(P.previewSetOf('emmys-2026', LOCK + 1).id !== 'emmys-2026', true, 'a locked set is not shown');
+  assert.equal(P.previewSetOf('', Date.UTC(2027, 5, 1)), null, 'nothing open, nothing shown');
+});
+
+async function previewWorld(fn) {
+  const { makeDom, settle } = await import('./fake-dom.mjs');
+  const DOM = makeDom();
+  globalThis.document = DOM.document;
+  globalThis.location = { hash: '#/props' };
+  const realNow = Date.now;
+  Date.now = () => SEP13;
+  const seen = { signIns: 0 };
+  globalThis.agOpenSignIn = async () => { seen.signIns++; return false; };
+  try { await fn({ DOM, settle, seen }); } finally { Date.now = realNow; delete globalThis.agOpenSignIn; }
+}
+
+test('pool first, signed out: the set\'s questions and options, a quiet Sign in, the pair - and the first tap opens the sign-in sheet', async () => {
+  await previewWorld(async ({ DOM, settle, seen }) => {
+    STORE.set('ag.propsTemplate', JSON.stringify('survivor-51'));
+    const d = await P.loadProps(api);
+    assert.equal(d.view, 'signed-out');
+    const root = DOM.mount();
+    P.render(root, d, 'ready');
+    assert.equal(root.querySelector('.pr-preview h2').textContent, SURV.name);
+    assert.equal(root.querySelector('.pr-preview .pr-p').textContent, SURV.when, 'when it is');
+    assert.equal(root.querySelectorAll('.pr-q').length, SURV.questions.length);
+    assert.deepEqual(root.querySelectorAll('.pr-q')[0].querySelectorAll('.pr-opt-l').map((o) => o.textContent),
+      SURV.questions[0].options.map(String));
+    assert.equal(root.querySelector('.pr-signin').textContent, 'Sign in');
+    assert.deepEqual(root.querySelectorAll('[data-sj]').map((b) => b.dataset.sj), ['start', 'join']);
+    assert.equal(root.querySelector('.pr-gate'), null, 'no full-screen sign-in card');
+    await root.querySelector('.pr-opt').click(); await settle();
+    assert.equal(seen.signIns, 1, 'the first tap opens the sign-in sheet');
+    assert.equal(STORE.get('ag.propsTemplate'), JSON.stringify('survivor-51'), 'the set is remembered for a group started next');
+    assert.deepEqual(CALLS, [], 'nothing is sent');
+  });
+});
+
+test('pool first, signed in with no questions group: the soonest set, and the first tap opens a small Start / Join sheet', async () => {
+  await previewWorld(async ({ DOM, settle, seen }) => {
+    signIn();
+    ROUTE['/api/group/mine'] = () => json({ groups: [G_NFL], kindness: 'k' });
+    const d = await P.loadProps(api);
+    assert.equal(d.view, 'no-group');
+    const root = DOM.mount();
+    P.render(root, d, 'ready');
+    assert.equal(root.querySelector('.pr-preview').dataset.template, templatesOpen(SEP13)[0].id);
+    assert.equal(root.querySelector('.pr-signin'), null);
+    await root.querySelector('.pr-opt').click(); await settle();
+    assert.equal(seen.signIns, 0);
+    const sheet = root.querySelector('.ag-sj--sheet');
+    assert.ok(sheet, 'an inline sheet, not a wall');
+    assert.deepEqual(sheet.querySelectorAll('[data-sj]').map((b) => b.dataset.sj), ['start', 'join', 'close']);
+    assert.deepEqual(CALLS.map((c) => c.url), ['/api/group/mine'], 'no pick is sent without a group');
+    await sheet.querySelector('[data-sj="start"]').click();
+    assert.deepEqual([STORE.get('ag.groupForm'), STORE.get('ag.sport'), location.hash], ['start', JSON.stringify('props'), '#/g']);
+  });
 });
 
 test('harness states touch no network and carry no group', async () => {

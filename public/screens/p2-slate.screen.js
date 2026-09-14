@@ -56,6 +56,13 @@ import { filterOptions, gamePasses, FILTER_ALL, filterKey, overlayLive } from '/
 /* GROUP POOLS - the current group and its switcher. Read and written only through
    this component (CONTRACT-GROUPS §1, §3). Used in the `group` state alone. */
 import { myGroups, pickCurrent, groupSwitcher, GROUP_CSS } from '/components/group.js';
+/* POOL FIRST (Jason, 2026-09-13). The pool shows its games and one card with Start a
+   group / Join a group; a pick from somebody with no group of the sport opens the
+   sign-in sheet (signed out) or a small inline sheet with the same two (signed in).
+   A static import, like group.js above: the p2 tests strip import lines, and every
+   name below is reached only from render() and the `browse` state, which no stripped
+   test runs - tests/pool-first.test.mjs installs the real module for those. */
+import { noGroupTap, startJoinCard, startJoinSheet, START_JOIN_CSS } from '/components/start-join.js';
 
 export const id = 'p2-slate';
 export const title = 'The slate';
@@ -65,7 +72,8 @@ export const bar = 'reference/cbs-pickem-teardown/screens/CBS-picks-week1-15-gam
  * against-the-spread ON - the worst case, because if it holds with spreads it holds
  * without. `ready-short` is the three REAL fixture games with ats off - the 3-row case.
  * A layout that only works at fifteen rows is broken, so both are routes, not a claim. */
-export const states = ['ready', 'ready-short', 'empty', 'loading', 'offline', 'error', 'group'];
+/* `browse` is #/pool - a day sport's pool for somebody in no group of it (BROWSE_COPY). */
+export const states = ['ready', 'ready-short', 'empty', 'loading', 'offline', 'error', 'group', 'browse'];
 
 /* 🔴 THE GROUP STATE - `#/gpicks`, the Pool tab of Group pools (CONTRACT-GROUPS §1).
  * Jason, 2026-09-11: "if i am part of a group, great then i can pick games. if i am
@@ -93,6 +101,8 @@ export const GROUP_COPY = {
   /* A questions group (2026-09-13): its pool is its questions page, as a racing
    * group's is its race. */
   props: { title: 'This group plays questions', body: 'The commissioner writes the questions - an awards show, a finale, anything - and enters the answers. One pick a question, scored in points.', cta: 'Open the questions', href: '#/props' },
+  /* Big Game squares (2026-09-13): its pool is its grid. */
+  squares: { title: 'This group plays Big Game squares', body: 'One 10 × 10 grid on the Big Game. Claim squares until kickoff; the square where the last digits of the score meet scores at each quarter.', cta: 'Open the grid', href: '#/squares' },
   emptyDay: { title: 'No games on this day', body: 'Pick another day above. Games show up as soon as they are scheduled.' },
   emptyUfc: { title: 'No UFC card on this day', body: 'Pick another day above. A card shows up here as soon as it is scheduled.' },
   emptyCricket: { title: 'No cricket on this day', body: 'Pick another day above. Matches show up as soon as they are scheduled.' },
@@ -116,6 +126,21 @@ export const GROUP_COPY = {
   loading: 'Loading your group…',
   refused: 'That pick did not go through.',
   unsent: 'That pick did not reach us. Check your connection and tap it again.'
+};
+
+/* 🔴 THE BROWSE STATE - `#/pool`, a pool before a group. Jason, 2026-09-13, chose
+ * "Pool first": somebody who taps a day sport on Home and is in no group of it lands
+ * on the pool itself - the day's games and one card to start or join a group - never
+ * on a sign-in wall or the group page's form. A pick there is never sent or kept, as
+ * there is no group for it to count in: signed out it opens the sign-in sheet, signed
+ * in the small Start / Join sheet opens beside the row. Somebody who does have a group
+ * of the sport is handed to #/gpicks with that group current. */
+export const BROWSE_COPY = {
+  loading: 'Loading the games…',
+  handover: 'Opening your group…',
+  offline: { title: 'You are offline', body: 'The games did not load. Check your connection and try again.', cta: 'Try again' },
+  error: { title: 'The games did not load', body: 'This is the page, not you. Try again in a moment.', cta: 'Try again' },
+  elsewhere: 'It has a page of its own, with the same Start and Join.'
 };
 
 /* ------------------------------------------------------------------ pure helpers
@@ -946,7 +971,29 @@ const WEEK = { 'college-football': 2, nfl: 1 };
 /* The Presidents Cup joined 2026-09-13 ("do the ... presidents cup next"): a day is the
  * matches teed off that day, the cup itself riding on the first. */
 const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup', 'squares'];
+
+/** The sport the browse state shows: `ag.sport` as Home wrote it, NOT clamped -
+ *  chosenSport() folds everything that is not the NFL into college football. */
+export function browseSport() {
+  try {
+    const v = JSON.parse(localStorage.getItem('ag.sport'));
+    return typeof v === 'string' ? v : '';
+  } catch { return ''; }
+}
+
+/** Browse is for the day sports. Any other sport has a screen of its own, and this is
+ *  the door to it: the race screens, questions, the grid - and football's slate. */
+export function browseDoor(sport) {
+  const s = String(sport || '');
+  if (s === 'f1') return { href: '#/f1', title: 'Formula 1 is picked a race weekend at a time', cta: 'Pick this weekend' };
+  if (s.startsWith('nascar')) {
+    return { href: '#/' + (['nascar-oreilly', 'nascar-truck'].includes(s) ? s : 'nascar'), title: 'NASCAR is picked a race at a time', cta: 'Pick this race' };
+  }
+  if (s === 'props') return { href: '#/props', title: 'Questions are picked on their own page', cta: 'Open the questions' };
+  if (s === 'squares') return { href: '#/squares', title: 'Big Game squares are played on the grid', cta: 'Open the grid' };
+  return { href: '#/slate', title: 'Football is picked a week at a time', cta: 'Open the slate' };
+}
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -1107,6 +1154,8 @@ async function groupData(fixtures) {
   }
   /* A questions group plays its questions, not a slate. */
   if (sport === 'props') return { ...base, groups, group, sport, groupState: 'props', raceHref: '#/props' };
+  /* A Big Game squares group plays its grid, not a slate. */
+  if (sport === 'squares') return { ...base, groups, group, sport, groupState: 'squares', raceHref: '#/squares' };
   const isDay = DAY_POOL_SPORTS.includes(sport);
   const today = poolDayOf(Date.now());
   const day = isDay ? chosenPoolDay(sport, today) : null;
@@ -1165,6 +1214,8 @@ export async function previewData(fixtures, state) {
   /* Group pools first, and nothing below it: the group state never falls back to
    * a generated week or to the main app's chosen sport. */
   if (state === 'group') return groupData(fixtures);
+  /* The browse state (#/pool) likewise: a day sport's pool, never the football week. */
+  if (state === 'browse') return browseData(fixtures);
   const db = fixtures.teams.teams;
   const byId = {};
   for (const k of Object.keys(db)) byId[db[k].id] = db[k];
@@ -1447,6 +1498,48 @@ export async function previewData(fixtures, state) {
     captured: fromFeed || (short ? real.length : 0),
     synthetic: games.length - (fromFeed || (short ? real.length : 0)),
     fromFeed: fromFeed > 0
+  };
+}
+
+/* 🔴 THE BROWSE STATE'S DATA - a day sport's pool for somebody in no group of it.
+ * The same day, feed and game shape groupData() reads for a group of that sport
+ * (realSlate on /api/day, the day bar's chosen day), with no group: no picks to
+ * merge, no scope, no pool. Never throws. */
+async function browseData(fixtures) {
+  const reload = () => browseData(fixtures);
+  const sport = browseSport();
+  const base = {
+    browseMode: true, noSample: true, reload, mode: 'pool', sport,
+    games: [], picks: {}, now: Date.now(), captured: 0, synthetic: 0, fromFeed: false
+  };
+  if (!DAY_POOL_SPORTS.includes(sport)) return { ...base, browseState: 'elsewhere', door: browseDoor(sport) };
+  /* Already in a group of this sport: its slate is #/gpicks, with that group made
+   * current (pickCurrent keeps the stored one if it is one of these, else the first). */
+  let mine = null;
+  try { mine = await myGroups({ force: true }); } catch { mine = null; }
+  const ofSport = mine && mine.signedIn && Array.isArray(mine.groups)
+    ? mine.groups.filter((g) => g && g.sport === sport) : [];
+  if (ofSport.length) return { ...base, browseState: 'handover', group: pickCurrent(ofSport) };
+  const today = poolDayOf(Date.now());
+  const day = chosenPoolDay(sport, today);
+  const byId = {};
+  const db = (fixtures && fixtures.teams && fixtures.teams.teams) || {};
+  for (const k of Object.keys(db)) byId[db[k].id] = db[k];
+  const games = (await realSlate(byId, sport, Number(day), '/api/day/' + sport + '/' + day)) || [];
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const tb = games.find((g) => g.status === 'scheduled') || games[games.length - 1];
+  return {
+    ...base, week: Number(day), day, today, dayLabel: poolDayName(day, today),
+    signedIn: !!(mine && mine.signedIn),
+    browseState: games.length ? 'ready' : (offline ? 'offline' : 'empty'),
+    games, picks: hydrate({}, games),
+    pool: {
+      id: null, name: SPORT_NAME[sport] || 'The pool', commissionerId: null,
+      scope: 'all', scopeArg: null, rankingSource: null,
+      ats: false, season: 2026, scopeLockedAt: null, memberCount: 0
+    },
+    tiebreak: { gameId: tb && tb.id, predictedTotal: null },
+    captured: games.length, synthetic: 0, fromFeed: games.length > 0
   };
 }
 
@@ -2076,8 +2169,14 @@ export function render(root, data, state) {
      on - another group, another screen - can tell it is stale and draw nothing. */
   root.__p2Seq = (root.__p2Seq || 0) + 1;
   const grp = state === 'group';
+  /* 🔴 POOL FIRST. The browse state (#/pool) and the public slate carry the Start /
+   * Join card; a group's own slate does not, and neither does the week's card - a
+   * marbles product with no group in it. */
+  const br = state === 'browse';
+  const pub = !grp && !br && (state === 'ready' || state === 'ready-short') && !!data && data.mode !== 'week';
   const style = el('style');
-  style.textContent = [TEAM_CHIP_CSS, STATES_CSS].concat(grp ? [GROUP_CSS] : []).join('\n');
+  style.textContent = [TEAM_CHIP_CSS, STATES_CSS].concat(grp ? [GROUP_CSS] : [])
+    .concat(br || pub ? [START_JOIN_CSS] : []).join('\n');
   root.appendChild(style);
 
   /* Group pools, before any slate: signed out, in no group, loading, offline, an
@@ -2085,6 +2184,13 @@ export function render(root, data, state) {
   if (grp && (!data || data.groupState !== 'ready')) {
     if (window.__agPoolLiveTimer) { clearInterval(window.__agPoolLiveTimer); window.__agPoolLiveTimer = null; }
     groupGate(root, data || {}, state);
+    return;
+  }
+  /* The browse state, likewise: loading, the hand-over to a group, another sport's
+   * door, offline, an empty day - see browseGate(). */
+  if (br && (!data || data.browseState !== 'ready')) {
+    if (window.__agPoolLiveTimer) { clearInterval(window.__agPoolLiveTimer); window.__agPoolLiveTimer = null; }
+    browseGate(root, data || {}, state);
     return;
   }
 
@@ -2169,6 +2275,10 @@ export function render(root, data, state) {
       if (oldRow && g) oldRow.replaceWith(row(ctx, g));
     },
     onPick: (gameId, side) => {
+      /* 🔴 POOL FIRST - A BROWSE PICK IS NEVER SENT OR KEPT: there is no group of this
+       * sport for it to count in. Signed out it opens the sign-in sheet; signed in, the
+       * small Start / Join sheet opens beside the row (browseTap). */
+      if (br) { browseTap(root, data, state, gameId); return; }
       /* 🔴 SIGN IN AT THE FIRST PICK, BEFORE THE PICK. Jason: "first pick is
        * fine." When the server requires an account and this phone has none,
        * the tap opens the sign-in sheet first and the pick happens only once
@@ -2242,6 +2352,10 @@ export function render(root, data, state) {
   head(root, data, null);
   /* The group state: which group, the dropdown, and the door to the group's page. */
   if (grp) { groupBar(root, data, state); dayBar(root, data, state); }
+  /* Pool first: the two ways into a group, above the games. The browse pool keeps its
+   * day bar under it, as a group of the sport does. */
+  if (br) { root.appendChild(startJoinCard(data.sport)); dayBar(root, data, state); }
+  else if (pub) root.appendChild(startJoinCard(data.sport));
 
   /* The "You're invited" line is gone (CONTRACT-GROUPS §1, amended 2026-09-11):
    * an invite opens #/g now, and the slate shows no invite. */
@@ -2388,6 +2502,8 @@ export function render(root, data, state) {
     list.appendChild(day);
   }
   root.appendChild(list);
+  /* A browse pick's sheet, back beside its row after a redraw, until Not now. */
+  if (br && data.sheetFor != null) placeBrowseSheet(root, data);
 
   /* THE TIEBREAK. ONE field, one named game of the week, at the foot. CBS ships four -
    * `Total Points for LVILLE`, `MISS`, `SMU`, `FSU` - which is a national-contest answer.
@@ -2426,7 +2542,8 @@ export function render(root, data, state) {
     }, 30000);
   }
 
-  const tb = data.games.find((g) => g.id === (data.tiebreak && data.tiebreak.gameId)) || data.games[0];
+  /* None on the browse pool: there is no group whose tie it would break. */
+  const tb = br ? null : data.games.find((g) => g.id === (data.tiebreak && data.tiebreak.gameId)) || data.games[0];
   /* No tiebreak on a fight card or a cricket day: a bout has no points to add up,
    * and a cricket total is text. */
   if (tb && !isWinnerSport(ctx.sport)) {
@@ -2485,7 +2602,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup', squares: 'Big Game squares' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2515,10 +2632,17 @@ function head(root, data, _) {
       : data.sport === 'ufc' ? GROUP_COPY.subUfc : data.sport === 'golf-cup' ? GROUP_COPY.subGolfCup : GROUP_COPY.sub)
       : data.group && wk ? 'Week ' + wk + (data.mode === 'ats' ? GROUP_COPY.subAts : GROUP_COPY.sub) : GROUP_COPY.subNoWeek)
     : null;
+  /* The browse state names its sport: "NBA · Today · pick the winners · scored in points". */
+  const bsub = data && data.browseMode
+    ? [SPORT_NAME[data.sport] || 'The pool'].concat(data.dayLabel ? [data.dayLabel] : []).join(' · ')
+      + (data.browseState === 'elsewhere' ? ''
+        : isSoccerSport(data.sport) ? GROUP_COPY.subSoccer
+        : data.sport === 'ufc' ? GROUP_COPY.subUfc : data.sport === 'golf-cup' ? GROUP_COPY.subGolfCup : GROUP_COPY.sub)
+    : null;
   root.appendChild(pageHeader({
     title: (data && data.mode) === 'week' ? "The week's card" : 'The slate',
     noTitle: true,
-    sub: gsub || ((data && data.mode) === 'week'
+    sub: gsub || bsub || ((data && data.mode) === 'week'
       ? 'Week ' + wk + ' · against the spread · every pick pays 2.00×'
       /* "your group" read wrong for anybody only in the everyone-in pool, and
        * the line never said what to do. Jason, 2026-09-10: yes to "pick the
@@ -2608,7 +2732,8 @@ function dayBar(root, data, state) {
       + (on ? 'border:1px solid var(--accent);color:var(--accent)' : 'border:1px solid var(--line);color:var(--fg)');
     b.onclick = () => {
       try { localStorage.setItem('ag.poolday.' + data.sport, d); } catch { /* private mode */ }
-      regroup(root, data, state);
+      /* The browse pool re-reads through its own state, never the group's. */
+      (state === 'browse' ? rebrowse : regroup)(root, data, state);
     };
     bar.appendChild(b);
   }
@@ -2646,7 +2771,7 @@ function groupGate(root, data, state) {
     root.appendChild(card);
     return;
   }
-  if (gs === 'f1' || gs === 'nascar' || gs === 'props') {
+  if (gs === 'f1' || gs === 'nascar' || gs === 'props' || gs === 'squares') {
     const copy = GROUP_COPY[gs];
     groupBar(root, data, state);
     const card = el('div', 'p2-gcard');
@@ -2672,5 +2797,92 @@ function groupGate(root, data, state) {
   root.appendChild(stateBlock(gs === 'offline' ? 'offline' : 'error', {
     title: c.title, body: c.body,
     action: { label: c.cta, onClick: () => regroup(root, data, state) }
+  }));
+}
+
+/* ------------------------------------------------------------------ browse state
+ * Drawn only on #/pool. Nothing here fetches either: signing in, the day bar and
+ * "Try again" all go back through data.reload(), previewData's browse branch. */
+
+/** Reload the browse state and draw it - unless the person has moved on meanwhile.
+ *  `sheetFor` is the game tapped before signing in: with still no group of the
+ *  sport, the sheet opens beside it (a group of it hands over to #/gpicks). */
+function rebrowse(root, data, state, sheetFor) {
+  if (!data || typeof data.reload !== 'function') return;
+  render(root, { ...data, browseState: 'loading', sheetFor: null }, state);
+  const mine = root.__p2Seq;
+  const here = () => root.__p2Seq === mine && root.classList.contains('scr-p2-slate');
+  data.reload()
+    .then((d) => {
+      if (!here()) return;
+      if (sheetFor != null && d && d.browseState === 'ready'
+        && (d.games || []).some((g) => String(g.id) === String(sheetFor))) d.sheetFor = sheetFor;
+      render(root, d, state);
+    })
+    .catch(() => { if (here()) render(root, { ...data, browseState: 'error', sheetFor: null }, state); });
+}
+
+/** A pick on the browse pool. Nothing is sent or kept. Signed out: the sign-in sheet,
+ *  then the pool again. Signed in: the Start / Join sheet, beside the row. */
+async function browseTap(root, data, state, gameId) {
+  const r = await noGroupTap();
+  if (r === 'signed-in') { rebrowse(root, data, state, gameId); return; }
+  if (r !== 'no-group' || !root.classList.contains('scr-p2-slate')) return;
+  data.sheetFor = gameId;
+  placeBrowseSheet(root, data);
+}
+
+/** The inline sheet, right under the tapped row - above the list if the row is gone.
+ *  One at a time; Not now closes it until the next pick. Never full-screen. */
+function placeBrowseSheet(root, data) {
+  for (const old of root.querySelectorAll('.ag-sj--sheet')) old.remove();
+  const sheet = startJoinSheet(data.sport, { onClose: () => { data.sheetFor = null; sheet.remove(); } });
+  const at = root.querySelector('.p2-row[data-game-id="' + cssEsc(data.sheetFor) + '"]');
+  const list = root.querySelector('.p2-list');
+  if (at) at.after(sheet);
+  else if (list) list.before(sheet);
+  else root.appendChild(sheet);
+  if (typeof sheet.scrollIntoView === 'function') sheet.scrollIntoView({ block: 'nearest' });
+}
+
+/** Every browse state that is not the day's games. Each has a way forward. */
+function browseGate(root, data, state) {
+  head(root, data, null);
+  const bs = data.browseState;
+  if (bs === 'handover') {
+    /* In a group of this sport: its slate, with that group made current (browseData). */
+    root.appendChild(stateBlock('loading', { rows: 5, body: BROWSE_COPY.handover }));
+    if (typeof location !== 'undefined') location.hash = '#/gpicks';
+    return;
+  }
+  if (bs === 'elsewhere') {
+    const door = data.door || browseDoor(data.sport);
+    const card = el('div', 'p2-gcard');
+    card.dataset.gate = 'elsewhere';
+    card.appendChild(el('p', 'p2-gcard-h', door.title));
+    card.appendChild(el('p', 'p2-gcard-b', BROWSE_COPY.elsewhere));
+    const a = el('a', 'p2-gcta', door.cta);
+    a.href = door.href;
+    card.appendChild(a);
+    root.appendChild(card);
+    return;
+  }
+  if (bs !== 'empty' && bs !== 'offline' && bs !== 'error') {
+    root.appendChild(stateBlock('loading', { rows: 5, body: BROWSE_COPY.loading }));
+    return;
+  }
+  /* The pair stays on every state below: a day with no games is still a pool to join. */
+  root.appendChild(startJoinCard(data.sport));
+  if (bs === 'empty') {
+    dayBar(root, data, state);
+    root.appendChild(stateBlock('empty', data.sport === 'ufc' ? GROUP_COPY.emptyUfc
+      : data.sport === 'cricket' ? GROUP_COPY.emptyCricket
+      : data.sport === 'golf-cup' ? GROUP_COPY.emptyGolfCup : GROUP_COPY.emptyDay));
+    return;
+  }
+  const c = bs === 'offline' ? BROWSE_COPY.offline : BROWSE_COPY.error;
+  root.appendChild(stateBlock(bs, {
+    title: c.title, body: c.body,
+    action: { label: c.cta, onClick: () => rebrowse(root, data, state) }
   }));
 }

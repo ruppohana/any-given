@@ -195,6 +195,26 @@ export function findEvent(medals: Map<string, string>, key: string): string | nu
 /* The catch-all option a race question carries, for a winner nobody listed. */
 export const OTHER_OPTION = /^(someone else|another nation)$/i;
 
+/** An open question's options once its set's list changes (start lists replacing last
+ *  year's leaders): the set's riders in its order, then anything this group already
+ *  picked that the set no longer lists, then the catch-all - never over the 20-option
+ *  limit, dropping the set's own unpicked names from the end first. Nobody's pick is
+ *  ever taken away. */
+export function mergeOptions(setOptions: string[], picked: string[], max = 20): string[] {
+  const other = setOptions.filter((o) => OTHER_OPTION.test(o));
+  const named = setOptions.filter((o) => !OTHER_OPTION.test(o));
+  const kept = [...new Set(picked)].filter((p) => p && !setOptions.includes(p) && !OTHER_OPTION.test(p));
+  const chosen = new Set(picked);
+  const list = [...named];
+  while (list.length + kept.length + other.length > max) {
+    let i = list.length - 1;
+    while (i >= 0 && chosen.has(list[i])) i--;
+    if (i < 0) break;
+    list.splice(i, 1);
+  }
+  return [...list, ...kept, ...other];
+}
+
 /** The option a result line settles: the option it names; or, when the question has a
  *  catch-all ("Someone else") and the line names none of the listed riders, the
  *  catch-all. 🔴 A listed rider's SURNAME in the line with no full match (a spelling the

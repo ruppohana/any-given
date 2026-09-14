@@ -25,6 +25,9 @@
 .scr-props .pr-p { margin: 0; font-size: var(--t-body); line-height: 1.5; color: var(--dim); }
 .scr-props .pr-note { margin: -4px 0 0; font-size: 12px; line-height: 1.4; color: var(--dim); }
 .scr-props .pr-gate .pr-link { justify-self: center; }
+/* Pool first: a quiet Sign in in the header, for a visitor who wants it before a tap. */
+.scr-props .pr-signin { min-height: var(--tap-min); padding: 0 8px; font: inherit; font-weight: 800;
+  color: var(--accent); background: transparent; border: 0; text-decoration: underline; cursor: pointer; }
 
 .scr-props .pr-primary { display: flex; align-items: center; justify-content: center; min-height: var(--tap-min);
   padding: 8px 16px; font: inherit; font-weight: 800; line-height: 1.2; text-align: center; text-decoration: none;

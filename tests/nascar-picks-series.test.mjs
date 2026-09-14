@@ -33,6 +33,7 @@ const PATHS = {
   "'/components/states.js'": href('../public/components/states.js'),
   "'/components/header.js'": href('../public/components/header.js'),
   "'/components/group.js'": href('../public/components/group.js'),
+  "'/components/start-join.js'": href('../public/components/start-join.js'),
   "'/src/lib/nascar.js'": href('../src/lib/nascar.ts')
 };
 let rebased = SRC;
@@ -383,5 +384,8 @@ test('copy per series: the sub line names the series, the footer is the same on 
   assert.equal(NAS.subLine('nascar-truck', null), 'NASCAR Truck Series');
   const js = code(SRC);
   assert.equal(js.split('Any Given is not associated in any way with NASCAR.').length, 2, 'one disclaimer, not one per series');
-  assert.ok(js.includes("el('a', null, S.invite)"), 'the start-a-group line names the series');
+  /* Pool first (2026-09-13): the line became the Start / Join card, which still names the series. */
+  assert.ok(js.includes('upFirst(S.invite)'), 'the start-a-group card names the series');
+  assert.ok(NAS.soloCard('nascar-truck').body.includes('Start a NASCAR Truck group'));
+  assert.ok(NAS.soloCard('nascar-oreilly').body.includes('Start a NASCAR O\'Reilly group'));
 });

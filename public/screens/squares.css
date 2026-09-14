@@ -1,0 +1,89 @@
+/* BIG GAME SQUARES - #/squares. The grid is eleven columns - the digits down the
+   left, then ten squares - that fit a 393px phone with no sideways scroll: every
+   square column is minmax(0, 1fr), so the grid shrinks to the card rather than
+   pushing the page. The away team runs across the top, the home team down the
+   left. Team color is scoped to .sq-board through --team-a (home) and --team-b
+   (away), never :root, and a side with no color reads as --team-null. Your squares
+   are tinted with the accent; a square that hit is edged in --up, and the one the
+   score is on now is ringed in --gold. Tokens only, no shadows. */
+.scr-squares { display: grid; gap: 12px; padding-bottom: 96px; align-content: start; }
+.scr-squares .sq { display: grid; gap: 12px; min-width: 0; align-content: start; }
+.scr-squares [hidden] { display: none !important; }
+
+.scr-squares .sq-top { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 4px; min-height: var(--tap-min); min-width: 0; }
+.scr-squares .sq-top .ag-gsw { flex: 1 1 auto; }
+.scr-squares .sq-link { display: inline-flex; align-items: center; min-height: var(--tap-min); padding: 0 4px;
+  font-weight: 700; color: var(--accent); text-decoration: none; white-space: nowrap; }
+.scr-squares .sq-signin { min-height: var(--tap-min); padding: 0 8px; font: inherit; font-weight: 800;
+  color: var(--accent); background: transparent; border: 0; text-decoration: underline; cursor: pointer; }
+.scr-squares .sq-total { position: sticky; top: 0; z-index: 2; text-align: center;
+  font-weight: 800; font-size: var(--t-body); line-height: 1.35; color: var(--accent);
+  padding: 10px 8px; background: var(--card); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.scr-squares .sq-total[data-locked="true"] { color: var(--fg); }
+.scr-squares .sq-status { margin: -4px 4px 0; font-size: 12px; line-height: 1.4; color: var(--dim); overflow-wrap: anywhere; }
+.scr-squares .sq-status:empty { display: none; }
+.scr-squares .sq-status[data-tone="err"] { color: var(--down); font-weight: 700; }
+.scr-squares .sq-status[data-tone="ok"] { color: var(--up); }
+
+.scr-squares .sq-card { display: grid; gap: 10px; padding: 14px 12px; min-width: 0; }
+.scr-squares .sq-h { margin: 0; font-size: var(--t-section); font-weight: 800; line-height: 1.25; }
+.scr-squares .sq-note { margin: -4px 0 0; font-size: 12px; line-height: 1.4; color: var(--dim); }
+.scr-squares .sq-rules,
+.scr-squares .sq-foot { margin: 0 4px; font-size: 12px; line-height: 1.5; color: var(--dim); }
+
+/* The board. */
+.scr-squares .sq-board { --team-a: var(--team-null); --team-b: var(--team-null);
+  display: grid; gap: 6px; padding: 10px 6px 12px; min-width: 0; }
+.scr-squares .sq-axis { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0;
+  font-size: 12px; font-weight: 800; line-height: 1.2; color: var(--fg); overflow: hidden; }
+.scr-squares .sq-axis::before { content: ''; flex: none; width: 10px; height: 10px; border-radius: 2px; }
+.scr-squares .sq-axis--away { padding-left: 34px; }
+.scr-squares .sq-axis--away::before { background: var(--team-b); }
+.scr-squares .sq-axis--home { writing-mode: vertical-rl; transform: rotate(180deg); }
+.scr-squares .sq-axis--home::before { background: var(--team-a); }
+.scr-squares .sq-body { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px; min-width: 0; }
+.scr-squares .sq-grid { display: grid; grid-template-columns: 26px repeat(10, minmax(0, 1fr)); gap: 2px; min-width: 0; }
+.scr-squares .sq-corner { display: block; }
+.scr-squares .sq-hd { display: grid; place-items: center; min-width: 0; font-size: 13px; font-weight: 900; color: var(--fg); }
+.scr-squares .sq-hd--col { height: 24px; border-bottom: 3px solid var(--team-b); }
+.scr-squares .sq-hd--row { border-right: 3px solid var(--team-a); }
+.scr-squares .sq-board[data-drawn="false"] .sq-hd { color: var(--dim); }
+
+.scr-squares .sq-cell { position: relative; display: grid; place-items: center; align-content: center; gap: 0;
+  aspect-ratio: 1; min-width: 0; min-height: 30px; padding: 0; font: inherit;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--fg); cursor: pointer; }
+.scr-squares .sq-cell:disabled { cursor: default; }
+.scr-squares .sq-ini { font-size: 11px; font-weight: 800; line-height: 1; letter-spacing: .02em; }
+.scr-squares .sq-tag { font-size: 8px; font-weight: 800; line-height: 1.1; color: var(--up); white-space: nowrap;
+  overflow: hidden; max-width: 100%; }
+.scr-squares .sq-cell[data-taken="true"] { background: var(--surface-2); }
+.scr-squares .sq-cell[data-mine="true"] { border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, var(--card)); }
+.scr-squares .sq-cell[data-win="true"] { border: 2px solid var(--up); }
+.scr-squares .sq-cell[data-current="true"] { outline: 3px solid var(--gold); outline-offset: -1px; z-index: 1; }
+.scr-squares .sq-cell[data-busy="true"] { opacity: .55; }
+
+/* The quarters under the grid. */
+.scr-squares .sq-res { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.scr-squares .sq-res-i { font-size: var(--t-body); line-height: 1.4; color: var(--fg); overflow-wrap: anywhere; }
+.scr-squares .sq-res-i[data-done="false"] { color: var(--dim); }
+.scr-squares .sq-res-i[data-mine="true"] { color: var(--accent); font-weight: 800; }
+.scr-squares .sq-res-i[data-nobody="true"] { color: var(--dim); }
+
+/* The commissioner's stepper: minus, the number, plus - 44px each - then Save. */
+.scr-squares .sq-label { font-size: 12px; font-weight: 800; color: var(--dim); }
+.scr-squares .sq-step { display: grid; grid-template-columns: var(--tap-min) minmax(0, 1fr) var(--tap-min); gap: 8px; }
+.scr-squares .sq-stepb { min-height: var(--tap-min); font: inherit; font-size: var(--t-emph); font-weight: 800;
+  border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--card); color: var(--fg); cursor: pointer; }
+/* 16px, or iOS zooms the page when the field takes focus. */
+.scr-squares .sq-in { box-sizing: border-box; width: 100%; min-width: 0; min-height: var(--tap-min); padding: 0 10px;
+  font: inherit; font-size: 16px; font-weight: 800; text-align: center;
+  border: 1px solid var(--line); border-radius: var(--radius-chip); background: var(--card); color: var(--fg); }
+.scr-squares .sq-primary { display: flex; align-items: center; justify-content: center; min-height: var(--tap-min);
+  padding: 8px 16px; font: inherit; font-weight: 800; line-height: 1.2; text-align: center;
+  border: 1px solid var(--accent); border-radius: var(--radius-button);
+  background: var(--accent); color: var(--on-accent); cursor: pointer; }
+.scr-squares .sq-primary:disabled { opacity: .5; cursor: default; }
+.scr-squares .sq-err { margin: 0; font-size: 12px; line-height: 1.4; color: var(--down); }
+.scr-squares .sq-err:empty { display: none; }

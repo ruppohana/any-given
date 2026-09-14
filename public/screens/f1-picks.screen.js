@@ -24,6 +24,11 @@ import { stateBlock, STATES_CSS } from '/components/states.js';
 import { pageHeader } from '/components/header.js';
 import { myGroups, setCurrentGroupId } from '/components/group.js';
 import { POINTS, scoreWeekend, isPickLocked, sessionFor, dnfBand } from '/src/lib/f1.js';
+/* POOL FIRST (Jason, 2026-09-13): with no F1 group the weekend still plays on this
+   phone, under one card with Start a group / Join a group. The first pick asks once:
+   signed out, the sign-in sheet (then the screen reloads, so a group is picked up);
+   signed in, a small inline sheet with the same two. */
+import { noGroupTap, startJoinCard, startJoinSheet, START_JOIN_CSS } from '/components/start-join.js';
 
 /* ---- the group, pure - tests/f1-picks-group.test.mjs ---- */
 
@@ -100,6 +105,17 @@ export function groupErrorText(status, loading) {
     : loading ? 'Your group picks did not load.' : 'Not saved with your group.';
   return head + (loading ? ' Showing the picks on this phone.' : ' Kept on this phone.');
 }
+
+/** Pool first: the card over a weekend played in no F1 group, and the inline sheet
+ *  at its first pick when signed in. The pick is on this phone either way. */
+export const SOLO_CARD = {
+  title: 'Pick the weekend with friends',
+  body: 'Your picks are kept on this phone. Start an F1 group and invite people, or join one with the code someone sent you.'
+};
+export const SOLO_SHEET = {
+  title: 'Play it with a group',
+  body: 'This pick is saved on this phone. To play the weekend with friends, start an F1 group or join one with a code.'
+};
 
 /** Save the whole picks object for a group. Never throws.
  *  -> { kind: 'ok', picks } | { kind: 'over', eventId } | { kind: 'error', status, text } */
@@ -232,7 +248,7 @@ export function render(root, data, state) {
   root.classList.add('scr-f1');
   root.innerHTML = '';
   const style = el('style');
-  style.textContent = STATES_CSS;
+  style.textContent = STATES_CSS + START_JOIN_CSS;
   root.appendChild(style);
 
   const d = data || {};
@@ -271,12 +287,32 @@ export function render(root, data, state) {
   /* A reply that lands after you have left the screen must not draw it back. */
   const mounted = () => !!root.querySelector('[data-f1-weekend="' + ev.id + '"]');
   const writeLocal = (v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* private mode */ } };
-  const reread = async () => {
+  const reread = async (after) => {
     const fresh = await previewData(null, 'ready');
     if (!mounted()) return;
     for (const k of Object.keys(d)) delete d[k];
     Object.assign(d, fresh);
+    if (after) after();
     redraw();
+  };
+  /* 🔴 POOL FIRST - THE FIRST PICK IN NO F1 GROUP ASKS, ONCE A VISIT, after the pick
+     is already kept on this phone (save() runs first). Signed out: the sign-in sheet,
+     then the weekend is read again, so an F1 group is picked up - and loadGroupPicks
+     sends it what the phone has. Still no group: the inline sheet. Signed in: the
+     inline sheet at once, beside the card that was picked. Not after a groups error:
+     that is not "no group", and the line above the cards already says so. */
+  const askOnce = (k) => {
+    if (group || d.groupsError || d.sjAsked) return;
+    d.sjAsked = true;
+    noGroupTap().then((r) => {
+      if (r === 'signed-in') {
+        reread(() => { if (!d.groupId) { d.sjAsked = true; d.sjOpen = k; } });
+        return;
+      }
+      if (r !== 'no-group' || !mounted()) return;
+      d.sjOpen = k;
+      redraw();
+    });
   };
   const send = () => {
     const seq = d.seq = (d.seq || 0) + 1;
@@ -363,17 +399,11 @@ export function render(root, data, state) {
     gl.addEventListener('click', () => setCurrentGroupId(group.id));
     gc.appendChild(gl);
     root.appendChild(gc);
+  } else if (d.groupsError) {
+    root.appendChild(el('p', 'f1-invite', 'Your groups did not load, so these picks are on this phone only.'));
   } else {
-    const inv = el('p', 'f1-invite');
-    if (d.groupsError) {
-      inv.textContent = 'Your groups did not load, so these picks are on this phone only.';
-    } else {
-      inv.appendChild(el('span', null, 'Pick the weekend with friends: '));
-      const a = el('a', null, 'start an F1 group');
-      a.href = '#/g';
-      inv.appendChild(a);
-    }
-    root.appendChild(inv);
+    /* In no F1 group: the weekend plays on this phone, under the two ways into one. */
+    root.appendChild(startJoinCard('f1', SOLO_CARD));
   }
   /* What each pick is worth, before any is made - the rule on the tile. */
   root.appendChild(el('p', 'f1-rule',
@@ -414,6 +444,7 @@ export function render(root, data, state) {
     const s = sessionFor(ev, k);
     if (!s) return;
     const c = card(title, s);
+    c.dataset.pickKey = k;                   /* where the inline sheet opens */
     const locked = isPickLocked(ev, k, now);
     const mine = Array.isArray(picks[k]) ? picks[k].slice() : [];
     const res = score[k];
@@ -431,7 +462,7 @@ export function render(root, data, state) {
           for (let j = 0; j < 3; j++) if (j !== i && next[j] === v) next[j] = '';
           next[i] = v;
           picks[k] = next;
-          save(); redraw();
+          save(); askOnce(k); redraw();
         }));
       }
       c.appendChild(row);
@@ -439,6 +470,7 @@ export function render(root, data, state) {
   };
 
   const choices = (c, k, opts, locked, result) => {
+    c.dataset.pickKey = k;                   /* where the inline sheet opens */
     const row = el('div', 'f1-choices');
     row.setAttribute('role', 'group');
     for (const [v, label] of opts) {
@@ -446,7 +478,7 @@ export function render(root, data, state) {
       b.type = 'button';
       if (picks[k] === v) b.dataset.on = 'true';
       if (locked) b.disabled = true;
-      else b.addEventListener('click', () => { picks[k] = v; save(); redraw(); });
+      else b.addEventListener('click', () => { picks[k] = v; save(); askOnce(k); redraw(); });
       row.appendChild(b);
     }
     c.appendChild(row);
@@ -463,6 +495,7 @@ export function render(root, data, state) {
     const raceLocked = isPickLocked(ev, 'fastest', now);
 
     const f = card('Fastest lap', race);
+    f.dataset.pickKey = 'fastest';
     const frow = el('div', 'f1-row f1-row-one');
     if (raceLocked) {
       frow.appendChild(driverTag(byId.get(picks.fastest), 'No pick'));
@@ -470,7 +503,7 @@ export function render(root, data, state) {
       frow.appendChild(el('span', 'f1-actual', who ? who.short : ''));
       frow.appendChild(ptsTag(score.fastest));
     } else {
-      frow.appendChild(driverSelect('Fastest lap', picks.fastest, (v) => { picks.fastest = v; save(); redraw(); }));
+      frow.appendChild(driverSelect('Fastest lap', picks.fastest, (v) => { picks.fastest = v; save(); askOnce('fastest'); redraw(); }));
     }
     f.appendChild(frow);
 
@@ -486,6 +519,16 @@ export function render(root, data, state) {
           + (score.dnf > 0 ? '+' + score.dnf : '0'));
         return n;
       })());
+  }
+
+  /* Pool first: the inline sheet, right under the card that was picked, until Not
+     now. Never with a group - the pick already counts there. */
+  if (d.sjOpen && !group) {
+    const sheet = startJoinSheet('f1', Object.assign({}, SOLO_SHEET, {
+      onClose: () => { d.sjOpen = null; sheet.remove(); }
+    }));
+    const at = root.querySelector('[data-pick-key="' + d.sjOpen + '"]');
+    if (at) at.after(sheet); else root.appendChild(sheet);
   }
 
   /* The live picks, on a finished race - src/lib/f1-live.ts. Hidden in 100% pool,

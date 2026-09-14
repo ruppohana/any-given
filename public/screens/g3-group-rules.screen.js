@@ -73,7 +73,7 @@ const LEAGUES = { 'college-football': 'College football', nfl: 'NFL',
   mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks',
   epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX',
   'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball',
-  props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup' };
+  props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup', squares: 'Big Game squares' };
 function leagueOf(s) { return Object.prototype.hasOwnProperty.call(LEAGUES, s) ? s : 'college-football'; }
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME. src/lib/day.ts DAY_SPORTS
  * is the server's copy; tests/g3-group-rules.test.mjs holds the two equal. */
@@ -96,8 +96,19 @@ export function isWinner(s) { return s === 'ufc' || s === 'cricket' || s === 'go
 /** The Presidents Cup (2026-09-13): team match play. src/lib/groups.ts gradeSql counts
  *  a halved match (winner 'draw') as played and scores the Halved pickers right. */
 export function isGolfCup(s) { return s === 'golf-cup'; }
-/** No spread anywhere: the races, soccer, questions, UFC, cricket and the Presidents Cup (src/lib/groups.ts hasNoSpread). */
-export function hasNoSpread(s) { return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s); }
+/** Big Game squares (2026-09-13): one 10 x 10 grid on the Big Game - src/squares-pool.ts. */
+export function isSquares(s) { return s === 'squares'; }
+/** No spread anywhere: the races, soccer, questions, UFC, cricket, the Presidents Cup
+ *  and Big Game squares (src/lib/groups.ts hasNoSpread). */
+export function hasNoSpread(s) { return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s); }
+
+/** How a squares group plays - group create's words (g1-group SQUARES_RULES), with the
+ *  grid said in words: this page never types a number that could read as one of its
+ *  LIMITS (tests/g3-group-rules.test.mjs). */
+export const SQUARES_RULES = 'Claim squares on a grid of a hundred - ten by ten - until kickoff. At kickoff the '
+  + 'numbers 0–9 are drawn at random for each team. At the end of each quarter the square where the last digits of the two scores meet '
+  + 'scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 (overtime counts in the final). '
+  + 'A square nobody claimed scores nobody.';
 
 /** The moment a day-sport game starts - the word its picks lock at - and the
  *  clause that says it: basketball tips off, baseball throws the first pitch,
@@ -277,6 +288,7 @@ function sHow() {
       'League, La Liga, Liga MX, UFC, cricket, the Presidents Cup, Formula 1 or NASCAR (Cup, Trucks or O’Reilly, ' +
       'formerly Xfinity) - chosen when it starts.',
     'Or it plays questions instead - an awards show, a TV finale, anything the commissioner writes.',
+    'Or it plays Big Game squares - one grid of a hundred squares on the Big Game, claimed until kickoff.',
     'You join with the code from an invite. The invite link carries the same code, ' +
       'and the code works in any case, with or without spaces.',
     'You need to be signed in with your email, with a handle, to start or join one.',
@@ -303,6 +315,21 @@ function sPicking(sport) {
       'Nobody sees how the group picked a question until it locks. Then the split shows ' +
         'on the question.',
       'Only members can pick in a group. Picking never joins you to one.'
+    ]));
+    return box;
+  }
+  if (isSquares(sport)) {
+    /* src/squares-pool.ts: a claim is refused from kickoff on, by the server's clock,
+     * and the digits are drawn once, at random, after the lock. */
+    box.appendChild(lead('Claim squares until kickoff. The grid locks at kickoff.'));
+    box.appendChild(bullets([
+      'A Big Game squares group plays one grid of a hundred squares, ten by ten, on the Big Game.',
+      'Tap an empty square to claim it, and one of yours to let it go. The commissioner sets ' +
+        'how many squares each person may hold.',
+      'At kickoff the numbers 0–9 are drawn at random, once for each team. Nobody chooses them, ' +
+        'the commissioner included.',
+      'The kickoff time is the server’s, not your phone’s, so a claim cannot slip in late.',
+      'Only members can claim in a group. Claiming never joins you to one.'
     ]));
     return box;
   }
@@ -389,6 +416,26 @@ function sScoring(sport) {
       'Ranked by points, then by right answers.',
       'Everyone in the group is on them from the day they join, picks or not.',
       'A group’s standings count only the picks made in that group.'
+    ]));
+    return box;
+  }
+  if (isSquares(sport)) {
+    /* src/lib/squares.ts PERIODS and squaresPoints: the square where the last digits
+     * meet at each moment scores its points; an unclaimed square scores nobody. */
+    box.appendChild(lead('A Big Game squares group is scored in points.'));
+    box.appendChild(bullets([
+      'At the end of the 1st quarter, halftime, the end of the 3rd quarter and the final, the ' +
+        'square where the last digit of each team’s score meets scores.',
+      'The 1st quarter is worth 1 point, halftime 2, the 3rd quarter 1 and the final 3. ' +
+        'Overtime counts in the final.',
+      'A square nobody claimed scores nobody.',
+      'There is no spread in a squares group.'
+    ]));
+    box.appendChild(subHead('The standings'));
+    box.appendChild(bullets([
+      'Ranked by points, then by squares that hit.',
+      'Everyone in the group is on them from the day they join, squares or not.',
+      'A group’s standings count only the squares claimed in that group.'
     ]));
     return box;
   }
@@ -565,6 +612,7 @@ function sCommish(sport) {
   box.appendChild(bullets([
     ...(isProps(sport) ? ['Write the questions or load a ready set, delete a question before it locks, ' +
       'and enter each answer once it locks.'] : []),
+    ...(isSquares(sport) ? ['Set how many squares each person may hold, until kickoff.'] : []),
     hasNoSpread(sport) ? 'Rename the group.' : 'Rename the group, and switch against the spread on or off.',
     'Send invites, by email through Any Given or by sharing the code or link.',
     'Mute a member. They still pick and stay on the standings, but cannot send ' +
@@ -700,6 +748,7 @@ function groupCard(root, data) {
   }));
   c.appendChild(kv([
     ['Picks', isProps(sport) ? 'Points, question by question'
+      : isSquares(sport) ? 'Points, from the squares that hit'
       : sport === 'f1' ? 'Points, each race weekend'
       : String(sport).startsWith('nascar') ? 'Points, each race'
       : isSoccer(sport) ? 'Straight up, or the draw'
@@ -720,8 +769,10 @@ function groupCard(root, data) {
   } else if (isProps(sport)) {
     c.appendChild(el('p', 'g3-p', 'This group plays questions the commissioner writes, ' +
       'scored in points as each answer is entered.'));
+  } else if (isSquares(sport)) {
+    c.appendChild(el('p', 'g3-p', SQUARES_RULES));
   }
-  c.appendChild(el('p', 'g3-note', isRacing(sport) || isDaySport(sport) || isProps(sport)
+  c.appendChild(el('p', 'g3-note', isRacing(sport) || isDaySport(sport) || isProps(sport) || isSquares(sport)
     ? 'The rules below are the ones for this group’s sport. Only this card changes between groups.'
     : 'Everything below is the same in every group. Only this card changes.'));
   return c;

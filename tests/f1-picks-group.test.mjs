@@ -32,6 +32,7 @@ const PATHS = {
   "'/components/states.js'": href('../public/components/states.js'),
   "'/components/header.js'": href('../public/components/header.js'),
   "'/components/group.js'": href('../public/components/group.js'),
+  "'/components/start-join.js'": href('../public/components/start-join.js'),
   "'/src/lib/f1.js'": href('../src/lib/f1.ts')
 };
 let rebased = SRC;
@@ -339,7 +340,11 @@ test('render: the doors, the pool-only switch, and the disclaimer', () => {
   assert.ok(render.includes("gl.href = '#/gstandings';"), 'the group board');
   assert.ok(render.includes("gl.addEventListener('click', () => setCurrentGroupId(group.id));"),
     'the group section\'s current group is set to THIS group before the link is followed');
-  assert.ok(render.includes("a.href = '#/g';") && render.includes("'start an F1 group'"), 'no group: one line to #/g');
+  /* Pool first (2026-09-13): in no F1 group the screen shows the Start / Join card,
+     not a line to #/g - tests/pool-first.test.mjs taps it. A groups error keeps its line. */
+  assert.ok(render.includes("startJoinCard('f1', SOLO_CARD)"), 'no group: the Start / Join card');
+  assert.ok(F1.SOLO_CARD.body.includes('Start an F1 group'), 'the card says which group to start');
+  assert.ok(render.includes("'Your groups did not load, so these picks are on this phone only.'"), 'a groups error is not "no group"');
   assert.ok(render.includes('if (globalThis.AG_POOL_ONLY !== true) {') && render.includes("rp.href = '#/f1live';"),
     'Replay a race is hidden in 100% pool, not deleted');
   assert.ok(render.includes('Any Given is not associated in any way with the Formula 1 companies.'));
@@ -354,7 +359,9 @@ test('css: scoped, every new control a 44px reach, nothing wider than a phone', 
   const plain = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
   const selectors = plain.split('}').map((b) => b.split('{')[0].trim()).filter((s) => s && !s.startsWith('@'));
   for (const sel of selectors) for (const part of sel.split(',')) assert.ok(part.trim().startsWith('.scr-f1'), 'unscoped: ' + part);
-  for (const ctl of ['.f1-grow', '.f1-glink', '.f1-invite a', '.f1-sel', '.f1-choice']) {
+  /* '.f1-invite a' left with the link (2026-09-13, pool first): its Start / Join
+     buttons are START_JOIN_CSS's, held to 44px in tests/pool-first.test.mjs. */
+  for (const ctl of ['.f1-grow', '.f1-glink', '.f1-sel', '.f1-choice']) {
     const m = plain.match(new RegExp('\\.scr-f1 ' + ctl.replace(/[.]/g, '\\.') + '\\s*\\{([^}]*)\\}'));
     assert.ok(m, 'no rule for ' + ctl);
     assert.match(m[1], /min-height:\s*44px/, ctl + ' is under 44px');

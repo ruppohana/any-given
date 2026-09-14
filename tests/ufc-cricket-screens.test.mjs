@@ -115,8 +115,9 @@ test('every screen knows UFC and cricket: the lists, the labels, the day sports,
 });
 
 test('group create: a Combat family and a Cricket family, in POOL_SPORTS order - no spread, no which-games', () => {
-  /* The Presidents Cup follows them (2026-09-13). */
-  assert.deepEqual(G1.SPORTS.slice(-3), [['ufc', 'UFC'], ['cricket', 'Cricket'], ['golf-cup', 'Presidents Cup']]);
+  /* The Presidents Cup follows them (2026-09-13), then Big Game squares. */
+  assert.deepEqual(G1.SPORTS.slice(-4), [['ufc', 'UFC'], ['cricket', 'Cricket'], ['golf-cup', 'Presidents Cup'],
+    ['squares', 'Big Game squares']]);
   assert.deepEqual(G1.SPORTS.map((s) => s[0]), [...POOL_SPORTS]);
   const fam = Object.fromEntries(G1.SPORT_FAMILIES);
   assert.deepEqual(fam.Combat, ['ufc']);

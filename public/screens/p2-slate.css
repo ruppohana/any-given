@@ -641,6 +641,11 @@
   font-weight: 800; color: var(--on-accent); background: var(--accent);
   border: 1px solid var(--accent); border-radius: var(--radius-button);
   text-decoration: none; cursor: pointer; }
+/* ── POOL FIRST - the browse state (#/pool) and the public slate ─────────────
+   The Start / Join card and the inline sheet at a pick are components/start-join.js
+   (START_JOIN_CSS, 44px buttons); this only spaces the card on this screen. A sheet
+   under a row is a grid item of .p2-games and takes that gap. */
+.scr-p2-slate > .ag-sj { margin: 4px 0 12px; }
 /* A refused pick says why, on the row it happened to - the server's own words. */
 .scr-p2-slate .p2-gmsg { margin: 0; font-size: var(--t-micro); font-weight: 700;
   color: var(--down); text-align: center; }
