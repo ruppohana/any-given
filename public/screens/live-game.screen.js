@@ -4220,7 +4220,8 @@ const HOME_SHOW_NAMES = {
   'traitors-new-blood': 'The Traitors',
   'worlds-2026': 'Cycling Worlds',
   'big-brother-28': 'Big Brother',
-  'breeders-cup-2026': "Breeders' Cup"
+  'breeders-cup-2026': "Breeders' Cup",
+  'big-game-props-2027': 'Big Game props'
 };
 const HOME_OWN = {
   id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, anything…'
@@ -4236,7 +4237,10 @@ const HOME_SPORT_SETS = [
   ['worlds-2026', 'Cycling'],
   /* The Breeders' Cup (Oct 30-31, 2026): its set is added by the breeders-cup-set routine once
      the fields are drawn (Oct 27); until then Home counts down to it (src/lib/upcoming.ts). */
-  ['breeders-cup-2026', 'Horse racing']
+  ['breeders-cup-2026', 'Horse racing'],
+  /* Big Game props (Jason, 2026-09-14: "do the big game props set next"): questions either
+     side can answer, open until kickoff on Feb 14, 2027. */
+  ['big-game-props-2027', 'The Big Game']
 ];
 function isSportSet(id) {
   return HOME_SPORT_SETS.some(([s]) => s === id);

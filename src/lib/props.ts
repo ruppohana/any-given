@@ -221,6 +221,27 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
     ]
   },
 
+  /* 🔴 BIG GAME PROPS - Jason, 2026-09-14: "do the big game props set next". The 2026 season's
+   * championship game, Sunday February 14, 2027, 23:30 UTC (6:30 PM ET) - ESPN event 401873270,
+   * the same as src/lib/squares.ts BIG_GAME (a test holds them equal). The teams are not set
+   * until the conference championships, so every question is one either side can answer. All
+   * lock at kickoff. Settles off ESPN's game summary (src/lib/biggame-props.ts), checked on the
+   * real February 2026 game. The app never names the game - "the Big Game". */
+  'big-game-props-2027': {
+    id: 'big-game-props-2027',
+    name: 'Big Game props',
+    when: 'Sunday, February 14, 2027 · the teams are set after the conference championships',
+    source: { kind: 'espn-nfl-game', page: '401873270' },
+    questions: [
+      { text: 'How many total points are scored?', points: 2, lockAt: Date.UTC(2027, 1, 14, 23, 30), options: ['Under 40', '40 to 49', '50 to 59', '60 or more'], key: 'total' },
+      { text: 'What is the winning margin?', points: 2, lockAt: Date.UTC(2027, 1, 14, 23, 30), options: ['1 to 3 points', '4 to 7 points', '8 to 14 points', '15 or more points'], key: 'margin' },
+      { text: 'What is the first score of the game?', points: 2, lockAt: Date.UTC(2027, 1, 14, 23, 30), options: ['Touchdown', 'Field goal', 'Safety'], key: 'first-score' },
+      { text: 'Which quarter has the most points?', points: 2, lockAt: Date.UTC(2027, 1, 14, 23, 30), options: ['1st quarter', '2nd quarter', '3rd quarter', '4th quarter'], key: 'top-quarter' },
+      { text: 'Does the game go to overtime?', points: 1, lockAt: Date.UTC(2027, 1, 14, 23, 30), options: ['Yes', 'No'], key: 'overtime' },
+      { text: 'Is there a touchdown of 50 yards or more?', points: 1, lockAt: Date.UTC(2027, 1, 14, 23, 30), options: ['Yes', 'No'], key: 'long-td' }
+    ]
+  },
+
   'dwts-35': {
     id: 'dwts-35',
     name: 'Dancing with the Stars, season 35',

@@ -306,13 +306,16 @@ test('Cycling Worlds: a one-row Cycling family on the Sports tab on Sept 13, gon
   const on13 = M.homeSetList(SEP13);
   /* The Worlds' family; the Breeders' Cup joins it on the tab once a routine adds its set. */
   assert.deepEqual(on13.filter((s) => s.id === 'worlds-2026').map((s) => [s.id, s.h, s.label]), [['worlds-2026', 'Cycling', 'Cycling Worlds']]);
-  assert.deepEqual(SPORT_SET_IDS, ['worlds-2026', 'breeders-cup-2026']);
+  assert.deepEqual(SPORT_SET_IDS, ['worlds-2026', 'breeders-cup-2026', 'big-game-props-2027']);
   assert.equal(on13[0].cap, dayOf(Math.min(...worlds.questions.map((q) => q.lockAt))), 'dated by its first race');
   assert.ok(!M.homeShowList(SEP13).some((s) => s.id === 'worlds-2026'), 'not in the Non-sports list');
 
   const fams = M.homeFamilies(SEP13);
-  assert.deepEqual(fams.children.map((f) => f.dataset.fam).slice(-2), ['golf', 'cycling'], 'Cycling after Golf');
-  const cyc = fams.children[fams.children.length - 1];
+  /* Right after Golf - other sport sets (The Big Game, later Horse racing) follow it. */
+  const famKeys = fams.children.map((f) => f.dataset.fam);
+  assert.equal(famKeys[famKeys.indexOf('golf') + 1], 'cycling', 'Cycling after Golf');
+  /* By name - other sport sets (The Big Game) now follow it on the tab. */
+  const cyc = fams.children.find((f) => f.dataset.fam === 'cycling');
   assert.equal(cyc.children.length, 1, 'one row');
   const b = cyc.soloRow;
   assert.equal(cyc.children[0], b);
@@ -326,7 +329,8 @@ test('Cycling Worlds: a one-row Cycling family on the Sports tab on Sept 13, gon
   assert.equal(b.getAttribute('aria-label'), 'Cycling Worlds, ' + on13[0].cap);
 
   /* Gone once its last question has locked, as a show tile goes. */
-  assert.deepEqual(M.homeSetList(SEP28), []);
+  /* The Worlds' row goes; another sport set still open then (Big Game props) stays. */
+  assert.ok(!M.homeSetList(SEP28).some((s) => s.id === 'worlds-2026'), 'the Worlds are gone');
   assert.ok(!M.homeFamilies(SEP28).children.some((f) => f.dataset.fam === 'cycling'));
   assert.ok(!M.homeShowList(SEP28).some((s) => s.id === 'worlds-2026'));
 
@@ -423,7 +427,8 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
     assert.deepEqual([b.tagName, b.type, b.hidden], ['button', 'button', false]);
     assert.ok(b.classList.contains('lg-league') && b.classList.contains('lg-fam-solo'), 'the row is the tile');
     assert.equal(byClass(b, 'lg-fam-t')[0].textContent,
-      { volleyball: 'Volleyball', baseball: 'Baseball', combat: 'Combat', cricket: 'Cricket', golf: 'Golf', cycling: 'Cycling' }[f.dataset.fam], 'the name on the left');
+      { volleyball: 'Volleyball', baseball: 'Baseball', combat: 'Combat', cricket: 'Cricket', golf: 'Golf', cycling: 'Cycling',
+        'the big game': 'The Big Game', 'horse racing': 'Horse racing' }[f.dataset.fam], 'the name on the left');
     assert.equal(byClass(f, 'lg-fam-solo-h').length, 0, 'no separate heading');
     assert.equal(byClass(f, 'lg-fam-row').length, 0, 'no row of tiles under it');
     assert.equal(byClass(f, 'lg-league').length, 1);

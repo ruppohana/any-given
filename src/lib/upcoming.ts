@@ -25,7 +25,9 @@ export const UPCOMING: Upcoming[] = [
      late October; from then the set's tile stands in for this countdown. */
   { id: 'breeders-cup', label: "Breeders' Cup", tab: 'sports', date: '2026-10-30', when: 'Oct 30–31, 2026', set: 'breeders-cup-2026' },
   { id: 'australian-open', label: 'Australian Open', tab: 'sports', date: '2027-01-11', when: 'Jan 11–31, 2027' },
-  { id: 'big-game-props', label: 'Big Game props', tab: 'sports', date: '2027-02-14', when: 'Feb 14, 2027' },
+  /* Its ready set is built (src/lib/props.ts 'big-game-props-2027'), so while that set is open
+     its own row on the Sports tab stands in for this countdown. */
+  { id: 'big-game-props', label: 'Big Game props', tab: 'sports', date: '2027-02-14', when: 'Feb 14, 2027', set: 'big-game-props-2027' },
   { id: 'masters', label: 'The Masters', tab: 'sports', date: '2027-04-08', when: 'Apr 8–11, 2027' },
   { id: 'nfl-draft', label: 'NFL Draft', tab: 'sports', date: '2027-04-29', when: 'Apr 29–May 1, 2027' },
   { id: 'kentucky-derby', label: 'Kentucky Derby', tab: 'sports', date: '2027-05-01', when: 'May 1, 2027' },

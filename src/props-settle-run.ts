@@ -14,12 +14,17 @@
  */
 import { PROP_TEMPLATES } from './lib/props.ts';
 import { winnersFromWikiAwards, findCategory, matchOption, castRows, answersFromCast, medalsFromWiki, findEvent, pickOption, mergeOptions, infoboxAnswers, breedersCupWinners } from './lib/props-settle.ts';
+import { bigGameAnswers } from './lib/biggame-props.ts';
 import { PROPS_LIMITS } from './lib/props.ts';
 
-const KINDS = ['wiki-awards', 'wiki-survivor', 'wiki-dwts', 'wiki-traitors', 'wiki-medals', 'wiki-bb', 'wiki-bc'];
+/* 'espn-nfl-game' is the one kind read off ESPN, not Wikipedia: its `page` is an ESPN event id
+   and its answers come from the game summary (src/lib/biggame-props.ts). */
+const KINDS = ['wiki-awards', 'wiki-survivor', 'wiki-dwts', 'wiki-traitors', 'wiki-medals', 'wiki-bb', 'wiki-bc', 'espn-nfl-game'];
 
 const UA = 'AnyGiven/1.0 (https://anygiven.app; ruppohana@gmail.com)';
 export const wikiHtmlUrl = (page: string) => `https://en.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(page)}`;
+/** An NFL game's summary on ESPN (site.web.api, which answers Cloudflare). */
+export const espnSummaryUrl = (event: string) => `https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${encodeURIComponent(event)}`;
 const MIN_GAP_MS = 60 * 1000;
 const KEEP_S = 60 * 60 * 24 * 30;      // KV expirationTtl is in seconds
 
@@ -85,8 +90,10 @@ export async function settleReadySets(env: any, now = Date.now(), fetchImpl: typ
 
     let html = '';
     try {
-      const r = await fetchImpl(wikiHtmlUrl(src.page), { headers: { 'user-agent': UA, accept: 'text/html' } });
-      if (!r.ok) throw new Error('wikipedia ' + r.status);
+      const espn = src.kind === 'espn-nfl-game';
+      const r = await fetchImpl(espn ? espnSummaryUrl(src.page) : wikiHtmlUrl(src.page),
+        { headers: { 'user-agent': UA, accept: espn ? 'application/json' : 'text/html' } });
+      if (!r.ok) throw new Error((espn ? 'espn ' : 'wikipedia ') + r.status);
       html = await r.text();
     } catch (e: any) {
       out.push({ template: t.id, error: String(e?.message || e) });
@@ -103,7 +110,11 @@ export async function settleReadySets(env: any, now = Date.now(), fetchImpl: typ
     const winners = awards ? winnersFromWikiAwards(html) : medals ? medalsFromWiki(html)
       : races ? breedersCupWinners(html) : new Map<string, string>();
     /* Big Brother answers from the season's infobox: winner, runner-up, America's Favorite. */
-    const cast = awards || medals || races ? {} : src.kind === 'wiki-bb' ? infoboxAnswers(html) : answersFromCast(src.kind, castRows(html));
+    /* The Big Game props answer off ESPN's game summary (JSON), keyed like a cast table. */
+    let summary: any = null;
+    if (src.kind === 'espn-nfl-game') { try { summary = JSON.parse(html); } catch { summary = null; } }
+    const cast = awards || medals || races ? {} : src.kind === 'espn-nfl-game' ? bigGameAnswers(summary)
+      : src.kind === 'wiki-bb' ? infoboxAnswers(html) : answersFromCast(src.kind, castRows(html));
     const answers: Record<string, string> = {};
     for (const x of want) {
       const line = awards || races ? findCategory(winners, x.q.key || x.q.text)

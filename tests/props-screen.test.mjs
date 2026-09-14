@@ -247,7 +247,9 @@ test('ready: the questions group is chosen over the NFL one, made current, and r
   assert.equal(STORE.get('ag.group'), G_Q.id);
   assert.equal(CALLS[1].url, '/api/props?pool=' + G_Q.id);
   assert.ok(Math.abs(Date.now() + d.skew - SEP13) < 5000, 'locks are read against the server\'s now');
-  assert.equal(d.props.templates.length, 6, 'the Emmys, Dancing with the Stars, the Traitors, the cycling Worlds, Survivor and Big Brother are all open on the 13th');
+  /* Every set open on the 13th - derived, so a set added later (Big Game props, the Breeders' Cup) changes nothing here. */
+  assert.equal(d.props.templates.length, templatesOpen(SEP13).length, 'every ready set open on the 13th');
+  assert.ok(d.props.templates.length >= 6, 'the Emmys, Dancing with the Stars, the Traitors, the cycling Worlds, Survivor and Big Brother at least');
 });
 
 test('a group you have left: asked once more with a fresh list, then the start view', async () => {

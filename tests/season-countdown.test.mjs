@@ -221,7 +221,9 @@ test('Home, Sports: Coming up is a list of the real UPCOMING, soonest first - th
   assert.equal(last.textContent, 'FIFA World Cup2030');
   /* The app never says the NFL's name for the game. */
   assert.doesNotMatch(sec.textContent, /super\s*bowl/i);
-  assert.ok(sec.textContent.includes('Big Game props'));
+  /* Big Game props is a ready set now (Jason, 2026-09-14: "do the big game props set next");
+     while it is open its own row on the Sports tab stands in for this countdown. */
+  assert.ok(!sec.textContent.includes('Big Game props'), 'the countdown steps aside for its open set');
 });
 
 test('Home, Non-sports: the awards and TV that are coming; a repaint on a later day moves every count and drops what has happened', () => {
