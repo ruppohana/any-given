@@ -52,6 +52,62 @@ export function winnersFromWikiAwards(html: string): Map<string, string> {
   return out;
 }
 
+/* 🔴 REALITY TV: THE CAST TABLE'S FINISH COLUMN. Survivor's contestants table ends each
+ * row with the finish ("1st voted out", "Sole Survivor"); Dancing with the Stars' couples
+ * table has a status cell ("Eliminated 1st & 2nd", shared by two rows with rowspan, or
+ * "Winners"). One row per person, the name in the row's <th>. Read on the real Survivor 50
+ * and DWTS season 34 pages. */
+const FINISH = /^(Sole Survivor|Runner-up|\d+(st|nd|rd|th) voted out|Winners|Runners-up|Third place|Fourth place|Eliminated|Withdrew|Medically evacuated|Quit)/i;
+
+/** Every person in a cast table with the finish written against them ('' while still in). */
+export function castRows(html: string): { name: string; status: string }[] {
+  const clean = String(html || '').replace(/\sdata-mw='[^']*'/g, '').replace(/\sdata-mw="[^"]*"/g, '');
+  const out: { name: string; status: string }[] = [];
+  let carry = '', left = 0;
+  for (const tr of clean.split(/<tr\b[^>]*>/i).slice(1)) {
+    const th = tr.match(/^\s*<th\b[^>]*scope="row"[^>]*>([\s\S]*?)<\/th>/i);
+    if (!th) continue;
+    const name = text(th[1].split(/<br\b/i)[0]);
+    if (!name) continue;
+    let status = '';
+    for (const td of tr.matchAll(/<td\b([^>]*)>([\s\S]*?)<\/td>/gi)) {
+      const t = text(td[2]);
+      if (!FINISH.test(t)) continue;
+      status = t;
+      const rs = Number((td[1].match(/rowspan="(\d+)"/i) || [])[1]) || 1;
+      carry = t; left = rs - 1;
+      break;
+    }
+    if (!status && left > 0) { status = carry; left--; }
+    out.push({ name, status });
+  }
+  return out;
+}
+
+/** What a cast table settles: 'winner' and 'first-out', each a name - or 'void' when
+ *  two people went out first together (a double elimination), which no single pick can
+ *  have called. Absent while the page does not say. */
+export function answersFromCast(kind: string, rows: { name: string; status: string }[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  /* 🔴 DWTS: ONLY THE COUPLES TABLE. Its status carries a date ("Winners on November 25,
+     2025", "Eliminated 1st & 2nd on September 23, 2025"); later tables on the same page
+     repeat "Winners" against past champions' pairings ("Robert & Witney", "Jordan & Apolo
+     Anton Ohno") with no date. Found on the real season 34 page, where they read as five
+     winners. So a DWTS finish counts only with its date, and only for one person's name. */
+  if (kind === 'wiki-dwts') {
+    rows = rows.filter((r) => !r.name.includes('&') && /\bon [A-Z][a-z]+ \d{1,2}, \d{4}\b/.test(r.status));
+  }
+  /* By NAME, once each: a page can list the same couple in more than one table (found on
+     DWTS season 34 - the winner appeared twice and read as two winners). */
+  const pick = (re: RegExp) => [...new Set(rows.filter((r) => re.test(r.status)).map((r) => r.name))];
+  const winners = kind === 'wiki-survivor' ? pick(/^Sole Survivor/i) : pick(/^Winners?\b/i);
+  if (winners.length === 1) out.winner = winners[0];
+  const first = kind === 'wiki-survivor' ? pick(/^1st voted out/i) : pick(/Eliminated 1st\b/i);
+  if (first.length === 1) out['first-out'] = first[0];
+  else if (first.length > 1) out['first-out'] = 'void';
+  return out;
+}
+
 /** Every category heading on an awards page, winner or not - so a ready set can be
  *  checked against the page before the night: each of its keys must be a heading. */
 export function categoriesFromWikiAwards(html: string): string[] {

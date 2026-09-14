@@ -13,7 +13,9 @@
  * route - what the page said, when, and what was written.
  */
 import { PROP_TEMPLATES } from './lib/props.ts';
-import { winnersFromWikiAwards, findCategory, matchOption } from './lib/props-settle.ts';
+import { winnersFromWikiAwards, findCategory, matchOption, castRows, answersFromCast } from './lib/props-settle.ts';
+
+const KINDS = ['wiki-awards', 'wiki-survivor', 'wiki-dwts'];
 
 const UA = 'AnyGiven/1.0 (https://anygiven.app; ruppohana@gmail.com)';
 export const wikiHtmlUrl = (page: string) => `https://en.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(page)}`;
@@ -26,7 +28,7 @@ export async function settleReadySets(env: any, now = Date.now(), fetchImpl: typ
   for (const t of Object.values(PROP_TEMPLATES)) {
     if (opts.only && t.id !== opts.only) continue;
     const src = t.source;
-    if (!src || src.kind !== 'wiki-awards') continue;
+    if (!src || !KINDS.includes(src.kind)) continue;
     const due = t.questions.map((q: any, i: number) => ({ q, qid: t.id + '-' + (i + 1) })).filter((x) => x.q.lockAt <= now);
     if (!due.length) continue;
     const open = new Set((((await env.DB.prepare(
@@ -53,18 +55,23 @@ export async function settleReadySets(env: any, now = Date.now(), fetchImpl: typ
       out.push({ template: t.id, error: String(e?.message || e) });
       continue;
     }
-    const winners = winnersFromWikiAwards(html);
+    /* An awards page answers by category heading; a cast table answers 'winner' and
+       'first-out' by name - or 'void' for a double elimination. */
+    const awards = src.kind === 'wiki-awards';
+    const winners = awards ? winnersFromWikiAwards(html) : new Map<string, string>();
+    const cast = awards ? {} : answersFromCast(src.kind, castRows(html));
     const answers: Record<string, string> = {};
     for (const x of want) {
-      const line = findCategory(winners, x.q.key || x.q.text);
+      const line = awards ? findCategory(winners, x.q.key || x.q.text) : (cast as any)[x.q.key];
       if (!line) continue;
-      const opt = matchOption(x.q.options, line);
+      const opt = line === 'void' ? 'void' : matchOption(x.q.options, line);
       if (!opt) continue;
       await env.DB.prepare('UPDATE prop_question SET answer = ?, settled_at = ? WHERE qid = ? AND answer IS NULL')
         .bind(opt, now, x.qid).run();
       answers[x.qid] = opt;
     }
-    const row = { template: t.id, at: now, winnersOnPage: winners.size, waiting: want.length, settled: Object.keys(answers).length, answers };
+    const row = { template: t.id, at: now, winnersOnPage: awards ? winners.size : Object.keys(cast).length,
+                  waiting: want.length, settled: Object.keys(answers).length, answers };
     out.push(row);
     if (env.LIVE) { try { await env.LIVE.put('props:settle:' + t.id, JSON.stringify(row), { expirationTtl: KEEP_S }); } catch { /* fine */ } }
   }

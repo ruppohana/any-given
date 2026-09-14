@@ -89,6 +89,44 @@ test('after the lock, the settler writes every group\'s answers from the page - 
   assert.equal(ans('OFFICE', 14), 'The Traitors', 'Reality Competition');
 });
 
+/* ------------------------------------------------------------ reality TV */
+import { castRows, answersFromCast } from '../src/lib/props-settle.ts';
+
+test('Survivor: the contestants table names the Sole Survivor and the first vote (real Survivor 50)', () => {
+  const rows = castRows(page('Survivor_50_In_the_Hands_of_the_Fans'));
+  assert.deepEqual(answersFromCast('wiki-survivor', rows), { winner: 'Aubry Bracco', 'first-out': 'Jenna Lewis-Dougherty' });
+  /* This season's page the week before: every castaway listed, nobody out. */
+  const s51 = castRows(page('Survivor_51'));
+  assert.deepEqual(answersFromCast('wiki-survivor', s51), {});
+  const names = new Set(s51.map((r) => r.name));
+  for (const o of PROP_TEMPLATES['survivor-51'].questions[0].options) assert.ok(names.has(o), 'not on the page: ' + o);
+});
+
+test('Dancing with the Stars: the winner, and a double elimination voids "eliminated first" (real season 34)', () => {
+  const rows = castRows(page('Dancing_with_the_Stars_American_TV_series_season_34'));
+  assert.deepEqual(answersFromCast('wiki-dwts', rows), { winner: 'Robert Irwin', 'first-out': 'void' },
+    'Baron Davis and Corey Feldman went out together in week 1 - nobody could have picked that');
+  const d35 = castRows(page('Dancing_with_the_Stars_American_TV_series_season_35'));
+  assert.deepEqual(answersFromCast('wiki-dwts', d35), {});
+  const names = new Set(d35.map((r) => r.name));
+  for (const o of PROP_TEMPLATES['dwts-35'].questions[0].options) assert.ok(names.has(o), 'not on the page: ' + o);
+});
+
+test('the reality sets settle through the same run: Survivor from its page, nobody typing', async () => {
+  const { d, DB } = db();
+  const S = PROP_TEMPLATES['survivor-51'];
+  const ins = d.prepare('INSERT INTO prop_question VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0)');
+  S.questions.forEach((q, i) => ins.run('TRIBE', 'survivor-51-' + (i + 1), i + 1, q.text, JSON.stringify(q.options), q.points, q.lockAt));
+  /* Last season's page, with this season's names swapped in for the two who finished, stands in
+     for the night the page is updated - the parser and the run are the real ones. */
+  const html = page('Survivor_50_In_the_Hands_of_the_Fans').replaceAll('Aubry Bracco', 'Ana Sani').replaceAll('Jenna Lewis-Dougherty', 'Devin Way');
+  const r = await settleReadySets({ DB }, Date.UTC(2026, 8, 24, 5, 0), async () => new Response(html), { force: true, only: 'survivor-51' });
+  assert.equal(r[0].settled, 2);
+  const ans = (n) => d.prepare('SELECT answer FROM prop_question WHERE qid = ?').get('survivor-51-' + n).answer;
+  assert.equal(ans(1), 'Ana Sani');
+  assert.equal(ans(2), 'Devin Way');
+});
+
 test('a failed read settles nothing and says why', async () => {
   const { d, DB } = db();
   load(d, 'OFFICE');

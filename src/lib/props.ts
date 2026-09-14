@@ -90,6 +90,10 @@ const SURVIVOR_51 = ['Rob Antonson', 'Brady Booker', 'Patt Cannaday', 'Linnea Ca
   'Carter Krull', 'Alexis Levine', 'Angelica "Jelly" Loblack', 'Eric Macksoud', 'Maggie Nestor',
   'Thien An Nguyen', 'Mike Pinsky', 'Aaliyah Puglia', 'Ana Sani', 'Devin Way'];
 
+const DWTS_35 = ['Tatyana Ali', 'Tyler Cameron', 'Giada De Laurentiis', 'Jenna Dewan', 'Ezra Frech', 'Amber Glenn',
+  'Taylor Hanson', 'Maura Higgins', 'Conner Leavitt', 'Ciara Miller', 'Sarah Jane Nader', 'Jackson Olson',
+  'Guillermo Rodriguez', 'Harry Shum Jr.', 'Julia Stiles', 'Connor Wood'];
+
 export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: string; questions: any[]; source?: { kind: string; page: string } }> = {
   'emmys-2026': {
     id: 'emmys-2026',
@@ -125,9 +129,28 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
     id: 'survivor-51',
     name: 'Survivor 51',
     when: 'Premieres Wednesday, September 23 · 8 PM · CBS',
+    /* Settles from the contestants table's finish column ("1st voted out", "Sole Survivor"). */
+    source: { kind: 'wiki-survivor', page: 'Survivor_51' },
     questions: [
-      { text: 'Who wins Survivor 51?', points: 5, lockAt: Date.UTC(2026, 8, 24, 0, 0, 0), options: SURVIVOR_51 },
-      { text: 'Who is voted out first?', points: 3, lockAt: Date.UTC(2026, 8, 24, 0, 0, 0), options: SURVIVOR_51 }
+      { text: 'Who wins Survivor 51?', points: 5, lockAt: Date.UTC(2026, 8, 24, 0, 0, 0), options: SURVIVOR_51, key: 'winner' },
+      { text: 'Who is voted out first?', points: 3, lockAt: Date.UTC(2026, 8, 24, 0, 0, 0), options: SURVIVOR_51, key: 'first-out' }
+    ]
+  },
+
+  /* 🔴 DANCING WITH THE STARS, SEASON 35 - premieres Tuesday, September 15, 2026, 8 PM ET
+   * on ABC and Disney+ (a second episode Wednesday the 16th). 16 celebrities as Wikipedia's
+   * season 35 page lists them, read 2026-09-13; the cast was revealed on Good Morning
+   * America on September 2. Both questions lock at the premiere: 8 PM Eastern is
+   * 2026-09-16T00:00:00Z. Settles from the couples table's status column; a double
+   * elimination in the first week voids "eliminated first" (no single pick called it). */
+  'dwts-35': {
+    id: 'dwts-35',
+    name: 'Dancing with the Stars, season 35',
+    when: 'Premieres Tuesday, September 15 · 8 PM ET · ABC and Disney+',
+    source: { kind: 'wiki-dwts', page: 'Dancing_with_the_Stars_(American_TV_series)_season_35' },
+    questions: [
+      { text: 'Who wins season 35?', points: 5, lockAt: Date.UTC(2026, 8, 16, 0, 0, 0), options: DWTS_35, key: 'winner' },
+      { text: 'Who is eliminated first?', points: 3, lockAt: Date.UTC(2026, 8, 16, 0, 0, 0), options: DWTS_35, key: 'first-out' }
     ]
   }
 };
@@ -135,7 +158,9 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
 /** The ready sets a commissioner can load today, soonest first. Past sets stay
  *  loadable by id but are not offered once every question has locked. */
 export function templatesOpen(now: number) {
+  const firstLock = (t: any) => Math.min(...t.questions.map((q: any) => q.lockAt));
   return Object.values(PROP_TEMPLATES)
     .filter((t) => t.questions.some((q) => q.lockAt > now))
+    .sort((a, b) => firstLock(a) - firstLock(b))
     .map((t) => ({ id: t.id, name: t.name, when: t.when, count: t.questions.length }));
 }
