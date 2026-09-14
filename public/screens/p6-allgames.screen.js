@@ -669,6 +669,12 @@ export async function refreshDay(games, sport, day) {
       if (num(n.awayScore)) g.awayScore = n.awayScore;
       if (n.periodsHome) g.periodsHome = n.periodsHome;
       if (n.periodsAway) g.periodsAway = n.periodsAway;
+      /* A knockout that ends on penalties while the slate is open: the side that
+         went through, and the shootout - or a level final reads as a Draw result
+         until the page reloads. */
+      if (n.winner === 'home' || n.winner === 'away') g.winner = n.winner;
+      if (num(n.penHome)) g.penHome = n.penHome;
+      if (num(n.penAway)) g.penAway = n.penAway;
     }
   } catch { /* the board's own values stand */ }
   return games;

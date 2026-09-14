@@ -71,7 +71,10 @@ export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball'
   /* 2026-09-13: three more soccer leagues and college hockey (src/lib/day.ts). */
   'ucl', 'laliga', 'ligamx', 'mens-college-hockey',
   /* 2026-09-13, "add women's college basketball too" - a college day sport. */
-  'womens-college-basketball'] as const;
+  'womens-college-basketball',
+  /* 2026-09-13, "non sports, golf, oscars, everything": a QUESTIONS group - the
+     commissioner writes the questions and enters the answers (src/props-pool.ts). */
+  'props'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
@@ -88,7 +91,7 @@ export const isRacingSport = (s: unknown) => s === 'f1' || String(s).startsWith(
  * result has no single line. */
 export const isSoccerSport = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(String(s));
 /** A race or a soccer match never picks against a spread. */
-export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s);
+export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s) || s === 'props';
 /** The sides a pick may take. */
 export const pickSides = (s: unknown): string[] => isSoccerSport(s) ? ['home', 'away', 'draw'] : ['home', 'away'];
 

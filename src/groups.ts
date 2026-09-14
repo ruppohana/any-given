@@ -250,6 +250,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     await env.DB.batch([
       env.DB.prepare('DELETE FROM pick WHERE pool_id = ? AND user_id = ?').bind(gid, t.user_id),
       env.DB.prepare('DELETE FROM f1_pick WHERE pool_id = ? AND user_id = ?').bind(gid, t.user_id),
+      env.DB.prepare('DELETE FROM prop_pick WHERE pool_id = ? AND user_id = ?').bind(gid, t.user_id),
       env.DB.prepare('DELETE FROM member WHERE pool_id = ? AND user_id = ?').bind(gid, t.user_id),
       env.DB.prepare(
         `INSERT INTO pool_removed (pool_id, user_id, removed_at) VALUES (?, ?, ?)
@@ -280,6 +281,8 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
         await env.DB.batch([
           env.DB.prepare('DELETE FROM pick WHERE pool_id = ?').bind(gid),
           env.DB.prepare('DELETE FROM f1_pick WHERE pool_id = ?').bind(gid),
+          env.DB.prepare('DELETE FROM prop_pick WHERE pool_id = ?').bind(gid),
+          env.DB.prepare('DELETE FROM prop_question WHERE pool_id = ?').bind(gid),
           env.DB.prepare('DELETE FROM member WHERE pool_id = ?').bind(gid),
           env.DB.prepare('DELETE FROM pool_removed WHERE pool_id = ?').bind(gid),
           env.DB.prepare('DELETE FROM pool_mail WHERE pool_id = ?').bind(gid),
@@ -296,6 +299,7 @@ export async function handleGroups(req: Request, env: any, p: string, json: Json
     await env.DB.batch([
       env.DB.prepare('DELETE FROM pick WHERE pool_id = ? AND user_id = ?').bind(gid, uid),
       env.DB.prepare('DELETE FROM f1_pick WHERE pool_id = ? AND user_id = ?').bind(gid, uid),
+      env.DB.prepare('DELETE FROM prop_pick WHERE pool_id = ? AND user_id = ?').bind(gid, uid),
       env.DB.prepare('DELETE FROM member WHERE pool_id = ? AND user_id = ?').bind(gid, uid)
     ]);
     return json({ ok: true, closed: false });

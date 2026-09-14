@@ -28,6 +28,7 @@ import { icsFromQuery, icsDeadline } from './lib/ics.ts';
 import { handleContact } from './contact.ts';
 import { handleGroups } from './groups.ts';
 import { handleF1Pool, racingStandings, RACING } from './f1-pool.ts';
+import { handlePropsPool, propsStandings } from './props-pool.ts';
 import { serveNascar, NASCAR_SERIES } from './nascar-feed.ts';
 import { poolSport, worldPoolId, pickSides, gradeSql } from './lib/groups.ts';
 
@@ -259,6 +260,9 @@ export default {
       /* ---- F1 group pools: /api/pool/f1picks, /api/pool/f1pick (src/f1-pool.ts) ---- */
       const f1Res = await handleF1Pool(req, env, p, json);
       if (f1Res) return f1Res;
+      /* ---- questions pools: /api/props* (src/props-pool.ts) - the Emmys, the Oscars, anything ---- */
+      const propsRes = await handlePropsPool(req, env, p, json);
+      if (propsRes) return propsRes;
       const groupRes = await handleGroups(req, env, p, json);
       if (groupRes) return groupRes;
 
@@ -1037,6 +1041,10 @@ export default {
         let week = Number(url.searchParams.get('week')) || 0;
         const poolId = url.searchParams.get('pool') || worldPoolId(sport);
         /* F1 and NASCAR score a race in points, not winners (src/f1-pool.ts). */
+        if (sport === 'props') {
+          return json({ pool: poolId, sport, week: 0, ats: false, unit: 'points',
+                        rows: await propsStandings(env, poolId), fetchedAt: Date.now() });
+        }
         if (RACING.includes(sport)) {
           return json({ pool: poolId, sport, week: 0, ats: false, unit: 'points',
                         rows: await racingStandings(env, poolId, sport), fetchedAt: Date.now() });

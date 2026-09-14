@@ -309,7 +309,7 @@ export async function handleAuth(req: Request, env: any, p: string, json: Json):
         `UPDATE member SET role = 'commissioner' WHERE role != 'commissioner'
            AND EXISTS (SELECT 1 FROM pool p WHERE p.id = member.pool_id AND p.commissioner_id = member.user_id)`),
       env.DB.prepare('DELETE FROM pool WHERE commissioner_id = ?').bind(id),
-      ...['pick', 'f1_pick', 'parlay_leg', 'tiebreak', 'week_score', 'marble_ledger', 'member']
+      ...['pick', 'f1_pick', 'prop_pick', 'parlay_leg', 'tiebreak', 'week_score', 'marble_ledger', 'member']
         .map((t) => env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?`).bind(id)),
       env.DB.prepare('DELETE FROM session WHERE account_id = ?').bind(id),
       env.DB.prepare('DELETE FROM device_account WHERE account_id = ?').bind(id),
