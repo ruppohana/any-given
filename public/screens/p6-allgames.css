@@ -147,13 +147,6 @@
   color: var(--accent); text-decoration: none;
 }
 .scr-p6-allgames .p6a-golive::after { content: ''; position: absolute; inset: -14px -8px; }
-/* "info" on every card - a word, as on the pick'em slate, reaching 44px. */
-.scr-p6-allgames .p6a-info {
-  flex: 0 0 auto; position: relative; min-height: 0; padding: 0 2px;
-  font: inherit; font-size: 11px; font-weight: 700; color: var(--fg);
-  text-decoration: underline; background: none; border: 0; cursor: pointer;
-}
-.scr-p6-allgames .p6a-info::after { content: ''; position: absolute; inset: -16px -10px; }
 
 /* THE MATCHUP. Away, then "@", then home - the order is the meaning. Football is
    not neutral: every game is played at somebody's place, the spread is quoted on
@@ -555,7 +548,6 @@
 /* With the selector centred, "info" holds the right-hand end itself - unless a
    pill or the spread label already does. And the channel stops short of the
    selector rather than running under it. */
-.scr-p6-allgames .p6a-top:not(:has(> .p6a-pill, > .p6a-sprd)) > .p6a-info { margin-left: auto; }
 .scr-p6-allgames .p6a-top:has(> .p6a-seg) > .p6a-chan {
   min-width: 0; max-width: calc(50% - 104px);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

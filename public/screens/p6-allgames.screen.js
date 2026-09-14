@@ -58,7 +58,6 @@ import { GAME_MARKETS, settleMarket } from '/src/markets.js';
 /* `dayName`, not `dayLabel` - this file already exports a dayLabel of its own
    (a kickoff's weekday), and two bindings of one name do not parse. */
 import { isDaySport, isDay, dayOf, addDays, dayLabel as dayName, dayClock } from '/src/lib/day.js';
-import { openInfo } from '/screens/p2-slate.screen.js';
 import { priceMarket, marketIsOpen, MIN_PRICE, trueCeiling, MAX_PRICE,
   gameWinnerProbs, priceFromP } from '/src/lib/price-model.js';
 /* 🔴 IMPORTED, NOT TYPED. The first version of the line below said "Up to
@@ -1351,17 +1350,6 @@ function liveIcon() {
   return s;
 }
 
-/** The pick'em slate's info card, with its stylesheet loaded on first use - on
- *  a cold open of All games the slate's CSS has never been fetched. */
-function infoFor(game, ctx) {
-  if (!document.querySelector('link[href="/screens/p2-slate.css"]')) {
-    const l = document.createElement('link');
-    l.rel = 'stylesheet'; l.href = '/screens/p2-slate.css';
-    document.head.appendChild(l);
-  }
-  openInfo(game, { sport: ctx.sport });
-}
-
 function gameCard(ctx, game) {
   const card = el('details', 'p6a-game');
   card.dataset.gameId = game.id;
@@ -1480,17 +1468,8 @@ function gameCard(ctx, game) {
     top.appendChild(el('span', 'p6a-sprd num',
       abbr + ' ' + spreadText(game.spread, game.spread <= 0 ? 'home' : 'away')));
   }
-  /* 🔴 "info" ON EVERY CARD. Jason, 2026-09-11: "...and an info word." The
-   * same card the pick'em slate opens - records, form and the last meeting.
-   * Inside a <summary>, so no fold. */
-  /* Not on the day sports yet. */
-  if (!isDaySport(ctx.sport)) {
-    const info = el('button', 'p6a-info', 'info');
-    info.type = 'button';
-    info.setAttribute('aria-label', 'Records and rank for this game');
-    info.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); infoFor(game, ctx); });
-    top.appendChild(info);
-  }
+  /* No "info" word since 2026-09-13 (Jason: "remove the fun facts info button
+   * too"); the card it opened is gone with it. */
   card.appendChild(top);
 
   /* The matchup sits inside the summary so the closed row shows who is

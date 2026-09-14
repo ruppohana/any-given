@@ -800,52 +800,19 @@ test('one selector, one block - no CSS rule is declared twice', () => {
     `overrides the earlier one property by property: ${dupes.join(', ')}`);
 });
 
-/* 🔴 THE INFO CARD MAY ONLY SHOW WHAT THE ROW CANNOT. This is the rule the first
- * info card died of - it opened on Record, Last season, The line, Spread pays
- * and Winner pays, then the row grew to carry the last three and the modal
- * became a copy of the card behind it. Jason: "The info card is useless. All
- * that info is on the past page."
+/* 🔴 NO INFO BUTTON AND NO INFO CARD (2026-09-13). Jason: "remove the fun facts
+ * info button too". The card's fun facts went with the nuggets; its records, form
+ * and last meeting went with the button. The row keeps the AP rank.
  *
- * It came back only because the row went the other way and the context line came
- * off it. So the test is the rule: every fact in the card is absent from the
- * row, and the two facts added for the head-to-head question - form and the last
- * meeting - are card-only by construction. If one of them ever migrates onto a
- * row, this fails and the card has to justify itself again. */
-test('the info card shows only what the row does not', () => {
-  /* zone() ends where center() begins - openInfo sits further down the file and
-   * must not be swept into the row's slice, or the card fails its own test.
-   *
-   * 🔴 AND THE COMMENTS COME OUT FIRST. This file argues with itself at length
-   * about rank, record and last season - zone()'s own comment block explains why
-   * the context line was REMOVED - so a guard that greps the raw text finds
-   * every one of those words in prose and fails on a row that draws none of
-   * them. Read the code, not the reasoning about the code. */
+ * The comments come out first: this file argues with itself at length about the
+ * card it used to have, so a guard that greps raw text finds it in prose. */
+test('no info button and no info card; the row shows the AP rank', () => {
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const code = strip(SRC);
+  assert.ok(!code.includes("'p2-info'"), 'no info button');
+  assert.ok(!code.includes('function openInfo('), 'no info card');
   const zone = strip(SRC.slice(SRC.indexOf('function zone('), SRC.indexOf('function center(')));
-  const card = strip(SRC.slice(SRC.indexOf('function openInfo('), SRC.indexOf('function statusPill(')));
-  for (const fact of ['lastMeeting', 'form', 'lastRecord']) {
-    assert.ok(card.includes(fact), `the info card does not show ${fact} - it has nothing the row lacks`);
-    assert.ok(!zone.includes(fact),
-      `${fact} is on the ROW as well as in the info card - that is what killed the first one`);
-  }
-  /* 🔴 THE RANK MOVED TO THE ROW. Jason, 2026-09-11: "I thought we had the ranking
-   * on cards like this." So the row draws it and the card, by the same rule, does not. */
   assert.ok(zone.includes('rank'), 'the row shows the AP rank');
-  assert.ok(!card.includes("'AP rank'"), 'the AP rank is on the row, so the card does not repeat it');
-});
-
-/* 🔴 A NUMBER PRESENTED AS ALL-TIME MUST BE ALL-TIME. Jason asked for the
- * ultimate head-to-head record; ESPN carries none for either league, and a
- * derived one could only honestly be labelled "since 2002". The card says "Last
- * meeting", which is exactly what it knows. This guards the wording, because the
- * tempting edit is one adjective. */
-test('the head-to-head line never claims to be all-time', () => {
-  const card = SRC.slice(SRC.indexOf('function openInfo('), SRC.indexOf('function statusPill('));
-  const strings = (card.match(/'[^']*'/g) || []).join(' ').toLowerCase();
-  for (const word of ['all-time', 'all time', 'ultimate', 'series record', 'lifetime']) {
-    assert.ok(!strings.includes(word),
-      `the card says "${word}" - the feed has no such number, so it would be invented`);
-  }
 });
 
 /* 🔴 THE NESTED CORNERS STAY CONCENTRIC. Jason, 2026-09-09, zoomed in on one:

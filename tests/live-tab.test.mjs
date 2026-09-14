@@ -93,7 +93,7 @@ test('the Slate tab opens the betting board on the betting side', () => {
   assert.ok(APP.includes("slateTab.setAttribute('href', slateHref());"), 'and decides again at the tap');
 });
 
-test('All games: a live game opens live from over its score, and every card has info', () => {
+test('All games: a live game opens live from over its score, and no card has an info word', () => {
   // Jason, 2026-09-11: "the live games can come from the slate as well", "put
   // the live icon above the score if it is live", "and an info word".
   const P6 = readFileSync(new URL('../public/screens/p6-allgames.screen.js', import.meta.url), 'utf8');
@@ -101,8 +101,9 @@ test('All games: a live game opens live from over its score, and every card has 
   assert.ok(P6.includes("const golive = el('a', 'p6a-golive');"), 'a go-live link');
   // Then: "Move the live icon to the top of the card. In line with 4:00."
   assert.ok(P6.includes('top.appendChild(golive);'), 'the go-live icon sits on the top row');
-  assert.ok(P6.includes("const info = el('button', 'p6a-info', 'info');"), 'an info word on the card');
-  assert.ok(P2.includes('export function openInfo(game, ctx)'), 'the same info card as the pick\'em slate');
+  // 2026-09-13: "remove the fun facts info button too" - no info word, no shared card.
+  assert.ok(!P6.includes("'p6a-info'"), 'no info word on the card');
+  assert.ok(!P2.includes('export function openInfo('), 'no info card');
   // "Sample data - these games are made up" over 86 real games: the screen must say its rows are real.
   assert.ok(P6.includes('fromFeed: games.length > 0'), 'All games reports that its week came off the feed');
   // "the best parts of the live": the held clock, in the Live pill - beside the

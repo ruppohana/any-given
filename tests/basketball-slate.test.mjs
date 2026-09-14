@@ -54,12 +54,10 @@ test('a game with no line at all offers no winner bet - never a coin flip on a m
   assert.equal(P6.includes('if (!num(game && game.spread)) return true;'), false, 'the 2.00x fallback is gone');
 });
 
-test('a basketball card offers winner, spread and total only, with no live link or football facts yet', () => {
+test('a basketball card offers winner, spread and total only, with no live link yet', () => {
   assert.ok(P6.includes("const DAY_MARKETS = ['winner', 'spread', 'total'];"));
   assert.ok(P6.includes("if (isDaySport(sport) && !DAY_MARKETS.includes(m.id)) return false;"), 'halves and quarters are football\'s clock');
   assert.ok(P6.includes("if (game.status === 'in_progress' && !isDaySport(ctx.sport)) {"), 'no live board link');
-  assert.ok(P6.includes("if (!isDaySport(ctx.sport)) {\n    const info = el('button', 'p6a-info', 'info');")
-    || P6.includes("if (!isDaySport(ctx.sport)) {\r\n    const info = el('button', 'p6a-info', 'info');"), 'no football nuggets');
   assert.ok(P6.includes("if (isDaySport(game.sport)) return dayClock(game.sport, game.period, game.clock, game.statusName);"), 'the sport\'s own periods on the clock');
   assert.ok(P6.includes("league: ctx.sport === 'nfl' ? 'nfl' : ctx.sport === 'nba' ? 'nba' : 'college-football',"), 'an NBA row asks for NBA crests');
 });

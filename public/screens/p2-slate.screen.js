@@ -1916,109 +1916,9 @@ function row(ctx, game) {
 
 /* The status pill - Deuce's "Upcoming" chip, saying the thing that actually
  * matters here: whether this row can still be picked. */
-/* 🔴 THE INFO CARD, REBUILT AND DELIBERATELY THINNER THAN THE FIRST ONE.
- *
- * The first version opened on Record, Last season, The line, Spread pays and
- * Winner pays - and it died when the row grew to carry the last three itself.
- * Jason: "The info card is useless. All that info is on the past page."
- *
- * It is back because the row went the other way: it now carries the four things
- * you decide with - crest, name, spread, payout - and the context came off it.
- * So this holds exactly what the row does NOT, and nothing else:
- *
- *   records, this season and last     the argument for or against the spread
- *   (the AP rank moved to the row, 2026-09-11 - see zone())
- *   where and on what                 venue and channel
- *
- * 🔴 IF IT EVER AGAIN SHOWS SOMETHING THE ROW SHOWS, IT IS DEAD AGAIN. That is
- * the test to apply before adding a line here, and it is the one this card
- * failed the first time.
- */
-/* Exported: All games opens the same card (Jason, 2026-09-11: "and an info
- * word"), so the two lists of the week say the same things about a game. */
-export function openInfo(game, ctx) {
-  const old = document.getElementById('p2-info-dlg');
-  if (old) old.remove();
-
-  const d = document.createElement('dialog');
-  d.id = 'p2-info-dlg';
-  d.className = 'p2-dlg';
-
-  const head = el('div', 'p2-dlg-h');
-  /* A fight and a cricket match are billed first-named first, and neither side is at home. */
-  head.appendChild(el('div', 'p2-dlg-t', isWinnerSport(game.sport)
-    ? (game.home.name || game.home.short) + (game.sport === 'cricket' ? ' v ' : ' vs ') + (game.away.name || game.away.short)
-    : (game.away.short || game.away.name) + ' at ' + (game.home.short || game.home.name)));
-  const meta = [timeLabel(game.kickoffUtc), dayLabel(game.kickoffUtc)];
-  if (game.venue) meta.push(game.venue);
-  if (game.broadcast) meta.push('on ' + game.broadcast);
-  head.appendChild(el('div', 'p2-dlg-s', meta.join(' · ')));
-  d.appendChild(head);
-
-  const t = el('div', 'p2-h2h');
-  const hdr = el('div', 'p2-h2h-r p2-h2h-hd');
-  hdr.appendChild(el('span', 'p2-h2h-l', ''));
-  hdr.appendChild(el('span', 'p2-h2h-v', game.away.abbrev || '–'));
-  hdr.appendChild(el('span', 'p2-h2h-v', game.home.abbrev || '–'));
-  t.appendChild(hdr);
-
-  const line = (label, a, b2) => {
-    /* A row where NEITHER side has the fact is not drawn. A card of dashes is
-     * the thing this card exists not to be. */
-    if (a == null && b2 == null) return;
-    const r = el('div', 'p2-h2h-r');
-    r.appendChild(el('span', 'p2-h2h-l', label));
-    r.appendChild(el('span', 'p2-h2h-v num', a == null ? '–' : String(a)));
-    r.appendChild(el('span', 'p2-h2h-v num', b2 == null ? '–' : String(b2)));
-    t.appendChild(r);
-  };
-  const A = game.away, H = game.home;
-  line('Record', A.record, H.record);
-  line('Last season', A.lastRecord, H.lastRecord);
-  /* The AP rank is on the row since 2026-09-11 ("#10 Texas A&M"), so the card
-   * does not repeat it - the test this card failed the first time. */
-  /* 🔴 FORM, NEWEST FIRST, AS FIVE LETTERS. Read left to right it is the last
-   * five games in order, which is how every football table in the world prints
-   * it. Not a sparkline and not a percentage - W L W W T is the whole fact and
-   * it fits in one cell. */
-  line('Last five', A.form || null, H.form || null);
-  d.appendChild(t);
-
-  /* 🔴 THE LAST MEETING, WHICH IS WHAT "HEAD TO HEAD" MEANS IN PRACTICE. Jason
-   * asked for the ultimate record; the feed has no such number for either
-   * league and a derived one could only honestly be labelled "since 2002", so
-   * this is the fact that does exist - the last time these two played.
-   *
-   * ABSENT, NOT HEDGED, when they have not met inside five games. An empty
-   * head-to-head line is worse than no line: it implies we looked all the way
-   * back and found nothing, and we looked back five games. */
-  if (game.lastMeeting && game.lastMeeting.score) {
-    const m = game.lastMeeting;
-    const who = m.winnerId == null ? 'Tied'
-      : ((m.winnerId === H.id ? (H.short || H.name) : (A.short || A.name)) + ' won');
-    const when = m.dateUtc
-      ? new Date(m.dateUtc).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-      : null;
-    d.appendChild(el('div', 'p2-h2h-last',
-      'Last meeting: ' + who + ' ' + m.score + (when ? ', ' + when : '')));
-  }
-
-  /* 🔴 NO NOTE ABOUT THE LINE. Jason, 2026-09-11: "There is no line here so why the
-   * stupid note?" The card never shows the line - the row does - so the sentence
-   * about whose line it is sat under a table with no line in it. */
-
-  /* NO FUN FACTS (2026-09-13). Jason: "Stop getting and remove them. We do not
-   * use them any longer." The researched team facts that filled a line per side
-   * here are gone with public/nuggets/. */
-
-  const close = el('button', 'p2-dlg-x', 'Close');
-  close.onclick = () => d.close();
-  d.appendChild(close);
-  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
-  d.addEventListener('close', () => d.remove());
-  document.body.appendChild(d);
-  d.showModal();
-}
+/* 🔴 NO INFO CARD (2026-09-13). Jason: "remove the fun facts info button too".
+ * The card (records, form, last meeting, and until that morning a fun fact per
+ * side) was opened only by the info button, so both went. It is in git history. */
 
 function statusPill(ctx, game) {
   const st = pickStateOf(game, ctx.picks[game.id], ctx.now, ctx.mode);
@@ -2029,7 +1929,8 @@ function statusPill(ctx, game) {
   return p;
 }
 
-/* The right-hand column: how this row settles, and a way to read more. */
+/* The right-hand column: how this row settles. No info button since 2026-09-13
+ * (Jason: "remove the fun facts info button too"). */
 function rules(ctx, game) {
   const c = el('div', 'p2-rules');
   if (ctx.mode === 'week' && typeof game.spread === 'number') {
@@ -2047,11 +1948,6 @@ function rules(ctx, game) {
     }
     c.appendChild(sw);
   }
-  const info = el('button', 'p2-info', 'info');
-  info.type = 'button';
-  info.setAttribute('aria-label', 'Records and rank for this game');
-  info.onclick = (e) => { e.stopPropagation(); openInfo(game, ctx); };
-  c.appendChild(info);
   return c;
 }
 
