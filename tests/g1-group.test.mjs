@@ -266,16 +266,17 @@ const POOL_SPORTS = ((code(LIB).match(/POOL_SPORTS\s*=\s*\[([^\]]+)\]/) || [])[1
 const HAS = { name: 'A-Test', pledged: true };
 const NEW3 = ['mlb', 'nhl', 'wnba'];
 
-test('the Sport control offers all eighteen, in POOL_SPORTS order, with their labels', () => {
+test('the Sport control offers all nineteen, in POOL_SPORTS order, with their labels', () => {
   /* NASCAR's O'Reilly and Truck series joined 2026-09-13, then the Premier League and MLS,
-     then the Champions League, La Liga, Liga MX, college hockey and women's college basketball. */
+     then the Champions League, La Liga, Liga MX, college hockey and women's college basketball,
+     then a questions group ('props' - awards, TV, anything). */
   assert.deepEqual(POOL_SPORTS, ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
     'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls',
-    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball']);
+    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props']);
   assert.deepEqual(mod.SPORTS.map((s) => s[0]), POOL_SPORTS, 'the screen and the server disagree on the sports');
   assert.deepEqual(mod.SPORTS.map((s) => s[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1',
     'NASCAR', 'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
-    'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball']);
+    'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions']);
   for (const [id, label] of mod.SPORTS) assert.equal(mod.sportLabel(id), label);
   assert.equal(mod.sportLabel('curling'), 'College football', 'an unknown sport reads as the server reads it');
   assert.equal(mod.sportLabel(undefined), 'College football');
@@ -288,8 +289,12 @@ test('one native select, grouped by family - every sport in exactly one', () => 
     ['Baseball', ['mlb']],
     ['Hockey', ['nhl', 'mens-college-hockey']],
     ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']],
-    ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]
+    ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']],
+    /* Not a sport - its own family, and the option says what it is for. */
+    ['Awards & TV', ['props']]
   ]);
+  assert.equal(mod.optionLabel('props'), 'Questions: awards, TV, anything');
+  for (const [id, label] of mod.SPORTS.filter(([s]) => s !== 'props')) assert.equal(mod.optionLabel(id), label);
   const flat = mod.SPORT_FAMILIES.flatMap((f) => f[1]);
   assert.equal(new Set(flat).size, flat.length, 'a sport is in two families');
   assert.deepEqual([...flat].sort(), [...POOL_SPORTS].sort(), 'a sport is in no family, so it cannot be chosen');
@@ -300,7 +305,7 @@ test('one native select, grouped by family - every sport in exactly one', () => 
   assert.match(CJS, /for \(const \[fam, ids\] of SPORT_FAMILIES\)/);
   assert.match(CJS, /document\.createElement\('optgroup'\)/);
   assert.match(CJS, /og\.label = fam;/);
-  assert.match(CJS, /el\('option', '', sportLabel\(v\)\)/);
+  assert.match(CJS, /el\('option', '', optionLabel\(v\)\)/);
   assert.match(CJS, /sportSel\.value = form\.sport;/, 'the select does not open on the default');
   assert.match(CJS, /form\.sport = poolSport\(sportSel\.value\);/);
   /* The nine-button grid is gone, not left behind hidden. */
@@ -366,6 +371,24 @@ test('what Create sends, per sport', () => {
     assert.deepEqual(mod.createPayload({ ...HAS, sport: s, scope: 'top25', ats: true }), { ...nba, sport: s },
       s + ' is not sent the way an NBA group is');
   }
+});
+
+test('a questions group: no spread, no which-games, its own words, and Create opens its questions', () => {
+  assert.equal(mod.isProps('props'), true);
+  assert.equal(mod.isRacing('props'), false);
+  assert.equal(mod.isDaySport('props'), false);
+  assert.equal(mod.hasNoSpread('props'), true);
+  assert.deepEqual(mod.scopeValues('props'), []);
+  assert.deepEqual(mod.createPayload({ ...HAS, sport: 'props', ats: true, scope: 'top25' }),
+    { name: 'A-Test', sport: 'props', pledge: true, ats: false }, 'never a spread, never a scope');
+  assert.equal(mod.periodLabel('props', 3), 'Question by question');
+  assert.equal(mod.picksLine({ sport: 'props', ats: true }), 'One pick a question, scored in points');
+  assert.match(mod.sportNote('props'), /Each question locks at its own time\.$/);
+  assert.equal(mod.shareText('Emmys night', 'BCD234', 'props'),
+    'Join my group Emmys night on Any Given. Pick the answers before each question locks, scored in points. Code BCD234');
+  /* A new questions group lands on #/props, where the ready set is loaded. */
+  assert.match(CJS, /if \(poolSport\(form\.sport\) === 'props'\) \{ location\.hash = '#\/props'; return; \}/);
+  assert.match(CJS, /if \(isProps\(sport\)\) \{\s*rows\.push\(\['The questions'/);
 });
 
 test('the races are F1 and NASCAR, through one helper', () => {
@@ -436,7 +459,7 @@ test('picks lock at the sport\'s own word: tip-off, first pitch, puck drop, kick
   const want = { 'college-football': 'kickoff', nfl: 'kickoff', 'mens-college-basketball': 'tip-off', nba: 'tip-off',
     wnba: 'tip-off', mlb: 'first pitch', nhl: 'puck drop', f1: '', nascar: '', 'nascar-oreilly': '', 'nascar-truck': '',
     epl: 'kickoff', mls: 'kickoff', ucl: 'kickoff', laliga: 'kickoff', ligamx: 'kickoff',
-    'mens-college-hockey': 'puck drop', 'womens-college-basketball': 'tip-off' };
+    'mens-college-hockey': 'puck drop', 'womens-college-basketball': 'tip-off', props: '' };
   for (const s of POOL_SPORTS) assert.equal(mod.lockWord(s), want[s], s);
   assert.equal(mod.sportNote('mlb'), 'Pick the winners a day at a time. Every pick locks at first pitch.');
   assert.equal(mod.sportNote('nhl'), 'Pick the winners a day at a time. Every pick locks at puck drop.');

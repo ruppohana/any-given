@@ -43,6 +43,8 @@ import { adSlot } from '/components/ad.js';
 import { signed, signClass, clock } from '/components/fmt.js';
 /* Home's sport chooser reads which groups you are in (homeSports, below). */
 import { myGroups, currentGroupId, setCurrentGroupId } from '/components/group.js';
+/* Home's Awards & TV tiles: the questions sets still open (homeShows, below). */
+import { templatesOpen, PROP_TEMPLATES } from '/src/lib/props.js';
 
 export const id = 'live-game';
 export const title = 'Live — the call';
@@ -4105,11 +4107,81 @@ function homeSportDest(sport, groups, currentId) {
   const mine = (Array.isArray(groups) ? groups : [])
     .filter((g) => g && g.id && (g.sport || 'college-football') === sport);
   const g = mine.find((x) => x.id === currentId) || mine[0];
-  return g ? { sport, groupId: g.id, hash: '#/gpicks' } : { sport, groupId: '', hash: '#/g' };
+  /* A questions group's pool is its questions page, not a slate. */
+  return g ? { sport, groupId: g.id, hash: sport === 'props' ? '#/props' : '#/gpicks' } : { sport, groupId: '', hash: '#/g' };
+}
+
+/* 🔴 TWO SECTIONS: SPORTS, AND AWARDS & TV. Jason, 2026-09-13: "add cricket too,
+ * and non sports, golf, oscars, everything", then "now we need the front page to
+ * separate sports and non-sports". Sports is the families above, unchanged. Awards
+ * & TV is a QUESTIONS group (sport 'props', src/props-pool.ts): one tile per ready
+ * set that is still open (src/lib/props.ts templatesOpen - a set leaves Home once
+ * every question in it has locked), then Your own questions, always. A tile
+ * remembers which set it was (ag.propsTemplate - the questions screen offers that
+ * set first) and goes where a sport tile goes: the group's questions if you are
+ * in a questions group, else the group page with the Start form on questions. */
+const HOME_SHOW_NAMES = {
+  'emmys-2026': 'The Emmys'
+};
+const HOME_OWN = {
+  id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, cricket…'
+};
+
+/** The Awards & TV tiles at `now`: each open set, named short and dated by its
+ *  first lock (the broadcast), then Your own questions. */
+function homeShowList(now) {
+  const sets = templatesOpen(now).map((t) => {
+    const first = Math.min(...PROP_TEMPLATES[t.id].questions.map((q) => q.lockAt));
+    return { id: t.id, label: HOME_SHOW_NAMES[t.id] || t.name,
+             cap: new Date(first).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) };
+  });
+  return [...sets, HOME_OWN];
+}
+
+function homeShows(now) {
+  const box = el('div', 'lg-shows');
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', 'Awards and TV');
+  const list = homeShowList(now == null ? Date.now() : now);
+  const sets = list.filter((s) => s.id);
+  /* Two across; Your own questions fills an odd row, or takes a row of its own. */
+  if (sets.length) {
+    const row = el('div', 'lg-fam-row n2');
+    for (const s of sets) row.appendChild(showTile(s));
+    if (sets.length % 2) row.appendChild(showTile(HOME_OWN));
+    box.appendChild(row);
+  }
+  if (!(sets.length % 2)) {
+    const one = el('div', 'lg-fam-row n1');
+    one.appendChild(showTile(HOME_OWN));
+    box.appendChild(one);
+  }
+  return box;
+}
+
+function showTile(s) {
+  const b = el('button', 'lg-league lg-show');
+  b.type = 'button';
+  b.dataset.sport = 'props';
+  b.dataset.template = s.id;
+  b.dataset.label = s.label + ', ' + s.cap;
+  b.appendChild(el('span', 'lg-league-n', s.label));
+  b.appendChild(el('span', 'lg-show-c', s.cap));
+  b.appendChild(el('span', 'lg-league-yg', 'Your group'));
+  mineMark(b);
+  b.onclick = () => homeShowTap(s.id);
+  return b;
+}
+
+/** Remember the set, then the same tap as any sport. */
+function homeShowTap(template) {
+  store.set('propsTemplate', template || '');
+  return homeSportTap('props');
 }
 
 function homeSports(wrap) {
   const c = el('div', 'lg-sports');
+  c.appendChild(el('h2', 'lg-sec-h', 'Sports'));
   const fams = el('div', 'lg-fams');
   fams.setAttribute('role', 'group');
   fams.setAttribute('aria-label', 'Which sport?');
@@ -4128,6 +4200,8 @@ function homeSports(wrap) {
     fams.appendChild(fam);
   });
   c.appendChild(fams);
+  c.appendChild(el('h2', 'lg-sec-h', 'Awards & TV'));
+  c.appendChild(homeShows());
   const my = el('a', 'lg-mygroups', 'My groups');
   my.href = '#/g';
   c.appendChild(my);
@@ -5698,6 +5772,13 @@ const CSS = `
 .lg-league-yg { display: none; font-size: var(--t-micro); font-weight: 700; color: var(--accent); }
 .lg-league.is-mine { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .lg-league.is-mine .lg-league-yg { display: block; }
+/* Sports, then Awards & TV (2026-09-13): a section heading a size above the
+   family headings, on the same ground chip - the first one sits on the stadium. */
+.lg-sec-h { justify-self: start; margin: 0 0 4px -4px; padding: 2px 8px; font-size: var(--t-section);
+  font-weight: 800; line-height: 1.25; color: var(--fg); background: var(--bg); border-radius: var(--radius-chip); }
+.lg-fams + .lg-sec-h { margin-top: 16px; }
+.lg-shows { display: grid; gap: 8px; }
+.lg-show-c { font-size: var(--t-micro); font-weight: 700; line-height: 1.3; color: var(--dim); }
 .lg-mygroups { justify-self: center; display: inline-flex; align-items: center; min-height: 44px;
   padding: 0 8px; font-size: var(--t-micro); font-weight: 700; color: var(--dim);
   text-decoration: underline; }

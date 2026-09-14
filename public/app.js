@@ -74,6 +74,11 @@ const ROUTES = [
   { id: 'g',          dest: 'g-info',      nav: 'group', screen: 'g1-group',       state: 'ready', label: 'Group' },
   { id: 'gcommish',   dest: 'g-info',      nav: 'group', screen: 'g2-commish',     state: 'ready', label: 'Commissioner' },
   { id: 'grules',     dest: 'g-info',      nav: 'group', screen: 'g3-group-rules', state: 'ready', label: 'Group rules' },
+  /* QUESTIONS - a 'props' group's pool (Jason, 2026-09-13: "non sports, golf,
+   * oscars, everything"). The commissioner writes the questions and enters the
+   * answers; everyone picks one option each. Under the group bar with Pool lit,
+   * because it IS that group's pool. A pool route, never a betting route. */
+  { id: 'props',      dest: 'g-pool',      nav: 'group', screen: 'props',          state: 'ready', label: 'Questions (awards, TV, anything)' },
   /* 🔴 THE ONLY ROUTE THAT IS NOT FIXTURES. It polls the Worker, holds what it
    * gets behind the user's own delay, and settles against the play that actually
    * happened. Everything else here is a design surface; this one is the product. */
@@ -256,6 +261,7 @@ const TITLES = {
   g: 'Group',
   gcommish: 'Commissioner',
   grules: 'Group rules',
+  props: 'Questions',
   settings: 'Settings',
 };
 

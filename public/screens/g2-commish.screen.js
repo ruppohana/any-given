@@ -87,7 +87,10 @@ const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   /* 2026-09-13: three more soccer leagues, college hockey (run like the NHL) and
      women's college basketball (run like the men's: All games or the Top 25). */
   ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX',
-  'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball' };
+  'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball',
+  /* 2026-09-13: a QUESTIONS group - the commissioner writes them and enters the
+     answers on #/props. No spread and no which-games. */
+  props: 'Questions' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
@@ -96,8 +99,10 @@ export const isRacing = (s) => { const p = poolSport(s); return p === 'f1' || p.
 export const isSoccer = (s) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(poolSport(s));
 /** Men's and women's college basketball: the same which-games choice. */
 const isCollegeHoops = (s) => { const p = poolSport(s); return p === 'mens-college-basketball' || p === 'womens-college-basketball'; };
-/** No spread to switch: the races and soccer (src/lib/groups.ts hasNoSpread). */
-export const hasNoSpread = (s) => isRacing(s) || isSoccer(s);
+/** A questions group (src/props-pool.ts). */
+export const isProps = (s) => poolSport(s) === 'props';
+/** No spread to switch: the races, soccer and questions (src/lib/groups.ts hasNoSpread). */
+export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s);
 /** Which-games choices a sport offers: conferences are football's only; the pro
  *  leagues and the races play every game. */
 export const scopeValues = (s) => {
@@ -255,9 +260,11 @@ export function render(root, data, state) {
     return a;
   }
 
-  function doors() {
+  function doors(sport) {
     const nav = el('nav', 'g2-card g2-doors');
     nav.setAttribute('aria-label', 'Group');
+    /* A questions group is run from its questions page: load a set, add, answer. */
+    if (isProps(sport)) nav.appendChild(door('#/props', 'The questions', 'Load a ready set, add questions, and enter the answers.'));
     nav.appendChild(door('#/g', 'Group page', 'Members, messages and the group’s home.'));
     nav.appendChild(door('#/grules', 'Group rules', 'How picks in this group are scored.'));
     return nav;
@@ -317,7 +324,7 @@ export function render(root, data, state) {
     }
     box.appendChild(goButton('#/g', 'Back to the group page'));
     host.appendChild(box);
-    host.appendChild(doors());
+    host.appendChild(doors(group.sport));
   }
 
   /* ---------------------------------------------------------------- ready */
@@ -350,7 +357,7 @@ export function render(root, data, state) {
     if (scopeValues(group.sport).length) host.appendChild(scopeSection(group, d.conferences || [], flashFor('scope')));
     if (detail.invite) host.appendChild(inviteSection(group, detail.invite));
     host.appendChild(membersSection(group, members, flashFor('members')));
-    host.appendChild(doors());
+    host.appendChild(doors(group.sport));
   }
 
   function section(labelText, forId) {

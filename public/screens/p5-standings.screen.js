@@ -468,7 +468,10 @@ const SPORT_LABEL = {
   laliga: 'La Liga',
   ligamx: 'Liga MX',
   'mens-college-hockey': 'College hockey',
-  'womens-college-basketball': 'Women’s college basketball'
+  'womens-college-basketball': 'Women’s college basketball',
+  /* 2026-09-13: a QUESTIONS group - the Emmys, Survivor, anything. Scored in
+   * points, one board (src/props-pool.ts propsStandings). */
+  props: 'Questions'
 };
 
 /** The soccer leagues - src/lib/groups.ts isSoccerSport. */
@@ -488,6 +491,8 @@ function boardKind(s) {
   const k = groupSport(s);
   /* NASCAR too (2026-09-12): a race scored in points, one board. */
   if (k === 'f1' || k.startsWith('nascar')) return 'points';
+  /* Questions too (2026-09-13): points, ranked by points, one board. */
+  if (k === 'props') return 'points';
   /* Every league that picks a day at a time (MLB, NHL, WNBA joined 2026-09-12). */
   if (k === 'mens-college-basketball' || k === 'nba' || k === 'mlb' || k === 'nhl' || k === 'wnba') return 'season';
   /* College hockey and women's college basketball (2026-09-13) too. */
@@ -511,6 +516,11 @@ function shapeF1Rows(api, youName, commishName) {
       displayName: name,
       points: Number(r && (r.points != null ? r.points : r.wins)) || 0,
       events: Number(r && (r.events != null ? r.events : r.played)) || 0,
+      /* A questions board's row (src/props-pool.ts): right answers, questions
+         answered by the commissioner, questions this member picked. */
+      correct: Number(r && r.correct) || 0,
+      settled: Number(r && r.settled) || 0,
+      answered: Number(r && r.answered) || 0,
       weekRec: null,
       seasonRec: null,
       parlayPoints: 0,
@@ -534,6 +544,13 @@ function shapeF1Rows(api, youName, commishName) {
 function weekendsText(n) {
   if (!n) return 'No weekends yet';
   return n + (n === 1 ? ' weekend' : ' weekends') + ' entered';
+}
+
+/** A questions row's second line: right answers of the questions answered so
+ *  far - never a W-L record, never weekends. */
+function answersText(r) {
+  if (!r || !r.settled) return r && r.answered ? r.answered + (r.answered === 1 ? ' pick' : ' picks') + ' in' : 'No picks yet';
+  return r.correct + ' of ' + r.settled + ' right';
 }
 
 function safeName(n) {
@@ -670,7 +687,9 @@ async function loadGroupBoard(opts) {
     const rows = shapeF1Rows(ss.rows || [], youName, commish);
     out.weekRows = rows;
     out.seasonRows = rows;
-    out.weekPicks = rows.reduce((n, r) => n + r.events, 0);
+    /* A questions board counts picks made, not questions answered - a member who
+       has picked all fourteen Emmys has not "entered nothing" before the show. */
+    out.weekPicks = rows.reduce((n, r) => n + (sport === 'props' ? r.answered : r.events), 0);
     out.pool.week = 0;
     out.pool.memberCount = rows.length || out.pool.memberCount;
     return out;
@@ -990,6 +1009,8 @@ export function render(root, data, state) {
   function groupSub(d) {
     if (!d || !d.current) return 'Group pools';
     const p = d.pool;
+    /* A questions board has no season and no week - it is the questions asked. */
+    if (d.sport === 'props') return sportLabel(d.sport) + ' · ' + p.memberCount + (p.memberCount === 1 ? ' member' : ' members');
     return sportLabel(d.sport) + (d.board && d.board !== 'week' ? ' · Season · ' : ' · Week ' + p.week + ' · ')
       + p.memberCount + (p.memberCount === 1 ? ' member' : ' members');
   }
@@ -1063,16 +1084,21 @@ export function render(root, data, state) {
     /* One board, no toggle: basketball and F1 read the season only. */
     const kind = d.board || 'week';
     const f1 = kind === 'points';
+    /* A questions group (2026-09-13): points too, but per question, not per weekend. */
+    const qs = d.sport === 'props';
     if (kind === 'week') host.appendChild(toggle(pool));
     else basis = 'season';
 
     if (!d.weekPicks) {
       host.appendChild(stateBlock('empty', {
         title: kind === 'week' ? 'No picks in yet for week ' + pool.week
-          : (f1 ? 'No weekends entered yet' : 'No picks in yet this season'),
+          : qs ? 'No picks in yet' : (f1 ? 'No weekends entered yet' : 'No picks in yet this season'),
         body: 'Nobody in ' + d.current.name + (kind === 'week' ? ' has picked this week.' : ' has picked yet.')
           + ' The table fills as the picks come in.',
-        action: { label: 'Make your picks', onClick: () => { location.hash = '#/gpicks'; } }
+        action: { label: 'Make your picks', onClick: () => {
+          if (qs) { location.hash = '#/props'; return; }
+          location.hash = '#/gpicks';
+        } }
       }));
     }
 
@@ -1081,7 +1107,7 @@ export function render(root, data, state) {
     const anyScore = f1 ? rows.some((r) => r.seasonPoints != null)
       : rows.some((r) => r[key] && r[key].played > 0);
     if (!anyScore) {
-      host.appendChild(note((f1 ? 'No weekend has scored yet'
+      host.appendChild(note((qs ? 'No question has its answer yet' : f1 ? 'No weekend has scored yet'
         : (basis === 'week' ? 'No game this week' : 'No game this season') + ' has gone final yet')
         + '. Nobody has scored — a dash is not a zero.'));
     }
@@ -1090,7 +1116,11 @@ export function render(root, data, state) {
     if (brag) host.appendChild(boastRow(brag));
     host.appendChild(table(rows));
     const foot = el('div', 'p5-foot');
-    foot.appendChild(el('p', 'p5-footline', f1
+    foot.appendChild(el('p', 'p5-footline', qs
+      /* src/lib/props.ts scoreProps: the question's own points, void scores nobody. */
+      ? 'Points for every right answer, once the commissioner enters it - each question shows what it is worth. '
+        + 'Ranked by points, then by right answers. A void question counts for nobody.'
+      : f1
       /* The numbers are src/lib/f1.ts POINTS and scoreTop3, read, not chosen. */
       ? 'Points from every Grand Prix weekend you enter. In qualifying, the sprint and the race: 3 for a driver '
         + 'in the exact spot, 1 for the right driver in the wrong spot. 3 for the fastest lap, 1 for the pole call, '
@@ -1185,7 +1215,9 @@ export function render(root, data, state) {
 
     const right = el('div', 'p5-self-right');
     const fig = el('div', 'p5-self-pts num', dash(pts));
-    const unit = el('div', 'p5-self-unit', basis === 'week' ? 'points this week' : 'points this season');
+    /* A questions group has no season - its points are the questions asked. */
+    const unit = el('div', 'p5-self-unit', basis === 'week' ? 'points this week'
+      : state === 'group' && data && data.sport === 'props' ? 'points' : 'points this season');
     right.append(fig, unit);
 
     card.append(rank, mid, right);
@@ -1297,7 +1329,9 @@ export function render(root, data, state) {
         top.appendChild(c);
       }
       /* F1 has no wins and losses: the second line is weekends entered. */
-      nameCell.append(top, el('span', 'p5-rec num', data.board === 'points' ? weekendsText(r.events)
+      /* A questions row: right answers of those answered so far. */
+      nameCell.append(top, el('span', 'p5-rec num', data.board === 'points'
+        ? (data.sport === 'props' ? answersText(r) : weekendsText(r.events))
         : recordText(basis === 'week' ? r.weekRec : r.seasonRec)));
     } else {
       nameCell.appendChild(el('span', 'p5-name', r.displayName));

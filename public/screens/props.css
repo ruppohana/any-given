@@ -1,0 +1,97 @@
+/* QUESTIONS - #/props. A card per question, one 44px row per option, your pick
+   filled, the answer marked in green once the commissioner enters it. The
+   commissioner's answer buttons are 52px and two-step (choose, then Save), so a
+   thumb during a live broadcast cannot settle the wrong one. Scoped to this
+   screen; tokens only. */
+.scr-props { display: grid; gap: 12px; padding-bottom: 96px; align-content: start; }
+.scr-props .pr { display: grid; gap: 12px; min-width: 0; align-content: start; }
+.scr-props [hidden] { display: none !important; }
+
+.scr-props .pr-top { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 4px; min-height: var(--tap-min); min-width: 0; }
+.scr-props .pr-top .ag-gsw { flex: 1 1 auto; }
+.scr-props .pr-link { display: inline-flex; align-items: center; min-height: var(--tap-min); padding: 0 4px;
+  font-weight: 700; color: var(--accent); text-decoration: none; white-space: nowrap; }
+.scr-props .pr-total { position: sticky; top: 0; z-index: 2; text-align: center;
+  font-weight: 800; font-size: var(--t-emph); color: var(--accent);
+  padding: 10px 8px; background: var(--card); border-bottom: 1px solid var(--line); }
+.scr-props .pr-status { margin: -4px 4px 0; font-size: 12px; line-height: 1.4; color: var(--dim); overflow-wrap: anywhere; }
+.scr-props .pr-status:empty { display: none; }
+.scr-props .pr-status[data-tone="err"] { color: var(--down); }
+.scr-props .pr-status[data-tone="ok"] { color: var(--up); }
+
+.scr-props .pr-card { display: grid; gap: 10px; padding: 14px 12px; min-width: 0; }
+.scr-props .pr-h { margin: 0; font-size: var(--t-section); font-weight: 800; line-height: 1.25; }
+.scr-props .pr-p { margin: 0; font-size: var(--t-body); line-height: 1.5; color: var(--dim); }
+.scr-props .pr-note { margin: -4px 0 0; font-size: 12px; line-height: 1.4; color: var(--dim); }
+.scr-props .pr-gate .pr-link { justify-self: center; }
+
+.scr-props .pr-primary { display: flex; align-items: center; justify-content: center; min-height: var(--tap-min);
+  padding: 8px 16px; font: inherit; font-weight: 800; line-height: 1.2; text-align: center; text-decoration: none;
+  border: 1px solid var(--accent); border-radius: var(--radius-button);
+  background: var(--accent); color: var(--on-accent); cursor: pointer; overflow-wrap: anywhere; }
+.scr-props .pr-primary:disabled { opacity: .5; cursor: default; }
+.scr-props .pr-btn { min-height: var(--tap-min); padding: 8px 14px; font: inherit; font-weight: 700; line-height: 1.2;
+  border: 1px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); color: var(--fg); cursor: pointer; overflow-wrap: anywhere; }
+.scr-props .pr-btn:disabled { opacity: .6; cursor: default; }
+.scr-props .pr-btn--quiet { justify-self: start; border-color: transparent; background: transparent;
+  color: var(--dim); padding: 0 4px; text-decoration: underline; }
+.scr-props .pr-btn--danger { background: var(--down); border-color: var(--down); color: var(--on-accent); }
+
+/* A question. */
+.scr-props .pr-q { display: grid; gap: 8px; padding: 12px; min-width: 0; }
+.scr-props .pr-q-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.scr-props .pr-q-t { margin: 0; min-width: 0; font-size: var(--t-emph); font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.scr-props .pr-q-pts { flex: none; font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.scr-props .pr-q-lock { margin: -4px 0 0; font-size: 12px; font-weight: 700; color: var(--dim); }
+.scr-props .pr-opts { display: grid; gap: 6px; }
+.scr-props .pr-opt { display: flex; align-items: center; gap: 8px; width: 100%; min-height: var(--tap-min);
+  padding: 8px 12px; font: inherit; text-align: left;
+  border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg); cursor: pointer; }
+.scr-props .pr-opt:disabled { cursor: default; }
+.scr-props .pr-opt-l { flex: 1 1 auto; min-width: 0; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.scr-props .pr-opt-n { flex: none; min-width: 20px; text-align: right; font-size: 12px; font-weight: 700; color: var(--dim); }
+.scr-props .pr-opt-a { flex: none; font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--up); }
+.scr-props .pr-opt[data-answer="true"] { border-color: var(--up); border-left-width: 5px; }
+.scr-props .pr-opt[data-on="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.scr-props .pr-opt[data-on="true"][data-won="true"] { background: var(--up); border-color: var(--up); }
+.scr-props .pr-opt[data-on="true"][data-won="false"] { background: var(--down); border-color: var(--down); }
+.scr-props .pr-opt[data-on="true"] .pr-opt-n,
+.scr-props .pr-opt[data-on="true"] .pr-opt-a { color: var(--on-accent); }
+.scr-props .pr-q-res { margin: 0; font-size: var(--t-body); font-weight: 800; color: var(--dim); }
+.scr-props .pr-q-res[data-won="true"] { color: var(--up); }
+.scr-props .pr-q-res[data-won="false"] { color: var(--down); }
+
+/* The commissioner, on a question: delete before the lock, the answer after. */
+.scr-props .pr-admin,
+.scr-props .pr-ans { display: grid; gap: 8px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.scr-props .pr-ans > .pr-primary { min-height: 52px; font-size: var(--t-emph); }
+.scr-props .pr-ans-h { margin: 0; font-size: var(--t-emph); font-weight: 800; }
+.scr-props .pr-ans-opts { display: grid; gap: 8px; }
+.scr-props .pr-ans-b { min-height: 52px; padding: 8px 14px; font: inherit; font-weight: 800; line-height: 1.25;
+  text-align: left; overflow-wrap: anywhere;
+  border: 2px solid var(--line); border-radius: var(--radius-button);
+  background: var(--card); color: var(--fg); cursor: pointer; }
+.scr-props .pr-ans-b--void { color: var(--dim); border-style: dashed; }
+.scr-props .pr-ans-b[data-on="true"] { border-color: var(--accent); border-style: solid; background: var(--accent); color: var(--on-accent); }
+.scr-props .pr-row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; align-items: end; }
+.scr-props .pr-save { min-height: 52px; }
+.scr-props .pr-confirm { display: grid; gap: 8px; }
+.scr-props .pr-confirm-q { margin: 0; font-size: var(--t-body); line-height: 1.4; }
+.scr-props .pr-err { margin: 0; font-size: 12px; line-height: 1.4; color: var(--down); }
+.scr-props .pr-err:empty { display: none; }
+
+/* The commissioner's panel and the add-a-question form. */
+.scr-props .pr-commish .pr-tpl { min-height: 52px; }
+.scr-props .pr-form { display: grid; gap: 8px; padding-top: 4px; }
+.scr-props .pr-label { font-size: 12px; font-weight: 800; color: var(--dim); }
+.scr-props .pr-col { display: grid; gap: 4px; min-width: 0; }
+/* 16px, or iOS zooms the page when a field takes focus. */
+.scr-props .pr-in { box-sizing: border-box; width: 100%; min-width: 0; min-height: var(--tap-min); padding: 0 10px;
+  font: inherit; font-size: 16px; border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--card); color: var(--fg); }
+.scr-props .pr-ta { padding: 8px 10px; min-height: 120px; line-height: 1.4; resize: vertical; }
+.scr-props .pr-foot { margin: 4px; font-size: 12px; line-height: 1.5; color: var(--dim); }

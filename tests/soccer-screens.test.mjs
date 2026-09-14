@@ -216,7 +216,9 @@ test('standings: the two league labels, and the season board a day sport gets', 
 test('group create: a Soccer family holds the five leagues, in POOL_SPORTS order', () => {
   assert.deepEqual(G1.SPORTS.filter(([id]) => isSoccerSport(id)), [['epl', 'Premier League'], ['mls', 'MLS'],
     ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX']]);
-  assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 1], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]);
+  /* The last SPORTS family - Awards & TV (questions, 2026-09-13) follows it, and is not a sport. */
+  assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 2], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]);
+  assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 1], ['Awards & TV', ['props']]);
   const order = G1.SPORT_FAMILIES.find((f) => f[0] === 'Soccer')[1];
   assert.deepEqual(order, POOL_SPORTS.filter((s) => isSoccerSport(s)));
   assert.equal(G1.sportLabel('epl'), 'Premier League');

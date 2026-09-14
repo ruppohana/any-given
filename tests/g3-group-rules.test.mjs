@@ -327,14 +327,16 @@ function branch(fn, cond) {
 }
 const lits = (src) => (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((s) => s.slice(1, -1)).join('');
 
-test('the League row shows the eighteen labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
+test('the League row shows the nineteen labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
   const m = CJS.match(/const LEAGUES = \{([^}]*)\}/);
   assert.ok(m, 'no LEAGUES map');
   const pairs = [...m[1].matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((x) => [x[1], x[2]]);
   assert.deepEqual(pairs.map((p) => p[0]), [...POOL_SPORTS]);
   assert.deepEqual(pairs.map((p) => p[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR',
     'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
-    'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball']);
+    'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions']);
+  /* A questions group (2026-09-13) is said once, in its own sentence. */
+  assert.ok(FLAT.includes('Or it plays questions instead - an awards show, a TV finale, anything the commissioner writes.'));
   assert.match(CJS, /\['League', LEAGUES\[sport\]\]/);
   /* How a group starts says all of them too - and names the O'Reilly series'
      old name once (Jason, 2026-09-13: the Xfinity Series, renamed for 2026). */

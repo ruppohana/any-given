@@ -302,10 +302,12 @@ test('standings: the new labels, the season board, and the knockout footnote', (
   assert.ok(flat(P5_SRC).includes('A void game counts for nobody. A knockout decided on penalties counts for the side that went through.'));
 });
 
-test('Home: all eighteen tiles, the women\'s NCAA shield captioned, college hockey beside the NHL', () => {
+test('Home: all eighteen sport tiles, the women\'s NCAA shield captioned, college hockey beside the NHL', () => {
   const H = new Function([lift(HOME_SRC, 'const HOME_FAMILIES = ['), 'return HOME_FAMILIES;'].join('\n'))();
   const ids = H.flatMap((f) => f.leagues.map(([id]) => id));
-  assert.deepEqual([...ids].sort(), [...POOL_SPORTS].sort());
+  /* Every pool sport but questions, which is Home's Awards & TV section (2026-09-13). */
+  assert.deepEqual([...ids, 'props'].sort(), [...POOL_SPORTS].sort());
+  assert.ok(HOME_SRC.includes("b.dataset.sport = 'props';"), 'the Awards & TV tiles are questions groups');
   const byId = Object.fromEntries(H.flatMap((f) => f.leagues.map((l) => [l[0], l])));
   for (const s of NEW) assert.equal(byId[s][1], LABEL[s]);
   assert.equal(byId['womens-college-basketball'][2], 'Women');

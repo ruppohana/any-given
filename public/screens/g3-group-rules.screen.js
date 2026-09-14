@@ -72,7 +72,8 @@ const LEAGUES = { 'college-football': 'College football', nfl: 'NFL',
   'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR',
   mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks',
   epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX',
-  'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball' };
+  'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball',
+  props: 'Questions' };
 function leagueOf(s) { return Object.prototype.hasOwnProperty.call(LEAGUES, s) ? s : 'college-football'; }
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME. src/lib/day.ts DAY_SPORTS
  * is the server's copy; tests/g3-group-rules.test.mjs holds the two equal. */
@@ -86,8 +87,10 @@ function isRacing(s) { return s === 'f1' || String(s).startsWith('nascar'); }
  *  pick, and gradeSql scores a level final for the people who picked it - unless
  *  a knockout was won on penalties (game.winner). */
 export function isSoccer(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(s); }
-/** No spread anywhere: the races and soccer (src/lib/groups.ts hasNoSpread). */
-export function hasNoSpread(s) { return isRacing(s) || isSoccer(s); }
+/** A questions group - awards, TV, anything (src/props-pool.ts, 2026-09-13). */
+export function isProps(s) { return s === 'props'; }
+/** No spread anywhere: the races, soccer and questions (src/lib/groups.ts hasNoSpread). */
+export function hasNoSpread(s) { return isRacing(s) || isSoccer(s) || isProps(s); }
 
 /** The moment a day-sport game starts - the word its picks lock at - and the
  *  clause that says it: basketball tips off, baseball throws the first pitch,
@@ -215,6 +218,7 @@ function sHow() {
       'the NBA, the WNBA, MLB, the NHL, college hockey, the Premier League, MLS, the Champions ' +
       'League, La Liga, Liga MX, Formula 1 or NASCAR (Cup, Trucks or O’Reilly, formerly Xfinity) ' +
       '- chosen when it starts.',
+    'Or it plays questions instead - an awards show, a TV finale, anything the commissioner writes.',
     'You join with the code from an invite. The invite link carries the same code, ' +
       'and the code works in any case, with or without spaces.',
     'You need to be signed in with your email, with a handle, to start or join one.',
@@ -227,6 +231,23 @@ function sHow() {
 
 function sPicking(sport) {
   const box = document.createDocumentFragment();
+  if (isProps(sport)) {
+    /* src/props-pool.ts: a pick is refused from the question's lock on, by the
+     * server's clock; the split is sent only for a locked question. */
+    box.appendChild(lead('Every question takes one pick, and your pick is editable until that ' +
+      'question locks.'));
+    box.appendChild(bullets([
+      'The commissioner writes the questions, or loads a ready set like the Emmys. Each one ' +
+        'has its own options, its own points and its own lock time.',
+      'Pick one option on each question. Pick again before it locks and the new pick ' +
+        'replaces the old one.',
+      'The lock time is the server’s, not your phone’s, so a pick cannot slip in late.',
+      'Nobody sees how the group picked a question until it locks. Then the split shows ' +
+        'on the question.',
+      'Only members can pick in a group. Picking never joins you to one.'
+    ]));
+    return box;
+  }
   if (sport === 'f1') {
     /* src/lib/f1.ts sessionFor: qualifying and sprint picks lock with their own
      * session, everything else with the race. */
@@ -294,6 +315,25 @@ function sPicking(sport) {
 
 function sScoring(sport) {
   const box = document.createDocumentFragment();
+  if (isProps(sport)) {
+    /* src/lib/props.ts scoreProps: a settled question whose answer is your pick
+     * scores its points; 'void' and unsettled score nothing. */
+    box.appendChild(lead('A questions group is scored in points.'));
+    box.appendChild(bullets([
+      'The commissioner enters each answer once its question has locked.',
+      'A right answer scores the points shown on the question. A wrong pick scores nothing ' +
+        'and takes nothing away.',
+      'A question the commissioner sets as void scores nobody - no points won and none lost.',
+      'There is no spread in a questions group.'
+    ]));
+    box.appendChild(subHead('The standings'));
+    box.appendChild(bullets([
+      'Ranked by points, then by right answers.',
+      'Everyone in the group is on them from the day they join, picks or not.',
+      'A group’s standings count only the picks made in that group.'
+    ]));
+    return box;
+  }
   if (sport === 'f1') {
     /* src/lib/f1.ts POINTS and scoreWeekend; src/f1-pool.ts f1Standings. No
      * spread - an F1 group is scored in points. */
@@ -404,6 +444,8 @@ function sCommish(sport) {
   box.appendChild(para('The commissioner is responsible for keeping the group kind, and ' +
     'has the tools to do it:'));
   box.appendChild(bullets([
+    ...(isProps(sport) ? ['Write the questions or load a ready set, delete a question before it locks, ' +
+      'and enter each answer once it locks.'] : []),
     hasNoSpread(sport) ? 'Rename the group.' : 'Rename the group, and switch against the spread on or off.',
     'Send invites, by email through Any Given or by sharing the code or link.',
     'Mute a member. They still pick and stay on the standings, but cannot send ' +
@@ -538,7 +580,8 @@ function groupCard(root, data) {
     render(root, Object.assign({}, data, { current: id }), 'ready');
   }));
   c.appendChild(kv([
-    ['Picks', sport === 'f1' ? 'Points, each race weekend'
+    ['Picks', isProps(sport) ? 'Points, question by question'
+      : sport === 'f1' ? 'Points, each race weekend'
       : String(sport).startsWith('nascar') ? 'Points, each race'
       : isSoccer(sport) ? 'Straight up, or the draw'
       : g.ats ? 'Against the spread' : 'Straight up'],
@@ -554,8 +597,11 @@ function groupCard(root, data) {
       'scored in points over each race.'));
   } else if (isDaySport(sport)) {
     c.appendChild(el('p', 'g3-p', dayCardLine(sport)));
+  } else if (isProps(sport)) {
+    c.appendChild(el('p', 'g3-p', 'This group plays questions the commissioner writes, ' +
+      'scored in points as each answer is entered.'));
   }
-  c.appendChild(el('p', 'g3-note', isRacing(sport) || isDaySport(sport)
+  c.appendChild(el('p', 'g3-note', isRacing(sport) || isDaySport(sport) || isProps(sport)
     ? 'The rules below are the ones for this group’s sport. Only this card changes between groups.'
     : 'Everything below is the same in every group. Only this card changes.'));
   return c;

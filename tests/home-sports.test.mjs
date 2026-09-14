@@ -17,6 +17,8 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { POOL_SPORTS } from '../src/lib/groups.ts';
+/* The real ready sets - Home's Awards & TV tiles are read off these, never invented. */
+import { templatesOpen, PROP_TEMPLATES } from '../src/lib/props.ts';
 
 const SRC = readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8')
   .replace(/\r\n/g, '\n');
@@ -32,7 +34,8 @@ function lift(name) {
   return SRC.slice(start, SRC.indexOf('\n', from));
 }
 
-const PIECES = ['el', 'store', 'HOME_FAMILIES', 'HOME_MARKS', 'homeSportDest', 'homeSports', 'leagueTile',
+const PIECES = ['el', 'store', 'HOME_FAMILIES', 'HOME_MARKS', 'homeSportDest', 'HOME_SHOW_NAMES', 'HOME_OWN',
+  'homeShowList', 'homeShows', 'showTile', 'homeShowTap', 'homeSports', 'leagueTile',
   'mineMark', 'markHomeGroups', 'loadHomeGroups', 'homeSportTap', 'homeScreen'];
 const BODY = PIECES.map(lift).join('\n\n');
 
@@ -63,7 +66,13 @@ function mk(tag) {
 }
 const byClass = (root, c) => all(root).filter((n) => n.classList.contains(c));
 const tiles = (root) => byClass(root, 'lg-league');
-const tile = (root, id) => tiles(root).find((b) => b.dataset.sport === id);
+/* The Sports section's tiles, and the Awards & TV section's. */
+const sportTiles = (root) => tiles(root).filter((b) => !b.classList.contains('lg-show'));
+const showTiles = (root) => byClass(root, 'lg-show');
+const tile = (root, id) => sportTiles(root).find((b) => b.dataset.sport === id);
+const show = (root, tpl) => showTiles(root).find((b) => b.dataset.template === tpl);
+const SEP13 = Date.UTC(2026, 8, 13, 19, 0, 0);   /* the day before the Emmys */
+const dayOf = (ms) => new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
 /* ------------------------------------------------------------ the world */
@@ -93,6 +102,7 @@ function load() {
   const deps = {
     S, document: globalThis.document, location: loc,
     myGroups: GROUP.myGroups, currentGroupId: GROUP.currentGroupId, setCurrentGroupId: GROUP.setCurrentGroupId,
+    templatesOpen, PROP_TEMPLATES,
     heroBlock: stub('hero'), modeCard: stub('modeCard'), sportCard: stub('sportCard'),
     goCard: stub('goCard'), marblesCard: stub('marblesCard')
   };
@@ -123,7 +133,78 @@ test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once',
   ]);
   const ids = HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id));
   assert.equal(new Set(ids).size, ids.length, 'no sport twice');
-  assert.deepEqual([...ids].sort(), [...POOL_SPORTS].sort(), 'every pool sport and nothing else');
+  /* Every pool sport but questions, which has its own section - Awards & TV (2026-09-13). */
+  assert.deepEqual([...ids, 'props'].sort(), [...POOL_SPORTS].sort(), 'every pool sport and nothing else');
+});
+
+/* ------------------------------------------------------------ Awards & TV
+ * Jason, 2026-09-13: "now we need the front page to separate sports and
+ * non-sports". The tiles are src/lib/props.ts's own ready sets, open ones only. */
+
+test('Awards & TV: each open ready set, dated by its broadcast, then Your own questions', () => {
+  const { homeShowList } = load();
+  const on13 = homeShowList(SEP13);
+  assert.deepEqual(on13.map((s) => s.id), ['emmys-2026', 'survivor-51', ''], 'both sets are open on the 13th');
+  assert.deepEqual(on13.map((s) => s.label), ['The Emmys', 'Survivor 51', 'Your own questions']);
+  /* The Emmys lock 2026-09-15T00:00Z (5 PM Pacific on the 14th); Survivor 51 2026-09-24T00:00Z. */
+  assert.equal(on13[0].cap, dayOf(PROP_TEMPLATES['emmys-2026'].questions[0].lockAt));
+  assert.equal(on13[1].cap, dayOf(PROP_TEMPLATES['survivor-51'].questions[0].lockAt));
+  if (new Date(SEP13).getTimezoneOffset() > 0) {
+    assert.equal(on13[0].cap, 'Mon, Sep 14', 'in the Americas the Emmys read as Monday the 14th');
+    assert.equal(on13[1].cap, 'Wed, Sep 23');
+  }
+  assert.match(on13[2].cap, /Oscars/);
+  /* After the Emmys lock only Survivor is offered; after both, only your own. */
+  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 15, 0, 0, 1)).map((s) => s.id), ['survivor-51', '']);
+  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 25)).map((s) => s.id), ['']);
+  /* The same list src/lib/props.ts offers a commissioner. */
+  assert.deepEqual(on13.filter((s) => s.id).map((s) => s.id), templatesOpen(SEP13).map((t) => t.id));
+});
+
+test('Awards & TV layout: two across, and Your own questions fills an odd row or takes its own', () => {
+  const { homeShows } = load();
+  const two = homeShows(SEP13);
+  assert.deepEqual(byClass(two, 'lg-fam-row').map((r) => [r.className, r.children.length]),
+    [['lg-fam-row n2', 2], ['lg-fam-row n1', 1]]);
+  const one = homeShows(Date.UTC(2026, 8, 16));
+  assert.deepEqual(byClass(one, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n2', 2]]);
+  assert.deepEqual(showTiles(one).map((b) => b.dataset.template), ['survivor-51', '']);
+  const none = homeShows(Date.UTC(2026, 8, 25));
+  assert.deepEqual(byClass(none, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n1', 1]]);
+  for (const b of showTiles(two)) assert.equal(b.dataset.sport, 'props', 'every Awards & TV tile is a questions group');
+});
+
+test('Awards & TV tap: remembers the set and goes where a sport tile goes - #/props in a questions group', async () => {
+  globalThis.AG_POOL_ONLY = true;
+  const M = load();
+  const wrap = mk('div');
+  M.homeScreen(wrap);
+  const emmys = show(wrap, 'emmys-2026');
+  /* Only while the Emmys are still open on the real clock. */
+  if (emmys) {
+    await emmys.onclick();
+    assert.equal(mem.get('ag.sport'), JSON.stringify('props'));
+    assert.equal(mem.get('ag.propsTemplate'), JSON.stringify('emmys-2026'));
+    assert.equal(loc.hash, '#/g', 'signed out: the group page, Start on questions');
+  }
+  await show(wrap, '').onclick();
+  assert.equal(mem.get('ag.propsTemplate'), JSON.stringify(''), 'your own questions forgets any set');
+  assert.equal(loc.hash, '#/g');
+
+  signIn();
+  GROUP.forgetGroups();
+  ANSWER = async () => reply([{ id: 'G-NFL', sport: 'nfl' }, { id: 'G-Q', sport: 'props' }]);
+  mem.set('ag.group', 'G-NFL');
+  const M2 = load();
+  const w2 = mk('div');
+  M2.homeScreen(w2);
+  await settle();
+  assert.deepEqual(showTiles(w2).filter((b) => b.classList.contains('is-mine')).length, showTiles(w2).length,
+    'every Awards & TV tile says Your group');
+  await show(w2, '').onclick();
+  assert.equal(mem.get('ag.group'), 'G-Q', 'the questions group is now the current group');
+  assert.equal(loc.hash, '#/props');
+  assert.deepEqual(M2.homeSportDest('props', [{ id: 'G-Q', sport: 'props' }], ''), { sport: 'props', groupId: 'G-Q', hash: '#/props' });
 });
 
 test('the marks are the ones page 2 already drew; every other league is its name', () => {
@@ -161,10 +242,17 @@ test('signed out: every tile, no request, and a tap goes to the group page on th
   const wrap = mk('div');
   M.homeScreen(wrap);
   assert.deepEqual(wrap.children.map((n) => n.stub || n.className), ['hero', 'lg-sports']);
-  assert.deepEqual(tiles(wrap).map((b) => b.dataset.sport),
+  /* Two sections, in this order: Sports, then Awards & TV. */
+  assert.deepEqual(byClass(wrap, 'lg-sec-h').map((h) => h.textContent), ['Sports', 'Awards & TV']);
+  assert.deepEqual(wrap.children[1].children.map((n) => n.className),
+    ['lg-sec-h', 'lg-fams', 'lg-sec-h', 'lg-shows', 'lg-mygroups']);
+  assert.deepEqual(sportTiles(wrap).map((b) => b.dataset.sport),
     M.HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id)), 'all eighteen, in order');
+  assert.deepEqual(showTiles(wrap).map((b) => b.dataset.template),
+    [...templatesOpen(Date.now()).map((t) => t.id), ''], 'the open sets, then your own');
   assert.deepEqual(byClass(wrap, 'lg-fam-h').map((h) => h.textContent), ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing', 'Soccer']);
-  assert.deepEqual(byClass(wrap, 'lg-fam-row').map((r) => r.className),
+  /* The Sports rows only - Awards & TV draws its own (tested below). */
+  assert.deepEqual(byClass(byClass(wrap, 'lg-fams')[0], 'lg-fam-row').map((r) => r.className),
     ['lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n1', 'lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n2'], 'two or three across');
   /* Baseball is the one family of one now, so it takes the full width rather than half a row. */
   assert.deepEqual(byClass(wrap, 'lg-fam').map((f) => f.classList.contains('is-one')), [false, false, false, false, false, false]);
@@ -198,7 +286,7 @@ test('signed in: the first paint does not wait, and the tiles say "Your group" o
   const M = load();
   const wrap = mk('div');
   M.homeScreen(wrap);
-  assert.equal(tiles(wrap).length, POOL_SPORTS.length, 'drawn while the request is still out');
+  assert.equal(sportTiles(wrap).length, POOL_SPORTS.length - 1, 'drawn while the request is still out');
   assert.equal(tiles(wrap).some((b) => b.classList.contains('is-mine')), false, 'and nothing claimed yet');
   assert.deepEqual(CALLS, ['/api/group/mine']);
 

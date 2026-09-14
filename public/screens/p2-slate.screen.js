@@ -86,6 +86,9 @@ export const GROUP_COPY = {
    * weekend on its own screen; a basketball group picks a day at a time. */
   f1: { title: 'This group plays Formula 1', body: 'Qualifying, the race, the fastest lap and more, picked each race weekend and scored in points.', cta: 'Pick this weekend', href: '#/f1' },
   nascar: { title: 'This group plays NASCAR', body: 'The top three, the winning make, the pole-sitter and a dark horse, picked each race day and scored in points.', cta: 'Pick this race', href: '#/nascar' },
+  /* A questions group (2026-09-13): its pool is its questions page, as a racing
+   * group's is its race. */
+  props: { title: 'This group plays questions', body: 'The commissioner writes the questions - an awards show, a finale, anything - and enters the answers. One pick a question, scored in points.', cta: 'Open the questions', href: '#/props' },
   emptyDay: { title: 'No games on this day', body: 'Pick another day above. Games show up as soon as they are scheduled.' },
   rules: { label: 'How it’s scored', href: '#/grules' },
   door: { label: 'Group info ›', href: '#/g' },
@@ -771,7 +774,7 @@ const WEEK = { 'college-football': 2, nfl: 1 };
  * then the Champions League, La Liga, Liga MX, college hockey and women's college
  * basketball the same day. */
 const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props'];
 export function poolDayOf(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -894,6 +897,8 @@ async function groupData(fixtures) {
   if (sport === 'f1' || sport.startsWith('nascar')) {
     return { ...base, groups, group, sport, groupState: sport === 'f1' ? 'f1' : 'nascar', raceHref: '#/' + sport };
   }
+  /* A questions group plays its questions, not a slate. */
+  if (sport === 'props') return { ...base, groups, group, sport, groupState: 'props', raceHref: '#/props' };
   const isDay = DAY_POOL_SPORTS.includes(sport);
   const today = poolDayOf(Date.now());
   const day = isDay ? chosenPoolDay(sport, today) : null;
@@ -2259,7 +2264,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2419,7 +2424,7 @@ function groupGate(root, data, state) {
     root.appendChild(card);
     return;
   }
-  if (gs === 'f1' || gs === 'nascar') {
+  if (gs === 'f1' || gs === 'nascar' || gs === 'props') {
     const copy = GROUP_COPY[gs];
     groupBar(root, data, state);
     const card = el('div', 'p2-gcard');

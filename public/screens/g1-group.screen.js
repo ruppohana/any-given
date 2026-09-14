@@ -90,7 +90,11 @@ export const SPORTS = [
   ['laliga', 'La Liga'],
   ['ligamx', 'Liga MX'],
   ['mens-college-hockey', 'College hockey'],
-  ['womens-college-basketball', 'Women’s college basketball']
+  ['womens-college-basketball', 'Women’s college basketball'],
+  /* 2026-09-13, "non sports, golf, oscars, everything": a QUESTIONS group. The
+   * commissioner writes the questions (or loads a ready set) and enters the
+   * answers - src/props-pool.ts. Not a sport, so it has a family of its own. */
+  ['props', 'Questions']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -104,8 +108,15 @@ export const SPORT_FAMILIES = [
   ['Baseball', ['mlb']],
   ['Hockey', ['nhl', 'mens-college-hockey']],
   ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']],
-  ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]
+  ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']],
+  ['Awards & TV', ['props']]
 ];
+
+/** The option's words in the Sport control. A questions group says what it is
+ *  for, since it is the one choice that is not a league. */
+export function optionLabel(v) {
+  return v === 'props' ? 'Questions: awards, TV, anything' : sportLabel(v);
+}
 
 /* The soccer leagues - src/lib/groups.ts isSoccerSport. */
 const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
@@ -129,10 +140,15 @@ export function isSoccer(s) {
   return SOCCER.includes(poolSport(s));
 }
 
-/** No spread to pick against: the races, and soccer. The server's copy is
- *  src/lib/groups.ts hasNoSpread, which refuses a spread for the same sports. */
+/** A questions group - awards, TV, anything (2026-09-13). */
+export function isProps(s) {
+  return poolSport(s) === 'props';
+}
+
+/** No spread to pick against: the races, soccer and questions. The server's copy
+ *  is src/lib/groups.ts hasNoSpread, which refuses a spread for the same ones. */
 export function hasNoSpread(s) {
-  return isRacing(s) || isSoccer(s);
+  return isRacing(s) || isSoccer(s) || isProps(s);
 }
 
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME - the group's "week" is
@@ -157,7 +173,8 @@ export function lockWord(s) {
   /* A soccer match kicks off - a day sport, but not a tip-off. */
   if (isSoccer(p)) return 'kickoff';
   if (isDaySport(p)) return 'tip-off';
-  if (isRacing(p)) return '';
+  /* A question locks at its own time, so a questions group has no one word. */
+  if (isRacing(p) || isProps(p)) return '';
   return 'kickoff';
 }
 
@@ -174,6 +191,7 @@ export function spreadNote(s) {
 /** The line under the Sport control: how the chosen sport is played. */
 export function sportNote(s) {
   const p = poolSport(s);
+  if (p === 'props') return 'You write the questions - an awards show, a finale, the Draft, anything - or load a ready set, and enter the answers. Each question locks at its own time.';
   if (p === 'f1') return 'Pick the race weekend, scored in points. Each pick locks when its session starts.';
   if (p.startsWith('nascar')) return 'Pick the race, scored in points. Every pick locks at the green flag.';
   if (isSoccer(p)) return 'Pick the winner or the draw, a day at a time. Every pick locks at kickoff.';
@@ -242,6 +260,7 @@ export function basketballScopeNote(scope, sport) {
  *  (YYYYMMDD), so it is never printed as a week number. */
 export function periodLabel(sport, week) {
   const s = poolSport(sport);
+  if (s === 'props') return 'Question by question';
   if (s === 'f1') return 'Race weekends';
   if (String(s).startsWith('nascar')) return 'Race days';
   if (isDaySport(s)) return 'A day at a time';
@@ -251,6 +270,7 @@ export function periodLabel(sport, week) {
 /** How the group's picks count, in one line. */
 export function picksLine(g) {
   const s = g && poolSport(g.sport);
+  if (s === 'props') return 'One pick a question, scored in points';
   if (s === 'f1') return 'Race weekend picks, scored in points';
   if (String(s).startsWith('nascar')) return 'Race day picks, scored in points';
   if (isSoccer(s)) return 'Picks straight up - who wins, or the draw';
@@ -295,7 +315,8 @@ export function prefillCode(pending) {
 
 export function shareText(groupName, code, sport) {
   const s = poolSport(sport);
-  const how = s === 'f1' ? 'Pick the race weekend, scored in points.'
+  const how = s === 'props' ? 'Pick the answers before each question locks, scored in points.'
+    : s === 'f1' ? 'Pick the race weekend, scored in points.'
     : String(s).startsWith('nascar') ? 'Pick the race: the top three, the winning make, the pole-sitter and a dark horse, scored in points.'
     : isSoccer(s) ? 'Pick the winner or the draw each day, scored in points.'
     : isDaySport(s) ? 'Pick the winners each day, scored in points.'
@@ -554,7 +575,7 @@ function startForm(host, data) {
     const og = document.createElement('optgroup');
     og.label = fam;
     for (const v of ids) {
-      const o = el('option', '', sportLabel(v));
+      const o = el('option', '', optionLabel(v));
       o.value = v;
       og.appendChild(o);
     }
@@ -691,6 +712,10 @@ function startForm(host, data) {
     }
     forgetGroups();
     setCurrentGroupId(j.group.id);
+    /* A questions group opens on its questions, where the commissioner loads a
+     * ready set or writes one - the Emmys go live the next evening. The invite
+     * is one tap away there, and on Info. */
+    if (poolSport(form.sport) === 'props') { location.hash = '#/props'; return; }
     host.dataset.created = JSON.stringify({ id: j.group.id, invite: j.invite || null });
     refresh(host, j.group.name + ' is started. You are its commissioner.');
   });
@@ -799,7 +824,7 @@ function drawGroup(host, data) {
 
   host.appendChild(membersBlock(d));
   host.appendChild(messagesBlock(host, d, isCommish));
-  host.appendChild(doors(isCommish));
+  host.appendChild(doors(isCommish, g.sport));
   host.appendChild(onboarding(host, data, 'another'));
   host.appendChild(leaveBlock(host, d));
 }
@@ -958,10 +983,15 @@ function compose(d, to, close) {
   return c;
 }
 
-function doors(isCommish) {
+function doors(isCommish, sport) {
   const nav = el('nav', 'card g1-doors');
   nav.setAttribute('aria-label', 'Group pages');
   const rows = [];
+  /* A questions group's pool is its questions page. */
+  if (isProps(sport)) {
+    rows.push(['The questions', isCommish ? 'Load a ready set or write your own, and enter the answers.'
+      : 'Pick the answers before each question locks.', '#/props']);
+  }
   if (isCommish) rows.push(['Commissioner tools', 'Invite by email, remove or mute members, change the settings.', '#/gcommish']);
   rows.push(['Group rules', 'How the group scores, when picks lock, and how ties break.', '#/grules']);
   for (const [h, b, href] of rows) {
