@@ -186,8 +186,14 @@ test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once',
 test('Awards & TV: each open ready set, soonest first, dated by its broadcast, then Your own questions', () => {
   const { homeShowList } = load();
   const on13 = homeShowList(SEP13);
-  assert.deepEqual(on13.map((s) => s.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'survivor-51', 'big-brother-28', ''], 'five sets are open on the 13th');
-  assert.deepEqual(on13.map((s) => s.label), ['The Emmys', 'Dancing with the Stars', 'The Traitors', 'Survivor 51', 'Big Brother', 'Your own questions']);
+  /* 🔴 NOT A FIXED LIST. A routine adds sets (the Oscars, from the nominations on Jan 21, 2027),
+     and those are open on these September dates too - a literal list would fail that routine's
+     deploy. Pinned: the sets known tonight, in their order, and Your own questions last. */
+  const KNOWN = ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'survivor-51', 'big-brother-28'];
+  const known = (list) => list.map((s) => s.id).filter((id) => KNOWN.includes(id) || id === '');
+  assert.deepEqual(known(on13), [...KNOWN, ''], 'the five known on the 13th, soonest first, then your own');
+  assert.deepEqual(on13.filter((s) => KNOWN.includes(s.id)).map((s) => s.label), ['The Emmys', 'Dancing with the Stars', 'The Traitors', 'Survivor 51', 'Big Brother']);
+  assert.equal(on13[on13.length - 1].label, 'Your own questions');
   /* The Emmys lock 2026-09-15T00:00Z, Dancing with the Stars 2026-09-16T00:00Z, The Traitors
      2026-09-18T00:00Z, Survivor 51 2026-09-24T00:00Z. */
   assert.equal(on13[0].cap, dayOf(PROP_TEMPLATES['emmys-2026'].questions[0].lockAt));
@@ -202,12 +208,12 @@ test('Awards & TV: each open ready set, soonest first, dated by its broadcast, t
   }
   /* The Big Brother finale locks 2026-10-02T00:00Z - Thursday the 1st in the Americas. */
   assert.equal(on13[4].cap, dayOf(PROP_TEMPLATES['big-brother-28'].questions[0].lockAt));
-  assert.match(on13[5].cap, /Oscars/);
-  /* Each set leaves the list as it locks; after all of them, only your own. */
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 15, 0, 0, 1)).map((s) => s.id), ['dwts-35', 'traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 16, 0, 0, 1)).map((s) => s.id), ['traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 25)).map((s) => s.id), ['big-brother-28', '']);
-  assert.deepEqual(homeShowList(Date.UTC(2026, 9, 3)).map((s) => s.id), ['']);
+  assert.match(on13[on13.length - 1].cap, /Oscars/);
+  /* Each set leaves the list as it locks; after all of the known ones, only your own. */
+  assert.deepEqual(known(homeShowList(Date.UTC(2026, 8, 15, 0, 0, 1))), ['dwts-35', 'traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
+  assert.deepEqual(known(homeShowList(Date.UTC(2026, 8, 16, 0, 0, 1))), ['traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
+  assert.deepEqual(known(homeShowList(Date.UTC(2026, 8, 25))), ['big-brother-28', '']);
+  assert.deepEqual(known(homeShowList(Date.UTC(2026, 9, 3))), ['']);
   /* The same list src/lib/props.ts offers a commissioner - less the Cycling Worlds, a
      sport, which are on the Sports tab (2026-09-13, "do the cycling worlds next"). */
   assert.ok(templatesOpen(SEP13).some((t) => t.id === 'worlds-2026'), 'the server offers the Worlds on the 13th');
@@ -217,21 +223,26 @@ test('Awards & TV: each open ready set, soonest first, dated by its broadcast, t
 
 test('Awards & TV layout: two across, and Your own questions fills an odd row or takes its own', () => {
   const { homeShows } = load();
-  /* Five sets on the 13th (odd): Your own questions fills the last pair - six, three rows of two. */
+  /* The rule, from the count of open Awards & TV sets at that moment - so a set a routine adds
+     later (the Oscars) moves the count and the rule still holds: an odd count, and Your own
+     questions fills the last pair; an even count, and it takes its own row; none, only it. */
+  const setsAt = (t) => templatesOpen(t).filter((x) => !SPORT_SET_IDS.includes(x.id)).length;
+  const rowsFor = (k) => (k === 0 ? [['lg-fam-row n1', 1]] : k % 2 === 1 ? [['lg-fam-row n2', k + 1]] : [['lg-fam-row n2', k], ['lg-fam-row n1', 1]]);
+  const rows = (root) => byClass(root, 'lg-fam-row').map((r) => [r.className, r.children.length]);
+  /* Tonight: five on the 13th (odd, six in pairs), four after the Emmys (even, its own row),
+     three after Dancing with the Stars (odd, pairs again), none after Big Brother. */
   const three = homeShows(SEP13);
-  assert.deepEqual(byClass(three, 'lg-fam-row').map((r) => [r.className, r.children.length]),
-    [['lg-fam-row n2', 6]]);
-  /* Four after the Emmys (even): Your own questions takes its own row. */
+  assert.deepEqual(rows(three), rowsFor(setsAt(SEP13)));
   const two = homeShows(Date.UTC(2026, 8, 15, 1));
-  assert.deepEqual(byClass(two, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n2', 4], ['lg-fam-row n1', 1]]);
-  /* Three after Dancing with the Stars locks (odd): it fills the last pair again - four, two rows of two. */
+  assert.deepEqual(rows(two), rowsFor(setsAt(Date.UTC(2026, 8, 15, 1))));
   const one = homeShows(Date.UTC(2026, 8, 16));
-  assert.deepEqual(byClass(one, 'lg-fam-row').map((r) => [r.className, r.children.length]),
-    [['lg-fam-row n2', 4]]);
-  assert.deepEqual(showTiles(one).map((b) => b.dataset.template), ['traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
-  /* After the Big Brother finale locks (Oct 1, 8 PM ET) no set is open. */
+  assert.deepEqual(rows(one), rowsFor(setsAt(Date.UTC(2026, 8, 16))));
+  assert.deepEqual(showTiles(one).map((b) => b.dataset.template).filter((id) => ['traitors-new-blood', 'survivor-51', 'big-brother-28', ''].includes(id)),
+    ['traitors-new-blood', 'survivor-51', 'big-brother-28', '']);
   const none = homeShows(Date.UTC(2026, 9, 3));
-  assert.deepEqual(byClass(none, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n1', 1]]);
+  assert.deepEqual(rows(none), rowsFor(setsAt(Date.UTC(2026, 9, 3))));
+  /* With tonight's sets those are exactly six in pairs, then four and one, then four, then one. */
+  if (setsAt(SEP13) === 5) assert.deepEqual(rows(three), [['lg-fam-row n2', 6]]);
   for (const b of showTiles(three)) assert.equal(b.dataset.sport, 'props', 'every Awards & TV tile is a questions group');
 });
 

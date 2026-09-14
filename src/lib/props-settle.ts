@@ -45,9 +45,13 @@ export function winnersFromWikiAwards(html: string): Map<string, string> {
     const head = cell.match(/^\s*<div[^>]*>\s*<b\b[^>]*>([\s\S]*?)<\/b>\s*<\/div>/i);
     if (!head) continue;
     const rest = cell.slice(head.index! + head[0].length);
-    const first = rest.match(/<li[^>]*>\s*<b\b[^>]*>([\s\S]*?)<\/b>\s*(?:<span[^>]*>)?\s*‡/i);
+    /* The Emmys page puts the double dagger after the bold ("<b>The Pitt</b> ‡"); the Oscars
+       page puts it inside ("<b>One Battle After Another - ... producers ‡</b>", the real 98th
+       Academy Awards page, 2026-09-14). Either marks the winner; the dagger is never kept. */
+    const first = rest.match(/<li[^>]*>\s*<b\b[^>]*>([\s\S]*?)<\/b>\s*(?:<span[^>]*>)?\s*‡/i)
+      || rest.match(/<li[^>]*>\s*<b\b[^>]*>([\s\S]*?‡)\s*<\/b>/i);
     if (!first) continue;
-    out.set(text(head[1]), text(first[1]));
+    out.set(text(head[1]), text(first[1]).replace(/\s*‡\s*$/, ''));
   }
   return out;
 }

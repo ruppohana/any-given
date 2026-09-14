@@ -4221,7 +4221,9 @@ const HOME_SHOW_NAMES = {
   'worlds-2026': 'Cycling Worlds',
   'big-brother-28': 'Big Brother',
   'breeders-cup-2026': "Breeders' Cup",
-  'big-game-props-2027': 'Big Game props'
+  'big-game-props-2027': 'Big Game props',
+  /* Added by the oscars-set routine when the nominations are announced (Jan 21, 2027). */
+  'oscars-2027': 'The Oscars'
 };
 const HOME_OWN = {
   id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, anything…'

@@ -44,7 +44,9 @@ export const UPCOMING: Upcoming[] = [
   /* Non-sports */
   { id: 'golden-globes', label: 'Golden Globes', tab: 'nonsports', date: '2027-01-10', when: 'Jan 10, 2027' },
   { id: 'grammys', label: 'Grammys', tab: 'nonsports', date: '2027-02-07', when: 'Feb 7, 2027' },
-  { id: 'oscars', label: 'The Oscars', tab: 'nonsports', date: '2027-03-14', when: 'Mar 14, 2027' },
+  /* Its ready set (src/lib/props.ts 'oscars-2027') is built by the oscars-set routine the day the
+     nominations are announced (Jan 21, 2027); from then the set's tile stands in for this. */
+  { id: 'oscars', label: 'The Oscars', tab: 'nonsports', date: '2027-03-14', when: 'Mar 14, 2027', set: 'oscars-2027' },
   { id: 'nathans', label: "Nathan's Hot Dog Eating Contest", tab: 'nonsports', date: '2027-07-04', when: 'Jul 4, 2027' },
   { id: 'tonys', label: 'Tony Awards', tab: 'nonsports', date: null, when: 'June 2027' },
   { id: 'the-bachelor', label: 'The Bachelor', tab: 'nonsports', date: null, when: '2027' }
