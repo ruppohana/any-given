@@ -4126,6 +4126,10 @@ const HOME_MARKS = {
   'nascar-oreilly': '/logos/leagues/nascar-500.svg',
   'nascar-truck': '/logos/leagues/nascar-500.svg',
   'ufc': '/logos/leagues/ufc-500.png',
+  /* Big Game squares (Jason, 2026-09-13: "do the big game squares on the home tile next"):
+     our own drawn mark - a squares grid with one square lit - never the NFL's or the
+     game's. Its day still reads under it. */
+  'squares': '/logos/leagues/squares-500.svg',
   'college-football': '/logos/leagues/ncaa-500.png',
   'nfl': '/logos/leagues/nfl-500.png',
   'mens-college-basketball': '/logos/leagues/ncaa-500.png',

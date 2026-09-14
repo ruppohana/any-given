@@ -86,6 +86,8 @@ function d1() {
            CREATE TABLE pool (id TEXT PRIMARY KEY, name TEXT, sport TEXT NOT NULL DEFAULT 'college-football');
            CREATE TABLE member (pool_id TEXT, user_id TEXT, display_name TEXT, role TEXT, PRIMARY KEY (pool_id, user_id));`);
   db.exec(readFileSync(new URL('../migrations/0012_squares.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0013_squares_cards.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0014_squares_money.sql', import.meta.url), 'utf8'));
   const stmt = (sql, args = []) => ({
     bind: (...a) => stmt(sql, a),
     first: async () => db.prepare(sql).get(...args) ?? null,
@@ -217,5 +219,166 @@ test('the cron draws every grid past kickoff, once, even if nobody looks', async
     assert.ok(isDraw({ rows: JSON.parse(first.rows_digits), cols: JSON.parse(first.cols_digits) }));
     assert.equal(await drawDueGrids(env, BIG_GAME.kickoffUtc + 60000), 0, 'never drawn twice');
     assert.deepEqual(db.prepare('SELECT rows_digits, cols_digits FROM squares_grid').get(), first);
+  } finally { Date.now = realNow; }
+});
+
+/* ------------------------------------------------------------ more than one card */
+/* Jason, 2026-09-13: "we will also need to add additional cards to the same pool" and
+   "a way to randomize the numbers". */
+
+test('0013 keeps a grid made before cards existed: it becomes card 1, its squares with it', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(readFileSync(new URL('../migrations/0012_squares.sql', import.meta.url), 'utf8'));
+  db.prepare('INSERT INTO squares_grid (pool_id, event_id, lock_at, max_per_person, created_at) VALUES (?, ?, ?, 10, 0)').run('OLD001', BIG_GAME.eventId, BIG_GAME.kickoffUtc);
+  db.prepare('INSERT INTO squares_cell VALUES (?, ?, ?, ?)').run('OLD001', 39, 'u-mem', 1);
+  db.exec(readFileSync(new URL('../migrations/0013_squares_cards.sql', import.meta.url), 'utf8'));
+  assert.deepEqual({ ...db.prepare('SELECT pool_id, card FROM squares_grid').get() }, { pool_id: 'OLD001', card: 1 });
+  assert.deepEqual({ ...db.prepare('SELECT card, cell, user_id FROM squares_cell').get() }, { card: 1, cell: 39, user_id: 'u-mem' });
+  db.prepare('INSERT INTO squares_cell VALUES (?, ?, ?, ?, ?)').run('OLD001', 2, 39, 'u-com', 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM squares_cell').get().n, 2, 'the same square on another card is another square');
+});
+
+test('cards: the commissioner adds one; each has its own squares; drawing one closes only that one', async () => {
+  const { env } = setup();
+  try {
+    assert.equal((await call(env, 'u-mem', '/api/squares/card', { pool: 'SQRS01' })).status, 403, 'commissioner only');
+    const add = await call(env, 'u-com', '/api/squares/card', { pool: 'SQRS01' });
+    assert.deepEqual([add.body.ok, add.body.card], [true, 2]);
+    const g2 = await call(env, 'u-mem', '/api/squares?pool=SQRS01&card=2');
+    assert.equal(g2.body.card, 2);
+    assert.deepEqual(g2.body.cards.map((c) => c.card), [1, 2]);
+    assert.equal(g2.body.canAddCard, false, 'a member cannot add one');
+    assert.equal((await call(env, 'u-com', '/api/squares?pool=SQRS01')).body.canAddCard, true);
+    assert.equal((await call(env, 'u-mem', '/api/squares?pool=SQRS01&card=3')).status, 404);
+    /* The same square on two cards is two squares. */
+    assert.equal((await call(env, 'u-mem', '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 5 })).status, 200);
+    assert.equal((await call(env, 'u-mem', '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 5 })).status, 200);
+    assert.equal((await call(env, 'u-com', '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 5 })).body.error, 'taken');
+    /* The draw: the commissioner's, once, and the card closes. */
+    assert.equal((await call(env, 'u-mem', '/api/squares/draw', { pool: 'SQRS01', card: 2 })).status, 403);
+    const d = await call(env, 'u-com', '/api/squares/draw', { pool: 'SQRS01', card: 2 });
+    assert.ok(d.body.ok && isDraw(d.body.digits));
+    const again = await call(env, 'u-com', '/api/squares/draw', { pool: 'SQRS01', card: 2 });
+    assert.deepEqual([again.status, again.body.error], [409, 'already_drawn']);
+    assert.deepEqual(again.body.digits, d.body.digits, 'drawn once');
+    const closed = await call(env, 'u-com', '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 6 });
+    assert.deepEqual([closed.status, closed.body.error], [409, 'drawn'], 'nobody claims a square knowing its numbers');
+    assert.equal((await call(env, 'u-mem', '/api/squares/release', { pool: 'SQRS01', card: 2, cell: 5 })).body.error, 'drawn');
+    const after = await call(env, 'u-mem', '/api/squares?pool=SQRS01&card=2');
+    assert.deepEqual([after.body.drawn, after.body.locked], [true, true]);
+    assert.deepEqual(after.body.digits, d.body.digits);
+    assert.deepEqual(after.body.cards.map((c) => [c.card, c.drawn, c.taken, c.mine]), [[1, false, 1, 1], [2, true, 1, 1]]);
+    /* Card 1 is still open. */
+    assert.equal((await call(env, 'u-com', '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 6 })).status, 200);
+    assert.equal((await call(env, 'u-mem', '/api/squares?pool=SQRS01')).body.locked, false);
+    /* Up to ten cards; none after kickoff; at kickoff every card undrawn is drawn. */
+    for (let i = 3; i <= 10; i++) assert.equal((await call(env, 'u-com', '/api/squares/card', { pool: 'SQRS01' })).body.card, i);
+    assert.equal((await call(env, 'u-com', '/api/squares/card', { pool: 'SQRS01' })).body.error, 'too_many');
+    Date.now = () => BIG_GAME.kickoffUtc + 1000;
+    const k = await call(env, 'u-mem', '/api/squares?pool=SQRS01');
+    assert.ok(k.body.cards.every((c) => c.drawn), 'every card has its numbers at kickoff');
+    assert.equal((await call(env, 'u-com', '/api/squares/draw', { pool: 'SQRS01', card: 1 })).body.error, 'locked');
+  } finally { Date.now = realNow; }
+});
+
+test('the board sums every card', async () => {
+  const { db, env } = setup();
+  try {
+    await call(env, 'u-com', '/api/squares/card', { pool: 'SQRS01' });
+    await call(env, 'u-mem', '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 39 });
+    await call(env, 'u-mem', '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 3 });
+    await call(env, 'u-com', '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 39 });
+    /* TEST INPUT: a known draw on both cards. */
+    db.prepare('UPDATE squares_grid SET rows_digits = ?, cols_digits = ? WHERE pool_id = ?')
+      .run(JSON.stringify(IDENTITY.rows), JSON.stringify(IDENTITY.cols), 'SQRS01');
+    Date.now = () => BIG_GAME.kickoffUtc + 5 * 3600 * 1000;
+    const rows = await squaresStandings(env, 'SQRS01', Date.now(), scoreboard(PLAYED));
+    /* Card 1: square 39 takes the final (3). Card 2: square 3 takes the 1st quarter (1) for
+       member, square 39 the final (3) for commish. */
+    assert.deepEqual(rows.map((r) => [r.name, r.points, r.hits, r.squares]), [['member', 4, 2, 2], ['commish', 3, 1, 1]]);
+    assert.equal(rows[0].played, 8, 'four moments on each of two cards');
+    const g2 = await call(env, 'u-mem', '/api/squares?pool=SQRS01&card=2', null, scoreboard(PLAYED));
+    assert.deepEqual(g2.body.results.map((r) => [r.key, r.cell, r.name, r.mine]),
+      [['q1', 3, 'member', true], ['half', 9, null, false], ['q3', 2, null, false], ['final', 39, 'commish', false]]);
+  } finally { Date.now = realNow; }
+});
+
+/* ------------------------------------------------------------ marbles per sheet */
+/* Jason, 2026-09-13: "sometimes we have a $1 box/sheet and maybe a $5 box sheet ... i dont
+   want 3 different groups", then "call them marbles for all i care". A sheet carries a name
+   and a box price IN MARBLES; no dollar is stored or shown. */
+import { sheetPayouts, cleanBoxPrice, cleanSplit, cleanSheetName, marbles, DEFAULT_SPLIT } from '../src/lib/squares.ts';
+
+test('a sheet\'s marbles: the split, rounding into the final, an unclaimed square rolls forward', () => {
+  assert.deepEqual(DEFAULT_SPLIT, [25, 25, 25, 25]);
+  assert.deepEqual(sheetPayouts(100, null, []).map((p) => [p.key, p.amount, p.settled]),
+    [['q1', 25, false], ['half', 25, false], ['q3', 25, false], ['final', 25, false]]);
+  const odd = sheetPayouts(101, [20, 30, 20, 30], []);
+  assert.deepEqual(odd.map((p) => p.amount), [20, 30, 20, 31], 'rounding lands on the final');
+  assert.equal(odd.reduce((a, p) => a + p.amount, 0), 101, 'the payouts always add up to the pot');
+  const r = [{ key: 'q1', userId: 'ann' }, { key: 'half', userId: null }, { key: 'q3', userId: null }, { key: 'final', userId: 'bo' }];
+  assert.deepEqual(sheetPayouts(100, null, r).map((p) => [p.key, p.amount, p.userId, p.rolled]),
+    [['q1', 25, 'ann', false], ['half', 25, null, true], ['q3', 50, null, true], ['final', 75, 'bo', false]]);
+  const lastEmpty = sheetPayouts(100, null, [{ key: 'q1', userId: 'a' }, { key: 'half', userId: 'a' }, { key: 'q3', userId: 'a' }, { key: 'final', userId: null }]);
+  assert.deepEqual([lastEmpty[3].amount, lastEmpty[3].unclaimed, lastEmpty[3].rolled], [25, true, false]);
+  assert.deepEqual([cleanBoxPrice(5), cleanBoxPrice(0), cleanBoxPrice(-1), cleanBoxPrice(1.5), cleanBoxPrice(1001)], [5, 0, null, null, null]);
+  assert.deepEqual([cleanSplit([20, 30, 20, 30]), cleanSplit([25, 25, 25, 24]), cleanSplit([50, 50])], [[20, 30, 20, 30], null, null]);
+  assert.equal(cleanSheetName('  The   big-one '), 'The big-one', 'a hyphen is kept');
+  assert.equal(cleanSheetName('A' + String.fromCharCode(7) + 'B'), 'A B', 'a control character is not');
+  assert.deepEqual([marbles(1), marbles(0), marbles(1000)], ['1 marble', '0 marbles', '1,000 marbles']);
+});
+
+test('a sheet\'s name, box price and split: the commissioner\'s; a price freezes once the sheet is drawn', async () => {
+  const { env } = setup();
+  try {
+    assert.equal((await call(env, 'u-mem', '/api/squares/settings', { pool: 'SQRS01', card: 1, boxPrice: 5 })).status, 403);
+    const set = await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 1, name: 'The big one', boxPrice: 5, split: [20, 30, 20, 30] });
+    assert.deepEqual([set.body.sheetName, set.body.boxPrice, set.body.split], ['The big one', 5, [20, 30, 20, 30]]);
+    assert.equal((await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 1, boxPrice: 1001 })).body.error, 'bad_price');
+    assert.equal((await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 1, split: [50, 50, 0, 1] })).body.error, 'bad_split');
+    assert.equal((await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 1 })).body.error, 'nothing_to_change');
+    for (const cell of [1, 2, 3]) await call(env, 'u-mem', '/api/squares/claim', { pool: 'SQRS01', card: 1, cell });
+    await call(env, 'u-com', '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 4 });
+    const g = await call(env, 'u-mem', '/api/squares?pool=SQRS01&card=1');
+    /* The pot is the full sheet, "assume all marbles are distributed": 100 x 5. */
+    assert.deepEqual([g.body.sheetName, g.body.boxPrice, g.body.pot, g.body.marblesIn, g.body.marblesWon], ['The big one', 5, 500, 15, 0]);
+    assert.deepEqual(g.body.payouts.map((p) => [p.key, p.percent, p.amount, p.settled]), [['q1', 20, 100, false], ['half', 30, 150, false], ['q3', 20, 100, false], ['final', 30, 150, false]]);
+    assert.deepEqual(g.body.cards.map((c) => [c.card, c.name, c.boxPrice]), [[1, 'The big one', 5]]);
+    assert.doesNotMatch(JSON.stringify(g.body), /\$|dollar/i, 'marbles, never dollars');
+    await call(env, 'u-com', '/api/squares/draw', { pool: 'SQRS01', card: 1 });
+    assert.equal((await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 1, boxPrice: 10 })).body.error, 'drawn', 'nobody\'s stake changes after the numbers are known');
+    assert.equal((await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 1, name: 'Renamed' })).body.sheetName, 'Renamed', 'a name can change any time');
+    /* Another sheet can still be added before kickoff, and priced while it is open. */
+    const added = await call(env, 'u-com', '/api/squares/card', { pool: 'SQRS01' });
+    assert.equal(added.body.card, 2);
+    assert.equal((await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 2, boxPrice: 1 })).body.boxPrice, 1);
+    const two = await call(env, 'u-mem', '/api/squares?pool=SQRS01&card=2');
+    assert.deepEqual([two.body.sheetName, two.body.boxPrice, two.body.locked], ['Sheet 2', 1, false]);
+  } finally { Date.now = realNow; }
+});
+
+test('the board counts marbles in and won over every sheet - a 1-marble sheet and a 5-marble sheet', async () => {
+  const { db, env } = setup();
+  try {
+    await call(env, 'u-com', '/api/squares/card', { pool: 'SQRS01' });
+    await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 1, name: 'One marble', boxPrice: 1 });
+    await call(env, 'u-com', '/api/squares/settings', { pool: 'SQRS01', card: 2, name: 'Five marbles', boxPrice: 5 });
+    await call(env, 'u-mem', '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 39 });
+    await call(env, 'u-mem', '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 3 });
+    await call(env, 'u-com', '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 39 });
+    /* TEST INPUT: a known draw on both sheets; last February's final standing in. */
+    db.prepare('UPDATE squares_grid SET rows_digits = ?, cols_digits = ? WHERE pool_id = ?')
+      .run(JSON.stringify(IDENTITY.rows), JSON.stringify(IDENTITY.cols), 'SQRS01');
+    Date.now = () => BIG_GAME.kickoffUtc + 5 * 3600 * 1000;
+    /* Each pot is the full sheet. Sheet 1: 100 x 1 = 100, 25 a moment - squares 3, 9 and 2
+       are empty, so each rolls forward and the final (square 39, member) takes all 100.
+       Sheet 2: 100 x 5 = 500, 125 a moment - member's square 3 takes the 1st quarter (125);
+       halftime and the 3rd roll forward; commish's square 39 takes the final 125 + 250 = 375. */
+    const two = await call(env, 'u-com', '/api/squares?pool=SQRS01&card=2', null, scoreboard(PLAYED));
+    assert.deepEqual(two.body.payouts.map((p) => [p.key, p.amount, p.name, p.rolled, p.mine]),
+      [['q1', 125, 'member', false, false], ['half', 125, null, true, false], ['q3', 250, null, true, false], ['final', 375, 'commish', false, true]]);
+    assert.deepEqual([two.body.pot, two.body.marblesIn, two.body.marblesWon], [500, 5, 375]);
+    const rows = await squaresStandings(env, 'SQRS01', Date.now(), scoreboard(PLAYED));
+    assert.deepEqual(rows.map((r) => [r.name, r.points, r.marblesIn, r.marblesWon]), [['member', 4, 6, 225], ['commish', 3, 5, 375]]);
   } finally { Date.now = realNow; }
 });

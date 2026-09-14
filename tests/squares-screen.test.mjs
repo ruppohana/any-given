@@ -15,13 +15,13 @@
  */
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { BIG_GAME, parseBigGame } from '../src/lib/squares.ts';
-import { handleSquaresPool } from '../src/squares-pool.ts';
+import { BIG_GAME, parseBigGame, marbles, DEFAULT_SPLIT } from '../src/lib/squares.ts';
+import { handleSquaresPool, squaresStandings } from '../src/squares-pool.ts';
 import { POOL_SPORTS, hasNoSpread } from '../src/lib/groups.ts';
 import { templatesOpen, PROP_TEMPLATES } from '../src/lib/props.ts';
 import { themeMark } from '../public/components/team-chip.js';
@@ -37,6 +37,7 @@ const G1_SRC = read('../public/screens/g1-group.screen.js');
 const G2_SRC = read('../public/screens/g2-commish.screen.js');
 const G3_SRC = read('../public/screens/g3-group-rules.screen.js');
 const P5_SRC = read('../public/screens/p5-standings.screen.js');
+const P5_CSS = read('../public/screens/p5-standings.css');
 const P2_SRC = read('../public/screens/p2-slate.screen.js');
 const code = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
 const flat = (s) => (code(s).match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((x) => x.slice(1, -1)).join('');
@@ -102,6 +103,8 @@ function d1() {
            CREATE TABLE pool (id TEXT PRIMARY KEY, name TEXT, sport TEXT NOT NULL DEFAULT 'college-football');
            CREATE TABLE member (pool_id TEXT, user_id TEXT, display_name TEXT, role TEXT, PRIMARY KEY (pool_id, user_id));`);
   db.exec(read('../migrations/0012_squares.sql'));
+  db.exec(read('../migrations/0013_squares_cards.sql'));
+  db.exec(read('../migrations/0014_squares_money.sql'));
   const stmt = (sql, args = []) => ({
     bind: (...a) => stmt(sql, a),
     first: async () => db.prepare(sql).get(...args) ?? null,
@@ -158,6 +161,15 @@ function draw(d) { const root = DOM.mount(); P.render(root, d, 'ready'); return 
 const cells = (root) => root.querySelectorAll('button.sq-cell');
 const cell = (root, i) => root.querySelector('button.sq-cell[data-cell="' + i + '"]');
 const PT = 'America/Los_Angeles';
+/** An input event, as a phone's keyboard sends it. */
+const fire = (n, t) => Promise.all((n.listeners[t] || []).map((fn) => fn({ type: t, target: n })));
+const typeIn = async (n, v) => { n.value = String(v); await fire(n, 'input'); };
+/** Every word a person reads on a render: its text (never the <style>) and its aria-labels. */
+function words(root) {
+  const style = root.querySelector('style');
+  return root.textContent.slice(style ? style.textContent.length : 0) + ' '
+    + root.querySelectorAll('*').map((n) => n.getAttribute('aria-label') || '').join(' ');
+}
 
 beforeEach(() => {
   STORE.clear(); CALLS = []; SIGNINS = 0; SIGNIN_AS = null; WHO = null; MINE = []; FEED = NEXT;
@@ -229,25 +241,25 @@ test('claims: initials, yours, and the server\'s own words for a taken square an
   assert.equal(cell(root, 20).querySelector('.sq-ini').textContent, 'CO');
   CALLS = [];
   await cell(root, 7).click(); await settle(60);
-  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', cell: 7 }]]);
-  assert.equal(root.querySelector('.sq-status').textContent, 'You can hold 2 squares in this group.');
+  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 7 }]]);
+  assert.equal(root.querySelector('.sq-status').textContent, 'You can hold 2 squares on this sheet.');
   assert.equal(root.querySelector('.sq-status').dataset.tone, 'err');
   assert.equal(cell(root, 7).dataset.mine, undefined, 'put back');
   /* A square somebody holds: the server says so, and the grid is read again. */
   CALLS = [];
   await cell(root, 20).click(); await settle(60);
-  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', cell: 20 }]]);
+  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 20 }]]);
   assert.equal(root.querySelector('.sq-status').textContent, 'Somebody has that square.');
   /* One of yours: released. */
   CALLS = [];
   await cell(root, 6).click(); await settle(60);
-  assert.deepEqual(posts(), [['/api/squares/release', { pool: 'SQRS01', cell: 6 }]]);
+  assert.deepEqual(posts(), [['/api/squares/release', { pool: 'SQRS01', card: 1, cell: 6 }]]);
   assert.equal(root.querySelector('.sq-status').textContent, 'Square 1-7 is open again.');
   assert.equal(cell(root, 6).dataset.mine, undefined);
   /* Now under the limit: claimed. */
   CALLS = [];
   await cell(root, 7).click(); await settle(60);
-  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', cell: 7 }]]);
+  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 7 }]]);
   assert.equal(root.querySelector('.sq-status').textContent, 'Square 1-8 is yours.');
   assert.equal(cell(root, 7).dataset.mine, 'true');
   assert.equal(root.querySelector('.sq-total').textContent, 'You hold 2 of 2 · 3 of 100 taken · Locks Sun, Feb 14 · '
@@ -314,7 +326,7 @@ test('at kickoff: locked, the digits drawn, no square takes a tap; after the gam
 
 /* ------------------------------------------------------------ the commissioner */
 
-test('the commissioner, before kickoff: squares per person, 1 to 100, sent only on Save; nobody has it after kickoff', async () => {
+test('the commissioner, before kickoff: squares per person, 1 to 100, sent only on Save; after kickoff only the name', async () => {
   assert.deepEqual([P.stepMax(10, 1), P.stepMax(1, -1), P.stepMax(100, 1), P.stepMax('x', 0), P.stepMax(7.6, 0)], [11, 1, 100, 10, 8]);
   as('u-com', [G_SQC]);
   const d = await P.loadSquares(api);
@@ -322,14 +334,14 @@ test('the commissioner, before kickoff: squares per person, 1 to 100, sent only 
   const panel = root.querySelector('.sq-commish');
   assert.ok(panel, 'the commissioner\'s panel');
   const save = panel.querySelector('.sq-save');
-  assert.deepEqual([save.textContent, save.disabled], ['Save: 10', true], 'nothing to save yet');
+  assert.deepEqual([save.textContent, save.disabled], ['Save', true], 'nothing to save yet');
   const [minus, plus] = panel.querySelectorAll('.sq-stepb');
   CALLS = [];
   await plus.click(); await plus.click(); await minus.click();
-  assert.deepEqual([save.textContent, save.disabled], ['Save: 11', false]);
+  assert.deepEqual([panel.querySelector('[id="sq-max"]').value, save.disabled], ['11', false]);
   assert.deepEqual(posts(), [], 'the stepper sends nothing by itself');
   await save.click(); await settle(60);
-  assert.deepEqual(posts(), [['/api/squares/settings', { pool: 'SQRS01', maxPerPerson: 11 }]]);
+  assert.deepEqual(posts(), [['/api/squares/settings', { pool: 'SQRS01', card: 1, maxPerPerson: 11 }]], 'only what changed');
   assert.equal(root.querySelector('.sq-status').textContent, 'Squares per person: 11.');
   assert.match(root.querySelector('.sq-total').textContent, /^You hold 0 of 11 · /);
 
@@ -337,7 +349,9 @@ test('the commissioner, before kickoff: squares per person, 1 to 100, sent only 
   assert.equal(draw(await P.loadSquares(api)).querySelector('.sq-commish'), null, 'a member has none');
   Date.now = () => KICKOFF + 1000;
   as('u-com', [G_SQC]);
-  assert.equal(draw(await P.loadSquares(api)).querySelector('.sq-commish'), null, 'and nobody after kickoff');
+  const late = draw(await P.loadSquares(api)).querySelector('.sq-commish');
+  assert.ok(late.querySelector('[id="sq-name"]'), 'after kickoff the name can still change');
+  for (const s of ['[id="sq-price"]', '[id="sq-max"]', '[data-split]', '.sq-draw-start']) assert.equal(late.querySelector(s), null, s + ' is gone');
 });
 
 /* ------------------------------------------------------------ pool first */
@@ -365,7 +379,7 @@ test('signed out: the grid itself - no sign-in wall - and the first tap on a squ
   SIGNIN_AS = { who: 'u-mem', groups: [G_SQ] };
   await cell(root, 42).click(); await settle(120);
   assert.equal(SIGNINS, 2);
-  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', cell: 42 }]], 'signed in, in a squares group: the tap goes on');
+  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 42 }]], 'signed in, in a squares group: the tap goes on');
   assert.equal(cell(root, 42).dataset.mine, 'true');
 });
 
@@ -403,6 +417,414 @@ test('harness states touch no network and carry no group', async () => {
   for (const s of ['loading', 'offline', 'error']) assert.ok(draw({ view: s }).querySelector('.state'), s + ' draws its state block');
 });
 
+/* ------------------------------------------------------------ sheets */
+/* Jason, 2026-09-13: "keep the same size, the person who is on the page has their squares
+   highlighted. we will also need to add additional cards to the same pool" - he calls them
+   sheets. The API says `card`; a person reads "sheet". */
+
+test('sheets: the commissioner adds one from the switcher and lands on it; each tab counts yours; a claim goes to the sheet on show; the phone remembers the sheet per group', async () => {
+  as('u-mem', [G_SQ]);
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 5 });
+  as('u-com', [G_SQC]);
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 10 });
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 11 });
+  const d = await P.loadSquares(api);
+  assert.equal(STORE.get('ag.sqSheet.SQRS01'), '1');
+  const root = draw(d);
+  const sw = root.querySelector('.sq-sheets');
+  assert.ok(sw, 'the commissioner may add one, so the switcher shows with a single sheet');
+  assert.deepEqual([sw.getAttribute('role'), sw.getAttribute('aria-label')], ['group', 'Sheets']);
+  assert.deepEqual(sw.querySelectorAll('button').map((b) => b.textContent), ['Sheet 1 · 2 yours', '+ Add a sheet']);
+  assert.equal(sw.querySelector('[aria-pressed="true"]').dataset.sheet, '1');
+  assert.match(root.querySelector('.sq-total').textContent, /^You hold 2 of 10 · 3 of 100 taken · /, 'one sheet: no name in the line');
+
+  CALLS = [];
+  await sw.querySelector('.sq-addsheet').click(); await settle(80);
+  assert.deepEqual(posts(), [['/api/squares/card', { pool: 'SQRS01' }]]);
+  assert.equal(CALLS.at(-1).url, '/api/squares?pool=SQRS01&card=2', 'then the new sheet');
+  assert.equal(root.querySelector('.sq-status').textContent, 'Sheet 2 is added. Its squares are open.');
+  assert.equal(STORE.get('ag.sqSheet.SQRS01'), '2');
+  assert.deepEqual(root.querySelectorAll('.sq-sheet').map((b) => [b.textContent, b.getAttribute('aria-pressed')]),
+    [['Sheet 1 · 2 yours', 'false'], ['Sheet 2 · 0 yours', 'true'], ['+ Add a sheet', null]]);
+  assert.match(root.querySelector('.sq-total').textContent, /^Sheet 2 · You hold 0 of 10 · 0 of 100 taken · Locks /, 'the line names the sheet');
+  assert.equal(root.querySelector('.sq-sheetname').textContent, 'Sheet 2');
+  assert.equal(cell(root, 5).dataset.taken, undefined, 'the same square on another sheet is another square');
+
+  CALLS = [];
+  await cell(root, 5).click(); await settle(60);
+  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 5 }]]);
+  assert.equal(cell(root, 5).dataset.mine, 'true');
+  assert.equal(root.querySelector('.sq-sheet[data-sheet="2"]').textContent, 'Sheet 2 · 1 yours');
+
+  /* Back to sheet 1 - the bare route - and remembered. */
+  CALLS = [];
+  await root.querySelector('.sq-sheet[data-sheet="1"]').click(); await settle(40);
+  assert.deepEqual(CALLS.map((c) => c.url), ['/api/squares?pool=SQRS01']);
+  assert.equal(STORE.get('ag.sqSheet.SQRS01'), '1');
+  assert.deepEqual([cell(root, 5).dataset.taken, cell(root, 5).dataset.mine, cell(root, 10).dataset.mine], ['true', undefined, 'true']);
+
+  /* The next visit opens the sheet looked at last; one that is gone is sheet 1, and forgotten. */
+  const gridCalls = () => CALLS.map((c) => c.url).filter((u) => u.startsWith('/api/squares'));
+  STORE.set('ag.sqSheet.SQRS01', '2');
+  CALLS = [];
+  assert.equal((await P.loadSquares(api)).sq.card, 2);
+  assert.deepEqual(gridCalls(), ['/api/squares?pool=SQRS01&card=2']);
+  STORE.set('ag.sqSheet.SQRS01', '7');
+  CALLS = [];
+  const gone = await P.loadSquares(api);
+  assert.deepEqual(gridCalls(), ['/api/squares?pool=SQRS01&card=7', '/api/squares?pool=SQRS01']);
+  assert.deepEqual([gone.view, gone.sq.card, STORE.get('ag.sqSheet.SQRS01')], ['ready', 1, '1']);
+  /* Storage that throws: sheet 1, and nothing breaks. */
+  const real = globalThis.localStorage;
+  globalThis.localStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() {} };
+  try {
+    assert.equal(P.savedSheet('SQRS01'), 1);
+    assert.doesNotThrow(() => P.saveSheet('SQRS01', 2));
+  } finally { globalThis.localStorage = real; }
+
+  /* A member: the sheets, and no Add. */
+  as('u-mem', [G_SQ]);
+  STORE.delete('ag.sqSheet.SQRS01');
+  const m = draw(await P.loadSquares(api));
+  assert.deepEqual(m.querySelectorAll('.sq-sheet').map((b) => b.textContent), ['Sheet 1 · 1 yours', 'Sheet 2 · 0 yours']);
+  assert.equal(m.querySelector('.sq-addsheet'), null, 'only the commissioner adds a sheet');
+  assert.doesNotMatch(words(m), /\bcards?\b/i, 'a person reads "sheet", never "card"');
+});
+
+test('the draw: two taps - the first names what it does, Cancel sends nothing, Draw closes the sheet and shows its digits; the other sheet stays open; a member never has it', async () => {
+  as('u-com', [G_SQC]);
+  await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 7 });
+  as('u-mem', [G_SQ]);
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 8 });
+  as('u-com', [G_SQC]);
+  STORE.set('ag.sqSheet.SQRS01', '2');
+  const root = draw(await P.loadSquares(api));
+  assert.equal(root.querySelector('.sq-commish .sq-h').textContent, 'Commissioner · Sheet 2');
+  assert.equal(root.querySelector('.sq-draw-start').textContent, 'Draw the numbers');
+  CALLS = [];
+  await root.querySelector('.sq-draw-start').click();
+  assert.deepEqual(posts(), [], 'the first tap only asks');
+  const ask = root.querySelector('.sq-draw-ask');
+  assert.equal(ask.querySelector('.sq-confirm').textContent,
+    'Draw Sheet 2’s numbers now? The sheet closes - nobody can claim or give back a square after.');
+  assert.deepEqual(ask.querySelectorAll('button').map((b) => b.textContent), ['Draw', 'Cancel']);
+  assert.equal(root.querySelector('.sq-draw-no').focused, true, 'focus lands on Cancel, not on Draw');
+  await root.querySelector('.sq-draw-no').click();
+  assert.equal(root.querySelector('.sq-draw-ask'), null, 'Cancel puts it back');
+  assert.deepEqual(posts(), []);
+  assert.equal(root.querySelector('.sq-board').dataset.drawn, 'false');
+
+  await root.querySelector('.sq-draw-start').click();
+  await root.querySelector('.sq-draw-go').click(); await settle(80);
+  assert.deepEqual(posts(), [['/api/squares/draw', { pool: 'SQRS01', card: 2 }]]);
+  assert.equal(root.querySelector('.sq-status').textContent, 'Sheet 2’s numbers are drawn. The sheet is closed.');
+  assert.equal(root.querySelector('.sq-board').dataset.drawn, 'true');
+  const hd = root.querySelectorAll('.sq-hd').map((h) => h.textContent);
+  assert.deepEqual([...hd.slice(0, 10)].sort(), [...'0123456789'], 'the digits across the top');
+  assert.deepEqual([...hd.slice(10)].sort(), [...'0123456789'], 'and down the side');
+  assert.ok(cells(root).every((c) => c.disabled), 'closed: no square takes a tap');
+  assert.equal(root.querySelectorAll('.sq-plus').length, 0, 'no "+" once drawn');
+  assert.equal(root.querySelector('.sq-total').textContent, 'Sheet 2 · Numbers drawn · closed · You hold 1 · 2 of 100 taken');
+  assert.equal(root.querySelector('.sq-rules').textContent, 'The numbers are drawn - this sheet is closed. Nobody can claim or give back a square on it.');
+  assert.equal(root.querySelector('.sq-sheet[data-sheet="2"]').dataset.drawn, 'true');
+  assert.equal(root.querySelector('.sq-draw-start'), null, 'nothing to draw twice');
+  CALLS = [];
+  await cell(root, 40).click(); await settle(20);
+  assert.deepEqual(posts(), []);
+
+  /* Sheet 1 is still open: "+" on every square, and its own draw. */
+  await root.querySelector('.sq-sheet[data-sheet="1"]').click(); await settle(40);
+  assert.equal(root.querySelector('.sq-board').dataset.drawn, 'false');
+  assert.ok(root.querySelector('.sq-draw-start'));
+  assert.equal(root.querySelectorAll('.sq-plus').length, 100);
+
+  as('u-mem', [G_SQ]);
+  assert.equal(draw(await P.loadSquares(api)).querySelector('.sq-draw-start'), null, 'a member never draws');
+});
+
+test('a sheet drawn behind your back: a Draw or a claim on it says so in the screen’s words, and the sheet is read again - closed', async () => {
+  as('u-com', [G_SQC]);
+  await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  STORE.set('ag.sqSheet.SQRS01', '2');
+  as('u-mem', [G_SQ]);
+  const mem = draw(await P.loadSquares(api));
+  as('u-com', [G_SQC]);
+  const com = draw(await P.loadSquares(api));
+  await com.querySelector('.sq-draw-start').click();
+  assert.equal((await P.call(api, '/api/squares/draw', { pool: 'SQRS01', card: 2 })).ok, true, 'drawn from another phone');
+  CALLS = [];
+  await com.querySelector('.sq-draw-go').click(); await settle(80);
+  assert.deepEqual(posts(), [['/api/squares/draw', { pool: 'SQRS01', card: 2 }]]);
+  assert.deepEqual([com.querySelector('.sq-status').textContent, com.querySelector('.sq-status').dataset.tone],
+    ['This sheet’s numbers are already drawn.', 'ok']);
+  assert.equal(com.querySelector('.sq-board').dataset.drawn, 'true');
+
+  as('u-mem', [G_SQ]);
+  CALLS = [];
+  await cell(mem, 12).click(); await settle(80);
+  assert.deepEqual(posts(), [['/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 12 }]]);
+  assert.equal(mem.querySelector('.sq-status').textContent, 'The numbers are drawn - this sheet is closed.');
+  assert.equal(cell(mem, 12).dataset.mine, undefined, 'put back');
+  assert.ok(cells(mem).every((c) => c.disabled), 'read again: closed');
+});
+
+test('refusals in the screen’s own words - "sheet", never "card" - for every code whose sentence names one; the rest are the server’s', async () => {
+  as('u-com', [G_SQC]);
+  await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  await P.call(api, '/api/squares/settings', { pool: 'SQRS01', card: 2, maxPerPerson: 1 });
+  as('u-mem', [G_SQ]);
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 1 });
+  const limit = await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 2 });
+  const nocard = await P.call(api, '/api/squares?pool=SQRS01&card=3');
+  const bad = await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 100 });
+  as('u-com', [G_SQC]);
+  assert.equal((await P.call(api, '/api/squares/draw', { pool: 'SQRS01', card: 2 })).ok, true);
+  const twice = await P.call(api, '/api/squares/draw', { pool: 'SQRS01', card: 2 });
+  const closed = await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 3 });
+  for (let i = 3; i <= 10; i++) await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  const many = await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  Date.now = () => KICKOFF + 1000;
+  const late = await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 3 });
+  const said = [limit, nocard, bad, twice, closed, many, late].map((r) => [r.j.error, P.sheetText(r, 'x', 10)]);
+  assert.deepEqual(said, [
+    ['limit', 'You can hold 1 square on this sheet.'],
+    ['no_card', 'That sheet is not in this group.'],
+    ['bad_cell', 'Pick a square on the sheet.'],
+    ['already_drawn', 'This sheet’s numbers are already drawn.'],
+    ['drawn', 'The numbers are drawn - this sheet is closed.'],
+    ['too_many', 'A group can run up to 10 sheets.'],
+    ['locked', 'The sheets locked at kickoff.']]);
+  for (const [, t] of said) assert.doesNotMatch(t, /\bcards?\b/i);
+  assert.equal(P.sheetText({ ok: false, status: 409, j: { error: 'taken', message: 'Somebody has that square.' } }, 'x'), 'Somebody has that square.');
+  assert.equal(P.sheetText({ offline: true }, 'x'), 'No connection. Nothing was changed.');
+});
+
+test('yours are filled with the accent, initials in the on-accent color; somebody else’s keep theirs on the quieter surface; "+" only on open squares before the draw; the squares keep their size', async () => {
+  as('u-com', [G_SQC]);
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', cell: 20 });
+  as('u-mem', [G_SQ]);
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', cell: 5 });
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', cell: 6 });
+  const root = draw(await P.loadSquares(api));
+  assert.equal(root.querySelector('.sq-sheets'), null, 'one sheet and no Add: no switcher');
+  assert.deepEqual(root.querySelectorAll('.sq-cell[data-mine="true"]').map((b) => [b.dataset.cell, b.querySelector('.sq-ini').textContent]),
+    [['5', 'ME'], ['6', 'ME']]);
+  assert.deepEqual(root.querySelectorAll('.sq-cell[data-taken="true"]').filter((b) => !b.dataset.mine)
+    .map((b) => [b.dataset.cell, b.querySelector('.sq-ini').textContent]), [['20', 'CO']]);
+  const plus = root.querySelectorAll('.sq-plus');
+  assert.equal(plus.length, 97, 'every open square, and only those');
+  assert.ok(plus.every((p) => p.textContent === '+' && p.getAttribute('aria-hidden') === 'true' && !p.parentNode.dataset.taken));
+  assert.deepEqual([cell(root, 5).querySelector('.sq-plus'), cell(root, 20).querySelector('.sq-plus')], [null, null]);
+  assert.equal(root.querySelector('.sq-sheetname').textContent, 'Sheet 1');
+  assert.equal(root.querySelector('.sq-sheetmeta').textContent, 'Points only');
+
+  assert.match(CSS, /\.scr-squares \.sq-cell\[data-mine="true"\] \{ border-color: var\(--accent\); background: var\(--accent\); color: var\(--on-accent\); \}/);
+  assert.match(CSS, /\.scr-squares \.sq-cell\[data-mine="true"\] \.sq-tag \{ color: var\(--on-accent\); \}/);
+  assert.match(CSS, /\.scr-squares \.sq-cell\[data-mine="true"\]\[data-current="true"\] \{ outline-color: var\(--fg\); \}/, 'the ring shows on your own');
+  assert.match(CSS, /\.scr-squares \.sq-cell\[data-taken="true"\] \{ background: var\(--surface-2\); \}/);
+  assert.match(CSS, /\.scr-squares \.sq-plus \{[^}]*color: var\(--dim\);[^}]*opacity: \.55;/);
+  assert.match(CSS, /\.scr-squares \.sq-cell \{[^}]*min-height: 30px;/, 'the squares keep their size');
+  assert.doesNotMatch(TOKENS.slice(TOKENS.indexOf('prefers-color-scheme: dark')), /--on-accent:/, 'one on-accent in both themes');
+  assert.match(CSS, /\.scr-squares \.sq-sheets \{[^}]*min-width: 0;[^}]*overflow-x: auto;/, 'the switcher scrolls inside itself');
+
+  assert.equal(draw({ view: 'signed-out', noSample: true }).querySelectorAll('.sq-plus').length, 100, 'the pool itself: all open');
+  Date.now = () => KICKOFF + 1000;
+  const k = draw(await P.loadSquares(api));
+  assert.equal(k.querySelectorAll('.sq-plus').length, 0, 'drawn at kickoff: open squares are blank');
+  assert.equal(cell(k, 5).dataset.mine, 'true', 'still yours, still filled');
+});
+
+test('the summary line per sheet: the sheet’s name leads once there are two; drawn before kickoff it says closed; from kickoff, the score', async () => {
+  as('u-com', [G_SQC]);
+  const one = (await P.call(api, '/api/squares?pool=SQRS01')).j;
+  assert.equal(P.summaryLine(one, BEFORE, PT), 'You hold 0 of 10 · 0 of 100 taken · Locks Sun, Feb 14 · 3:30 PM');
+  await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 4 });
+  await P.call(api, '/api/squares/settings', { pool: 'SQRS01', card: 2, name: 'The big one' });
+  const two = (await P.call(api, '/api/squares?pool=SQRS01&card=2')).j;
+  assert.equal(P.summaryLine(two, BEFORE, PT), 'The big one · You hold 1 of 10 · 1 of 100 taken · Locks Sun, Feb 14 · 3:30 PM');
+  assert.equal(P.summaryLine((await P.call(api, '/api/squares?pool=SQRS01')).j, BEFORE, PT),
+    'Sheet 1 · You hold 0 of 10 · 0 of 100 taken · Locks Sun, Feb 14 · 3:30 PM');
+  await P.call(api, '/api/squares/draw', { pool: 'SQRS01', card: 2 });
+  assert.equal(P.summaryLine((await P.call(api, '/api/squares?pool=SQRS01&card=2')).j, BEFORE),
+    'The big one · Numbers drawn · closed · You hold 1 · 1 of 100 taken');
+  Date.now = () => KICKOFF + 5 * 3600000;
+  FEED = PLAYED;
+  assert.equal(P.summaryLine((await P.call(api, '/api/squares?pool=SQRS01&card=2')).j, Date.now()), 'The big one · Final · NE 13 – SEA 29 · You hold 1');
+  assert.deepEqual([P.sheetLabel({ card: 2, mine: 3 }), P.sheetLabel({ card: 3, name: 'Late', mine: 0 }), P.sheetName({ card: 4, name: '  ' })],
+    ['Sheet 2 · 3 yours', 'Late · 0 yours', 'Sheet 4']);
+  assert.deepEqual([P.gridUrl('SQRS01', 1), P.gridUrl('SQRS01', 3), P.gridUrl('a b', 0)],
+    ['/api/squares?pool=SQRS01', '/api/squares?pool=SQRS01&card=3', '/api/squares?pool=a%20b']);
+});
+
+/* ------------------------------------------------------------ marbles */
+/* Jason: "sometimes we have a $1 box/sheet and maybe a $5 box sheet" - then "call them
+   marbles for all i care". A box price is a count of marbles. No "$", no money. */
+
+test('marbles: the commissioner names a sheet and sets its box price, its split (the running sum shown) and squares per person - Save sends only what changed; after the draw, the name only', async () => {
+  assert.deepEqual([0, 1, 2, 1000, 1234.9].map(P.priceLine), ['Points only', '1 marble a square', '2 marbles a square', '1,000 marbles a square', '1,234 marbles a square']);
+  /* Jason: "the comish will assist in the cost per square and the payout. assume all marbles are
+     distributed" - the pot is the whole sheet, so the commissioner sees every quarter's marbles. */
+  assert.deepEqual(P.potPreview('5', ['25', '25', '25', '25']),
+    { pot: 500, amounts: [125, 125, 125, 125], text: 'Pot 500 marbles · 1st quarter 125 · Halftime 125 · 3rd quarter 125 · Final 125' });
+  assert.equal(P.potPreview(3, [33, 33, 33, 1]).text, 'Pot 300 marbles · 1st quarter 99 · Halftime 99 · 3rd quarter 99 · Final 3', 'the final takes what rounding leaves');
+  assert.deepEqual([P.potPreview(0, []).text, P.potPreview('', DEFAULT_SPLIT).text, P.potPreview(5, [30, 30, 30, 30]).text],
+    ['Points only - no pot.', 'The cost per square is 0 to 1,000 marbles.', 'Pot 500 marbles · the payouts have to add up to 100%']);
+  as('u-com', [G_SQC]);
+  await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  const root = draw(await P.loadSquares(api));
+  const panel = () => root.querySelector('.sq-commish');
+  const q = (s) => panel().querySelector(s);
+  assert.deepEqual([q('[id="sq-name"]').value, q('[id="sq-name"]').placeholder, q('[id="sq-price"]').value], ['', 'Sheet 1', '0']);
+  assert.deepEqual(panel().querySelectorAll('[data-split]').map((i) => i.value), ['25', '25', '25', '25']);
+  assert.equal(q('.sq-sum').textContent, 'Total 100%');
+  assert.equal(q('.sq-save').disabled, true, 'nothing to save yet');
+  assert.equal(root.querySelector('.sq-pot'), null, 'a points-only sheet has no pot');
+  const labels = panel().querySelectorAll('.sq-label').map((l) => l.textContent);
+  assert.ok(labels.includes('Cost per square') && labels.includes('Payouts'), 'plain words: ' + labels.join(', '));
+  assert.deepEqual(panel().querySelectorAll('.sq-quickb').map((b) => b.textContent), ['Even (25/25/25/25)', 'Final pays most (20/20/20/40)']);
+  assert.equal(q('.sq-preview').textContent, 'Points only - no pot.');
+  const amounts = () => panel().querySelectorAll('.sq-split-m').map((m) => m.textContent);
+
+  /* Sheet 1: 1 marble a square - the pot and each quarter's marbles, live; the price alone is sent. */
+  CALLS = [];
+  await typeIn(q('[id="sq-price"]'), 1);
+  assert.equal(q('.sq-preview').textContent, 'Pot 100 marbles · 1st quarter 25 · Halftime 25 · 3rd quarter 25 · Final 25');
+  assert.deepEqual(amounts(), ['25', '25', '25', '25'], 'each quarter\'s marbles under its box');
+  assert.equal(q('.sq-save').disabled, false);
+  await q('.sq-save').click(); await settle(80);
+  assert.deepEqual(posts(), [['/api/squares/settings', { pool: 'SQRS01', card: 1, boxPrice: 1 }]]);
+  assert.equal(root.querySelector('.sq-status').textContent, '1 marble a square.');
+  assert.equal(root.querySelector('.sq-sheetmeta').textContent, '1 marble a square');
+  assert.ok(root.querySelector('.sq-pot'), 'a priced sheet has its pot');
+  assert.equal(root.querySelector('.sq-pot .sq-h').textContent, 'Pot 100 marbles', 'the whole sheet, before a square is claimed');
+
+  /* Sheet 2: a name, 5 marbles, the quick splits, and a split that has to add to 100. */
+  await root.querySelector('.sq-sheet[data-sheet="2"]').click(); await settle(40);
+  await typeIn(q('[id="sq-name"]'), '  The   big one ');
+  await typeIn(q('[id="sq-price"]'), 5);
+  assert.equal(q('.sq-preview').textContent, 'Pot 500 marbles · 1st quarter 125 · Halftime 125 · 3rd quarter 125 · Final 125');
+  await q('.sq-quickb[data-quick="final"]').click();
+  assert.deepEqual(panel().querySelectorAll('[data-split]').map((i) => i.value), ['20', '20', '20', '40']);
+  assert.deepEqual([q('.sq-sum').textContent, q('.sq-preview').textContent, amounts()],
+    ['Total 100%', 'Pot 500 marbles · 1st quarter 100 · Halftime 100 · 3rd quarter 100 · Final 200', ['100', '100', '100', '200']]);
+  const split = panel().querySelectorAll('[data-split]');
+  await typeIn(split[0], 40);
+  assert.deepEqual([q('.sq-sum').textContent, q('.sq-preview').textContent, amounts(), q('.sq-save').disabled],
+    ['Total 120% - it has to be 100', 'Pot 500 marbles · the payouts have to add up to 100%', ['–', '–', '–', '–'], true]);
+  await q('.sq-quickb[data-quick="even"]').click();
+  assert.deepEqual([panel().querySelectorAll('[data-split]').map((i) => i.value), q('.sq-sum').textContent], [['25', '25', '25', '25'], 'Total 100%']);
+  await typeIn(split[0], 40);
+  assert.deepEqual([q('.sq-sum').textContent, q('.sq-sum').dataset.tone, q('.sq-save').disabled], ['Total 115% - it has to be 100', 'err', true]);
+  await typeIn(split[1], 20); await typeIn(split[2], 20);
+  assert.deepEqual([q('.sq-sum').textContent, q('.sq-save').disabled], ['Total 105% - it has to be 100', true]);
+  await typeIn(split[3], '');
+  assert.equal(q('.sq-save').disabled, true, 'a blank box is not a zero');
+  await typeIn(split[3], 20);
+  assert.deepEqual([q('.sq-sum').textContent, q('.sq-sum').dataset.tone, q('.sq-save').disabled], ['Total 100%', 'ok', false]);
+  CALLS = [];
+  await q('.sq-save').click(); await settle(80);
+  assert.deepEqual(posts(), [['/api/squares/settings', { pool: 'SQRS01', card: 2, name: 'The big one', boxPrice: 5, split: [40, 20, 20, 20] }]],
+    'squares per person did not change, so it is not sent');
+  assert.equal(root.querySelector('.sq-status').textContent, 'Name: The big one · 5 marbles a square · The pot splits 40% / 20% / 20% / 20%.');
+  assert.deepEqual([root.querySelector('.sq-sheetname').textContent, root.querySelector('.sq-sheetmeta').textContent], ['The big one', '5 marbles a square']);
+  assert.equal(q('.sq-preview').textContent, 'Pot 500 marbles · 1st quarter 200 · Halftime 100 · 3rd quarter 100 · Final 100');
+  assert.deepEqual(root.querySelectorAll('.sq-sheet').map((b) => b.textContent), ['Sheet 1 · 0 yours', 'The big one · 0 yours', '+ Add a sheet']);
+  assert.equal(q('.sq-h').textContent, 'Commissioner · The big one');
+  assert.deepEqual(panel().querySelectorAll('[data-split]').map((i) => i.value), ['40', '20', '20', '20'], 'read back from the server');
+
+  /* Out of range or blank cannot be saved; back where it was is nothing to save. */
+  await typeIn(q('[id="sq-price"]'), 1001);
+  assert.deepEqual([q('.sq-save').disabled, q('.sq-preview').textContent], [true, 'The cost per square is 0 to 1,000 marbles.']);
+  await typeIn(q('[id="sq-price"]'), ''); assert.equal(q('.sq-save').disabled, true);
+  await typeIn(q('[id="sq-price"]'), 5); assert.equal(q('.sq-save').disabled, true);
+  assert.equal(P.sheetText(await P.call(api, '/api/squares/settings', { pool: 'SQRS01', card: 2, boxPrice: -1 }), 'x'), 'A box costs 0 to 1,000 marbles.');
+
+  /* Drawn: the price, the split, the limit and the draw are gone; the name still saves. */
+  await q('.sq-draw-start').click();
+  await root.querySelector('.sq-draw-go').click(); await settle(80);
+  for (const s of ['[id="sq-price"]', '[id="sq-max"]', '[data-split]', '.sq-draw-start']) assert.equal(q(s), null, s + ' is gone');
+  CALLS = [];
+  await typeIn(q('[id="sq-name"]'), 'Big one, drawn');
+  await q('.sq-save').click(); await settle(80);
+  assert.deepEqual(posts(), [['/api/squares/settings', { pool: 'SQRS01', card: 2, name: 'Big one, drawn' }]]);
+  assert.equal(root.querySelector('.sq-sheetname').textContent, 'Big one, drawn');
+  const w = words(root);
+  assert.doesNotMatch(w, /\$|money|dollar/i, 'marbles, never money');
+  assert.doesNotMatch(w, /\bcards?\b/i);
+});
+
+test('the pot is the whole sheet: what each moment pays up front, then a winner, rolled to the next moment, an unclaimed final - and your line; the board sums every sheet and P5 puts In and Won beside the points', async () => {
+  as('u-com', [G_SQC]);
+  await P.call(api, '/api/squares/card', { pool: 'SQRS01' });
+  await P.call(api, '/api/squares/settings', { pool: 'SQRS01', card: 1, boxPrice: 1 });
+  await P.call(api, '/api/squares/settings', { pool: 'SQRS01', card: 2, name: 'The big one', boxPrice: 5, split: [40, 20, 20, 20] });
+  /* The big one: commish holds 39 (the final) and 40; member 3 (the 1st quarter) and 5 - 9 and 2 are nobody's.
+     Sheet 1: commish holds 3; member 5, 6 and 7 - the half, the 3rd quarter and the final land on nobody. */
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 39 });
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 40 });
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: 3 });
+  as('u-mem', [G_SQ]);
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 3 });
+  await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 2, cell: 5 });
+  for (const c of [5, 6, 7]) await P.call(api, '/api/squares/claim', { pool: 'SQRS01', card: 1, cell: c });
+
+  STORE.set('ag.sqSheet.SQRS01', '2');
+  const pre = await P.loadSquares(api);
+  assert.equal(pre.sq.pot, 500, 'a hundred squares at 5, claimed or not - "assume all marbles are distributed"');
+  assert.deepEqual(P.payoutLines(pre.sq).map((l) => l.text), ['1st quarter · 40% · 200 marbles',
+    'Halftime · 20% · 100 marbles', '3rd quarter · 20% · 100 marbles', 'Final · 20% · 100 marbles']);
+  assert.equal(P.youLine(pre.sq), 'You: 10 marbles in · 0 won');
+
+  /* TEST INPUT: a known draw on both sheets, then last February's final. */
+  DB.prepare('UPDATE squares_grid SET rows_digits = ?, cols_digits = ? WHERE pool_id = ?')
+    .run(JSON.stringify(IDENTITY.rows), JSON.stringify(IDENTITY.cols), 'SQRS01');
+  Date.now = () => KICKOFF + 5 * 3600000;
+  FEED = PLAYED;
+  const f = await P.loadSquares(api, { force: true });
+  const lines = P.payoutLines(f.sq).map((l) => l.text);
+  assert.deepEqual(lines, ['1st quarter · 40% · 200 marbles · member', 'Halftime · 100 marbles · rolled to the 3rd quarter',
+    '3rd quarter · 200 marbles · rolled to the final', 'Final · 20% · 300 marbles (200 rolled in) · commish']);
+  assert.equal(P.youLine(f.sq), 'You: 10 marbles in · 200 won');
+  const root = draw(f);
+  const pot = root.querySelector('.sq-pot');
+  assert.equal(pot.querySelector('.sq-h').textContent, 'Pot 500 marbles');
+  assert.deepEqual(pot.querySelectorAll('.sq-pay').map((li) => li.textContent), lines);
+  assert.deepEqual(pot.querySelectorAll('.sq-pay').map((li) => [li.dataset.mine, li.dataset.nobody]),
+    [['true', undefined], [undefined, 'true'], [undefined, 'true'], [undefined, undefined]]);
+  assert.equal(pot.querySelector('.sq-you').textContent, 'You: 10 marbles in · 200 won');
+  assert.equal(root.querySelector('.sq-foot').textContent, P.RULES_FULL + ' The standings rank by points; the marbles are counted beside them.');
+  assert.doesNotMatch(words(root), /\$|money|dollar/i);
+
+  /* Sheet 1, 1 marble a square: a hundred in the pot, and the final on nobody's square. */
+  const s1 = (await P.call(api, '/api/squares?pool=SQRS01')).j;
+  assert.deepEqual(P.payoutLines(s1).map((l) => l.text), ['1st quarter · 25% · 25 marbles · commish',
+    'Halftime · 25 marbles · rolled to the 3rd quarter', '3rd quarter · 50 marbles · rolled to the final', 'Final · 75 marbles · nobody’s square']);
+  assert.equal(P.youLine(s1), 'You: 3 marbles in · 0 won');
+
+  /* The board, summed over both sheets by the real server - and P5's reading of it. */
+  const rows = await squaresStandings(ENV, 'SQRS01', Date.now(), async () => new Response(JSON.stringify(PLAYED)));
+  assert.deepEqual(rows.map((r) => [r.name, r.points, r.marblesIn, r.marblesWon]), [['commish', 4, 11, 325], ['member', 1, 13, 200]]);
+  const S = new Function([lift(P5_SRC, 'function safeName('), lift(P5_SRC, 'function shapeF1Rows('),
+    lift(P5_SRC, 'function squaresUnits('), lift(P5_SRC, 'function squaresAddPot('), lift(P5_SRC, 'function squaresHasPot('),
+    'return { shapeF1Rows, squaresUnits, squaresAddPot, squaresHasPot };'].join('\n'))();
+  assert.match(code(P5_SRC), /if \(sport === 'squares'\) squaresAddPot\(rows, ss\.rows \|\| \[\]\);/, 'the squares board, and only it');
+  const shaped = S.squaresAddPot(S.shapeF1Rows(rows, 'member', 'commish'), rows);
+  assert.deepEqual(shaped.map((r) => [r.displayName, r.rank, r.points, r.potIn, r.potWon]),
+    [['commish', 1, 4, 11, 325], ['member', 2, 1, 13, 200]]);
+  assert.equal(S.squaresHasPot(shaped), true);
+  assert.equal(S.squaresHasPot(shaped.map((r) => ({ ...r, potIn: 0 }))), false, 'a points-only board keeps its one column');
+  for (const n of [0, 1, 2, 999, 1000, 12345, 2.7, -3, 'x']) assert.equal(S.squaresUnits(n), marbles(n), 'P5 mirrors src/lib/squares.ts marbles(' + n + ')');
+  const C5 = code(P5_SRC);
+  assert.match(C5, /if \(mb\) head\.append\(el\('span', 'p5-col', 'In'\), el\('span', 'p5-col', 'Won'\)\);/);
+  assert.match(C5, /\(mb \? ' p5-table--pot' : ''\)/);
+  assert.match(C5, /el\('span', 'p5-num num p5-pot', String\(r\.potIn\)\), el\('span', 'p5-num num p5-pot', String\(r\.potWon\)\), s\);/);
+  assert.match(P5_CSS, /\.scr-p5-standings \.p5-table--pot \.p5-row \{ grid-template-columns: 26px 24px 22px minmax\(0, 1fr\) 40px 44px 52px; \}/);
+  assert.ok(flat(P5_SRC).includes(' In and Won count marbles, summed over every sheet.'));
+  assert.doesNotMatch(flat(P5_SRC), /\$\s?\d|dollar/i);
+});
+
 /* ------------------------------------------------------------ Home */
 
 function liftHome(name) {
@@ -426,7 +848,7 @@ function loadHome() {
   return { ...H, loc };
 }
 
-test('Home: Big Game squares in Football between the NFL and college football - a words tile with the game\'s day - there on Sept 13, gone on Feb 16, 2027', async () => {
+test('Home: Big Game squares in Football between the NFL and college football - our own drawn mark with the game\'s day under it - there on Sept 13, gone on Feb 16, 2027', async () => {
   const H = loadHome();
   assert.equal(H.HOME_DATED.squares, BIG_GAME.kickoffUtc, 'Home\'s date is the server\'s kickoff');
   const football = H.HOME_FAMILIES.find((f) => f.h === 'Football');
@@ -440,12 +862,18 @@ test('Home: Big Game squares in Football between the NFL and college football - 
   assert.deepEqual(fb.querySelectorAll('.lg-league').map((b) => b.dataset.sport), ['nfl', 'squares', 'college-football']);
   assert.equal(fb.rollRow.className, 'lg-fam-row n3', 'three across');
   const sq = fb.querySelector('.lg-league[data-sport="squares"]');
-  assert.equal(sq.querySelector('img'), null, 'a words tile, like Cricket');
-  assert.equal(sq.querySelector('.lg-league-n').textContent, 'Big Game squares');
-  assert.equal(sq.querySelector('.lg-league-c').textContent, H.homeDatedCap('squares'));
+  /* Jason, 2026-09-13: "do the big game squares on the home tile next" - our own drawn
+     mark (a squares grid with one square lit), never the NFL's or the game's. */
+  assert.equal(H.HOME_MARKS.squares, '/logos/leagues/squares-500.svg');
+  for (const f of ['squares-500.svg', 'squares-500-dark.svg']) {
+    assert.ok(existsSync(new URL('../public/logos/leagues/' + f, import.meta.url)), f + ' is on disk');
+  }
+  assert.ok(sq.querySelector('img.lg-league-logo'), 'the tile carries the mark');
+  assert.equal(sq.querySelector('.lg-league-n'), null, 'the mark stands for the name');
+  assert.equal(sq.querySelector('.lg-league-c').textContent, H.homeDatedCap('squares'), 'the day under it, like the NCAA Men / Women captions');
   assert.equal(sq.dataset.label, 'Big Game squares, ' + H.homeDatedCap('squares'));
   if (new Date(KICKOFF).getTimezoneOffset() > 0) assert.equal(H.homeDatedCap('squares'), 'Sun, Feb 14', 'in the Americas, Sunday the 14th');
-  assert.equal(fb.querySelectorAll('.lg-fam-mark').length, 2, 'the collapsed header shows the two shields - no mark for the game');
+  assert.equal(fb.querySelectorAll('.lg-fam-mark').length, 3, 'the collapsed header shows the two shields and the grid');
 
   const gone = H.homeFamilies(FEB16).querySelector('.lg-fam[data-fam="football"]');
   assert.equal(gone.querySelector('.lg-league[data-sport="squares"]'), null, 'gone a day after kickoff');
@@ -486,10 +914,13 @@ test('group create: "Big Game squares" in the Football family, kickoff, no sprea
   assert.deepEqual(G1.createPayload({ name: 'grid-x', pledged: true, sport: 'squares', ats: true, scope: 'top25' }),
     { name: 'grid-x', sport: 'squares', pledge: true, ats: false }, 'never a spread or a scope');
   assert.equal(G1.lockWord('squares'), 'kickoff');
-  assert.equal(G1.sportNote('squares'), 'Claim squares on a 10 × 10 grid until kickoff. At kickoff the numbers 0–9 are drawn '
-    + 'at random for each team. At the end of each quarter the square where the last digits of the two scores meet scores '
-    + 'points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 (overtime counts in the final). A square nobody claimed scores nobody.');
+  assert.equal(G1.sportNote('squares'), 'Claim squares on a 10 × 10 sheet until its numbers are drawn - at kickoff, or '
+    + 'earlier when the commissioner draws a sheet. The numbers 0–9 are drawn at random for each team, and a drawn sheet is '
+    + 'closed. A group can run more than one sheet, and your points add up across them. At the end of each quarter the '
+    + 'square where the last digits of the two scores meet scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 '
+    + '(overtime counts in the final). A square nobody claimed scores nobody.');
   assert.equal(P.RULES_FULL, G1.SQUARES_RULES, 'the grid and group create say the same rules');
+  assert.ok(P.RULES_SHORT.includes('at kickoff, or earlier when the commissioner draws a sheet') && P.RULES_SHORT.includes('a drawn sheet is closed'));
   assert.equal(G1.periodLabel('squares', 0), 'One grid, the Big Game');
   assert.equal(G1.picksLine({ sport: 'squares', ats: true }), 'Squares on a 10 × 10 grid, scored in points');
   assert.equal(G1.shareText('grid-x', 'BCD234', 'squares'),
@@ -514,10 +945,15 @@ test('commissioner, group rules and standings: the label, no spread switch, the 
   assert.equal(G3.isDaySport('squares'), false);
   assert.ok(G3_SRC.includes("squares: 'Big Game squares'"), 'the League row');
   const F3 = flat(G3_SRC);
-  assert.ok(F3.includes('Or it plays Big Game squares - one grid of a hundred squares on the Big Game, claimed until kickoff.'));
+  assert.ok(F3.includes('Or it plays Big Game squares - sheets of a hundred squares on the Big Game, each claimed until its numbers are drawn.'));
   assert.ok(F3.includes('The 1st quarter is worth 1 point, halftime 2, the 3rd quarter 1 and the final 3. Overtime counts in the final.'));
   assert.ok(F3.includes('A square nobody claimed scores nobody.'));
-  assert.ok(F3.includes('Set how many squares each person may hold, until kickoff.'));
+  assert.ok(F3.includes('Claim squares until a sheet’s numbers are drawn - at kickoff, or earlier when the commissioner draws it.'));
+  assert.ok(F3.includes('A drawn sheet is closed - nobody can claim or give back a square on it.'));
+  assert.ok(F3.includes('Add sheets until kickoff, and draw a sheet’s numbers early. Before a sheet is drawn, set how many '
+    + 'squares each person may hold on it; name it any time.'));
+  assert.ok(G3.SQUARES_RULES.includes('until its numbers are drawn: at kickoff, or earlier when the commissioner draws a sheet'));
+  assert.doesNotMatch(F3, /\$|dollar|money/i);
   assert.match(code(G3_SRC), /: isSquares\(sport\) \? 'Points, from the squares that hit'/);
 
   const S = new Function([lift(P5_SRC, 'const SPORT_LABEL = {'), lift(P5_SRC, 'function groupSport('),

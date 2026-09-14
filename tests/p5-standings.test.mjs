@@ -262,9 +262,25 @@ test('a dash is not a zero — the pre-week table', () => {
  * 3. CONTRACT §5 — the checks that fail a piece silently
  * ------------------------------------------------------------------ */
 
+/* The one place the pool board may say "marble" is its SQUARES MARBLES block: squares-only
+ * declarations, and no other betting or purchase word in them. Both guards below skip that
+ * block and nothing else - "marble" anywhere outside it still fails. */
+const SQ_MARBLES = /\/\* ---- SQUARES MARBLES[\s\S]*?\/\* ---- end SQUARES MARBLES ---- \*\//g;
+function withoutSquaresMarbles(src) {
+  const blocks = src.match(SQ_MARBLES) || [];
+  assert.equal(blocks.length, 1, 'exactly one SQUARES MARBLES block');
+  const body = stripComments(blocks[0]);
+  const decls = [...body.matchAll(/^(?:function|const|let)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
+  assert.ok(decls.length > 0 && decls.every((n) => /^(squares|SQUARES_)/.test(n)), 'only squares declarations: ' + decls.join(', '));
+  assert.doesNotMatch(body, /\b(stakes?|staked|staking|odds|prices?|priced|bets?|betting|wager\w*|credits?|coins?|top-?up|purchase|buy|refill)\b/i,
+    'no other betting or purchase word inside it');
+  return src.replace(SQ_MARBLES, '');
+}
+
 test('the pool board never says Marbles, and never says any of the purchase words', () => {
   const banned = ['marble', 'credit', 'coin', 'top-up', 'purchase', ' buy ', 'refill'];
-  const js = stripComments(SCREEN_SRC).toLowerCase();
+  // Squares sheets only: Jason, "call them marbles for all i care" - settled.md, "A squares sheet's box price is in marbles, never dollars".
+  const js = stripComments(withoutSquaresMarbles(SCREEN_SRC)).toLowerCase();
   const css = stripComments(CSS_SRC).toLowerCase();
   for (const w of banned) {
     assert.ok(!js.includes(w), `screen ships the word "${w.trim()}"`);
@@ -332,7 +348,7 @@ test('the screen fetches nothing, declares no types, and uses the SHARED chip', 
    * honest route - a real board off D1 - to be replaced by invented rows to
    * satisfy a purity rule about a different function. */
   const renderBody = js.slice(js.indexOf('export function render'));
-  assert.ok(!/fetch\s*\(|XMLHttpRequest|WebSocket/.test(renderBody),
+  assert.ok(!/\bfetch\s*\(|XMLHttpRequest|WebSocket/.test(renderBody),
     'render() reached the network - data arrives as an argument');
   /* 🔴 THIS ASSERTION IS INVERTED ON PURPOSE, 2026-09-08. It used to demand the
    * shared TEAM CHIP in the mark slot, and it was enforcing the wrong thing.
@@ -430,7 +446,8 @@ test('group state: the doors - no group to #/g, empty to #/gpicks, signed out to
 });
 
 test('group state: no betting words anywhere in what ships', () => {
-  const js = stripComments(SCREEN_SRC);
+  // Squares sheets only: Jason, "call them marbles for all i care" - settled.md, "A squares sheet's box price is in marbles, never dollars".
+  const js = stripComments(withoutSquaresMarbles(SCREEN_SRC));
   const css = stripComments(CSS_SRC);
   const bad = /\b(marbles?|stakes?|staked|staking|odds|prices?|priced|bets?|betting|wager\w*)\b/i;
   assert.ok(!bad.test(js), `screen ships "${(js.match(bad) || [])[0]}"`);

@@ -234,10 +234,11 @@ export function spreadNote(s) {
 
 /** How a Big Game squares group plays, in the words the screens share - the
  *  points are src/lib/squares.ts PERIODS. */
-export const SQUARES_RULES = 'Claim squares on a 10 × 10 grid until kickoff. At kickoff the numbers 0–9 are drawn '
-  + 'at random for each team. At the end of each quarter the square where the last digits of the two scores meet '
-  + 'scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 (overtime counts in the final). '
-  + 'A square nobody claimed scores nobody.';
+export const SQUARES_RULES = 'Claim squares on a 10 × 10 sheet until its numbers are drawn - at kickoff, or earlier when '
+  + 'the commissioner draws a sheet. The numbers 0–9 are drawn at random for each team, and a drawn sheet is closed. '
+  + 'A group can run more than one sheet, and your points add up across them. At the end of each quarter the square '
+  + 'where the last digits of the two scores meet scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 '
+  + '(overtime counts in the final). A square nobody claimed scores nobody.';
 
 /** The line under the Sport control: how the chosen sport is played. */
 export function sportNote(s) {

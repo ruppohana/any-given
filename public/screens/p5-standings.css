@@ -262,6 +262,9 @@
    F1 group its points, so the week column goes and the name takes the room. */
 .scr-p5-standings .p5-table--one .p5-head,
 .scr-p5-standings .p5-table--one .p5-row { grid-template-columns: 26px 24px 22px minmax(0, 1fr) 58px; }
+/* A squares board with a priced sheet: In and Won before Points. */
+.scr-p5-standings .p5-table--pot .p5-head,
+.scr-p5-standings .p5-table--pot .p5-row { grid-template-columns: 26px 24px 22px minmax(0, 1fr) 40px 44px 52px; }
 
 /* BOAST - Share, X, Text. Each is a full tap target, and they split one row
    rather than wrap or run off it: no sideways scroll at 393px. */

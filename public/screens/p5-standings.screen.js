@@ -572,6 +572,41 @@ function answersText(r) {
   return r.correct + ' of ' + r.settled + ' right';
 }
 
+/* ---- SQUARES MARBLES - the one place this board says the word. Marbles were hidden when the
+ * app went all pool; Jason, 2026-09-13, allowed them back as the unit on Big Game squares
+ * sheets only: "call them marbles for all i care" (vault settled.md: "A squares sheet's box
+ * price is in marbles, never dollars"). A count on a sheet - never the live board's balance.
+ * Only squares declarations live here; tests/p5-standings.test.mjs skips this block and
+ * nothing else. ---- */
+
+/** "1 marble", "25 marbles" - src/lib/squares.ts marbles(), mirrored because this screen
+ *  imports no lib; tests/squares-screen.test.mjs pins the two equal. */
+function squaresUnits(n) {
+  const v = Math.max(0, Math.floor(Number(n) || 0));
+  return v.toLocaleString('en-US') + (v === 1 ? ' marble' : ' marbles');
+}
+
+/** A squares board's rows (shapeF1Rows) get what each person put in and won over every
+ *  sheet, from the API's rows (src/squares-pool.ts squaresStandings), matched by id. */
+function squaresAddPot(rows, api) {
+  const by = new Map((api || []).map((r) => [String(r && r.id), r]));
+  for (const r of rows || []) {
+    const a = by.get(String(r.userId)) || {};
+    r.potIn = Number(a.marblesIn) || 0;
+    r.potWon = Number(a.marblesWon) || 0;
+  }
+  return rows;
+}
+
+/** Somebody put some in: In and Won get columns beside the points. */
+function squaresHasPot(rows) {
+  return (rows || []).some((r) => Number(r && r.potIn) > 0);
+}
+
+const SQUARES_POT_COPY = { foot: ' In and Won count marbles, summed over every sheet.' };
+
+/* ---- end SQUARES MARBLES ---- */
+
 /** A squares row's second line: squares held, and how many hit - never a W-L record. */
 function squaresText(r) {
   const n = (r && r.squares) || 0, h = (r && r.hits) || 0;
@@ -711,6 +746,8 @@ async function loadGroupBoard(opts) {
   if (ss.unit === 'points' || kind === 'points') {
     out.board = 'points';
     const rows = shapeF1Rows(ss.rows || [], youName, commish);
+    /* A squares board also carries each person's marbles in and won (a priced sheet). */
+    if (sport === 'squares') squaresAddPot(rows, ss.rows || []);
     out.weekRows = rows;
     out.seasonRows = rows;
     /* A questions board counts picks made, not questions answered - a member who
@@ -1149,6 +1186,7 @@ export function render(root, data, state) {
       /* src/lib/squares.ts PERIODS: 1, 2, 1, 3 - and an unclaimed square scores nobody. */
       ? 'Points from the squares that hit: 1 for the 1st quarter, 2 at halftime, 1 for the 3rd quarter and 3 for '
         + 'the final - overtime counts in the final. A square nobody claimed scores nobody.'
+        + (squaresHasPot(rows) ? SQUARES_POT_COPY.foot : '')
       : qs
       /* src/lib/props.ts scoreProps: the question's own points, void scores nobody. */
       ? 'Points for every right answer, once the commissioner enters it - each question shows what it is worth. '
@@ -1278,14 +1316,19 @@ export function render(root, data, state) {
   /* The board has one figure, not two: a basketball or F1 group. */
   function oneCol() { return state === 'group' && !!data && !!data.board && data.board !== 'week'; }
 
+  /* A squares board with a priced sheet: In and Won columns before Points. */
+  function potCols(rows) { return state === 'group' && !!data && data.sport === 'squares' && squaresHasPot(rows); }
+
   function table(rows) {
-    const card = el('div', 'p5-table' + (oneCol() ? ' p5-table--one' : ''));
+    const mb = potCols(rows);
+    const card = el('div', 'p5-table' + (oneCol() ? ' p5-table--one' : '') + (mb ? ' p5-table--pot' : ''));
 
     /* Sofascore's header treatment: short caps, --dim, over the NUMERIC columns
      * only. Rank and name are unlabelled because they need no label. */
     const head = el('div', 'p5-head');
     head.append(el('span', null, ''), el('span', null, ''), el('span', null, ''), el('span', null, ''));
     if (oneCol()) {
+      if (mb) head.append(el('span', 'p5-col', 'In'), el('span', 'p5-col', 'Won'));
       head.appendChild(el('span', 'p5-col p5-col--on', data.board === 'points' ? 'Points' : 'Season'));
       card.appendChild(head);
     } else {
@@ -1399,13 +1442,17 @@ export function render(root, data, state) {
     const s = el('span', 'p5-num num' + (basis === 'season' ? ' p5-num--on' : ''), dash(r.seasonPoints));
 
     const one = oneCol();
+    const mb = one && potCols(rows);
     a.setAttribute('aria-label',
       (r.rank ? (tied ? 'Tied ' : '') + 'Rank ' + r.rank + ', ' : 'Unranked, ') + r.displayName +
       (r.isSelf ? ' (you)' : '') + (r.isCommish ? ', commissioner' : '') + ', ' +
       (one ? dash(r.seasonPoints) + ' points this season'
-        : dash(r.weekPoints) + ' points this week, ' + dash(r.seasonPoints) + ' this season'));
+        : dash(r.weekPoints) + ' points this week, ' + dash(r.seasonPoints) + ' this season') +
+      (mb ? ', ' + squaresUnits(r.potIn) + ' in, ' + squaresUnits(r.potWon) + ' won' : ''));
 
-    if (one) a.append(rank, mv, chipSlot, nameCell, s);
+    if (mb) a.append(rank, mv, chipSlot, nameCell,
+      el('span', 'p5-num num p5-pot', String(r.potIn)), el('span', 'p5-num num p5-pot', String(r.potWon)), s);
+    else if (one) a.append(rank, mv, chipSlot, nameCell, s);
     else a.append(rank, mv, chipSlot, nameCell, w, s);
     li.appendChild(a);
     return li;

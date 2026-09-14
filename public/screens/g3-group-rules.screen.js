@@ -105,8 +105,10 @@ export function hasNoSpread(s) { return isRacing(s) || isSoccer(s) || isProps(s)
 /** How a squares group plays - group create's words (g1-group SQUARES_RULES), with the
  *  grid said in words: this page never types a number that could read as one of its
  *  LIMITS (tests/g3-group-rules.test.mjs). */
-export const SQUARES_RULES = 'Claim squares on a grid of a hundred - ten by ten - until kickoff. At kickoff the '
-  + 'numbers 0–9 are drawn at random for each team. At the end of each quarter the square where the last digits of the two scores meet '
+export const SQUARES_RULES = 'Claim squares on a sheet of a hundred - ten by ten - until its numbers are drawn: at '
+  + 'kickoff, or earlier when the commissioner draws a sheet. The numbers 0–9 are drawn at random for each team, and a '
+  + 'drawn sheet is closed. A group can run more than one sheet, and your points add up across them. '
+  + 'At the end of each quarter the square where the last digits of the two scores meet '
   + 'scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 (overtime counts in the final). '
   + 'A square nobody claimed scores nobody.';
 
@@ -288,7 +290,7 @@ function sHow() {
       'League, La Liga, Liga MX, UFC, cricket, the Presidents Cup, Formula 1 or NASCAR (Cup, Trucks or O’Reilly, ' +
       'formerly Xfinity) - chosen when it starts.',
     'Or it plays questions instead - an awards show, a TV finale, anything the commissioner writes.',
-    'Or it plays Big Game squares - one grid of a hundred squares on the Big Game, claimed until kickoff.',
+    'Or it plays Big Game squares - sheets of a hundred squares on the Big Game, each claimed until its numbers are drawn.',
     'You join with the code from an invite. The invite link carries the same code, ' +
       'and the code works in any case, with or without spaces.',
     'You need to be signed in with your email, with a handle, to start or join one.',
@@ -319,15 +321,19 @@ function sPicking(sport) {
     return box;
   }
   if (isSquares(sport)) {
-    /* src/squares-pool.ts: a claim is refused from kickoff on, by the server's clock,
-     * and the digits are drawn once, at random, after the lock. */
-    box.appendChild(lead('Claim squares until kickoff. The grid locks at kickoff.'));
+    /* src/squares-pool.ts: a claim is refused once its sheet is drawn - by the
+     * commissioner, or at kickoff by the server's clock - and the digits are drawn
+     * once, at random, by the server. */
+    box.appendChild(lead('Claim squares until a sheet’s numbers are drawn - at kickoff, or earlier ' +
+      'when the commissioner draws it.'));
     box.appendChild(bullets([
-      'A Big Game squares group plays one grid of a hundred squares, ten by ten, on the Big Game.',
+      'A Big Game squares group plays one or more sheets of a hundred squares, ten by ten, on the ' +
+        'Big Game. Each sheet has its own squares and its own draw, and your points add up across them.',
       'Tap an empty square to claim it, and one of yours to let it go. The commissioner sets ' +
-        'how many squares each person may hold.',
-      'At kickoff the numbers 0–9 are drawn at random, once for each team. Nobody chooses them, ' +
-        'the commissioner included.',
+        'how many squares each person may hold on each sheet.',
+      'The numbers 0–9 are drawn at random, once for each team: at kickoff, or earlier when the ' +
+        'commissioner draws a sheet. Nobody chooses them, the commissioner included.',
+      'A drawn sheet is closed - nobody can claim or give back a square on it.',
       'The kickoff time is the server’s, not your phone’s, so a claim cannot slip in late.',
       'Only members can claim in a group. Claiming never joins you to one.'
     ]));
@@ -612,7 +618,8 @@ function sCommish(sport) {
   box.appendChild(bullets([
     ...(isProps(sport) ? ['Write the questions or load a ready set, delete a question before it locks, ' +
       'and enter each answer once it locks.'] : []),
-    ...(isSquares(sport) ? ['Set how many squares each person may hold, until kickoff.'] : []),
+    ...(isSquares(sport) ? ['Add sheets until kickoff, and draw a sheet’s numbers early. Before a sheet is ' +
+      'drawn, set how many squares each person may hold on it; name it any time.'] : []),
     hasNoSpread(sport) ? 'Rename the group.' : 'Rename the group, and switch against the spread on or off.',
     'Send invites, by email through Any Given or by sharing the code or link.',
     'Mute a member. They still pick and stay on the standings, but cannot send ' +

@@ -4,12 +4,20 @@
  * Game, then "do the big game squares next". The app never says the game's name:
  * it is the NFL's trademark, so every word on this screen says "the Big Game".
  *
- * One 10 x 10 grid per group. Members claim squares until kickoff; at kickoff the
- * server draws the digits 0-9 at random, once down the left for the home team (the
- * rows) and once across the top for the away team (the columns). At the end of the
- * 1st quarter, halftime, the end of the 3rd and the final, the square where the last
- * digit of each score meets scores that moment's points. A square nobody claimed
- * scores nobody. Points only.
+ * A group runs one or more SHEETS - 10 x 10 grids, each with its own claims, limit and
+ * draw (Jason: "we will also need to add additional cards to the same pool"; he calls
+ * them sheets - "sometimes we start with 2 sheets", so a person reads "sheet" and the
+ * API says `card`). Members claim squares until a sheet's numbers are drawn: by the
+ * commissioner's "Draw the numbers" (two taps), or at kickoff for a sheet nobody drew.
+ * The server draws the digits 0-9 at random, once down the left for the home team (the
+ * rows) and once across the top for the away team (the columns), and a drawn sheet is
+ * closed. At the end of the 1st quarter, halftime, the end of the 3rd and the final,
+ * the square where the last digit of each score meets scores that moment's points,
+ * summed over every sheet on the standings. A square nobody claimed scores nobody.
+ *
+ * "keep the same size, the person who is on the page has their squares highlighted":
+ * the squares stay ~30px at 393px; yours are filled with the accent. Before a draw an
+ * open square carries a faint "+".
  *
  * The Worker is src/squares-pool.ts; the rules are src/lib/squares.ts, the one copy
  * this screen imports too (BIG_GAME, PERIODS, cellOf). The server is the only clock:
@@ -29,7 +37,10 @@ import { stateBlock, STATES_CSS } from '/components/states.js';
 import { pageHeader, HEADER_CSS } from '/components/header.js';
 import { myGroups, currentGroupId, setCurrentGroupId, groupSwitcher, forgetGroups, GROUP_CSS } from '/components/group.js';
 import { startJoinCard, startJoinSheet, noGroupTap, START_JOIN_CSS } from '/components/start-join.js';
-import { BIG_GAME, PERIODS, SQUARES_LIMITS, cellOf } from '/src/lib/squares.js';
+import {
+  BIG_GAME, PERIODS, SQUARES_LIMITS, cellOf, marbles, DEFAULT_SPLIT, MAX_BOX, SHEET_NAME_MAX,
+  cleanSheetName, cleanSplit, cleanBoxPrice, sheetPayouts
+} from '/src/lib/squares.js';
 
 export const id = 'squares';
 export const title = 'Big Game squares';
@@ -40,12 +51,14 @@ export const SQUARES_SPORT = 'squares';
 
 /** The rules, two lines - under the grid a person has not played yet. The points
  *  are src/lib/squares.ts PERIODS. */
-export const RULES_SHORT = 'Claim squares until kickoff. At kickoff the numbers 0–9 are drawn at random for each '
-  + 'team, and at each quarter the square where the last digits of the two scores meet scores points.';
-export const RULES_FULL = 'Claim squares on a 10 × 10 grid until kickoff. At kickoff the numbers 0–9 are drawn '
-  + 'at random for each team. At the end of each quarter the square where the last digits of the two scores meet '
-  + 'scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 (overtime counts in the final). '
-  + 'A square nobody claimed scores nobody.';
+export const RULES_SHORT = 'Claim squares until the numbers are drawn - at kickoff, or earlier when the commissioner '
+  + 'draws a sheet. The numbers 0–9 are drawn at random for each team, and a drawn sheet is closed. At each quarter '
+  + 'the square where the last digits of the two scores meet scores points.';
+export const RULES_FULL = 'Claim squares on a 10 × 10 sheet until its numbers are drawn - at kickoff, or earlier when '
+  + 'the commissioner draws a sheet. The numbers 0–9 are drawn at random for each team, and a drawn sheet is closed. '
+  + 'A group can run more than one sheet, and your points add up across them. At the end of each quarter the square '
+  + 'where the last digits of the two scores meet scores points - 1st quarter 1, halftime 2, 3rd quarter 1, final 3 '
+  + '(overtime counts in the final). A square nobody claimed scores nobody.';
 
 /* ------------------------------------------------------------------ *
  * PURE - tests/squares-screen.test.mjs runs these against responses built by
@@ -161,18 +174,178 @@ export function scoreText(g) {
   return h + ' ' + g.homeScore + ' – ' + a + ' ' + g.awayScore;
 }
 
-/** The pinned line. Before kickoff: what you hold, what is taken, when it locks.
- *  From kickoff: Locked and the score - Final once it is. */
+/* ---- sheets. The API's `card` is a person's "sheet". ---- */
+
+/** A sheet's name - the commissioner's, else "Sheet 2". `c` is a `cards[]` item, or
+ *  sheetOf() of the sheet on show (GET /api/squares `name` is the GROUP's name). */
+export function sheetName(c) {
+  const n = String((c && c.name) || '').trim();
+  return n || 'Sheet ' + (Number(c && c.card) || 1);
+}
+
+/** The sheet on show, in the shape of a `cards[]` item. */
+export function sheetOf(sq) {
+  return { card: Number(sq && sq.card) || 1, name: String((sq && sq.sheetName) || ''), boxPrice: Number(sq && sq.boxPrice) || 0,
+           drawn: !!(sq && sq.drawn), taken: Number(sq && sq.taken) || 0, mine: Number(sq && sq.myCount) || 0 };
+}
+
+/** The group's sheets from GET /api/squares, or just the one on show. */
+export function sheetsOf(d) {
+  if (d && Array.isArray(d.cards) && d.cards.length) return d.cards;
+  return [sheetOf(d)];
+}
+
+/** A switcher button: "Sheet 2 · 3 yours". */
+export function sheetLabel(c) {
+  return sheetName(c) + ' · ' + (Number(c && c.mine) || 0) + ' yours';
+}
+
+/** More than one sheet, or the commissioner may add one: the switcher shows. */
+export function showsSheets(d) {
+  return sheetsOf(d).length > 1 || !!(d && d.canAddCard);
+}
+
+const SHEET_KEY = 'ag.sqSheet.';
+
+/** The last sheet this phone looked at in a group - 1 when it has none, or storage
+ *  is blocked. */
+export function savedSheet(groupId) {
+  try {
+    const n = Number(localStorage.getItem(SHEET_KEY + groupId));
+    return Number.isInteger(n) && n >= 1 ? n : 1;
+  } catch { return 1; }
+}
+
+export function saveSheet(groupId, n) {
+  try { localStorage.setItem(SHEET_KEY + groupId, String(n)); } catch { /* a blocked store just forgets */ }
+}
+
+/** GET /api/squares for a sheet - the bare route for sheet 1, the server's default. */
+export function gridUrl(pool, card) {
+  const n = Number(card) || 1;
+  return '/api/squares?pool=' + encodeURIComponent(pool) + (n > 1 ? '&card=' + n : '');
+}
+
+/* ---- marbles. A sheet's box price is a count of MARBLES (src/lib/squares.ts) - never
+ * dollars, never "money". The app shows the pot and the payouts; it holds nothing. ---- */
+
+/** Under a sheet's name: "5 marbles a square", or "Points only" at 0. */
+export function priceLine(boxPrice) {
+  const n = Number(boxPrice) || 0;
+  return n > 0 ? marbles(n) + ' a square' : 'Points only';
+}
+
+const blankish = (v) => String(v == null ? '' : v).trim() === '';
+
+/** The commissioner's live sum while setting a sheet up. Jason: "assume all marbles are
+ *  distributed" - the pot is the whole sheet, 100 squares x the cost per square, claimed
+ *  or not (src/squares-pool.ts), so every quarter's payout is known before anyone claims:
+ *  "Pot 500 marbles · 1st quarter 125 · Halftime 125 · 3rd quarter 125 · Final 125". */
+export function potPreview(boxPrice, split) {
+  const price = blankish(boxPrice) ? null : cleanBoxPrice(boxPrice);
+  if (price == null) return { pot: null, amounts: null, text: 'The cost per square is 0 to ' + marbles(MAX_BOX) + '.' };
+  if (price === 0) return { pot: 0, amounts: null, text: 'Points only - no pot.' };
+  const pot = price * SQUARES_LIMITS.cells;
+  const sp = !Array.isArray(split) || split.some(blankish) ? null : cleanSplit(split.map(Number));
+  if (!sp) return { pot, amounts: null, text: 'Pot ' + marbles(pot) + ' · the payouts have to add up to 100%' };
+  const amounts = sheetPayouts(pot, sp, []).map((p) => p.amount);
+  return { pot, amounts, text: 'Pot ' + marbles(pot) + ' · ' + PERIODS.map((p, i) => p.label + ' ' + amounts[i].toLocaleString('en-US')).join(' · ') };
+}
+
+/** The commissioner's two quick splits. */
+export const QUICK_SPLITS = [['even', 'Even (25/25/25/25)', DEFAULT_SPLIT], ['final', 'Final pays most (20/20/20/40)', [20, 20, 20, 40]]];
+
+const ROLL_TO = { half: 'halftime', q3: 'the 3rd quarter', final: 'the final' };
+
+/** A priced sheet's payouts, one line per scoring moment (GET /api/squares `payouts`) -
+ *  known before a square is claimed, since the pot is the whole sheet: "1st quarter · 25%
+ *  · 125 marbles", then once it has passed "... · Ann", "Halftime · 125 marbles · rolled
+ *  to the 3rd quarter" or "Final · 375 marbles · nobody’s square". `amount` already
+ *  carries what rolled in; how much is the amount less the moment's own share of the
+ *  pot - the same sheetPayouts the server uses, with nothing settled. */
+export function payoutLines(sq) {
+  const list = sq && Array.isArray(sq.payouts) ? sq.payouts : [];
+  const own = sheetPayouts(Number(sq && sq.pot) || 0, sq && sq.split, []);
+  return list.map((p, i) => {
+    const amount = Number(p.amount) || 0;
+    const base = own.find((o) => o.key === p.key);
+    const carry = Math.max(0, amount - (base ? base.amount : 0));
+    const next = list[i + 1];
+    let text;
+    if (p.rolled) text = p.label + ' · ' + marbles(amount) + ' · rolled to ' + (ROLL_TO[next && next.key] || 'the next quarter');
+    else if (p.unclaimed) text = p.label + ' · ' + marbles(amount) + ' · nobody’s square';
+    else text = p.label + ' · ' + p.percent + '% · ' + marbles(amount) + (carry ? ' (' + carry.toLocaleString('en-US') + ' rolled in)' : '')
+      + (p.settled ? ' · ' + (p.name || 'Someone') : '');
+    return { key: p.key, text, settled: !!p.settled, mine: !!p.mine, nobody: !!(p.rolled || p.unclaimed) };
+  });
+}
+
+/** "You: 15 marbles in · 25 won" - this sheet. */
+export function youLine(sq) {
+  const won = Math.max(0, Math.floor(Number(sq && sq.marblesWon) || 0));
+  return 'You: ' + marbles(Number(sq && sq.marblesIn) || 0) + ' in · ' + won.toLocaleString('en-US') + ' won';
+}
+
+/** Where the commissioner's sheet settings start: the sheet as the server has it. A
+ *  sheet with no name of its own starts blank, with "Sheet 2" as the placeholder. */
+export function draftOf(sq) {
+  const card = Number(sq && sq.card) || 1;
+  const nm = String((sq && sq.sheetName) || '');
+  const split = sq && Array.isArray(sq.split) && sq.split.length === 4 ? sq.split : DEFAULT_SPLIT;
+  return { name: nm === 'Sheet ' + card ? '' : nm, boxPrice: String(Number(sq && sq.boxPrice) || 0),
+           split: split.map(String), max: Number(sq && sq.maxPerPerson) || SQUARES_LIMITS.maxDefault };
+}
+
+export const splitSum = (split) => (split || []).reduce((a, v) => a + (Number(v) || 0), 0);
+
+/** What Save sends: only the fields that changed, and `ok` false while one is not valid.
+ *  After the draw (`open` false) only the name can change. */
+export function draftChanges(sq, draft, open) {
+  const start = draftOf(sq);
+  const body = {};
+  let ok = true;
+  const nm = cleanSheetName(draft.name);
+  if (nm !== cleanSheetName(start.name)) body.name = nm;
+  if (open) {
+    const blank = (v) => String(v == null ? '' : v).trim() === '';
+    const price = blank(draft.boxPrice) ? null : cleanBoxPrice(draft.boxPrice);
+    if (price == null) ok = false;
+    else if (price !== Number(start.boxPrice)) body.boxPrice = price;
+    const split = draft.split.some(blank) ? null : cleanSplit(draft.split.map(Number));
+    if (!split) ok = false;
+    else if (split.some((v, i) => v !== Number(start.split[i]))) body.split = split;
+    const max = stepMax(draft.max, 0);
+    if (max !== Number(start.max)) body.maxPerPerson = max;
+  }
+  return { body, ok, changed: Object.keys(body).length > 0 };
+}
+
+/** What a Save changed, from the server's answer: "5 marbles a box · Squares per person: 11." */
+export function savedText(j) {
+  const parts = [];
+  if (j && j.sheetName !== undefined) parts.push('Name: ' + j.sheetName);
+  if (j && j.boxPrice !== undefined) parts.push(priceLine(j.boxPrice));
+  if (j && Array.isArray(j.split)) parts.push('The pot splits ' + j.split.map((v) => v + '%').join(' / '));
+  if (j && j.maxPerPerson !== undefined) parts.push('Squares per person: ' + j.maxPerPerson);
+  return (parts.join(' · ') || 'Saved') + '.';
+}
+
+/** The pinned line. Open: what you hold, what is taken, when it locks. Drawn before
+ *  kickoff: closed. From kickoff: Locked and the score - Final once it is. With more
+ *  than one sheet it starts with the sheet's name. */
 export function summaryLine(d, now, tz) {
   const mine = Number(d && d.myCount) || 0;
   const max = Number(d && d.maxPerPerson) || SQUARES_LIMITS.maxDefault;
   const taken = Number(d && d.taken) || 0;
-  const locked = (d && d.locked === true) || !(now < Number(d && d.lockAt));
-  if (!locked) return 'You hold ' + mine + ' of ' + max + ' · ' + taken + ' of 100 taken · ' + lockText(Number(d.lockAt), now, tz);
+  const kicked = !(now < Number(d && d.lockAt));
+  const locked = (d && d.locked === true) || kicked;
+  const pre = d && Array.isArray(d.cards) && d.cards.length > 1 ? sheetName(sheetOf(d)) + ' · ' : '';
+  if (!locked) return pre + 'You hold ' + mine + ' of ' + max + ' · ' + taken + ' of 100 taken · ' + lockText(Number(d.lockAt), now, tz);
+  if (!kicked) return pre + 'Numbers drawn · closed · You hold ' + mine + ' · ' + taken + ' of 100 taken';
   const st = scoreText(d.game);
-  if (st && d.game.status === 'final') return 'Final · ' + st + ' · You hold ' + mine;
-  if (st) return 'Locked · ' + st + ' · You hold ' + mine;
-  return 'Locked · You hold ' + mine + ' · ' + taken + ' of 100 taken';
+  if (st && d.game.status === 'final') return pre + 'Final · ' + st + ' · You hold ' + mine;
+  if (st) return pre + 'Locked · ' + st + ' · You hold ' + mine;
+  return pre + 'Locked · You hold ' + mine + ' · ' + taken + ' of 100 taken';
 }
 
 export const pointsText = (n) => n + (n === 1 ? ' pt' : ' pts');
@@ -220,6 +393,26 @@ export function failText(r, fallback) {
   return (r && r.j && typeof r.j.message === 'string' && r.j.message) || fallback;
 }
 
+/** A refusal in this screen's words. The server's sentences say "card"; a person reads
+ *  "sheet", so every code whose sentence names a card is said here - the rest are the
+ *  server's own. `maxSheets` is GET /api/squares maxCards. */
+export function sheetText(r, fallback, maxSheets) {
+  const j = (r && !r.offline && r.j) || {};
+  const max = Number(j.max);
+  const most = Number(maxSheets);
+  switch (j.error) {
+    case 'drawn': return 'The numbers are drawn - this sheet is closed.';
+    case 'locked': return 'The sheets locked at kickoff.';
+    case 'already_drawn': return 'This sheet’s numbers are already drawn.';
+    case 'limit': return max > 0 ? 'You can hold ' + max + (max === 1 ? ' square' : ' squares') + ' on this sheet.'
+      : 'You hold as many squares as this sheet allows.';
+    case 'too_many': return most > 0 ? 'A group can run up to ' + most + ' sheets.' : 'This group cannot add another sheet.';
+    case 'no_card': return 'That sheet is not in this group.';
+    case 'bad_cell': return 'Pick a square on the sheet.';
+    default: return failText(r, fallback);
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * DATA - fetched in previewData and after a tap, never during a draw.
  * ------------------------------------------------------------------ */
@@ -257,10 +450,14 @@ export async function loadSquares(api, opts) {
     const g = chooseGroup(groups, currentGroupId());
     if (!g) return { ...base, view: 'no-group' };
     setCurrentGroupId(g.id);
-    const r = await call(api, '/api/squares?pool=' + encodeURIComponent(g.id));
+    /* The sheet this phone last looked at in the group; one that is gone is sheet 1. */
+    const want = savedSheet(g.id);
+    let r = await call(api, gridUrl(g.id, want));
+    if (r.status === 404 && r.j.error === 'no_card' && want !== 1) r = await call(api, gridUrl(g.id, 1));
     if (r.offline) return { ...base, view: 'offline', groups, groupId: g.id };
     if (r.status === 401) return { ...base, view: 'signed-out' };
     if (r.ok && Array.isArray(r.j.cells)) {
+      saveSheet(g.id, Number(r.j.card) || 1);
       return { ...base, view: 'ready', groups, groupId: g.id, sq: r.j, skew: (Number(r.j.now) || Date.now()) - Date.now() };
     }
     if ((r.status === 403 || r.status === 409) && attempt === 0) {
@@ -326,17 +523,24 @@ async function refresh(host, status, loading, then) {
   if (then) then(next);
 }
 
-/** Read the grid again for the group on screen, keeping the view - after a claim,
- *  a release or a setting. */
-async function reloadGrid(host, d, status) {
+/** Read a sheet again for the group on screen, keeping the view - after a claim, a
+ *  release, a setting, a draw or a new sheet, or to switch to sheet `card`. */
+async function reloadGrid(host, d, status, card) {
   const seq = ++SEQ;
-  const r = await call(apiFn(), '/api/squares?pool=' + encodeURIComponent(d.groupId));
+  const want = Number(card) || Number(d.sq && d.sq.card) || 1;
+  let r = await call(apiFn(), gridUrl(d.groupId, want));
+  if (r.status === 404 && r.j.error === 'no_card' && want !== 1) r = await call(apiFn(), gridUrl(d.groupId, 1));
   if (seq !== SEQ || !host.isConnected) return;
   if (r.ok && Array.isArray(r.j.cells)) {
+    const was = Number(d.sq && d.sq.card) || 1;
     d.sq = r.j;
     d.skew = (Number(r.j.now) || Date.now()) - Date.now();
+    const shown = Number(r.j.card) || 1;
+    saveSheet(d.groupId, shown);
+    /* Another sheet has its own limit and its own draw. */
+    if (shown !== was) { d.draft = null; d.confirmDraw = null; }
   }
-  d.status = status || (r.ok ? null : { tone: 'err', text: failText(r, 'The grid did not load.') });
+  d.status = status || (r.ok ? null : { tone: 'err', text: sheetText(r, 'The sheet did not load.', d.sq && d.sq.maxCards) });
   draw(host, d, 'ready');
 }
 
@@ -441,6 +645,9 @@ function drawReady(host, d) {
   top.appendChild(sl);
   host.appendChild(top);
 
+  /* The sheets, above everything that belongs to one of them. */
+  if (showsSheets(sq)) host.appendChild(sheetSwitcher(host, d));
+
   const bar = el('div', 'sq-total num', summaryLine(sq, now()));
   bar.dataset.squares = d.groupId;
   if (locked) bar.dataset.locked = 'true';
@@ -452,15 +659,24 @@ function drawReady(host, d) {
   if (d.status) st.dataset.tone = d.status.tone;
   host.appendChild(st);
 
-  if (isCommish && !locked) host.appendChild(commishPanel(host, d));
+  /* The commissioner's settings: everything before the draw, the name after it. */
+  if (isCommish) host.appendChild(commishPanel(host, d, !locked));
 
   const m = gridModel(sq);
-  host.appendChild(board(m, { mode: locked ? 'locked' : 'open', busy: d.busy || {}, onTap: (i) => tapCell(host, d, i) }));
-  host.appendChild(el('p', 'sq-rules', locked
-    ? 'The numbers were drawn at kickoff. Each quarter’s square is marked; the square the score is on now is ringed.'
-    : 'Tap an empty square to claim it; tap one of yours to let it go. Yours are tinted. The numbers are drawn at kickoff.'));
+  const kicked = !(now() < Number(sq.lockAt));
+  const priced = Number(sq.boxPrice) > 0;
+  host.appendChild(board(m, { mode: locked ? 'locked' : 'open', busy: d.busy || {}, onTap: (i) => tapCell(host, d, i),
+    sheet: sheetOf(sq) }));
+  host.appendChild(el('p', 'sq-rules', !locked
+    ? 'Tap an empty square to claim it; tap one of yours to let it go. Yours are filled in. The numbers are drawn at '
+      + 'kickoff, or earlier when the commissioner draws this sheet.'
+    : kicked
+      ? 'The numbers are drawn and the sheet is closed. Each quarter’s square is marked; the square the score is on now is ringed.'
+      : 'The numbers are drawn - this sheet is closed. Nobody can claim or give back a square on it.'));
+  if (priced) host.appendChild(potBlock(sq));
   host.appendChild(resultsBlock(sq));
-  host.appendChild(el('p', 'sq-foot', RULES_FULL + ' Points are the only score.'));
+  host.appendChild(el('p', 'sq-foot', RULES_FULL + (priced
+    ? ' The standings rank by points; the marbles are counted beside them.' : ' Points are the only score.')));
 }
 
 /** A tap on the grid before kickoff: claim a free square, release one of yours. The
@@ -479,7 +695,7 @@ async function tapCell(host, d, i) {
   else if (!before) { sq.cells[i] = { name: me, mine: true }; sq.myCount = (Number(sq.myCount) || 0) + 1; sq.taken = (Number(sq.taken) || 0) + 1; }
   d.status = { tone: 'busy', text: 'Saving…' };
   if (host.isConnected) draw(host, d, 'ready');
-  const r = await call(apiFn(), act.path, { pool: d.groupId, cell: i });
+  const r = await call(apiFn(), act.path, { pool: d.groupId, card: Number(sq.card) || 1, cell: i });
   delete d.busy[i];
   const name = 'Square ' + (Math.floor(i / 10) + 1) + '-' + ((i % 10) + 1);
   if (r.ok) {
@@ -490,9 +706,9 @@ async function tapCell(host, d, i) {
   sq.cells[i] = before;
   if (act.release) { sq.myCount = (Number(sq.myCount) || 0) + 1; sq.taken = (Number(sq.taken) || 0) + 1; }
   else if (!before) { sq.myCount = Math.max(0, (Number(sq.myCount) || 0) - 1); sq.taken = Math.max(0, (Number(sq.taken) || 0) - 1); }
-  const status = { tone: 'err', text: failText(r, 'That square did not go through.') };
-  /* Taken or locked: the grid on screen is out of date, so read it again. */
-  if (r.status === 409 && (r.j.error === 'taken' || r.j.error === 'locked' || r.j.error === 'not_yours')) { reloadGrid(host, d, status); return; }
+  const status = { tone: 'err', text: sheetText(r, 'That square did not go through.', sq.maxCards) };
+  /* Taken, drawn or locked: the sheet on screen is out of date, so read it again. */
+  if (r.status === 409 && ['taken', 'drawn', 'locked', 'not_yours'].includes(r.j.error)) { reloadGrid(host, d, status); return; }
   d.status = status;
   if (host.isConnected) draw(host, d, 'ready');
 }
@@ -511,6 +727,14 @@ function board(m, opts) {
   if (m.home.color) wrap.style.setProperty('--team-a', m.home.color);
   if (m.away.color) wrap.style.setProperty('--team-b', m.away.color);
 
+  /* The sheet's own header: its name, then its box price - or "Points only". */
+  if (o.sheet) {
+    const hd = el('div', 'sq-sheethd');
+    hd.appendChild(el('h2', 'sq-sheetname', sheetName(o.sheet)));
+    hd.appendChild(el('p', 'sq-sheetmeta num', priceLine(o.sheet.boxPrice)));
+    wrap.appendChild(hd);
+  }
+
   const away = el('div', 'sq-axis sq-axis--away', m.away.name);
   wrap.appendChild(away);
   const body = el('div', 'sq-body');
@@ -519,7 +743,7 @@ function board(m, opts) {
 
   const grid = el('div', 'sq-grid');
   grid.setAttribute('role', 'group');
-  grid.setAttribute('aria-label', m.drawn ? 'The squares' : 'The squares - the numbers are drawn at kickoff');
+  grid.setAttribute('aria-label', m.drawn ? 'The squares' : 'The squares - the numbers are not drawn yet');
   grid.appendChild(el('span', 'sq-corner'));
   for (let c = 0; c < 10; c++) {
     const h = el('span', 'sq-hd sq-hd--col num', m.cols[c]);
@@ -527,6 +751,8 @@ function board(m, opts) {
     grid.appendChild(h);
   }
   const tappable = o.mode === 'open' || o.mode === 'preview';
+  /* Before a draw an open square reads as claimable; once drawn, open squares are blank. */
+  const plus = tappable && !m.drawn;
   for (let r = 0; r < 10; r++) {
     const h = el('span', 'sq-hd sq-hd--row num', m.rows[r]);
     h.setAttribute('aria-hidden', 'true');
@@ -536,7 +762,11 @@ function board(m, opts) {
       const b = el('button', 'sq-cell');
       b.type = 'button';
       b.dataset.cell = String(cell.i);
-      b.appendChild(el('span', 'sq-ini', cell.text));
+      if (plus && !cell.taken) {
+        const p = el('span', 'sq-plus', '+');
+        p.setAttribute('aria-hidden', 'true');
+        b.appendChild(p);
+      } else b.appendChild(el('span', 'sq-ini', cell.text));
       if (cell.tag) b.appendChild(el('span', 'sq-tag num', cell.tag));
       if (cell.taken) b.dataset.taken = 'true';
       if (cell.mine) b.dataset.mine = 'true';
@@ -552,6 +782,25 @@ function board(m, opts) {
   body.appendChild(grid);
   wrap.appendChild(body);
   return wrap;
+}
+
+/** A priced sheet's pot, what each moment pays, and your line - all in marbles. */
+function potBlock(sq) {
+  const sec = el('section', 'card sq-card sq-pot');
+  sec.setAttribute('aria-label', 'The pot');
+  sec.appendChild(el('h2', 'sq-h num', 'Pot ' + marbles(sq.pot)));
+  const ol = el('ol', 'sq-res sq-pays');
+  for (const l of payoutLines(sq)) {
+    const li = el('li', 'sq-res-i sq-pay num', l.text);
+    li.dataset.key = l.key;
+    li.dataset.done = String(l.settled);
+    if (l.mine) li.dataset.mine = 'true';
+    if (l.nobody) li.dataset.nobody = 'true';
+    ol.appendChild(li);
+  }
+  sec.appendChild(ol);
+  sec.appendChild(el('p', 'sq-you num', youLine(sq)));
+  return sec;
 }
 
 function resultsBlock(sq) {
@@ -573,52 +822,254 @@ function resultsBlock(sq) {
 
 /* ------------------------------------------------------ the commissioner */
 
-/** Squares per person, before kickoff: minus, the number, plus, and Save. Nothing is
- *  sent until Save, and Save names the number it sends. */
-function commishPanel(host, d) {
+const SPLIT_LABEL = { q1: '1st qtr', half: 'Half', q3: '3rd qtr', final: 'Final' };
+
+/** The commissioner's sheet settings. Before the draw (`open`): the sheet's name, its box
+ *  price in marbles, how its pot splits over the four moments - four whole percents that
+ *  add to 100, the running sum shown - and squares per person, then the draw. After the
+ *  draw: the name only. Nothing is sent until Save, and Save sends only what changed. */
+function commishPanel(host, d, open) {
   const sq = d.sq;
+  const card = Number(sq.card) || 1;
   const panel = el('section', 'card sq-card sq-commish');
   panel.setAttribute('aria-label', 'Commissioner');
-  panel.appendChild(el('h2', 'sq-h', 'Commissioner'));
-  if (d.maxDraft == null) d.maxDraft = Number(sq.maxPerPerson) || SQUARES_LIMITS.maxDefault;
-  const lab = el('label', 'sq-label', 'Squares per person');
-  lab.setAttribute('for', 'sq-max');
-  panel.appendChild(lab);
-  const row = el('div', 'sq-step');
-  const input = el('input', 'sq-in num');
-  input.id = 'sq-max';
-  input.type = 'number'; input.min = '1'; input.max = String(SQUARES_LIMITS.maxMax); input.step = '1';
-  input.inputMode = 'numeric';
-  input.value = String(d.maxDraft);
+  panel.appendChild(el('h2', 'sq-h', showsSheets(sq) ? 'Commissioner · ' + sheetName(sheetOf(sq)) : 'Commissioner'));
+  if (!d.draft) d.draft = draftOf(sq);
+  const dr = d.draft;
   const err = el('p', 'sq-err');
   err.setAttribute('role', 'alert');
-  const save = btn('sq-primary sq-save', '');
+  const save = btn('sq-primary sq-save', 'Save');
+  let sum = null, maxIn = null, preview = null;
+  const splitIns = [], amountEls = [];
   const paint = () => {
-    input.value = String(d.maxDraft);
-    save.textContent = 'Save: ' + d.maxDraft;
-    save.disabled = d.maxDraft === Number(sq.maxPerPerson);
-  };
-  const minus = btn('sq-stepb', '−', () => { d.maxDraft = stepMax(d.maxDraft, -1); paint(); });
-  minus.setAttribute('aria-label', 'One fewer');
-  const plus = btn('sq-stepb', '+', () => { d.maxDraft = stepMax(d.maxDraft, 1); paint(); });
-  plus.setAttribute('aria-label', 'One more');
-  input.addEventListener('change', () => { d.maxDraft = stepMax(input.value, 0); paint(); });
-  save.addEventListener('click', async () => {
-    const want = stepMax(d.maxDraft, 0);
-    save.disabled = true; save.textContent = 'Saving…'; err.textContent = '';
-    const r = await call(apiFn(), '/api/squares/settings', { pool: d.groupId, maxPerPerson: want });
-    if (r.ok) {
-      d.maxDraft = null;
-      reloadGrid(host, d, { tone: 'ok', text: 'Squares per person: ' + (Number(r.j.maxPerPerson) || want) + '.' });
-      return;
+    const c = draftChanges(sq, dr, open);
+    save.disabled = !c.changed || !c.ok;
+    if (sum) {
+      const s = splitSum(dr.split);
+      sum.textContent = 'Total ' + s + '%' + (s === 100 ? '' : ' - it has to be 100');
+      sum.dataset.tone = s === 100 ? 'ok' : 'err';
     }
+    /* The pot and each quarter's payout, live, as the cost or the split changes. */
+    if (preview) {
+      const pv = potPreview(dr.boxPrice, dr.split);
+      preview.textContent = pv.text;
+      amountEls.forEach((m, i) => { m.textContent = pv.amounts ? pv.amounts[i].toLocaleString('en-US') : '–'; });
+    }
+    if (maxIn) maxIn.value = String(dr.max);
+  };
+  const field = (id, label, input) => {
+    const l = el('label', 'sq-label', label);
+    l.setAttribute('for', id);
+    input.id = id;
+    panel.append(l, input);
+  };
+
+  const name = el('input', 'sq-in sq-in--text');
+  name.type = 'text'; name.maxLength = SHEET_NAME_MAX; name.autocomplete = 'off';
+  name.placeholder = 'Sheet ' + card;
+  name.value = dr.name;
+  name.addEventListener('input', () => { dr.name = name.value; paint(); });
+  field('sq-name', 'Sheet name', name);
+
+  if (open) {
+    const price = el('input', 'sq-in num');
+    price.type = 'number'; price.min = '0'; price.max = String(MAX_BOX); price.step = '1'; price.inputMode = 'numeric';
+    price.value = String(dr.boxPrice);
+    price.addEventListener('input', () => { dr.boxPrice = price.value; paint(); });
+    field('sq-price', 'Cost per square', price);
+    panel.appendChild(el('p', 'sq-note', 'In marbles. 0 plays this sheet for points only.'));
+
+    /* "the comish will assist in the cost per square and the payout" - the split, with
+       two quick ones, each quarter's marbles under its box, the sum, and the pot. */
+    panel.appendChild(el('p', 'sq-label', 'Payouts'));
+    const quick = el('div', 'sq-quick');
+    for (const [key, label, v] of QUICK_SPLITS) {
+      const b = btn('sq-ghost sq-quickb', label, () => {
+        v.forEach((x, i) => { dr.split[i] = String(x); if (splitIns[i]) splitIns[i].value = String(x); });
+        paint();
+      });
+      b.dataset.quick = key;
+      quick.appendChild(b);
+    }
+    panel.appendChild(quick);
+    const split = el('div', 'sq-split');
+    split.setAttribute('role', 'group');
+    split.setAttribute('aria-label', 'Payouts, in percent of the pot');
+    PERIODS.forEach((p, i) => {
+      const cell = el('label', 'sq-split-i');
+      cell.appendChild(el('span', 'sq-split-l', SPLIT_LABEL[p.key] || p.label));
+      const inp = el('input', 'sq-in num');
+      inp.type = 'number'; inp.min = '0'; inp.max = '100'; inp.step = '1'; inp.inputMode = 'numeric';
+      inp.value = String(dr.split[i]);
+      inp.dataset.split = String(i);
+      inp.setAttribute('aria-label', p.label + ', percent of the pot');
+      inp.addEventListener('input', () => { dr.split[i] = inp.value; paint(); });
+      splitIns.push(inp);
+      cell.appendChild(inp);
+      const m = el('span', 'sq-split-m num', '');
+      m.setAttribute('aria-hidden', 'true');
+      amountEls.push(m);
+      cell.appendChild(m);
+      split.appendChild(cell);
+    });
+    panel.appendChild(split);
+    sum = el('p', 'sq-sum num');
+    sum.setAttribute('aria-live', 'polite');
+    panel.appendChild(sum);
+    preview = el('p', 'sq-preview num');
+    preview.setAttribute('aria-live', 'polite');
+    panel.appendChild(preview);
+
+    const lab = el('label', 'sq-label', 'Squares per person');
+    lab.setAttribute('for', 'sq-max');
+    const row = el('div', 'sq-step');
+    maxIn = el('input', 'sq-in num');
+    maxIn.id = 'sq-max';
+    maxIn.type = 'number'; maxIn.min = '1'; maxIn.max = String(SQUARES_LIMITS.maxMax); maxIn.step = '1';
+    maxIn.inputMode = 'numeric';
+    const minus = btn('sq-stepb', '−', () => { dr.max = stepMax(dr.max, -1); paint(); });
+    minus.setAttribute('aria-label', 'One fewer');
+    const plus = btn('sq-stepb', '+', () => { dr.max = stepMax(dr.max, 1); paint(); });
+    plus.setAttribute('aria-label', 'One more');
+    maxIn.addEventListener('change', () => { dr.max = stepMax(maxIn.value, 0); paint(); });
+    row.append(minus, maxIn, plus);
+    panel.append(lab, row);
+    panel.appendChild(el('p', 'sq-note', 'Lowering it takes nobody’s squares away - it stops new claims past it.'));
+  }
+
+  save.addEventListener('click', async () => {
+    const c = draftChanges(sq, dr, open);
+    if (!c.changed || !c.ok) return;
+    save.disabled = true; save.textContent = 'Saving…'; err.textContent = '';
+    const r = await call(apiFn(), '/api/squares/settings', { pool: d.groupId, card, ...c.body });
+    if (r.ok) { d.draft = null; reloadGrid(host, d, { tone: 'ok', text: savedText(r.j) }); return; }
+    /* Drawn or locked meanwhile: the sheet on screen is out of date. */
+    if (r.status === 409) { d.draft = null; reloadGrid(host, d, { tone: 'err', text: sheetText(r, 'That did not save.') }); return; }
+    save.textContent = 'Save';
     paint();
-    err.textContent = failText(r, 'That did not save.');
+    err.textContent = sheetText(r, 'That did not save.');
   });
-  row.append(minus, input, plus);
-  panel.append(row, save, err);
-  panel.appendChild(el('p', 'sq-note', 'Lowering it takes nobody’s squares away - it stops new claims past it. '
-    + 'It can be changed until kickoff.'));
+  panel.append(save, err);
+  panel.appendChild(el('p', 'sq-note', open
+    ? 'The price, the split and squares per person can change until this sheet’s numbers are drawn; the name, any time.'
+    : 'The numbers are drawn, so only the name can change.'));
   paint();
+  if (open) panel.appendChild(drawBlock(host, d));
   return panel;
+}
+
+/** "a way to randomize the numbers": draw this sheet's numbers now. Two taps - the
+ *  first asks, naming what it does to everyone; the second draws. The server draws
+ *  them (src/squares-pool.ts), once. */
+function drawBlock(host, d) {
+  const sq = d.sq;
+  const n = Number(sq.card) || 1;
+  const box = el('div', 'sq-draw');
+  box.appendChild(el('p', 'sq-label', 'The numbers'));
+  if (d.confirmDraw !== n) {
+    box.appendChild(el('p', 'sq-note', 'Draw this sheet’s numbers now, or they are drawn at kickoff. '
+      + 'They are drawn at random - nobody chooses them.'));
+    box.appendChild(btn('sq-ghost sq-draw-start', 'Draw the numbers', () => {
+      d.confirmDraw = n;
+      d.status = null;
+      draw(host, d, 'ready');
+      const no = host.querySelector && host.querySelector('.sq-draw-no');
+      if (no && no.focus) no.focus();
+    }));
+    return box;
+  }
+  const ask = el('div', 'sq-draw-ask');
+  const q = el('p', 'sq-confirm', 'Draw ' + sheetName(sheetOf(sq)) + '’s numbers now? The sheet closes - nobody can claim or '
+    + 'give back a square after.');
+  q.id = 'sq-draw-q';
+  ask.appendChild(q);
+  const row = el('div', 'sq-draw-row');
+  const go = btn('sq-primary sq-draw-go', d.drawing ? 'Drawing…' : 'Draw', () => drawSheet(host, d));
+  go.setAttribute('aria-describedby', 'sq-draw-q');
+  const no = btn('sq-ghost sq-draw-no', 'Cancel', () => { d.confirmDraw = null; draw(host, d, 'ready'); });
+  go.disabled = no.disabled = !!d.drawing;
+  row.append(go, no);
+  ask.appendChild(row);
+  box.appendChild(ask);
+  return box;
+}
+
+/** The second tap: POST /api/squares/draw, then the sheet again - drawn and closed. */
+async function drawSheet(host, d) {
+  if (d.drawing) return;
+  const n = Number(d.sq.card) || 1;
+  const name = sheetName(sheetOf(d.sq));
+  d.drawing = true;
+  draw(host, d, 'ready');
+  const r = await call(apiFn(), '/api/squares/draw', { pool: d.groupId, card: n });
+  d.drawing = false;
+  d.confirmDraw = null;
+  if (r.ok) { reloadGrid(host, d, { tone: 'ok', text: name + '’s numbers are drawn. The sheet is closed.' }); return; }
+  const status = { tone: r.j && r.j.error === 'already_drawn' ? 'ok' : 'err', text: sheetText(r, 'The numbers were not drawn.') };
+  /* Drawn already, or kickoff came: read the sheet again. */
+  if (r.status === 409) { reloadGrid(host, d, status); return; }
+  d.status = status;
+  if (host.isConnected) draw(host, d, 'ready');
+}
+
+/* ------------------------------------------------------------ the sheets */
+
+/** A segmented row of the group's sheets - "Sheet 2 · 3 yours", the one on show
+ *  pressed - and, for the commissioner before kickoff, "+ Add a sheet". It scrolls
+ *  inside itself; the page never scrolls sideways. */
+function sheetSwitcher(host, d) {
+  const sq = d.sq;
+  const cur = Number(sq.card) || 1;
+  const row = el('div', 'sq-sheets');
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-label', 'Sheets');
+  for (const c of sheetsOf(sq)) {
+    const n = Number(c.card) || 1;
+    const b = btn('sq-sheet', sheetLabel(c), () => { if (n !== cur) switchSheet(host, d, n); });
+    b.dataset.sheet = String(n);
+    b.setAttribute('aria-pressed', String(n === cur));
+    b.setAttribute('aria-label', sheetName(c) + ', ' + (Number(c.mine) || 0) + ' of your squares' + (c.drawn ? ', numbers drawn' : ''));
+    if (c.drawn) b.dataset.drawn = 'true';
+    row.appendChild(b);
+  }
+  if (sq.canAddCard) {
+    const add = btn('sq-sheet sq-addsheet', d.adding ? 'Adding…' : '+ Add a sheet', () => addSheet(host, d));
+    add.disabled = !!d.adding;
+    row.appendChild(add);
+  }
+  /* The one on show stays in view when there are more than fit. */
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      const on = row.querySelector('[aria-pressed="true"]');
+      if (on && on.offsetLeft + on.offsetWidth > row.clientWidth) row.scrollLeft = on.offsetLeft - 8;
+    });
+  }
+  return row;
+}
+
+function switchSheet(host, d, n) {
+  saveSheet(d.groupId, n);
+  d.confirmDraw = null;
+  d.status = null;
+  reloadGrid(host, d, null, n);
+}
+
+/** "+ Add a sheet": POST /api/squares/card, then the new sheet. */
+async function addSheet(host, d) {
+  if (d.adding) return;
+  d.adding = true;
+  d.status = { tone: 'busy', text: 'Adding a sheet…' };
+  draw(host, d, 'ready');
+  const r = await call(apiFn(), '/api/squares/card', { pool: d.groupId });
+  d.adding = false;
+  const n = Number(r.j && r.j.card);
+  if (r.ok && n) {
+    saveSheet(d.groupId, n);
+    reloadGrid(host, d, { tone: 'ok', text: sheetName({ card: n }) + ' is added. Its squares are open.' }, n);
+    return;
+  }
+  const status = { tone: 'err', text: sheetText(r, 'The sheet was not added.', d.sq && d.sq.maxCards) };
+  if (r.status === 409) { reloadGrid(host, d, status); return; }
+  d.status = status;
+  if (host.isConnected) draw(host, d, 'ready');
 }

@@ -3,9 +3,13 @@
    square column is minmax(0, 1fr), so the grid shrinks to the card rather than
    pushing the page. The away team runs across the top, the home team down the
    left. Team color is scoped to .sq-board through --team-a (home) and --team-b
-   (away), never :root, and a side with no color reads as --team-null. Your squares
-   are tinted with the accent; a square that hit is edged in --up, and the one the
-   score is on now is ringed in --gold. Tokens only, no shadows. */
+   (away), never :root, and a side with no color reads as --team-null. The squares
+   stay ~30px at 393px ("keep the same size"). Yours are FILLED with the accent, your
+   initials in --on-accent - the same pair in light and dark; somebody else's keep
+   their initials on the quieter --surface-2; an open square shows a faint "+" until
+   the sheet is drawn. A square that hit is edged in --up, and the one the score is
+   on now is ringed in --gold (--fg on your own, where the accent would vanish).
+   Tokens only, no shadows. */
 .scr-squares { display: grid; gap: 12px; padding-bottom: 96px; align-content: start; }
 .scr-squares .sq { display: grid; gap: 12px; min-width: 0; align-content: start; }
 .scr-squares [hidden] { display: none !important; }
@@ -31,6 +35,51 @@
 .scr-squares .sq-note { margin: -4px 0 0; font-size: 12px; line-height: 1.4; color: var(--dim); }
 .scr-squares .sq-rules,
 .scr-squares .sq-foot { margin: 0 4px; font-size: 12px; line-height: 1.5; color: var(--dim); }
+
+/* The sheets: one segmented row that scrolls inside itself - the page never scrolls
+   sideways, however many sheets there are. */
+.scr-squares .sq-sheets { display: flex; gap: 2px; margin: 0 4px; padding: 2px; min-width: 0;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  border: 1px solid var(--line); border-radius: var(--radius-chip); background: var(--surface-2); }
+.scr-squares .sq-sheets::-webkit-scrollbar { display: none; }
+.scr-squares .sq-sheet { flex: none; min-height: var(--tap-min); padding: 0 12px; font: inherit; font-size: 13px;
+  font-weight: 800; white-space: nowrap; border: 0; border-radius: var(--radius-chip);
+  background: transparent; color: var(--fg); cursor: pointer; }
+.scr-squares .sq-sheet[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.scr-squares .sq-addsheet { color: var(--accent); }
+.scr-squares .sq-sheet:disabled { opacity: .55; cursor: default; }
+/* A sheet's own header, on the board: its name, and room for a line under it. */
+.scr-squares .sq-sheethd { display: grid; gap: 2px; padding: 0 4px 2px; min-width: 0; }
+.scr-squares .sq-sheetname { margin: 0; font-size: var(--t-section); font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+.scr-squares .sq-sheetmeta { margin: 0; font-size: 12px; font-weight: 700; line-height: 1.3; color: var(--dim); }
+
+/* A priced sheet's pot and payouts, in marbles - and your line under them. */
+.scr-squares .sq-you { margin: 0; font-weight: 800; line-height: 1.4; color: var(--fg); overflow-wrap: anywhere; }
+
+/* The commissioner's sheet settings: the name, the box price, the split in four, the sum. */
+.scr-squares .sq-in.sq-in--text { text-align: left; font-weight: 700; }
+.scr-squares .sq-split { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.scr-squares .sq-split-i { display: grid; gap: 4px; min-width: 0; }
+.scr-squares .sq-split-l { font-size: 11px; font-weight: 800; color: var(--dim); text-align: center; white-space: nowrap; }
+.scr-squares .sq-split .sq-in { padding: 0 4px; }
+.scr-squares .sq-split-m { font-size: 11px; font-weight: 700; color: var(--dim); text-align: center; }
+.scr-squares .sq-quick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.scr-squares .sq-quickb { padding: 6px 8px; font-size: 13px; }
+.scr-squares .sq-sum { margin: -4px 0 0; font-size: 12px; font-weight: 800; color: var(--up); }
+.scr-squares .sq-sum[data-tone="err"] { color: var(--down); }
+.scr-squares .sq-preview { margin: 0; font-size: 12px; font-weight: 700; line-height: 1.45; color: var(--fg); overflow-wrap: anywhere; }
+
+/* The commissioner's draw: a quiet button, then an inline ask with Draw and Cancel. */
+.scr-squares .sq-draw { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.scr-squares .sq-draw .sq-label,
+.scr-squares .sq-draw .sq-note { margin: 0; }
+.scr-squares .sq-draw-ask { display: grid; gap: 10px; padding: 10px; border: 1px solid var(--accent); border-radius: var(--radius-chip); }
+.scr-squares .sq-confirm { margin: 0; font-weight: 700; line-height: 1.4; color: var(--fg); }
+.scr-squares .sq-draw-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.scr-squares .sq-ghost { display: flex; align-items: center; justify-content: center; min-height: var(--tap-min);
+  padding: 8px 16px; font: inherit; font-weight: 800; line-height: 1.2; text-align: center;
+  border: 1px solid var(--line); border-radius: var(--radius-button); background: var(--card); color: var(--fg); cursor: pointer; }
+.scr-squares .sq-ghost:disabled { opacity: .5; cursor: default; }
 
 /* The board. */
 .scr-squares .sq-board { --team-a: var(--team-null); --team-b: var(--team-null);
@@ -58,10 +107,12 @@
 .scr-squares .sq-tag { font-size: 8px; font-weight: 800; line-height: 1.1; color: var(--up); white-space: nowrap;
   overflow: hidden; max-width: 100%; }
 .scr-squares .sq-cell[data-taken="true"] { background: var(--surface-2); }
-.scr-squares .sq-cell[data-mine="true"] { border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 24%, var(--card)); }
+.scr-squares .sq-plus { font-size: 14px; font-weight: 600; line-height: 1; color: var(--dim); opacity: .55; }
+.scr-squares .sq-cell[data-mine="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.scr-squares .sq-cell[data-mine="true"] .sq-tag { color: var(--on-accent); }
 .scr-squares .sq-cell[data-win="true"] { border: 2px solid var(--up); }
 .scr-squares .sq-cell[data-current="true"] { outline: 3px solid var(--gold); outline-offset: -1px; z-index: 1; }
+.scr-squares .sq-cell[data-mine="true"][data-current="true"] { outline-color: var(--fg); }
 .scr-squares .sq-cell[data-busy="true"] { opacity: .55; }
 
 /* The quarters under the grid. */

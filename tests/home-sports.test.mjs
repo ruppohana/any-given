@@ -253,14 +253,16 @@ test('Awards & TV tap: remembers the set and goes where a sport tile goes - #/pr
 
 /* 🔴 EVERY MARK FROM OUR ORIGIN (2026-09-13, "are we not capturing the rest of
  * the logos?"). The NBA's was hot-linked and every league after it was words. */
-test('every league with a mark shows it from our origin, light and dark; only cricket, the Presidents Cup and Big Game squares are words', () => {
+test('every league with a mark shows it from our origin, light and dark; only cricket and the Presidents Cup are words', () => {
   const { HOME_MARKS, HOME_FAMILIES, homeMarkDark } = load();
   const ids = HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id));
   /* Racing and combat carry marks since Jason asked (2026-09-13: "racing logos?"): F1's
      and UFC's own, NASCAR our drawn flag. Cricket: ESPN's marks are per competition. The
-     Presidents Cup (2026-09-13) has no mark: a text tile, the way Cricket's is. Nor does
-     Big Game squares - the game's own mark is the NFL's trademark. */
-  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket', 'golf-cup', 'squares']);
+     Presidents Cup (2026-09-13) has no mark: a text tile, the way Cricket's is. Big Game
+     squares carries our own drawn squares grid ("do the big game squares on the home tile
+     next") - never the NFL's mark, which the game's is. */
+  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket', 'golf-cup']);
+  assert.equal(HOME_MARKS.squares, '/logos/leagues/squares-500.svg', 'our drawn grid');
   for (const [id, src] of Object.entries(HOME_MARKS)) {
     assert.match(src, /^\/logos\/leagues\/[a-z0-9]+-500\.(png|svg)$/, id);
     assert.ok(existsSync(new URL('../public' + src, import.meta.url)), src + ' is on disk');
@@ -428,7 +430,8 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
     && f.rollH.getAttribute('aria-expanded') === 'false'));
   const L = (n) => '/logos/leagues/' + n + '-500.png';
   assert.deepEqual(rolls.map((f) => [f.dataset.fam, byClass(f.rollMarks, 'lg-fam-mark').map((m) => m.src)]), [
-    ['football', [L('nfl'), L('ncaa')]],
+    /* Big Game squares' own drawn grid sits between the NFL and the NCAA. */
+    ['football', [L('nfl'), '/logos/leagues/squares-500.svg', L('ncaa')]],
     ['basketball', [L('nba'), L('wnba'), L('ncaa')]],
     ['hockey', [L('nhl'), L('ncaa')]],
     ['racing', [L('f1'), '/logos/leagues/nascar-500.svg']],

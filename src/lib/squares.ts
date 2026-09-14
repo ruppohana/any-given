@@ -138,6 +138,62 @@ export function squaresPoints(results: { points: number; userId: string | null }
   return out;
 }
 
+/* 🔴 A SHEET'S PRICE IS IN MARBLES, NEVER DOLLARS. Jason, 2026-09-13: "sometimes we have a $1
+ * box/sheet and maybe a $5 box sheet", then - told a dollar ledger is what changes the app's
+ * points-only position - "we are not holding any money or paying out any money, call them
+ * marbles for all i care". So a sheet can carry a box price in MARBLES, and the app shows its
+ * pot, what each scoring moment pays and what each person put in and won - all in marbles, a
+ * count, not the live board's Marbles balance. Nothing of value is recorded; whatever a group
+ * does with cash stays off the app. Whole marbles only. */
+export const DEFAULT_SPLIT = [25, 25, 25, 25];
+export const MAX_BOX = 1000;                  // marbles a box
+export const SHEET_NAME_MAX = 30;
+
+/** A box price from a phone: whole marbles, 0 to 1,000, or null. */
+export function cleanBoxPrice(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= MAX_BOX ? n : null;
+}
+
+/** A payout split: four whole percents, 0-100 each, adding to 100 - or null. */
+export function cleanSplit(v: unknown): number[] | null {
+  if (!Array.isArray(v) || v.length !== 4) return null;
+  const n = v.map(Number);
+  return n.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && n.reduce((a, b) => a + b, 0) === 100 ? n : null;
+}
+
+/** A sheet name: trimmed, control characters out, capped; '' for none. */
+export function cleanSheetName(v: unknown): string {
+  return String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, SHEET_NAME_MAX);
+}
+
+/** "1 marble", "25 marbles", "1,000 marbles". */
+export function marbles(n: number): string {
+  const v = Math.max(0, Math.floor(Number(n) || 0));
+  return v.toLocaleString('en-US') + (v === 1 ? ' marble' : ' marbles');
+}
+
+/** What each scoring moment of a sheet pays, in marbles. The pot is claimed boxes x price;
+ *  each moment takes its percent, rounded down, and the final takes what rounding leaves, so
+ *  the payouts always add up to the pot. A moment that has passed on a square nobody claimed
+ *  rolls its money into the next one; an unclaimed final is `unclaimed` - the commissioner's
+ *  to decide. `results` are squaresResults for the sheet (only the moments that have passed). */
+export function sheetPayouts(pot: number, split: number[] | null, results: { key: string; userId: string | null }[]) {
+  const pct = split && split.length === 4 ? split : DEFAULT_SPLIT;
+  const base = PERIODS.map((_, i) => (i < 3 ? Math.floor((pot * pct[i]) / 100) : 0));
+  base[3] = pot - base[0] - base[1] - base[2];
+  let carry = 0;
+  return PERIODS.map((p, i) => {
+    const amount = base[i] + carry;
+    const r = results.find((x) => x.key === p.key);
+    if (!r) return { key: p.key, label: p.label, percent: pct[i], amount, userId: null, settled: false, rolled: false, unclaimed: false };
+    if (r.userId) { carry = 0; return { key: p.key, label: p.label, percent: pct[i], amount, userId: r.userId, settled: true, rolled: false, unclaimed: false }; }
+    const last = i === PERIODS.length - 1;
+    carry = last ? 0 : amount;
+    return { key: p.key, label: p.label, percent: pct[i], amount, userId: null, settled: true, rolled: !last, unclaimed: last };
+  });
+}
+
 /** A commissioner's "squares per person": a whole number 1-100, or null. */
 export function cleanMax(v: unknown): number | null {
   const n = Math.round(Number(v));
