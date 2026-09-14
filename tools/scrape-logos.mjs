@@ -173,7 +173,10 @@ const LEAGUE_MARKS = [
   ['mls', 'leaguelogos/soccer', '19'],
   ['ucl', 'leaguelogos/soccer', '2'],
   ['laliga', 'leaguelogos/soccer', '15'],
-  ['ligamx', 'leaguelogos/soccer', '22']
+  ['ligamx', 'leaguelogos/soccer', '22'],
+  /* The NWSL (2026-09-13): ESPN league 2323, the file the real day feeds'
+     leagues[0].logos name (fixtures/feed/espn-nwsl-scoreboard-260912.json). */
+  ['nwsl', 'leaguelogos/soccer', '2323']
 ];
 
 /* 🔴 LIGA MX: ESPN'S DARK FILE IS A RETIRED MARK. leaguelogos/soccer/500-dark/22.png
@@ -223,7 +226,9 @@ if (PRO[which]) {
 /* ------------------------------------------------------------ soccer clubs
  * 🔴 BY TEAM ID, under ESPN's one `soccer` folder for every league. A club's
  * abbreviation is not its file name there (BOU is 349.png). */
-const SOCCER = { epl: 'eng.1', mls: 'usa.1', ucl: 'uefa.champions', laliga: 'esp.1', ligamx: 'mex.1' };
+/* The NWSL (2026-09-13) is the same folder, by id: the real feeds' team.logo is
+   teamlogos/soccer/500/<id>.png (21423 is San Diego Wave), never an abbreviation. */
+const SOCCER = { epl: 'eng.1', mls: 'usa.1', ucl: 'uefa.champions', laliga: 'esp.1', ligamx: 'mex.1', nwsl: 'usa.nwsl' };
 if (which === 'soccer') {
   const per = {};
   const lists = [];
@@ -316,8 +321,11 @@ if (which === 'cricket') {
 if (which === 'ncaa-extra') {
   const hockey = await apiTeams('hockey/mens-college-hockey');
   const wcbb = union(await apiTeams('basketball/womens-college-basketball'), fixtureTeams('espn-wcbb-'));
+  /* Women's volleyball (2026-09-13): the same school ids under ncaa - only the schools on
+     the real captured days (fixtures/feed/espn-wvb-*), most of them already on disk. */
+  const wvb = fixtureTeams('espn-wvb-');
   const dir = root + 'ncaa';
-  for (const [label, teams] of [['college hockey', hockey], ["women's college basketball", wcbb]]) {
+  for (const [label, teams] of [['college hockey', hockey], ["women's college basketball", wcbb], ["women's volleyball", union(wvb)]]) {
     await crests(label, 'ncaa', dir, teams, (t) => t.id);
   }
   process.exit(0);

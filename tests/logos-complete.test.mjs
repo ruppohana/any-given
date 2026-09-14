@@ -78,7 +78,10 @@ test('the Home screen asks ESPN\'s CDN for nothing, and every league mark it nam
 const FEEDS = [
   ['nba', 'nba'], ['mlb', 'mlb'], ['nhl', 'nhl'],
   ['epl', 'epl'], ['mls', 'mls'], ['ucl', 'ucl'],
-  ['wcbb', 'womens-college-basketball']
+  ['wcbb', 'womens-college-basketball'],
+  /* 2026-09-13: the NWSL - soccer crests by team id, like MLS. Women's volleyball has a
+     test of its own below: one school on its Saturday has no file at ESPN. */
+  ['nwsl', 'nwsl']
 ];
 const FEED = new URL('../fixtures/feed/', import.meta.url);
 
@@ -105,6 +108,34 @@ for (const [prefix, league] of FEEDS) {
     assert.deepEqual(missing, [], `${missing.length} crests missing of ${teams.size * 2}`);
   });
 }
+
+/* ------------------------------------------------------------ women's volleyball
+ * NCAA crests by SCHOOL id under ncaa, the file the football and basketball rows use -
+ * every school on the real Division I Saturday (159 matches) and the 2025 national final. */
+test('womens-college-volleyball: every school on the captured days has its crest on our origin; the one ESPN 404s is not invented', () => {
+  /* Tampa Spartans: ESPN's own ncaa/500/2626.png and 500-dark/2626.png are 404 (checked
+     2026-09-13). The row draws the chip, off team.color. */
+  const ESPN_404 = new Set(['2626']);
+  const files = readdirSync(FEED).filter((n) => n.startsWith('espn-wvb-scoreboard-') && n.endsWith('.json'));
+  assert.ok(files.length >= 2, 'the Saturday and the final');
+  const seen = new Set();
+  const missing = [];
+  for (const f of files) {
+    const j = JSON.parse(readFileSync(new URL(f, FEED), 'utf8'));
+    for (const e of j.events || []) for (const c of e.competitions || []) for (const k of c.competitors || []) {
+      const t = { id: String(k.team.id), abbreviation: k.team.abbreviation, name: k.team.displayName };
+      seen.add(t.id);
+      for (const v of ['500', '500-dark']) {
+        const u = logoUrl(t, 'womens-college-volleyball', v);
+        assert.equal(u, `/logos/ncaa/${v}/${t.id}.png`, 'by school id, under ncaa');
+        if (ESPN_404.has(t.id)) assert.equal(onDisk(u), false, `${t.name}: no file is invented`);
+        else if (!onDisk(u)) missing.push(`${t.name} ${u}`);
+      }
+    }
+  }
+  assert.ok(seen.size >= 200, 'schools on the captured days: ' + seen.size);
+  assert.deepEqual(missing, []);
+});
 
 /* ------------------------------------------------------------ UFC and cricket
  * A UFC "team" is a fighter ('f' + ESPN athlete id) whose crest is the country

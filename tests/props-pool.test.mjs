@@ -82,8 +82,20 @@ test('the ready sets: the 2026 Emmys (14, lock at the broadcast) and Survivor 51
   assert.equal(sv.questions[0].options.length, 21);
   /* Soonest first: the Emmys lock Sept 15, Dancing with the Stars Sept 16, Survivor Sept 24. */
   /* The cycling Worlds (tests/props-worlds.test.mjs) first lock Sept 20: between The Traitors and Survivor. */
-  assert.deepEqual(templatesOpen(NOW).map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28']);
-  assert.deepEqual(templatesOpen(Date.UTC(2026, 8, 20)).map((t) => t.id), ['worlds-2026', 'survivor-51', 'big-brother-28'], 'a set is not offered once it has locked');
+  /* 🔴 NOT A FIXED LIST. A ready set can be added by a routine (the Breeders' Cup, from the fields
+     drawn on Oct 27), so a literal list of ids would fail that routine's deploy. What is pinned is
+     the rule: every set with a question still open, none that has locked, soonest first lock
+     first - and the sets known tonight in their order. */
+  const firstLock = (id) => Math.min(...PROP_TEMPLATES[id].questions.map((q) => q.lockAt));
+  const openIds = (t) => Object.keys(PROP_TEMPLATES).filter((id) => PROP_TEMPLATES[id].questions.some((q) => q.lockAt > t));
+  for (const t of [NOW, Date.UTC(2026, 8, 20), Date.UTC(2026, 9, 3)]) {
+    const ids = templatesOpen(t).map((x) => x.id);
+    assert.deepEqual([...ids].sort(), openIds(t).sort(), 'every open set and no locked one');
+    assert.deepEqual(ids, [...ids].sort((a, b) => firstLock(a) - firstLock(b)), 'soonest first');
+  }
+  const known = ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28'];
+  assert.deepEqual(templatesOpen(NOW).map((t) => t.id).filter((id) => known.includes(id)), known);
+  assert.ok(!templatesOpen(Date.UTC(2026, 8, 20)).some((t) => t.id === 'emmys-2026'), 'a set is not offered once it has locked');
 });
 
 test('scoring: a right answer scores its points; void and unsettled score nobody', () => {
@@ -114,7 +126,9 @@ test('the commissioner loads the Emmys; a member picks; only the commissioner wr
   try {
     const empty = await call(env, 'u-com', '/api/props?pool=EMMYS1');
     assert.deepEqual(empty.body.questions, []);
-    assert.deepEqual(empty.body.templates.map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28']);
+    /* The commissioner is offered exactly what templatesOpen offers - not a fixed list. */
+    assert.deepEqual(empty.body.templates.map((t) => t.id), templatesOpen(NOW).map((t) => t.id));
+    assert.equal(empty.body.templates[0].id, 'emmys-2026', 'the Emmys first on the 13th');
     assert.deepEqual((await call(env, 'u-mem', '/api/props?pool=EMMYS1')).body.templates, [], 'a member is not offered the sets');
 
     assert.equal((await call(env, 'u-mem', '/api/props/template', { pool: 'EMMYS1', template: 'emmys-2026' })).status, 403);

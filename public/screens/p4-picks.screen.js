@@ -311,7 +311,7 @@ export function cupLine(game) {
  *  null. The side by its short name, the winner's shootout goals first. Restated
  *  from p2-slate (pensText), because the tests load this module with its imports
  *  stripped. */
-const SOCCER_IDS = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+const SOCCER_IDS = ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'];
 export function pensText(game) {
   if (!game || !SOCCER_IDS.includes(game.sport) || game.status !== 'final') return null;
   if (game.homeScore == null || game.homeScore !== game.awayScore) return null;
@@ -524,13 +524,14 @@ function chosenSport() {
  * The day rules are restated from p2-slate rather than imported, because the
  * tests load this module with its imports stripped. The day turns over at 6 AM
  * Eastern, as in src/lib/day.ts. */
-const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'];
 /* Every sport the pool plays a day at a time - src/lib/day.ts DAY_SPORTS. The
  * Champions League, La Liga, Liga MX, college hockey and women's college
  * basketball joined 2026-09-13. */
 /* UFC and cricket joined 2026-09-13 ("do the ufc and cricket next"), then the
  * Presidents Cup ("do the ... presidents cup next"). */
-const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
+/* The NWSL and NCAA women's volleyball joined 2026-09-13 ("dont ask do any that appear valid"). */
+const DAY_SPORT_IDS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup', 'nwsl', 'womens-college-volleyball'];
 function soccerToday(ms) {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(ms - 6 * 3600000));
@@ -668,7 +669,8 @@ async function soccerCard(byId, sport) {
       : sport === 'ufc' ? 'pick the winner of each bout · scored in points'
       : sport === 'golf-cup' ? 'pick the winner of each match, or halved · scored in points'
       : ats ? 'against the spread · scored in points' : 'pick the winners · scored in points',
-    noun: soccer || sport === 'cricket' || sport === 'golf-cup' ? 'match' : sport === 'ufc' ? 'bout' : 'game',
+    noun: soccer || sport === 'cricket' || sport === 'golf-cup' || sport === 'womens-college-volleyball' ? 'match'
+      : sport === 'ufc' ? 'bout' : 'game',
     /* A soccer slate is the group's; with no group, the way in is the group page. */
     slateHref: group ? '#/gpicks' : '#/g',
     slateSize: games.length,
@@ -1472,7 +1474,7 @@ export function render(root, data, state) {
      * day and fixed here before it could ship the same way. */
     /* The same league list the slate hands its chips - a pro crest is filed by
        abbreviation and a college one by id (components/team-chip.js). */
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'].includes(data.sport) ? data.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup', 'nwsl', 'womens-college-volleyball'].includes(data.sport) ? data.sport : 'college-football',
     mode: data.mode || 'pool',
     /* OFFLINE FREEZES THE EDIT, IT DOES NOT HIDE THE LIST. See the offline block. */
     frozen: state === 'offline',
@@ -1802,6 +1804,9 @@ export function render(root, data, state) {
             ? 'Every pick is editable until its match tees off, and locks at the first tee. One rule, no exceptions, per match.'
           : data.noun === 'match' && data.sport === 'cricket'
             ? 'Every pick is editable until its match starts, and locks at the first ball. One rule, no exceptions, per match.'
+          /* A volleyball match locks at its first serve (2026-09-13). */
+          : data.sport === 'womens-college-volleyball'
+            ? 'Every pick is editable until its match starts, and locks at first serve. One rule, no exceptions, per match.'
             : 'Every pick is editable until that game kicks, and locks at kickoff. One rule, no exceptions, and it is per game rather than per week.'));
       box.appendChild(el('p', 'p4-footline num',
         'Your pool’s split is shown only where it cannot name anybody' +

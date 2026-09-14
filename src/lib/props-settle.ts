@@ -156,6 +156,33 @@ export function infoboxAnswers(html: string): Record<string, string> {
   return out;
 }
 
+/* 🔴 THE BREEDERS' CUP RACES TABLE - Jason, 2026-09-13: "dont ask do any that appear valid"
+ * (the Breeders' Cup, Oct 30-31, 2026). A year's Breeders' Cup page lists its races in a table -
+ * Race name, Post time, Sponsor, Distance, Restrictions, Purse, Winner (Bred), Odds, Margin -
+ * and a run race's winner cell reads "Forever Young (JPN)" (the real 2025 page). Returns race
+ * name -> the winning horse, the country it was bred in dropped. Nothing for a race not run. */
+export function breedersCupWinners(html: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const clean = String(html || '').replace(/\sdata-mw='[^']*'/g, '').replace(/\sdata-mw="[^"]*"/g, '');
+  for (const tb of clean.split(/<table\b/i).slice(1)) {
+    const body = tb.split(/<\/table>/i)[0];
+    const rows = body.split(/<tr\b[^>]*>/i).slice(1)
+      .map((r) => [...r.matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((m) => text(m[1].replace(/<sup\b[\s\S]*?<\/sup>/gi, ''))));
+    if (!rows.length) continue;
+    const head = rows[0].map(norm);
+    const ri = head.indexOf('race name');
+    const wi = head.findIndex((h) => h.startsWith('winner'));
+    if (ri < 0 || wi < 0) continue;
+    for (const r of rows.slice(1)) {
+      if (r.length !== rows[0].length) continue;
+      const race = r[ri];
+      const horse = String(r[wi] || '').replace(/\s*\([A-Z]{2,4}\)\s*$/, '').trim();
+      if (race && horse && !out.has(race)) out.set(race, horse);
+    }
+  }
+  return out;
+}
+
 /** Every category heading on an awards page, winner or not - so a ready set can be
  *  checked against the page before the night: each of its keys must be a heading. */
 export function categoriesFromWikiAwards(html: string): string[] {

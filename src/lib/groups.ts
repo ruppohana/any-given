@@ -84,7 +84,11 @@ export const POOL_SPORTS = ['college-football', 'nfl', 'mens-college-basketball'
   /* 2026-09-13, "for the super bowl, can we create squares people can pick?" - one
      10 x 10 grid on the Big Game, digits drawn at kickoff (src/squares-pool.ts). The
      app never says the game's name. */
-  'squares'] as const;
+  'squares',
+  /* 2026-09-13, "dont ask do any that appear valid": the NWSL (a soccer day sport - a draw
+     is a pick) and NCAA women's volleyball (a day sport scored in sets won), both on ESPN's
+     free feed (src/lib/day.ts). */
+  'nwsl', 'womens-college-volleyball'] as const;
 export type PoolSport = typeof POOL_SPORTS[number];
 export function poolSport(s: unknown): PoolSport {
   return (POOL_SPORTS as readonly string[]).includes(String(s)) ? (s as PoolSport) : 'college-football';
@@ -99,11 +103,13 @@ export const isRacingSport = (s: unknown) => s === 'f1' || String(s).startsWith(
  * So a soccer pick has three sides, a level final grades the draw pickers right
  * and everyone else wrong, and it counts as played. No spread: a three-way
  * result has no single line. */
-export const isSoccerSport = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(String(s));
+export const isSoccerSport = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'].includes(String(s));
 /** A race or a soccer match never picks against a spread. */
 /** A sport graded by ESPN's winner flag, not a score: a fight, a cricket match. */
 export const isWinnerSport = (s: unknown) => s === 'ufc' || s === 'cricket' || s === 'golf-cup';
-export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s) || isWinnerSport(s) || s === 'props' || s === 'squares';
+/* College volleyball has no betting line to pick against - straight up only. */
+export const hasNoSpread = (s: unknown) => isRacingSport(s) || isSoccerSport(s) || isWinnerSport(s) || s === 'props' || s === 'squares'
+  || s === 'womens-college-volleyball';
 /** The sides a pick may take. */
 /* A halved match-play match is a result like a soccer draw: the third side. */
 export const pickSides = (s: unknown): string[] => isSoccerSport(s) || s === 'golf-cup' ? ['home', 'away', 'draw'] : ['home', 'away'];

@@ -1700,6 +1700,17 @@ export function render(root, data, state) {
    * an empty scroll would read as a broken deploy. */
   if (state === 'empty' || !games.length) {
     head(root, d);
+    /* 🔴 A DAY SPORT OUT OF SEASON SAYS WHEN IT IS BACK (Jason, 2026-09-13: "if any are
+     * out of season put a countdown clock on the page") - components/season.js, from
+     * ESPN's season calendar through /api/season/next. Loaded with import(), drawn
+     * hidden, and shown only when the next game is days away. */
+    if (isDaySport(d.sport)) {
+      const season = el('div', 'ag-season');
+      season.hidden = true;
+      season.dataset.season = d.sport;
+      root.appendChild(season);
+      import('/components/season.js').then((m) => m.fillSeason(season, d.sport)).catch(() => { /* the empty state stands */ });
+    }
     root.appendChild(stateBlock('empty', {
       title: isDaySport(d.sport) ? 'No games on this day' : 'No markets this week',
       /* NOT a dead end. The captured week is what this screen is for; the way

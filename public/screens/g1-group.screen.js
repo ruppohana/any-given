@@ -108,7 +108,12 @@ export const SPORTS = [
   /* 2026-09-13, "do the big game squares next": one 10 x 10 grid on the Big Game,
    * claimed until kickoff, the digits drawn at kickoff (src/squares-pool.ts). No
    * spread, no which-games. The app never says the game's name. */
-  ['squares', 'Big Game squares']
+  ['squares', 'Big Game squares'],
+  /* 2026-09-13, "dont ask do any that appear valid": the NWSL - a soccer day sport, the
+   * draw a pick - and NCAA women's volleyball, a day sport scored in sets won (3-1). Both
+   * on ESPN's free feed (src/lib/day.ts). */
+  ['nwsl', 'NWSL'],
+  ['womens-college-volleyball', 'Women’s college volleyball']
 ];
 const SPORT_IDS = SPORTS.map((s) => s[0]);
 
@@ -120,10 +125,13 @@ export const SPORT_FAMILIES = [
   /* Big Game squares (2026-09-13) is football's, after the NFL as in POOL_SPORTS. */
   ['Football', ['college-football', 'nfl', 'squares']],
   ['Basketball', ['mens-college-basketball', 'womens-college-basketball', 'nba', 'wnba']],
+  /* NCAA women's volleyball (2026-09-13) - a family of one, after basketball as on Home. */
+  ['Volleyball', ['womens-college-volleyball']],
   ['Baseball', ['mlb']],
   ['Hockey', ['nhl', 'mens-college-hockey']],
   ['Racing', ['f1', 'nascar', 'nascar-oreilly', 'nascar-truck']],
-  ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']],
+  /* The NWSL (2026-09-13) last, as in POOL_SPORTS. */
+  ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl']],
   /* A fight card and a cricket match (2026-09-13), with the sports, before the
    * one family that is not a sport. */
   ['Combat', ['ufc']],
@@ -140,7 +148,7 @@ export function optionLabel(v) {
 }
 
 /* The soccer leagues - src/lib/groups.ts isSoccerSport. */
-const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+const SOCCER = ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'];
 /* The two college basketball leagues: the same which-games choice (All games,
  * Top 25), because src/lib/groups.ts isCollegeSport names both. */
 const COLLEGE_HOOPS = ['mens-college-basketball', 'womens-college-basketball'];
@@ -183,7 +191,8 @@ export function isWinner(s) {
  *  server's copy is src/lib/groups.ts hasNoSpread, which refuses a spread for the
  *  same ones. */
 export function hasNoSpread(s) {
-  return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s);
+  /* College volleyball has no betting line - straight up only (2026-09-13). */
+  return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s) || s === 'womens-college-volleyball';
 }
 
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME - the group's "week" is
@@ -191,7 +200,8 @@ export function hasNoSpread(s) {
  * module with its imports stripped cannot read it, so tests/g1-group.test.mjs
  * holds the two equal. */
 export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls',
-  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup',
+  'nwsl', 'womens-college-volleyball'];
 
 /** Picks a day at a time: basketball, baseball, hockey, soccer, a UFC card, cricket,
  *  the Presidents Cup. */
@@ -216,6 +226,8 @@ export function lockWord(s) {
   if (p === 'golf-cup') return 'the first tee';
   /* The squares lock at the Big Game's kickoff, when the digits are drawn. */
   if (p === 'squares') return 'kickoff';
+  /* A volleyball match (2026-09-13) starts with its first serve. */
+  if (p === 'womens-college-volleyball') return 'first serve';
   if (isDaySport(p)) return 'tip-off';
   /* A question locks at its own time, so a questions group has no one word. */
   if (isRacing(p) || isProps(p)) return '';

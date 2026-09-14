@@ -481,11 +481,15 @@ const SPORT_LABEL = {
   'golf-cup': 'Presidents Cup',
   /* 2026-09-13, "do the big game squares next": one grid, scored in points from the
    * squares that hit - one board (src/squares-pool.ts squaresStandings). */
-  squares: 'Big Game squares'
+  squares: 'Big Game squares',
+  /* 2026-09-13, "dont ask do any that appear valid": the NWSL and NCAA women's volleyball -
+   * each a day at a time, so the season board. */
+  nwsl: 'NWSL',
+  'womens-college-volleyball': 'Women’s college volleyball'
 };
 
 /** The soccer leagues - src/lib/groups.ts isSoccerSport. */
-function isSoccerBoard(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(s); }
+function isSoccerBoard(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'].includes(s); }
 
 /** A group's sport as one of the five; anything else is college football, as before. */
 function groupSport(s) {
@@ -510,7 +514,9 @@ function boardKind(s) {
   /* College hockey and women's college basketball (2026-09-13) too. */
   if (k === 'mens-college-hockey' || k === 'womens-college-basketball') return 'season';
   /* Every soccer league picks a day at a time too: its "week" is a date. */
-  if (['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(k)) return 'season';
+  if (['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'].includes(k)) return 'season';
+  /* NCAA women's volleyball too (2026-09-13): its "week" is a date. */
+  if (k === 'womens-college-volleyball') return 'season';
   /* A UFC card and a cricket day too (2026-09-13): their "week" is a date. */
   if (k === 'ufc' || k === 'cricket') return 'season';
   /* The Presidents Cup too (2026-09-13): its "week" is the day. */

@@ -411,21 +411,21 @@ function sportWorld(sport, scope = 'all') {
 }
 const stateCalls = () => CALLS.filter((c) => c.path.startsWith('/api/state/'));
 
-test('sportName gives the twenty-three labels, and an unknown sport reads as college football', () => {
+test('sportName gives the twenty-five labels, and an unknown sport reads as college football', () => {
   assert.deepEqual([...POOL_SPORTS], ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
     'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls',
     'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup',
-    'squares']);
+    'squares', 'nwsl', 'womens-college-volleyball']);
   assert.deepEqual(POOL_SPORTS.map(mod.sportName),
     ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR', 'MLB', 'NHL', 'WNBA',
       'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
       'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions',
-      'UFC', 'Cricket', 'Presidents Cup', 'Big Game squares']);
+      'UFC', 'Cricket', 'Presidents Cup', 'Big Game squares', 'NWSL', 'Women’s college volleyball']);
   assert.equal(mod.sportName('curling'), 'College football');
   /* Women's college basketball takes the men's two choices; college hockey plays every game;
      a questions group has no which-games and no spread; nor do UFC and cricket (2026-09-13),
      nor the Presidents Cup. */
-  assert.deepEqual(POOL_SPORTS.map((s) => mod.scopeValues(s).length), [3, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0]);
+  assert.deepEqual(POOL_SPORTS.map((s) => mod.scopeValues(s).length), [3, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0]);
   assert.equal(mod.hasNoSpread('props'), true);
   assert.equal(mod.hasNoSpread('ufc'), true);
   assert.equal(mod.hasNoSpread('cricket'), true);

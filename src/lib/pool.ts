@@ -207,7 +207,9 @@ export type GameOutcome = 'home' | 'away' | 'draw' | 'void' | null;
 
 /* Soccer - kept inline rather than imported, because this module is shipped to
    the browser on its own (src/lib/groups.ts isSoccerSport says the same). */
-const isSoccer = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(String(s));
+/* Every soccer day sport - the same list as src/lib/groups.ts isSoccerSport; the NWSL joined
+   2026-09-13 ("dont ask do any that appear valid"). A level NWSL final is a draw, not a void. */
+const isSoccer = (s: unknown) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'].includes(String(s));
 
 export type VoidReason =
   | 'status_void'      // cancelled or postponed. Same thing, deliberately.

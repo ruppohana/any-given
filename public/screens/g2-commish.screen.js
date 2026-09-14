@@ -99,13 +99,16 @@ const SPORT_NAMES = { 'college-football': 'College football', nfl: 'NFL',
   'golf-cup': 'Presidents Cup',
   /* 2026-09-13, "do the big game squares next": one grid on the Big Game. No spread and
      no which-games; the commissioner sets squares per person on #/squares. */
-  squares: 'Big Game squares' };
+  squares: 'Big Game squares',
+  /* 2026-09-13, "dont ask do any that appear valid": the NWSL (soccer - no spread) and
+     NCAA women's volleyball (every match, the spread allowed as the server allows it). */
+  nwsl: 'NWSL', 'womens-college-volleyball': 'Women’s college volleyball' };
 const poolSport = (s) => (Object.prototype.hasOwnProperty.call(SPORT_NAMES, s) ? s : 'college-football');
 export const sportName = (s) => SPORT_NAMES[poolSport(s)];
 /** F1 and NASCAR are races: scored in points, so no spread and no which-games. */
 export const isRacing = (s) => { const p = poolSport(s); return p === 'f1' || p.startsWith('nascar'); };
 /** Soccer - the five leagues (src/lib/groups.ts isSoccerSport). A draw is a pick there, and there is no spread. */
-export const isSoccer = (s) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(poolSport(s));
+export const isSoccer = (s) => ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'].includes(poolSport(s));
 /** Men's and women's college basketball: the same which-games choice. */
 const isCollegeHoops = (s) => { const p = poolSport(s); return p === 'mens-college-basketball' || p === 'womens-college-basketball'; };
 /** A questions group (src/props-pool.ts). */
@@ -117,7 +120,9 @@ export const isWinner = (s) => { const p = poolSport(s); return p === 'ufc' || p
 export const isSquares = (s) => poolSport(s) === 'squares';
 /** No spread to switch: the races, soccer, questions, UFC, cricket, the Presidents Cup
  *  and Big Game squares (src/lib/groups.ts hasNoSpread). */
-export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s);
+/* College volleyball has no betting line - straight up only (2026-09-13). */
+export const hasNoSpread = (s) => isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s)
+  || s === 'womens-college-volleyball';
 /** Which-games choices a sport offers: conferences are football's only; the pro
  *  leagues and the races play every game. */
 export const scopeValues = (s) => {

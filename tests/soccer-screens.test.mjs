@@ -208,20 +208,20 @@ test('standings: the two league labels, and the season board a day sport gets', 
   const F = flat(P5_SRC);
   assert.ok(F.includes('A point for every right pick - a winner or the draw - once the match is final. A void game counts for nobody.'));
   assert.match(code(P5_SRC), /: isSoccerBoard\(d\.sport\)\s*\?/);
-  assert.ok(P5_SRC.includes("function isSoccerBoard(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(s); }"));
+  assert.ok(P5_SRC.includes("function isSoccerBoard(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'].includes(s); }"));
 });
 
 /* ------------------------------------------------------------ G1 G2 G3 groups */
 
 test('group create: a Soccer family holds the five leagues, in POOL_SPORTS order', () => {
   assert.deepEqual(G1.SPORTS.filter(([id]) => isSoccerSport(id)), [['epl', 'Premier League'], ['mls', 'MLS'],
-    ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX']]);
+    ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX'], ['nwsl', 'NWSL']]);
   /* Combat and Cricket (UFC and cricket, 2026-09-13) follow it, then the last family -
      Awards & TV (questions, 2026-09-13) - which is not a sport. */
   const fams = G1.SPORT_FAMILIES.map((f) => f[0]);
   /* Golf (the Presidents Cup, 2026-09-13) after Cricket. */
   assert.deepEqual(fams.slice(fams.indexOf('Soccer')), ['Soccer', 'Combat', 'Cricket', 'Golf', 'Awards & TV']);
-  assert.deepEqual(G1.SPORT_FAMILIES[fams.indexOf('Soccer')], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx']]);
+  assert.deepEqual(G1.SPORT_FAMILIES[fams.indexOf('Soccer')], ['Soccer', ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl']]);
   assert.deepEqual(G1.SPORT_FAMILIES[G1.SPORT_FAMILIES.length - 1], ['Awards & TV', ['props']]);
   const order = G1.SPORT_FAMILIES.find((f) => f[0] === 'Soccer')[1];
   assert.deepEqual(order, POOL_SPORTS.filter((s) => isSoccerSport(s)));
@@ -292,7 +292,7 @@ test('Home: a Soccer family with all five league tiles, and the same tap as ever
   /* By name, not by position: Combat and Cricket followed it on 2026-09-13. */
   assert.deepEqual(H.HOME_FAMILIES.find((f) => f.h === 'Soccer'),
     { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'],
-      ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] });
+      ['laliga', 'La Liga'], ['ligamx', 'Liga MX'], ['nwsl', 'NWSL']] });
   const G = [{ id: 'SOCCR1', sport: 'epl' }, { id: 'NFL1', sport: 'nfl' }];
   assert.deepEqual(H.homeSportDest('epl', G, ''), { sport: 'epl', groupId: 'SOCCR1', hash: '#/gpicks' });
   /* No MLS group: MLS's pool, not the group page (pool first, 2026-09-13). */

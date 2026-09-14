@@ -31,6 +31,9 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
      ESPN's own minute ("67'", "90'+6'"). */
   epl: { path: 'soccer/eng.1', groups: '', label: 'Premier League', periods: 2 },
   mls: { path: 'soccer/usa.1', groups: '', label: 'MLS', periods: 2 },
+  /* 2026-09-13, "dont ask do any that appear valid": the NWSL, on ESPN's free feed the same
+     shape as MLS (STATUS_FULL_TIME, a level final is a draw). Its championship is Nov 21. */
+  nwsl: { path: 'soccer/usa.nwsl', groups: '', label: 'NWSL', periods: 2 },
   /* 2026-09-13 - "soccer ... only MLS and premier?" The Champions League (league
      phase Sep-Jan, then knockouts to the May final), La Liga and Liga MX: the same
      ESPN soccer scoreboard. A knockout decided on penalties is WON - Jason: "a
@@ -44,6 +47,10 @@ export const DAY_SPORTS: Record<string, { path: string; groups: string; label: s
   /* Jason, 2026-09-13: "add women's college basketball too". groups=50 is Division I
      (72 games on 2026-03-07; without it ESPN returns 10). Four ten-minute quarters. */
   'womens-college-basketball': { path: 'basketball/womens-college-basketball', groups: '50', label: "Women's college basketball", periods: 4 },
+  /* 2026-09-13, "dont ask do any that appear valid": NCAA women's volleyball, on ESPN's free
+     feed - the score is sets won (3-1), a period is a set. With no groups the scoreboard lists
+     every Division I match (159 on Saturday, Sept 12); groups=50 lists nine. */
+  'womens-college-volleyball': { path: 'volleyball/womens-college-volleyball', groups: '', label: "Women's college volleyball", periods: 5 },
   /* 🔴 WINNER-FLAG SPORTS - Jason, 2026-09-13: "do the ufc and cricket next". Neither
      is graded by a score: a fight has no score, and a cricket score is text ("151/8
      (20 ov)"). ESPN flags the winner on each side, and a bout drawn or ruled no
@@ -74,7 +81,7 @@ export function isWinnerDay(sport: unknown): boolean {
 }
 
 /** The soccer day sports - src/lib/groups.ts isSoccerSport says the same. */
-export const SOCCER_DAY = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+export const SOCCER_DAY = ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'];
 
 /** Soccer counts minutes, not a countdown - see dayClock. */
 export function isSoccerDay(sport: unknown): boolean {
@@ -158,7 +165,9 @@ export function dayClock(sport: string, period: number, clock: string | null, st
   if (isWinnerDay(sport)) return '';
   const p = Number(period);
   if (!Number.isFinite(p) || p < 1) return '';
-  const ORD = ['1st', '2nd', '3rd', '4th'];
+  /* Volleyball plays sets, not a clock - "Set 5", never an ordinal past the fourth. */
+  if (sport === 'womens-college-volleyball') return 'Set ' + p;
+  const ORD = ['1st', '2nd', '3rd', '4th', '5th'];
   const ord = p <= reg ? ORD[p - 1] : (p - reg === 1 ? 'OT' : (p - reg) + 'OT');
   if (!clock) return ord;
   if (clock === '0:00' || clock === '0.0') return p === reg / 2 ? 'Halftime' : 'End ' + ord;

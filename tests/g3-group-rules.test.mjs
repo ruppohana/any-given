@@ -327,7 +327,7 @@ function branch(fn, cond) {
 }
 const lits = (src) => (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).map((s) => s.slice(1, -1)).join('');
 
-test('the League row shows the twenty-three labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
+test('the League row shows the twenty-five labels, keyed by src/lib/groups.ts POOL_SPORTS', () => {
   const m = CJS.match(/const LEAGUES = \{([^}]*)\}/);
   assert.ok(m, 'no LEAGUES map');
   const pairs = [...m[1].matchAll(/'?([a-z0-9-]+)'?:\s*'([^']+)'/g)].map((x) => [x[1], x[2]]);
@@ -335,7 +335,7 @@ test('the League row shows the twenty-three labels, keyed by src/lib/groups.ts P
   assert.deepEqual(pairs.map((p) => p[1]), ['College football', 'NFL', 'College basketball', 'NBA', 'Formula 1', 'NASCAR',
     'MLB', 'NHL', 'WNBA', 'NASCAR O’Reilly', 'NASCAR Trucks', 'Premier League', 'MLS',
     'Champions League', 'La Liga', 'Liga MX', 'College hockey', 'Women’s college basketball', 'Questions',
-    'UFC', 'Cricket', 'Presidents Cup', 'Big Game squares']);
+    'UFC', 'Cricket', 'Presidents Cup', 'Big Game squares', 'NWSL', 'Women’s college volleyball']);
   /* A questions group (2026-09-13) is said once, in its own sentence. */
   assert.ok(FLAT.includes('Or it plays questions instead - an awards show, a TV finale, anything the commissioner writes.'));
   assert.match(CJS, /\['League', LEAGUES\[sport\]\]/);
@@ -419,7 +419,8 @@ test('the day sports are one list, equal to src/lib/day.ts, and the page reads t
   assert.deepEqual([...mod.DAY_SPORTS].sort(), Object.keys(SERVER_DAY).sort(),
     'the page and src/lib/day.ts disagree on which sports pick a day at a time');
   assert.deepEqual(POOL_SPORTS.filter(mod.isDaySport), ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls',
-    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup']);
+    'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup',
+    'nwsl', 'womens-college-volleyball']);
   assert.doesNotMatch(CJS, /isHoops/, 'the old basketball-only helper is still in use');
   /* Picking and the group card both go through it. */
   const pick = branch('sPicking', 'isDaySport(sport)');

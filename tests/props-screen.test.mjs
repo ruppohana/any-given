@@ -78,7 +78,10 @@ test('the ready sets are src/lib/props.ts\'s own: the 2026 Emmys (14, all at the
   assert.deepEqual(EQ.slice(0, 3).map((q) => q.points), [3, 3, 3], 'the big three are worth 3');
   assert.equal(SURV.questions.length, 2);
   /* Soonest first - Dancing with the Stars (Sept 16) joined 2026-09-13. */
-  assert.deepEqual(templatesOpen(SEP13).map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28']);
+  /* Not a fixed list: a routine can add a set (the Breeders' Cup, Oct 27). The sets known
+     tonight, in their order, are pinned; the rest follows templatesOpen. */
+  const KNOWN = ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28'];
+  assert.deepEqual(templatesOpen(SEP13).map((t) => t.id).filter((id) => KNOWN.includes(id)), KNOWN);
   /* A questions group has no spread - the server's own rule. */
   assert.ok(POOL_SPORTS.includes('props'));
   assert.equal(hasNoSpread('props'), true);
@@ -165,11 +168,14 @@ test('the pinned total is scoreProps\'s own figure', () => {
 
 test('ready sets offered: the one Home remembered first, none that is already all here', () => {
   const open = templatesOpen(SEP13);
-  assert.deepEqual(P.offeredTemplates(open, '', []).map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28']);
-  assert.deepEqual(P.offeredTemplates(open, 'survivor-51', []).map((t) => t.id), ['survivor-51', 'emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'big-brother-28']);
+  /* Derived from the open list, so a set a routine adds later changes nothing here. */
+  const ids = open.map((t) => t.id);
+  assert.equal(ids[0], 'emmys-2026');
+  assert.deepEqual(P.offeredTemplates(open, '', []).map((t) => t.id), ids);
+  assert.deepEqual(P.offeredTemplates(open, 'survivor-51', []).map((t) => t.id), ['survivor-51', ...ids.filter((id) => id !== 'survivor-51')]);
   assert.equal(P.loadedCount('emmys-2026', EQ), 14);
-  assert.deepEqual(P.offeredTemplates(open, 'emmys-2026', EQ).map((t) => t.id), ['dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28'], 'the Emmys are in');
-  assert.deepEqual(P.offeredTemplates(open, '', EQ.slice(0, 5)).map((t) => t.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'worlds-2026', 'survivor-51', 'big-brother-28'],
+  assert.deepEqual(P.offeredTemplates(open, 'emmys-2026', EQ).map((t) => t.id), ids.filter((id) => id !== 'emmys-2026'), 'the Emmys are in');
+  assert.deepEqual(P.offeredTemplates(open, '', EQ.slice(0, 5)).map((t) => t.id), ids,
     'half a set is offered again (the server loads only what is missing)');
   assert.deepEqual(P.offeredTemplates(undefined, '', []), []);
 });

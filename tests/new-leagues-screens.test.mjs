@@ -233,7 +233,7 @@ test('crests: the three soccer leagues by team id under soccer; college hockey a
 test('group create: every new sport has its label and its family; soccer, hockey and college hoops behave', () => {
   for (const s of NEW) assert.equal(G1.sportLabel(s), LABEL[s]);
   const fam = Object.fromEntries(G1.SPORT_FAMILIES);
-  assert.deepEqual(fam.Soccer, ['epl', 'mls', 'ucl', 'laliga', 'ligamx']);
+  assert.deepEqual(fam.Soccer, ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl']);
   assert.deepEqual(fam.Hockey, ['nhl', 'mens-college-hockey']);
   assert.deepEqual(fam.Basketball, ['mens-college-basketball', 'womens-college-basketball', 'nba', 'wnba']);
   for (const s of POOL_SPORTS) assert.equal(G1.hasNoSpread(s), hasNoSpread(s), s);

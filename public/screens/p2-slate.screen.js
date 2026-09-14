@@ -107,6 +107,8 @@ export const GROUP_COPY = {
   emptyUfc: { title: 'No UFC card on this day', body: 'Pick another day above. A card shows up here as soon as it is scheduled.' },
   emptyCricket: { title: 'No cricket on this day', body: 'Pick another day above. Matches show up as soon as they are scheduled.' },
   emptyGolfCup: { title: 'No Presidents Cup matches on this day', body: 'Pick another day above. The matches show up here once the pairings are announced.' },
+  /* NCAA women's volleyball (2026-09-13): its games are matches. */
+  emptyVolleyball: { title: 'No volleyball on this day', body: 'Pick another day above. Matches show up as soon as they are scheduled.' },
   rules: { label: 'How it’s scored', href: '#/grules' },
   door: { label: 'Group info ›', href: '#/g' },
   signedOut: {
@@ -335,7 +337,8 @@ export function knockoutLine(game) {
  * stripped. tests/soccer-screens.test.mjs holds the two equal on the real day. */
 /* The Champions League, La Liga and Liga MX joined 2026-09-13 - src/lib/groups.ts
  * isSoccerSport names the same five. */
-export const SOCCER_SPORTS = ['epl', 'mls', 'ucl', 'laliga', 'ligamx'];
+/* The NWSL joined 2026-09-13 ("dont ask do any that appear valid") - a draw is a pick there too. */
+export const SOCCER_SPORTS = ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'];
 export function isSoccerSport(s) { return SOCCER_SPORTS.includes(s); }
 
 /* 🔴 UFC AND CRICKET ARE GRADED BY THE WINNER ESPN FLAGS, NOT A SCORE (2026-09-13,
@@ -419,7 +422,9 @@ export function sessionGroupsOf(games) {
 
 /** What one game is called in a sport, for counts: a bout, a match, a game. */
 export function gameNoun(sport, n) {
-  const one = sport === 'ufc' ? 'bout' : sport === 'cricket' || sport === 'golf-cup' ? 'match' : 'game';
+  /* A volleyball match (2026-09-13) is a match, like cricket's. */
+  const one = sport === 'ufc' ? 'bout'
+    : sport === 'cricket' || sport === 'golf-cup' || sport === 'womens-college-volleyball' ? 'match' : 'game';
   return n === 1 ? one : one === 'match' ? 'matches' : one + 's';
 }
 
@@ -970,8 +975,9 @@ const WEEK = { 'college-football': 2, nfl: 1 };
  * its card, a cricket day every limited-overs match in season. */
 /* The Presidents Cup joined 2026-09-13 ("do the ... presidents cup next"): a day is the
  * matches teed off that day, the cup itself riding on the first. */
-const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
-const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup', 'squares'];
+/* The NWSL and NCAA women's volleyball joined 2026-09-13 ("dont ask do any that appear valid"). */
+const DAY_POOL_SPORTS = ['mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup', 'nwsl', 'womens-college-volleyball'];
+const POOL_SPORT_IDS = ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar', 'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup', 'squares', 'nwsl', 'womens-college-volleyball'];
 
 /** The sport the browse state shows: `ag.sport` as Home wrote it, NOT clamped -
  *  chosenSport() folds everything that is not the NFL into college football. */
@@ -1620,7 +1626,7 @@ function zone(ctx, game, side) {
     size: 44,
     /* UFC and cricket (2026-09-13): the chip is told the league, so a fighter's flag
        and a cricket crest are looked up as theirs and never as a college school's. */
-    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'].includes(ctx.sport) ? ctx.sport : 'college-football',
+    league: ['nfl', 'college-football', 'mens-college-basketball', 'nba', 'mlb', 'nhl', 'wnba', 'epl', 'mls', 'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup', 'nwsl', 'womens-college-volleyball'].includes(ctx.sport) ? ctx.sport : 'college-football',
     adjacentTo: game[side === 'home' ? 'away' : 'home']
   }));
 
@@ -2602,7 +2608,7 @@ function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 /** The head. NOTHING SITS IN FRONT OF THE SLATE - no account wall, no install prompt, no
  *  interstitial. The pool name at 17px is the largest type on this screen and that is the
  *  whole answer to the unassigned headline figure. */
-const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup', squares: 'Big Game squares' };
+const SPORT_NAME = { nfl: 'NFL', 'college-football': 'College', 'mens-college-basketball': 'College basketball', nba: 'NBA', f1: 'Formula 1', nascar: 'NASCAR', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks', epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX', 'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball', props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup', squares: 'Big Game squares', nwsl: 'NWSL', 'womens-college-volleyball': 'Women’s college volleyball' };
 
 function head(root, data, _) {
   /* THE SHARED HEADER. The kicker, the h1, the league pill and the meta line
@@ -2786,11 +2792,14 @@ function groupGate(root, data, state) {
   }
   if (gs === 'empty') {
     groupBar(root, data, state);
+    /* A day sport's group out of season: when it has games again (seasonSlot). */
+    if (data.day && DAY_POOL_SPORTS.includes(data.sport)) root.appendChild(seasonSlot(data.sport));
     dayBar(root, data, state);
     root.appendChild(stateBlock('empty', !data.day ? GROUP_COPY.empty
       : data.sport === 'ufc' ? GROUP_COPY.emptyUfc
       : data.sport === 'cricket' ? GROUP_COPY.emptyCricket
-      : data.sport === 'golf-cup' ? GROUP_COPY.emptyGolfCup : GROUP_COPY.emptyDay));
+      : data.sport === 'golf-cup' ? GROUP_COPY.emptyGolfCup
+      : data.sport === 'womens-college-volleyball' ? GROUP_COPY.emptyVolleyball : GROUP_COPY.emptyDay));
     return;
   }
   const c = gs === 'offline' ? GROUP_COPY.offline : GROUP_COPY.error;
@@ -2845,6 +2854,21 @@ function placeBrowseSheet(root, data) {
   if (typeof sheet.scrollIntoView === 'function') sheet.scrollIntoView({ block: 'nearest' });
 }
 
+/* 🔴 THE OFF-SEASON COUNTDOWN. Jason, 2026-09-13: "if any are out of season put a
+ * countdown clock on the page." A day with no games can be a day off or a season off; the
+ * Worker reads ESPN's season calendar (/api/season/next, src/season-next.ts) and
+ * components/season.js says "The NBA is back Sat, Oct 3 · in 20 days". Loaded with
+ * import(), not an import line: the p2 tests load this module with its import lines
+ * stripped, and the block is extra to the empty state - where it cannot load, the empty
+ * state stands as it was. Drawn hidden; it shows only when it has something to say. */
+function seasonSlot(sport) {
+  const box = el('div', 'ag-season');
+  box.hidden = true;
+  box.dataset.season = sport;
+  import('/components/season.js').then((m) => m.fillSeason(box, sport)).catch(() => { /* the empty state stands */ });
+  return box;
+}
+
 /** Every browse state that is not the day's games. Each has a way forward. */
 function browseGate(root, data, state) {
   head(root, data, null);
@@ -2874,10 +2898,13 @@ function browseGate(root, data, state) {
   /* The pair stays on every state below: a day with no games is still a pool to join. */
   root.appendChild(startJoinCard(data.sport));
   if (bs === 'empty') {
+    /* Out of season: when the pool has games again, under the pair (seasonSlot). */
+    root.appendChild(seasonSlot(data.sport));
     dayBar(root, data, state);
     root.appendChild(stateBlock('empty', data.sport === 'ufc' ? GROUP_COPY.emptyUfc
       : data.sport === 'cricket' ? GROUP_COPY.emptyCricket
-      : data.sport === 'golf-cup' ? GROUP_COPY.emptyGolfCup : GROUP_COPY.emptyDay));
+      : data.sport === 'golf-cup' ? GROUP_COPY.emptyGolfCup
+      : data.sport === 'womens-college-volleyball' ? GROUP_COPY.emptyVolleyball : GROUP_COPY.emptyDay));
     return;
   }
   const c = bs === 'offline' ? BROWSE_COPY.offline : BROWSE_COPY.error;

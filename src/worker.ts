@@ -31,6 +31,7 @@ import { handleF1Pool, racingStandings, RACING } from './f1-pool.ts';
 import { handlePropsPool, propsStandings } from './props-pool.ts';
 import { settleReadySets, syncReadyOptions } from './props-settle-run.ts';
 import { handleSquaresPool, squaresStandings, drawDueGrids } from './squares-pool.ts';
+import { handleSeasonNext } from './season-next.ts';
 import { serveNascar, NASCAR_SERIES } from './nascar-feed.ts';
 import { poolSport, worldPoolId, pickSides, gradeSql } from './lib/groups.ts';
 
@@ -285,6 +286,9 @@ export default {
       /* ---- Big Game squares: /api/squares* (src/squares-pool.ts) ---- */
       const squaresRes = await handleSquaresPool(req, env, p, json);
       if (squaresRes) return squaresRes;
+      /* ---- when an off-season pool has games again: /api/season/next (src/season-next.ts) ---- */
+      const seasonRes = await handleSeasonNext(req, env, p, json);
+      if (seasonRes) return seasonRes;
       const groupRes = await handleGroups(req, env, p, json);
       if (groupRes) return groupRes;
 

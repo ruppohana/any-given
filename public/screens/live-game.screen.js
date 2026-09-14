@@ -45,6 +45,9 @@ import { signed, signClass, clock } from '/components/fmt.js';
 import { myGroups, currentGroupId, setCurrentGroupId } from '/components/group.js';
 /* Home's Awards & TV tiles: the questions sets still open (homeShows, below). */
 import { templatesOpen, PROP_TEMPLATES } from '/src/lib/props.js';
+/* What is coming - the out-of-season events Home counts down to (2026-09-13). Its day count
+   is renamed here: this screen's own countdownText is the live kickoff clock. */
+import { upcomingOn, upcomingAt, countdownText as upcomingCountdown } from '/src/lib/upcoming.js';
 
 export const id = 'live-game';
 export const title = 'Live — the call';
@@ -4085,6 +4088,9 @@ const HOME_FAMILIES = [
    * The third element is that caption; the second is still the accessible name. */
   { h: 'Basketball', leagues: [['nba', 'NBA'], ['wnba', 'WNBA'], ['mens-college-basketball', 'College basketball', 'Men'],
     ['womens-college-basketball', 'Women’s college basketball', 'Women']] },
+  /* NCAA women's volleyball, 2026-09-13 ("dont ask do any that appear valid") - after
+   * basketball. One league, so a solo row like Baseball, with the NCAA shield. */
+  { h: 'Volleyball', leagues: [['womens-college-volleyball', 'Women’s college volleyball']] },
   { h: 'Baseball', leagues: [['mlb', 'MLB']] },
   /* College hockey, 2026-09-13 - beside the NHL. The NCAA shield with a caption,
    * Men, the way the two basketball shields carry theirs. */
@@ -4095,8 +4101,9 @@ const HOME_FAMILIES = [
   { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup', 'Cup'], ['nascar-oreilly', "NASCAR O'Reilly", 'O’Reilly'],
     ['nascar-truck', 'NASCAR Trucks', 'Trucks']] },
   /* Soccer, 2026-09-13 - last, as in POOL_SPORTS. */
+  /* The NWSL (2026-09-13) last in the family, as in POOL_SPORTS. */
   { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'],
-    ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] },
+    ['laliga', 'La Liga'], ['ligamx', 'Liga MX'], ['nwsl', 'NWSL']] },
   /* UFC and cricket, 2026-09-13 - day sports graded by ESPN's winner flag
    * (src/slate-day.ts). UFC carries its mark since Jason asked for the combat and
    * racing logos (2026-09-13); cricket stays words - ESPN's cricket marks are per
@@ -4143,7 +4150,11 @@ const HOME_MARKS = {
   'mls': '/logos/leagues/mls-500.png',
   'ucl': '/logos/leagues/ucl-500.png',
   'laliga': '/logos/leagues/laliga-500.png',
-  'ligamx': '/logos/leagues/ligamx-500.png'
+  'ligamx': '/logos/leagues/ligamx-500.png',
+  /* 2026-09-13: the NWSL's own mark (tools/scrape-logos.mjs leagues); women's volleyball
+     is an NCAA sport, so the NCAA shield, as every college tile carries. */
+  'nwsl': '/logos/leagues/nwsl-500.png',
+  'womens-college-volleyball': '/logos/leagues/ncaa-500.png'
 };
 
 /* A LEAGUE WITH A DATE. Big Game squares is one game, so its tile says the day and
@@ -4208,7 +4219,8 @@ const HOME_SHOW_NAMES = {
   'dwts-35': 'Dancing with the Stars',
   'traitors-new-blood': 'The Traitors',
   'worlds-2026': 'Cycling Worlds',
-  'big-brother-28': 'Big Brother'
+  'big-brother-28': 'Big Brother',
+  'breeders-cup-2026': "Breeders' Cup"
 };
 const HOME_OWN = {
   id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, anything…'
@@ -4221,7 +4233,10 @@ const HOME_OWN = {
  * [set id, family name], in the order they follow Golf. A set's family is there while
  * the set is open and gone once its last question locks, as a show tile is. */
 const HOME_SPORT_SETS = [
-  ['worlds-2026', 'Cycling']
+  ['worlds-2026', 'Cycling'],
+  /* The Breeders' Cup (Oct 30-31, 2026): its set is added by the breeders-cup-set routine once
+     the fields are drawn (Oct 27); until then Home counts down to it (src/lib/upcoming.ts). */
+  ['breeders-cup-2026', 'Horse racing']
 ];
 function isSportSet(id) {
   return HOME_SPORT_SETS.some(([s]) => s === id);
@@ -4330,8 +4345,11 @@ function homeSports(wrap) {
   c.appendChild(bar);
   const sp = homePanel('sports');
   sp.appendChild(homeFamilies());
+  /* What is coming, under each tab's own list (homeComingUp). */
+  sp.appendChild(homeComingUp('sports'));
   const np = homePanel('nonsports');
   np.appendChild(homeShows());
+  np.appendChild(homeComingUp('nonsports'));
   c.appendChild(sp);
   c.appendChild(np);
   const my = el('a', 'lg-mygroups', 'My groups');
@@ -4349,6 +4367,85 @@ function homePanel(id) {
   p.setAttribute('role', 'tabpanel');
   p.setAttribute('aria-labelledby', 'lg-tab-' + id);
   return p;
+}
+
+/* 🔴 COMING UP. Jason, 2026-09-13: "dont ask do any that appear valid. if any are out of
+ * season put a countdown clock on the page." The events worth a pool that are not in season
+ * yet - src/lib/upcoming.ts UPCOMING, the server's own list, never typed here - under each
+ * tab's own list: the Breeders' Cup, the Masters, the Draft on Sports; the Globes, the
+ * Grammys, the Oscars on Non-sports. One quiet row each: the name on the left; on the right
+ * the countdown over the day ("in 47 days" over "Fri, Oct 30"), or - with no date announced
+ * - when it is expected ("June 2027"). Not buttons: there is nothing to open yet.
+ *
+ * The count is by calendar day in the phone's zone (countdownText), so it moves at midnight
+ * and never ticks: it is repainted when the page is looked at again and at local midnight,
+ * and at no other time. */
+function homeComingUp(tab, now) {
+  const sec = el('section', 'lg-coming');
+  sec.dataset.tab = tab;
+  const h = el('h2', 'lg-coming-t', 'Coming up');
+  h.id = 'lg-coming-h-' + tab;
+  sec.setAttribute('aria-labelledby', h.id);
+  sec.appendChild(h);
+  const list = el('ul', 'lg-coming-list');
+  sec.appendChild(list);
+  sec.comingList = list;
+  homeComingPaint(sec, now == null ? Date.now() : now);
+  homeComingWatch();
+  return sec;
+}
+
+/** A section's rows at `now`: an event leaves on its day, and every count moves with the date. */
+function homeComingPaint(sec, now) {
+  const list = sec.comingList;
+  list.textContent = '';
+  const items = upcomingOn(sec.dataset.tab, now);
+  sec.hidden = !items.length;
+  for (const u of items) {
+    const li = el('li', 'lg-coming-row');
+    li.dataset.id = u.id;
+    li.appendChild(el('span', 'lg-coming-l', u.label));
+    const r = el('span', 'lg-coming-r');
+    const count = upcomingCountdown(u, now);
+    if (count) {
+      r.appendChild(el('span', 'lg-coming-n', count));
+      const d = el('time', 'lg-coming-d', homeComingDate(u));
+      d.setAttribute('datetime', u.date);
+      r.appendChild(d);
+    } else {
+      r.appendChild(el('span', 'lg-coming-w', u.when));
+    }
+    li.appendChild(r);
+    list.appendChild(li);
+  }
+}
+
+/** "Fri, Oct 30" - the event's own day, the same on every phone (upcomingAt is noon UTC). */
+function homeComingDate(u) {
+  return new Date(upcomingAt(u)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+/** Repaint every Coming up on the page, for today. */
+function homeComingRefresh() {
+  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+  const now = Date.now();
+  for (const sec of document.querySelectorAll('.lg-coming')) if (sec.comingList) homeComingPaint(sec, now);
+}
+
+/** Once per page: repaint when the page is looked at again (a phone left on Home overnight
+ *  wakes to today's count), and at each local midnight. Nothing ticks. */
+function homeComingWatch() {
+  if (S.comingWatch || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  S.comingWatch = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') homeComingRefresh();
+  });
+  const arm = () => {
+    const n = new Date();
+    const next = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 1);
+    S.comingTimer = setTimeout(() => { homeComingRefresh(); arm(); }, next - n);
+  };
+  arm();
 }
 
 /** The tab this phone chose last; Sports when nothing is stored or storage is off. */
@@ -6168,6 +6265,22 @@ const CSS = `
 .lg-league.is-mine { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .lg-league.is-mine .lg-league-yg { display: block; }
 .lg-shows { display: grid; gap: 8px; }
+/* COMING UP (2026-09-13): what is not in season yet, one quiet row each under the tab's own
+   list - the name on the left, the countdown over its day on the right. Not buttons, so no
+   button look: one card, rows split by a hairline. */
+.lg-coming { display: grid; gap: 6px; margin-top: 8px; }
+.lg-coming[hidden] { display: none; }
+.lg-coming-t { margin: 0; padding: 0 4px; font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--dim); }
+.lg-coming-list { list-style: none; margin: 0; padding: 0; background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius-card); }
+.lg-coming-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 44px; padding: 7px 14px; }
+.lg-coming-row + .lg-coming-row { border-top: 1px solid var(--line); }
+.lg-coming-l { flex: 1 1 auto; min-width: 0; font-size: var(--t-body); font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.lg-coming-r { display: flex; flex-direction: column; align-items: flex-end; flex: none; text-align: right; }
+.lg-coming-n { font-size: var(--t-body); font-weight: 800; line-height: 1.2; color: var(--fg); }
+.lg-coming-d, .lg-coming-w { font-size: var(--t-micro); font-weight: 700; line-height: 1.3; color: var(--dim); }
 .lg-show-c { font-size: var(--t-micro); font-weight: 700; line-height: 1.3; color: var(--dim); }
 .lg-mygroups { justify-self: center; display: inline-flex; align-items: center; min-height: 44px;
   padding: 0 8px; font-size: var(--t-micro); font-weight: 700; color: var(--dim);

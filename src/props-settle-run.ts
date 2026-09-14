@@ -13,10 +13,10 @@
  * route - what the page said, when, and what was written.
  */
 import { PROP_TEMPLATES } from './lib/props.ts';
-import { winnersFromWikiAwards, findCategory, matchOption, castRows, answersFromCast, medalsFromWiki, findEvent, pickOption, mergeOptions, infoboxAnswers } from './lib/props-settle.ts';
+import { winnersFromWikiAwards, findCategory, matchOption, castRows, answersFromCast, medalsFromWiki, findEvent, pickOption, mergeOptions, infoboxAnswers, breedersCupWinners } from './lib/props-settle.ts';
 import { PROPS_LIMITS } from './lib/props.ts';
 
-const KINDS = ['wiki-awards', 'wiki-survivor', 'wiki-dwts', 'wiki-traitors', 'wiki-medals', 'wiki-bb'];
+const KINDS = ['wiki-awards', 'wiki-survivor', 'wiki-dwts', 'wiki-traitors', 'wiki-medals', 'wiki-bb', 'wiki-bc'];
 
 const UA = 'AnyGiven/1.0 (https://anygiven.app; ruppohana@gmail.com)';
 export const wikiHtmlUrl = (page: string) => `https://en.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(page)}`;
@@ -97,12 +97,16 @@ export async function settleReadySets(env: any, now = Date.now(), fetchImpl: typ
     const awards = src.kind === 'wiki-awards';
     /* A medal table answers by event name, with the race's gold line (src/lib/props-settle.ts). */
     const medals = src.kind === 'wiki-medals';
-    const winners = awards ? winnersFromWikiAwards(html) : medals ? medalsFromWiki(html) : new Map<string, string>();
+    /* The Breeders' Cup answers by race name from the year's races table, like an awards page
+       by category heading (src/lib/props-settle.ts breedersCupWinners). */
+    const races = src.kind === 'wiki-bc';
+    const winners = awards ? winnersFromWikiAwards(html) : medals ? medalsFromWiki(html)
+      : races ? breedersCupWinners(html) : new Map<string, string>();
     /* Big Brother answers from the season's infobox: winner, runner-up, America's Favorite. */
-    const cast = awards || medals ? {} : src.kind === 'wiki-bb' ? infoboxAnswers(html) : answersFromCast(src.kind, castRows(html));
+    const cast = awards || medals || races ? {} : src.kind === 'wiki-bb' ? infoboxAnswers(html) : answersFromCast(src.kind, castRows(html));
     const answers: Record<string, string> = {};
     for (const x of want) {
-      const line = awards ? findCategory(winners, x.q.key || x.q.text)
+      const line = awards || races ? findCategory(winners, x.q.key || x.q.text)
         : medals ? findEvent(winners, x.q.key || x.q.text) : (cast as any)[x.q.key];
       if (!line) continue;
       /* Each group against its OWN options: a set's list can change after a group loaded

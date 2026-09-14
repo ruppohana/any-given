@@ -25,6 +25,8 @@ import { POOL_SPORTS } from '../src/lib/groups.ts';
 import { templatesOpen, PROP_TEMPLATES } from '../src/lib/props.ts';
 /* The real theme helper the league marks go through. */
 import { themeMark } from '../public/components/team-chip.js';
+/* The real list of what is coming - Home's Coming up rows are read off it (2026-09-13). */
+import { upcomingOn, upcomingAt, countdownText } from '../src/lib/upcoming.ts';
 
 const SRC = readFileSync(new URL('../public/screens/live-game.screen.js', import.meta.url), 'utf8')
   .replace(/\r\n/g, '\n');
@@ -43,6 +45,8 @@ function lift(name) {
 const PIECES = ['el', 'store', 'HOME_FAMILIES', 'HOME_MARKS', 'HOME_DATED', 'homeLeaguesAt', 'homeDatedCap', 'homeAccordion',
   'homeMarkDark', 'homeSportDest', 'HOME_SHOW_NAMES',
   'HOME_OWN', 'HOME_SPORT_SETS', 'isSportSet', 'homeSetCap', 'homeShowList', 'homeSetList', 'homeSetFamily', 'setTile', 'homeShows', 'showTile', 'homeShowTap', 'HOME_TABS', 'homeSports', 'homePanel',
+  /* Coming up, under each tab (2026-09-13) - tests/season-countdown.test.mjs runs it. */
+  'homeComingUp', 'homeComingPaint', 'homeComingDate', 'homeComingRefresh', 'homeComingWatch',
   'homeTabNow', 'homeTabTo', 'homeFamilies', 'homeFamily', 'homeOpenMap', 'homeFamWanted', 'homeFamOpen',
   'homeFamToggle', 'leagueTile', 'soloTile', 'mineMark', 'markHomeGroups', 'loadHomeGroups', 'homeSportTap', 'homeScreen'];
 const BODY = PIECES.map(lift).join('\n\n');
@@ -88,6 +92,9 @@ const openFams = (root) => byClass(root, 'lg-fam').filter(isOpen).map((f) => f.d
 const tabsOf = (root) => byClass(root, 'lg-hometab');
 const panel = (root, id) => byClass(root, 'lg-homepanel').find((p) => p.dataset.tab === id);
 const SEP13 = Date.UTC(2026, 8, 13, 19, 0, 0);   /* the day before the Emmys */
+/* The ready sets that are sports and so live on the Sports tab (the Cycling Worlds, the
+   Breeders' Cup), read off the shipped screen - never a list restated here. */
+const SPORT_SET_IDS = new Function(lift('HOME_SPORT_SETS') + ';return HOME_SPORT_SETS;')().map(([id]) => id);
 const dayOf = (ms) => new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
@@ -121,6 +128,8 @@ function load() {
     S, document: globalThis.document, location: loc,
     myGroups: GROUP.myGroups, currentGroupId: GROUP.currentGroupId, setCurrentGroupId: GROUP.setCurrentGroupId,
     templatesOpen, PROP_TEMPLATES, themeMark,
+    /* Coming up reads the real list of what is coming (2026-09-13). */
+    upcomingOn, upcomingAt, upcomingCountdown: countdownText,
     heroBlock: stub('hero'), modeCard: stub('modeCard'), sportCard: stub('sportCard'),
     goCard: stub('goCard'), marblesCard: stub('marblesCard')
   };
@@ -140,7 +149,7 @@ beforeEach(() => {
 test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once', () => {
   const { HOME_FAMILIES } = load();
   assert.deepEqual(HOME_FAMILIES.map((f) => f.h),
-    ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing', 'Soccer', 'Combat', 'Cricket', 'Golf']);
+    ['Football', 'Basketball', 'Volleyball', 'Baseball', 'Hockey', 'Racing', 'Soccer', 'Combat', 'Cricket', 'Golf']);
   assert.deepEqual(HOME_FAMILIES.map((f) => f.leagues), [
     /* The NCAA last in every family - Jason, 2026-09-13: "put the ncaa logo last in the list".
        Big Game squares (2026-09-13) between the two shields. */
@@ -148,12 +157,16 @@ test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once',
     /* The NCAA shields carry a caption each - Men, Women (2026-09-13). */
     [['nba', 'NBA'], ['wnba', 'WNBA'], ['mens-college-basketball', 'College basketball', 'Men'],
       ['womens-college-basketball', 'Women’s college basketball', 'Women']],
+    /* Women's college volleyball, 2026-09-13 - one league, a solo row after basketball. */
+    [['womens-college-volleyball', 'Women’s college volleyball']],
     [['mlb', 'MLB']],
     [['nhl', 'NHL'], ['mens-college-hockey', 'College hockey', 'Men']],
     /* The three NASCAR series share the drawn flag, a caption each. */
     [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup', 'Cup'], ['nascar-oreilly', "NASCAR O'Reilly", 'O’Reilly'],
       ['nascar-truck', 'NASCAR Trucks', 'Trucks']],
-    [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX']],
+    /* The NWSL (2026-09-13) last in Soccer, as in POOL_SPORTS. */
+    [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX'],
+      ['nwsl', 'NWSL']],
     /* UFC and cricket, 2026-09-13 - day sports graded by ESPN's winner flag. */
     [['ufc', 'UFC']],
     [['cricket', 'Cricket']],
@@ -199,7 +212,7 @@ test('Awards & TV: each open ready set, soonest first, dated by its broadcast, t
      sport, which are on the Sports tab (2026-09-13, "do the cycling worlds next"). */
   assert.ok(templatesOpen(SEP13).some((t) => t.id === 'worlds-2026'), 'the server offers the Worlds on the 13th');
   assert.deepEqual(on13.filter((s) => s.id).map((s) => s.id),
-    templatesOpen(SEP13).map((t) => t.id).filter((id) => id !== 'worlds-2026'));
+    templatesOpen(SEP13).map((t) => t.id).filter((id) => !SPORT_SET_IDS.includes(id)));
 });
 
 test('Awards & TV layout: two across, and Your own questions fills an odd row or takes its own', () => {
@@ -291,7 +304,9 @@ test('Cycling Worlds: a one-row Cycling family on the Sports tab on Sept 13, gon
   assert.ok(lastLock < SEP28 && lastLock > SEP13, 'the set locks between the two clocks');
 
   const on13 = M.homeSetList(SEP13);
-  assert.deepEqual(on13.map((s) => [s.id, s.h, s.label]), [['worlds-2026', 'Cycling', 'Cycling Worlds']]);
+  /* The Worlds' family; the Breeders' Cup joins it on the tab once a routine adds its set. */
+  assert.deepEqual(on13.filter((s) => s.id === 'worlds-2026').map((s) => [s.id, s.h, s.label]), [['worlds-2026', 'Cycling', 'Cycling Worlds']]);
+  assert.deepEqual(SPORT_SET_IDS, ['worlds-2026', 'breeders-cup-2026']);
   assert.equal(on13[0].cap, dayOf(Math.min(...worlds.questions.map((q) => q.lockAt))), 'dated by its first race');
   assert.ok(!M.homeShowList(SEP13).some((s) => s.id === 'worlds-2026'), 'not in the Non-sports list');
 
@@ -379,7 +394,7 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
     'every sport, in order');
   assert.equal(byClass(panel(wrap, 'sports'), 'lg-league').length, sportTiles(wrap).length, 'all on the Sports tab');
   assert.deepEqual(showTiles(wrap).map((b) => b.dataset.template),
-    [...templatesOpen(Date.now()).map((t) => t.id).filter((id) => id !== 'worlds-2026'), ''],
+    [...templatesOpen(Date.now()).map((t) => t.id).filter((id) => !SPORT_SET_IDS.includes(id)), ''],
     'the open sets, then your own - never the Worlds, which are a sport');
   assert.equal(byClass(panel(wrap, 'nonsports'), 'lg-show').length, showTiles(wrap).length, 'all on the Non-sports tab');
 
@@ -400,7 +415,7 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
   const solos = byClass(wrap, 'lg-fam').filter((f) => !f.rollH);
   /* Then Cycling while the Worlds are open - a ready set that is a sport (2026-09-13). */
   assert.deepEqual(solos.map((f) => f.dataset.fam),
-    ['baseball', 'combat', 'cricket', 'golf', ...M.homeSetList(Date.now()).map((s) => s.h.toLowerCase())]);
+    ['volleyball', 'baseball', 'combat', 'cricket', 'golf', ...M.homeSetList(Date.now()).map((s) => s.h.toLowerCase())]);
   for (const f of solos) {
     assert.equal(f.children.length, 1, f.dataset.fam + ' is one row, not a heading and a tile');
     const b = f.children[0];
@@ -408,7 +423,7 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
     assert.deepEqual([b.tagName, b.type, b.hidden], ['button', 'button', false]);
     assert.ok(b.classList.contains('lg-league') && b.classList.contains('lg-fam-solo'), 'the row is the tile');
     assert.equal(byClass(b, 'lg-fam-t')[0].textContent,
-      { baseball: 'Baseball', combat: 'Combat', cricket: 'Cricket', golf: 'Golf', cycling: 'Cycling' }[f.dataset.fam], 'the name on the left');
+      { volleyball: 'Volleyball', baseball: 'Baseball', combat: 'Combat', cricket: 'Cricket', golf: 'Golf', cycling: 'Cycling' }[f.dataset.fam], 'the name on the left');
     assert.equal(byClass(f, 'lg-fam-solo-h').length, 0, 'no separate heading');
     assert.equal(byClass(f, 'lg-fam-row').length, 0, 'no row of tiles under it');
     assert.equal(byClass(f, 'lg-league').length, 1);
@@ -439,7 +454,8 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
     ['basketball', [L('nba'), L('wnba'), L('ncaa')]],
     ['hockey', [L('nhl'), L('ncaa')]],
     ['racing', [L('f1'), '/logos/leagues/nascar-500.svg']],
-    ['soccer', [L('epl'), L('mls'), L('ucl'), L('laliga'), L('ligamx')]]
+    /* The NWSL's mark last, as its tile is (2026-09-13). */
+    ['soccer', [L('epl'), L('mls'), L('ucl'), L('laliga'), L('ligamx'), L('nwsl')]]
   ], 'each mark once, small, in the collapsed header - the NCAA last');
   assert.equal(fam(wrap, 'soccer').rollMarks.getAttribute('aria-hidden'), 'true', 'the name is the label, not the marks');
   for (const m of byClass(wrap, 'lg-fam-mark')) assert.equal(m.dataset.logoDark, m.src.replace(/-500\.(png|svg)$/, '-500-dark.$1'));

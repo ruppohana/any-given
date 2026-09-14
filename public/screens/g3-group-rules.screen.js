@@ -73,12 +73,14 @@ const LEAGUES = { 'college-football': 'College football', nfl: 'NFL',
   mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA', 'nascar-oreilly': 'NASCAR O’Reilly', 'nascar-truck': 'NASCAR Trucks',
   epl: 'Premier League', mls: 'MLS', ucl: 'Champions League', laliga: 'La Liga', ligamx: 'Liga MX',
   'mens-college-hockey': 'College hockey', 'womens-college-basketball': 'Women’s college basketball',
-  props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup', squares: 'Big Game squares' };
+  props: 'Questions', ufc: 'UFC', cricket: 'Cricket', 'golf-cup': 'Presidents Cup', squares: 'Big Game squares',
+  nwsl: 'NWSL', 'womens-college-volleyball': 'Women’s college volleyball' };
 function leagueOf(s) { return Object.prototype.hasOwnProperty.call(LEAGUES, s) ? s : 'college-football'; }
 /* 🔴 THE ONE LIST OF SPORTS THAT PICK A DAY AT A TIME. src/lib/day.ts DAY_SPORTS
  * is the server's copy; tests/g3-group-rules.test.mjs holds the two equal. */
 export const DAY_SPORTS = ['mens-college-basketball', 'nba', 'wnba', 'mlb', 'nhl', 'epl', 'mls',
-  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup'];
+  'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'ufc', 'cricket', 'golf-cup',
+  'nwsl', 'womens-college-volleyball'];
 export function isDaySport(s) { return DAY_SPORTS.includes(s); }
 /** F1 and NASCAR are races: scored in points, with no spread anywhere. */
 /* F1 and every NASCAR series - Cup, O'Reilly, Truck (2026-09-13). */
@@ -86,7 +88,7 @@ function isRacing(s) { return s === 'f1' || String(s).startsWith('nascar'); }
 /** The five soccer leagues. src/lib/groups.ts isSoccerSport: the draw is a
  *  pick, and gradeSql scores a level final for the people who picked it - unless
  *  a knockout was won on penalties (game.winner). */
-export function isSoccer(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx'].includes(s); }
+export function isSoccer(s) { return ['epl', 'mls', 'ucl', 'laliga', 'ligamx', 'nwsl'].includes(s); }
 /** A questions group - awards, TV, anything (src/props-pool.ts, 2026-09-13). */
 export function isProps(s) { return s === 'props'; }
 /** UFC and cricket (2026-09-13): graded by the winner ESPN flags, not a score -
@@ -100,7 +102,8 @@ export function isGolfCup(s) { return s === 'golf-cup'; }
 export function isSquares(s) { return s === 'squares'; }
 /** No spread anywhere: the races, soccer, questions, UFC, cricket, the Presidents Cup
  *  and Big Game squares (src/lib/groups.ts hasNoSpread). */
-export function hasNoSpread(s) { return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s); }
+/* College volleyball has no betting line - straight up only (2026-09-13). */
+export function hasNoSpread(s) { return isRacing(s) || isSoccer(s) || isProps(s) || isWinner(s) || isSquares(s) || s === 'womens-college-volleyball'; }
 
 /** How a squares group plays - group create's words (g1-group SQUARES_RULES), with the
  *  grid said in words: this page never types a number that could read as one of its
@@ -125,12 +128,14 @@ const DAY_WORDS = {
   UFC: { lock: 'the start of its card', until: 'its part of the card starts' },
   cricket: { lock: 'the first ball', until: 'the first ball of that match' },
   /* A Presidents Cup match locks when it tees off; the cup itself with the first match. */
-  golf: { lock: 'the first tee', until: 'that match tees off' }
+  golf: { lock: 'the first tee', until: 'that match tees off' },
+  /* A volleyball match (2026-09-13) starts with its first serve. */
+  volleyball: { lock: 'first serve', until: 'that match’s first serve' }
 };
 function dayFamily(s) {
   return s === 'mlb' ? 'baseball' : s === 'nhl' || s === 'mens-college-hockey' ? 'hockey'
     : isSoccer(s) ? 'soccer' : s === 'ufc' ? 'UFC' : s === 'cricket' ? 'cricket'
-    : s === 'golf-cup' ? 'golf' : 'basketball';
+    : s === 'golf-cup' ? 'golf' : s === 'womens-college-volleyball' ? 'volleyball' : 'basketball';
 }
 export function lockWord(s) { return DAY_WORDS[dayFamily(s)].lock; }
 
@@ -192,13 +197,16 @@ export function dayPicking(s) {
   }
   /* Soccer has three picks on a match, and the draw is one of them. */
   const what = fam === 'soccer' ? 'the home side, the away side or the draw' : 'a side';
+  /* A volleyball match is a match (2026-09-13); everywhere else here it is a game. */
+  const one = fam === 'volleyball' ? 'match' : 'game';
+  const many = fam === 'volleyball' ? 'matches' : 'games';
   return {
     lead: 'Every pick is editable until ' + w.until + ', and locks at ' + w.lock + '.',
     bullets: [
-      'A ' + fam + ' group picks a day at a time. Each day, pick ' + what + ' in the games you ' +
+      'A ' + fam + ' group picks a day at a time. Each day, pick ' + what + ' in the ' + many + ' you ' +
         'want. There is no minimum.',
       'The ' + w.lock + ' time is the server’s, not your phone’s, so a pick cannot slip in late.',
-      'Pick the same game again before ' + w.lock + ' and the new pick replaces the old one.',
+      'Pick the same ' + one + ' again before ' + w.lock + ' and the new pick replaces the old one.',
       'Only members can pick in a group. Picking never joins you to one.'
     ]
   };

@@ -29,8 +29,9 @@ test('eighteen sports and questions, and anything else is a college football gro
   assert.deepEqual([...POOL_SPORTS], ['college-football', 'nfl', 'mens-college-basketball', 'nba', 'f1', 'nascar',
     'mlb', 'nhl', 'wnba', 'nascar-oreilly', 'nascar-truck', 'epl', 'mls',
     'ucl', 'laliga', 'ligamx', 'mens-college-hockey', 'womens-college-basketball', 'props', 'ufc', 'cricket', 'golf-cup',
-    /* Big Game squares, 2026-09-13 (tests/squares.test.mjs). */
-    'squares']);
+    /* Big Game squares, 2026-09-13 (tests/squares.test.mjs), then the NWSL and women's
+       college volleyball (tests/nwsl-wvb-countdown.test.mjs). */
+    'squares', 'nwsl', 'womens-college-volleyball']);
   for (const s of POOL_SPORTS) assert.equal(poolSport(s), s);
   assert.equal(poolSport('curling'), 'college-football');
   assert.equal(poolSport(undefined), 'college-football');
