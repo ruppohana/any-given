@@ -151,15 +151,35 @@ const LEAGUE_PATH = { nfl: 'nfl', 'college-football': 'ncaa', ncaa: 'ncaa',
    different team in college. MLB, NHL and WNBA joined 2026-09-12. */
 const BY_ABBREV = new Set(['nba', 'mlb', 'nhl', 'wnba']);
 
-/* 🔴 AN NBA CREST COMES FROM ITS ABBREVIATION, NEVER ITS ID. ESPN files NBA
+const CDN = 'https://a.espncdn.com/i/teamlogos';
+
+/* 🔴 A PRO CREST COMES FROM ITS ABBREVIATION, NEVER ITS ID. ESPN files these
  * logos by abbreviation (nba/500/det.png) and an NBA team id is a different
  * school in college - 5 is Cleveland here - so the id path would draw a real
- * college crest on an NBA row and nothing would error. Not self-hosted yet:
- * ESPN's CDN directly, the same host the college fallback already uses. */
-function nbaLogo(team, variant, league = 'nba') {
+ * college crest on an NBA row and nothing would error.
+ *
+ * 🔴 SELF-HOSTED SINCE 2026-09-13. Jason: "are we not capturing the rest of the
+ * logos?" - the four pro leagues were the last crests still hot-linked. The
+ * scraper (tools/scrape-logos.mjs nba|wnba|mlb|nhl) saves them under the SAME
+ * lowercase abbreviation ESPN uses, so our path and the CDN path differ only in
+ * the host: `/logos/nba/500/det.png`, then the CDN, then the drawn chip - the
+ * order college and the NFL already use. */
+/* 🔴 A FILE WINDOWS CANNOT HOLD. The Connecticut Sun are "CON", and con.png is a
+ * reserved device name on Windows (so are prn, aux, nul, com1-9, lpt1-9): the file
+ * could not be read, git refused the whole commit, and the crest test passed anyway
+ * because asking Windows whether "con.png" exists asks about the console. So OUR copy
+ * of such a crest is saved with a trailing underscore - con_.png - by the scraper and
+ * asked for the same way here. The CDN keeps ESPN's own name. Found 2026-09-13. */
+export function localName(ab) {
+  const s = String(ab || '').toLowerCase();
+  return /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(s) ? s + '_' : s;
+}
+
+function proLogo(team, variant, league, host) {
   const ab = String(team.abbrev || team.abbreviation || '').toLowerCase();
   if (!ab) return null;
-  return `https://a.espncdn.com/i/teamlogos/${league}/${variant === '500-dark' ? '500-dark' : '500'}/${ab}.png`;
+  const file = host === CDN ? ab : localName(ab);
+  return `${host}/${league}/${variant === '500-dark' ? '500-dark' : '500'}/${file}.png`;
 }
 
 /**
@@ -178,8 +198,10 @@ function nbaLogo(team, variant, league = 'nba') {
  */
 export function logoUrl(team, league, variant) {
   if (!team || !team.id) return null;
-  if (BY_ABBREV.has(league || team.league)) return nbaLogo(team, variant, league || team.league);
-  const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
+  const lg = league || team.league;
+  if (FROM_LOGO[lg]) return fromLogo(team, variant, FROM_LOGO[lg]);
+  if (BY_ABBREV.has(lg)) return proLogo(team, variant, lg, '/logos');
+  const path = LEAGUE_PATH[lg || 'college-football'] || 'ncaa';
   return `/logos/${path}/${variant || '500'}/${team.id}.png`;
 }
 
@@ -187,9 +209,28 @@ export function logoUrl(team, league, variant) {
  *  local one 404s, so a school we have not scraped is never a hole. */
 export function cdnLogoUrl(team, league, variant) {
   if (!team || !team.id) return null;
-  if (BY_ABBREV.has(league || team.league)) return nbaLogo(team, variant, league || team.league);
-  const path = LEAGUE_PATH[league || team.league || 'college-football'] || 'ncaa';
-  return `https://a.espncdn.com/i/teamlogos/${path}/${variant || '500'}/${team.id}.png`;
+  const lg = league || team.league;
+  /* The feed's own URL, and the light one: ESPN has no dark file for most
+     cricket teams, and a flag reads on either ground. */
+  if (FROM_LOGO[lg]) return fromLogo(team, variant, FROM_LOGO[lg]) ? String(team.logo) : null;
+  if (BY_ABBREV.has(lg)) return proLogo(team, variant, lg, CDN);
+  const path = LEAGUE_PATH[lg || 'college-football'] || 'ncaa';
+  return `${CDN}/${path}/${variant || '500'}/${team.id}.png`;
+}
+
+/* 🔴 UFC AND CRICKET CARRY THEIR OWN LOGO URL, and no path can be built from
+ * their id. A UFC "team" is a fighter - id 'f' + ESPN athlete id - and its crest
+ * is the fighter's COUNTRY FLAG (src/slate-day.ts parseUfcDay: team.logo is
+ * teamlogos/countries/500/usa.png). A cricket team's is ESPN's file when it has
+ * one. So the file name is read out of the feed's URL, and the scraper
+ * (tools/scrape-logos.mjs countries | cricket) saves it under that name. No URL,
+ * or one of another shape, is null - the drawn chip, never a guess. Never a UFC
+ * mark: the vault's Logos table allows none. */
+const FROM_LOGO = { ufc: 'countries', cricket: 'cricket' };
+function fromLogo(team, variant, folder) {
+  const m = /\/teamlogos\/(countries|cricket)\/500\/([a-z0-9]+)\.png$/i.exec(String(team.logo || ''));
+  if (!m || m[1].toLowerCase() !== folder) return null;
+  return `/logos/${folder}/${variant === '500-dark' ? '500-dark' : '500'}/${m[2].toLowerCase()}.png`;
 }
 
 /* 🔴 THE DECODED CACHE — the other half of the blink fix.
@@ -246,7 +287,8 @@ function isDark() {
 
 function paintLogos() {
   const dark = isDark();
-  for (const img of document.querySelectorAll('img.tchip-logo')) {
+  /* Crests, and the league marks themeMark() hands the same watcher. */
+  for (const img of document.querySelectorAll('img.tchip-logo, img[data-theme-mark]')) {
     const want = dark ? img.dataset.logoDark : img.dataset.logoLight;
     if (want && img.getAttribute('src') !== want) img.setAttribute('src', want);
   }
@@ -265,6 +307,28 @@ function watchTheme() {
     if (mq.addEventListener) mq.addEventListener('change', paintLogos);
     else if (mq.addListener) mq.addListener(paintLogos);
   }
+}
+
+/**
+ * A LEAGUE MARK THAT FOLLOWS THE THEME. Home's league tiles draw marks that
+ * are not team crests - the NHL shield, the Premier League lion - and several
+ * of them are drawn for white paper exactly like the crests are (the NHL's
+ * light file is a black shield that vanishes on --bg). ESPN ships a
+ * 500-dark file for each; scrape-logos.mjs saves it beside the light one.
+ *
+ * This hands the image to the SAME watcher the crests use rather than growing
+ * a second one: both variants ride on the element and paintLogos swaps them
+ * whenever data-theme or the system setting moves. Without a real document (a
+ * test shim) it is just the light file.
+ */
+export function themeMark(img, light, dark) {
+  img.dataset.themeMark = '1';
+  img.dataset.logoLight = light;
+  img.dataset.logoDark = dark || light;
+  const live = typeof document !== 'undefined' && document.documentElement && typeof window !== 'undefined';
+  if (live) watchTheme();
+  img.src = live && isDark() ? img.dataset.logoDark : light;
+  return img;
 }
 
 /** How much larger a logo is drawn than the box it replaces, to cancel the
@@ -300,7 +364,9 @@ export function teamChip(team, opts) {
    * an image somebody screenshots and sends. A CDN logo inside it is a network
    * dependency in a picture, and a licensing question in something designed to
    * travel. The drawn chip is self-contained. */
-  const wantLogo = !opts.drawn && marksOn();
+  /* No URL at all - a cricket side ESPN has no file for, a fighter with no flag -
+   * is the drawn chip at once, rather than an <img src="null"> that 404s first. */
+  const wantLogo = !opts.drawn && marksOn() && !!logoUrl(team, opts.league, '500');
   if (wantLogo) {
     watchTheme();
     const img = document.createElement('img');

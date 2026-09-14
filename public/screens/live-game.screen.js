@@ -37,7 +37,7 @@ import { shareReaction, MOMENTS, PHRASE } from '/components/sharecard.js';
    again here - the bug and the slate have to agree about when two teams clash,
    or the same fixture is legible in one place and not the other. */
 import { pageHeader } from '/components/header.js';
-import { teamChip, applyTeamVars, tooClose, normalizeColor, marksOn, logoUrl } from '/components/team-chip.js';
+import { teamChip, applyTeamVars, tooClose, normalizeColor, marksOn, logoUrl, themeMark } from '/components/team-chip.js';
 import { stateBlock, STATES_CSS } from '/components/states.js';
 import { adSlot } from '/components/ad.js';
 import { signed, signClass, clock } from '/components/fmt.js';
@@ -3680,10 +3680,8 @@ function sportCard(wrap) {
      * "use the nfl logo and the ncaa logo." */
     const img = document.createElement('img');
     img.className = 'lg-sport-logo';
-    /* The NBA's mark is not self-hosted yet - ESPN's league logo, the host the
-       crest fallback already uses. */
-    img.src = id === 'nba' ? 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png'
-      : `/logos/leagues/${id === 'nfl' ? 'nfl' : 'ncaa'}-500.png`;
+    /* The NBA's mark is self-hosted too since 2026-09-13 (scrape-logos.mjs leagues). */
+    img.src = `/logos/leagues/${id === 'nfl' ? 'nfl' : id === 'nba' ? 'nba' : 'ncaa'}-500.png`;
     /* 64, up from 44 - the mark is the whole button now. Jason, 2026-09-11:
      * "make the nfl and ncaa logos larger". */
     img.alt = ''; img.width = 64; img.height = 64;
@@ -4083,22 +4081,51 @@ const HOME_FAMILIES = [
   { h: 'Basketball', leagues: [['mens-college-basketball', 'College basketball', 'Men'],
     ['womens-college-basketball', 'Women’s college basketball', 'Women'], ['nba', 'NBA'], ['wnba', 'WNBA']] },
   { h: 'Baseball', leagues: [['mlb', 'MLB']] },
-  /* College hockey, 2026-09-13 - beside the NHL. Its name in type. */
-  { h: 'Hockey', leagues: [['nhl', 'NHL'], ['mens-college-hockey', 'College hockey']] },
+  /* College hockey, 2026-09-13 - beside the NHL. The NCAA shield with a caption,
+   * Men, the way the two basketball shields carry theirs. */
+  { h: 'Hockey', leagues: [['nhl', 'NHL'], ['mens-college-hockey', 'College hockey', 'Men']] },
   { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']] },
-  /* Soccer, 2026-09-13 - last, as in POOL_SPORTS. Names in type: no league mark. */
+  /* Soccer, 2026-09-13 - last, as in POOL_SPORTS. */
   { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'],
-    ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] }
+    ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] },
+  /* UFC and cricket, 2026-09-13 - day sports graded by ESPN's winner flag
+   * (src/slate-day.ts). Both are words: the vault's Logos table allows no UFC
+   * mark, and ESPN's cricket marks are per competition, not one for the sport. */
+  { h: 'Combat', leagues: [['ufc', 'UFC']] },
+  { h: 'Cricket', leagues: [['cricket', 'Cricket']] }
 ];
-/* The marks page 2 already draws, and no others. The mark alone, the name as
- * the tile's accessible label - "remove the word NFL and College" (2026-09-11). */
+/* 🔴 EVERY MARK FROM OUR ORIGIN. Jason, 2026-09-13: "are we not capturing the
+ * rest of the logos?" - the NBA's was hot-linked and every league after it was
+ * its name in type. tools/scrape-logos.mjs leagues saves each league's mark as
+ * public/logos/leagues/<sport>-500.png plus a -500-dark.png, and
+ * tests/logos-complete.test.mjs checks every path here is on disk in both.
+ *
+ * The mark alone, the name as the tile's accessible label - "remove the word NFL
+ * and College" (2026-09-11). NOT Formula 1 (its guidelines allow no logo at all -
+ * vault: Any Given/wiki/live-sports-data-2026-09-12.md) and not NASCAR (ESPN has
+ * no mark for it): those tiles stay words. */
 const HOME_MARKS = {
   'college-football': '/logos/leagues/ncaa-500.png',
   'nfl': '/logos/leagues/nfl-500.png',
   'mens-college-basketball': '/logos/leagues/ncaa-500.png',
   'womens-college-basketball': '/logos/leagues/ncaa-500.png',
-  'nba': 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png'
+  'nba': '/logos/leagues/nba-500.png',
+  'wnba': '/logos/leagues/wnba-500.png',
+  'mlb': '/logos/leagues/mlb-500.png',
+  'nhl': '/logos/leagues/nhl-500.png',
+  'mens-college-hockey': '/logos/leagues/ncaa-500.png',
+  'epl': '/logos/leagues/epl-500.png',
+  'mls': '/logos/leagues/mls-500.png',
+  'ucl': '/logos/leagues/ucl-500.png',
+  'laliga': '/logos/leagues/laliga-500.png',
+  'ligamx': '/logos/leagues/ligamx-500.png'
 };
+
+/** The dark-ground file beside a mark: nhl-500.png -> nhl-500-dark.png. The NHL's
+ *  light shield is black and sinks into --bg without it. */
+function homeMarkDark(src) {
+  return src.replace(/-500\.png$/, '-500-dark.png');
+}
 
 /** Where a tap on a sport goes. Pure: the sport, my groups, the current group's
  *  id. The current group wins when it is of that sport; a group row from before
@@ -4121,7 +4148,10 @@ function homeSportDest(sport, groups, currentId) {
  * set first) and goes where a sport tile goes: the group's questions if you are
  * in a questions group, else the group page with the Start form on questions. */
 const HOME_SHOW_NAMES = {
-  'emmys-2026': 'The Emmys'
+  'emmys-2026': 'The Emmys',
+  /* "Dancing with the Stars, season 35" is three lines on a half-width tile at
+     393px; the date under it already says which night. */
+  'dwts-35': 'Dancing with the Stars'
 };
 const HOME_OWN = {
   id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, cricket…'
@@ -4179,34 +4209,170 @@ function homeShowTap(template) {
   return homeSportTap('props');
 }
 
+/* 🔴 TWO TABS: SPORTS, AND NON-SPORTS. Jason, 2026-09-13: "maybe a sports tag on
+ * the left and a non-sports tag on the right?" A real tablist in place of the two
+ * stacked section headings (Sports, Awards & TV). Sports is the families, each
+ * rolled up; Non-sports is the Awards & TV question sets as plain tiles - three or
+ * four of them read cleaner as tiles than behind one more header. The tab is
+ * remembered on this phone (ag.homeTab); nothing stored, or no storage, is Sports. */
+const HOME_TABS = [
+  ['sports', 'Sports'],
+  ['nonsports', 'Non-sports']
+];
+
 function homeSports(wrap) {
   const c = el('div', 'lg-sports');
-  c.appendChild(el('h2', 'lg-sec-h', 'Sports'));
-  const fams = el('div', 'lg-fams');
-  fams.setAttribute('role', 'group');
-  fams.setAttribute('aria-label', 'Which sport?');
-  HOME_FAMILIES.forEach((f, i) => {
-    const n = f.leagues.length;
-    /* A family of one sits half width only beside another family of one, so two
-     * of them share a row. Alone - Baseball, since College hockey joined the NHL
-     * (2026-09-13) - it takes the full width rather than leaving half a row empty. */
-    const pair = n === 1 && [HOME_FAMILIES[i - 1], HOME_FAMILIES[i + 1]].some((x) => x && x.leagues.length === 1);
-    const fam = el('div', 'lg-fam' + (pair ? ' is-one' : ''));
-    fam.appendChild(el('div', 'lg-fam-h', f.h));
-    /* Two or three across; four or more is rows of two. */
-    const row = el('div', 'lg-fam-row n' + (n > 3 ? 2 : n));
-    for (const [id, label, cap] of f.leagues) row.appendChild(leagueTile(id, label, cap));
-    fam.appendChild(row);
-    fams.appendChild(fam);
+  const bar = el('div', 'lg-hometabs');
+  bar.setAttribute('role', 'tablist');
+  bar.setAttribute('aria-label', 'Sports or non-sports');
+  const tabs = HOME_TABS.map(([id, label]) => {
+    const t = el('button', 'lg-hometab', label);
+    t.type = 'button';
+    t.id = 'lg-tab-' + id;
+    t.dataset.tab = id;
+    t.setAttribute('role', 'tab');
+    t.setAttribute('aria-controls', 'lg-panel-' + id);
+    t.onclick = () => homeTabTo(c, id, true);
+    /* The arrow keys move between the two, as a tablist's should. */
+    t.onkeydown = (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (e.preventDefault) e.preventDefault();
+      const other = id === 'sports' ? 'nonsports' : 'sports';
+      homeTabTo(c, other, true);
+      const b = tabs.find((x) => x.dataset.tab === other);
+      if (b && b.focus) b.focus();
+    };
+    bar.appendChild(t);
+    return t;
   });
-  c.appendChild(fams);
-  c.appendChild(el('h2', 'lg-sec-h', 'Awards & TV'));
-  c.appendChild(homeShows());
+  c.appendChild(bar);
+  const sp = homePanel('sports');
+  sp.appendChild(homeFamilies());
+  const np = homePanel('nonsports');
+  np.appendChild(homeShows());
+  c.appendChild(sp);
+  c.appendChild(np);
   const my = el('a', 'lg-mygroups', 'My groups');
   my.href = '#/g';
   c.appendChild(my);
+  homeTabTo(c, homeTabNow(), false);
   loadHomeGroups(wrap);
   return c;
+}
+
+function homePanel(id) {
+  const p = el('div', 'lg-homepanel');
+  p.id = 'lg-panel-' + id;
+  p.dataset.tab = id;
+  p.setAttribute('role', 'tabpanel');
+  p.setAttribute('aria-labelledby', 'lg-tab-' + id);
+  return p;
+}
+
+/** The tab this phone chose last; Sports when nothing is stored or storage is off. */
+function homeTabNow() {
+  if (!S.homeTab) S.homeTab = store.get('homeTab', 'sports') === 'nonsports' ? 'nonsports' : 'sports';
+  return S.homeTab;
+}
+
+/** Show one tab's panel. `save` is a tap: remember it - in memory as well, so a
+ *  phone that cannot store keeps it across a repaint. */
+function homeTabTo(c, id, save) {
+  for (const t of c.querySelectorAll('.lg-hometab')) {
+    const on = t.dataset.tab === id;
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+    t.tabIndex = on ? 0 : -1;
+    t.classList.toggle('is-on', on);
+  }
+  for (const p of c.querySelectorAll('.lg-homepanel')) p.hidden = p.dataset.tab !== id;
+  if (save) { S.homeTab = id; store.set('homeTab', id); }
+}
+
+/* 🔴 EACH FAMILY IS A ROLL-UP. Jason, 2026-09-13: "we should probably roll up the
+ * sports up under the headers". The header row IS the button - full width, 48px,
+ * aria-expanded, a chevron that turns - and the tiles sit under it, collapsed. A
+ * collapsed header shows its league marks small, so the list still reads at a
+ * glance.
+ *
+ * Open or closed is remembered per family (ag.homeOpen). A family with nothing
+ * remembered is open when you are in a group of one of its sports - which is only
+ * known once the list lands, so markHomeGroups opens it then. A remembered choice
+ * wins: somebody who closed their own family is not made to close it again. */
+function homeFamilies() {
+  const fams = el('div', 'lg-fams');
+  fams.setAttribute('role', 'group');
+  fams.setAttribute('aria-label', 'Which sport?');
+  for (const f of HOME_FAMILIES) fams.appendChild(homeFamily(f));
+  return fams;
+}
+
+function homeFamily(f) {
+  const key = f.h.toLowerCase();
+  const n = f.leagues.length;
+  const fam = el('div', 'lg-fam');
+  fam.dataset.fam = key;
+  const h = el('button', 'lg-fam-h');
+  h.type = 'button';
+  h.id = 'lg-fam-h-' + key;
+  h.setAttribute('aria-controls', 'lg-fam-p-' + key);
+  h.appendChild(el('span', 'lg-fam-t', f.h));
+  /* The marks, small and once each - the two college basketball tiles share one. */
+  const marks = el('span', 'lg-fam-marks');
+  marks.setAttribute('aria-hidden', 'true');
+  for (const src of [...new Set(f.leagues.map(([id]) => HOME_MARKS[id]).filter(Boolean))]) {
+    const m = document.createElement('img');
+    m.className = 'lg-fam-mark';
+    m.alt = ''; m.width = 22; m.height = 22;
+    themeMark(m, src, homeMarkDark(src));
+    marks.appendChild(m);
+  }
+  h.appendChild(marks);
+  h.appendChild(el('span', 'lg-chev'));
+  h.onclick = () => homeFamToggle(fam);
+  fam.appendChild(h);
+  /* Two or three across; four or more is rows of two. */
+  const row = el('div', 'lg-fam-row n' + (n > 3 ? 2 : n));
+  row.id = 'lg-fam-p-' + key;
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-labelledby', h.id);
+  for (const [id, label, cap] of f.leagues) row.appendChild(leagueTile(id, label, cap));
+  fam.appendChild(row);
+  fam.rollH = h; fam.rollRow = row; fam.rollMarks = marks;
+  homeFamOpen(fam, homeFamWanted(key, row));
+  return fam;
+}
+
+/** What this phone remembers about each family, read once - and kept in memory,
+ *  so a phone that cannot store still keeps its choices across a repaint. */
+function homeOpenMap() {
+  if (!S.homeOpen) {
+    const v = store.get('homeOpen', null);
+    S.homeOpen = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  }
+  return S.homeOpen;
+}
+
+/** Open or closed as drawn: the remembered choice, else open when a tile in it
+ *  says Your group. */
+function homeFamWanted(key, row) {
+  const saved = homeOpenMap()[key];
+  if (typeof saved === 'boolean') return saved;
+  return Array.from(row.children).some((b) => b.classList.contains('is-mine'));
+}
+
+function homeFamOpen(fam, open) {
+  fam.classList.toggle('is-open', open);
+  fam.rollH.setAttribute('aria-expanded', open ? 'true' : 'false');
+  fam.rollRow.hidden = !open;
+  fam.rollMarks.hidden = open;
+}
+
+function homeFamToggle(fam) {
+  const open = fam.rollH.getAttribute('aria-expanded') !== 'true';
+  homeFamOpen(fam, open);
+  const m = homeOpenMap();
+  m[fam.dataset.fam] = open;
+  store.set('homeOpen', m);
 }
 
 function leagueTile(id, label, cap) {
@@ -4217,8 +4383,9 @@ function leagueTile(id, label, cap) {
   if (HOME_MARKS[id]) {
     const img = document.createElement('img');
     img.className = 'lg-league-logo';
-    img.src = HOME_MARKS[id];
     img.alt = ''; img.width = 32; img.height = 32;
+    /* Both variants ride on the image; the crests' theme watcher swaps them. */
+    themeMark(img, HOME_MARKS[id], homeMarkDark(HOME_MARKS[id]));
     b.appendChild(img);
     /* The caption that tells two identical marks apart - Men, Women. */
     if (cap) b.appendChild(el('span', 'lg-league-c', cap));
@@ -4241,6 +4408,11 @@ function mineMark(b) {
 
 function markHomeGroups(wrap) {
   for (const b of wrap.querySelectorAll('.lg-league')) mineMark(b);
+  /* A family with nothing remembered on this phone opens once the list says you
+   * are in a group of one of its sports. A remembered choice is left alone. */
+  for (const f of wrap.querySelectorAll('.lg-fam')) {
+    if (typeof homeOpenMap()[f.dataset.fam] !== 'boolean') homeFamOpen(f, homeFamWanted(f.dataset.fam, f.rollRow));
+  }
 }
 
 /* Once per mount (each mount is a new wrap); a repaint of the same Home draws
@@ -5742,20 +5914,36 @@ const CSS = `
   color: var(--accent); padding: 12px 0; min-height: 44px; }
 .lg-how-s::-webkit-details-marker { display: none; }
 .lg-how[open] .lg-how-s { padding-bottom: 8px; }
-/* 100% POOL: Home starts with the sports (Jason, 2026-09-13). A heading per
-   family, the leagues as 44px tiles two or three across; a family of one sits
-   half width so Baseball and Hockey share a row. Nothing here is wider than
-   its column, so 393px never scrolls sideways. */
-.lg-sports { display: grid; gap: 6px; }
-.lg-fams { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 10px; }
-.lg-fam { grid-column: 1 / -1; display: grid; gap: 6px; min-width: 0; }
-.lg-fam.is-one { grid-column: auto; }
-/* Each heading sits on a chip of the page ground: the stadium bleeds 75px under
-   the first lines, and the doors this replaced were solid cards - a bare dim
-   heading on the roof was unreadable (measured at 393px, 2026-09-13). */
-.lg-fam-h { justify-self: start; font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--dim); padding: 1px 6px; margin-left: -4px;
-  background: var(--bg); border-radius: var(--radius-chip); }
+/* 100% POOL: Home starts with the sports (Jason, 2026-09-13), under two tabs -
+   Sports and Non-sports - with each sport family a roll-up: a full-width header
+   row that is the button, the leagues as 44px tiles under it. Nothing here is
+   wider than its column, so 393px never scrolls sideways. */
+.lg-sports { display: grid; gap: 10px; }
+/* The tabs sit on a card: the stadium bleeds 75px under the first lines, and a
+   bare label on the roof was unreadable (measured at 393px, 2026-09-13). */
+.lg-hometabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-card); }
+.lg-hometab { min-height: 44px; min-width: 0; padding: 0 8px; font: inherit; font-size: var(--t-emph);
+  font-weight: 800; color: var(--dim); background: transparent; border: 0;
+  border-radius: calc(var(--radius-card) - 3px); cursor: pointer; }
+.lg-hometab[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+.lg-hometab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* [hidden] loses to a display rule of the author's own, so it is restated. */
+.lg-homepanel[hidden], .lg-fam-row[hidden], .lg-fam-marks[hidden] { display: none; }
+.lg-fams { display: grid; gap: 8px; }
+.lg-fam { display: grid; gap: 8px; min-width: 0; }
+.lg-fam-h { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 14px;
+  font: inherit; text-align: left; color: var(--fg); background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius-card); cursor: pointer; }
+.lg-fam-h:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lg-fam-t { flex: 1 1 auto; min-width: 0; font-size: var(--t-emph); font-weight: 800; }
+.lg-fam-marks { display: flex; align-items: center; gap: 8px; flex: none; }
+.lg-fam-mark { display: block; width: 22px; height: 22px; object-fit: contain; }
+/* The chevron: down while closed, up while open. */
+.lg-chev { flex: none; width: 9px; height: 9px; margin: 0 3px 4px 2px; border: solid var(--dim);
+  border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .18s ease; }
+.lg-fam-h[aria-expanded="true"] .lg-chev { transform: rotate(225deg); margin-bottom: -4px; }
+@media (prefers-reduced-motion: reduce) { .lg-chev { transition: none; } }
 .lg-fam-row { display: grid; gap: 8px; }
 .lg-fam-row.n1 { grid-template-columns: minmax(0, 1fr); }
 .lg-fam-row.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -5772,11 +5960,6 @@ const CSS = `
 .lg-league-yg { display: none; font-size: var(--t-micro); font-weight: 700; color: var(--accent); }
 .lg-league.is-mine { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .lg-league.is-mine .lg-league-yg { display: block; }
-/* Sports, then Awards & TV (2026-09-13): a section heading a size above the
-   family headings, on the same ground chip - the first one sits on the stadium. */
-.lg-sec-h { justify-self: start; margin: 0 0 4px -4px; padding: 2px 8px; font-size: var(--t-section);
-  font-weight: 800; line-height: 1.25; color: var(--fg); background: var(--bg); border-radius: var(--radius-chip); }
-.lg-fams + .lg-sec-h { margin-top: 16px; }
 .lg-shows { display: grid; gap: 8px; }
 .lg-show-c { font-size: var(--t-micro); font-weight: 700; line-height: 1.3; color: var(--dim); }
 .lg-mygroups { justify-self: center; display: inline-flex; align-items: center; min-height: 44px;
