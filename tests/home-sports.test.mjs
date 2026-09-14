@@ -80,7 +80,9 @@ const showTiles = (root) => byClass(root, 'lg-show');
 const tile = (root, id) => sportTiles(root).find((b) => b.dataset.sport === id);
 const show = (root, tpl) => showTiles(root).find((b) => b.dataset.template === tpl);
 const fam = (root, key) => byClass(root, 'lg-fam').find((f) => f.dataset.fam === key);
-const isOpen = (f) => f.rollH.getAttribute('aria-expanded') === 'true';
+/* A one-league family has no roll-up (Jason: "baseball is only mlb so it does not need a
+   dropdown") - it is never "open", it is simply there. */
+const isOpen = (f) => !!f.rollH && f.rollH.getAttribute('aria-expanded') === 'true';
 const openFams = (root) => byClass(root, 'lg-fam').filter(isOpen).map((f) => f.dataset.fam);
 const tabsOf = (root) => byClass(root, 'lg-hometab');
 const panel = (root, id) => byClass(root, 'lg-homepanel').find((p) => p.dataset.tab === id);
@@ -139,13 +141,16 @@ test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once',
   assert.deepEqual(HOME_FAMILIES.map((f) => f.h),
     ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing', 'Soccer', 'Combat', 'Cricket']);
   assert.deepEqual(HOME_FAMILIES.map((f) => f.leagues), [
-    [['college-football', 'College football'], ['nfl', 'NFL']],
+    /* The NCAA last in every family - Jason, 2026-09-13: "put the ncaa logo last in the list". */
+    [['nfl', 'NFL'], ['college-football', 'College football']],
     /* The NCAA shields carry a caption each - Men, Women (2026-09-13). */
-    [['mens-college-basketball', 'College basketball', 'Men'], ['womens-college-basketball', 'Women’s college basketball', 'Women'],
-      ['nba', 'NBA'], ['wnba', 'WNBA']],
+    [['nba', 'NBA'], ['wnba', 'WNBA'], ['mens-college-basketball', 'College basketball', 'Men'],
+      ['womens-college-basketball', 'Women’s college basketball', 'Women']],
     [['mlb', 'MLB']],
     [['nhl', 'NHL'], ['mens-college-hockey', 'College hockey', 'Men']],
-    [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']],
+    /* The three NASCAR series share the drawn flag, a caption each. */
+    [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup', 'Cup'], ['nascar-oreilly', "NASCAR O'Reilly", 'O’Reilly'],
+      ['nascar-truck', 'NASCAR Trucks', 'Trucks']],
     [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'], ['laliga', 'La Liga'], ['ligamx', 'Liga MX']],
     /* UFC and cricket, 2026-09-13 - day sports graded by ESPN's winner flag. */
     [['ufc', 'UFC']],
@@ -164,21 +169,24 @@ test('the families, in Jason\'s order, carry every POOL_SPORTS id exactly once',
 test('Awards & TV: each open ready set, soonest first, dated by its broadcast, then Your own questions', () => {
   const { homeShowList } = load();
   const on13 = homeShowList(SEP13);
-  assert.deepEqual(on13.map((s) => s.id), ['emmys-2026', 'dwts-35', 'survivor-51', ''], 'three sets are open on the 13th');
-  assert.deepEqual(on13.map((s) => s.label), ['The Emmys', 'Dancing with the Stars', 'Survivor 51', 'Your own questions']);
-  /* The Emmys lock 2026-09-15T00:00Z, Dancing with the Stars 2026-09-16T00:00Z, Survivor 51 2026-09-24T00:00Z. */
+  assert.deepEqual(on13.map((s) => s.id), ['emmys-2026', 'dwts-35', 'traitors-new-blood', 'survivor-51', ''], 'four sets are open on the 13th');
+  assert.deepEqual(on13.map((s) => s.label), ['The Emmys', 'Dancing with the Stars', 'The Traitors', 'Survivor 51', 'Your own questions']);
+  /* The Emmys lock 2026-09-15T00:00Z, Dancing with the Stars 2026-09-16T00:00Z, The Traitors
+     2026-09-18T00:00Z, Survivor 51 2026-09-24T00:00Z. */
   assert.equal(on13[0].cap, dayOf(PROP_TEMPLATES['emmys-2026'].questions[0].lockAt));
   assert.equal(on13[1].cap, dayOf(PROP_TEMPLATES['dwts-35'].questions[0].lockAt));
-  assert.equal(on13[2].cap, dayOf(PROP_TEMPLATES['survivor-51'].questions[0].lockAt));
+  assert.equal(on13[2].cap, dayOf(PROP_TEMPLATES['traitors-new-blood'].questions[0].lockAt));
+  assert.equal(on13[3].cap, dayOf(PROP_TEMPLATES['survivor-51'].questions[0].lockAt));
   if (new Date(SEP13).getTimezoneOffset() > 0) {
     assert.equal(on13[0].cap, 'Mon, Sep 14', 'in the Americas the Emmys read as Monday the 14th');
     assert.equal(on13[1].cap, 'Tue, Sep 15', 'and the premiere as Tuesday the 15th');
-    assert.equal(on13[2].cap, 'Wed, Sep 23');
+    assert.equal(on13[2].cap, 'Thu, Sep 17');
+    assert.equal(on13[3].cap, 'Wed, Sep 23');
   }
-  assert.match(on13[3].cap, /Oscars/);
-  /* After the Emmys lock, the other two; after the premiere, Survivor; after all three, only your own. */
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 15, 0, 0, 1)).map((s) => s.id), ['dwts-35', 'survivor-51', '']);
-  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 16, 0, 0, 1)).map((s) => s.id), ['survivor-51', '']);
+  assert.match(on13[4].cap, /Oscars/);
+  /* Each set leaves the list as it locks; after all four, only your own. */
+  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 15, 0, 0, 1)).map((s) => s.id), ['dwts-35', 'traitors-new-blood', 'survivor-51', '']);
+  assert.deepEqual(homeShowList(Date.UTC(2026, 8, 16, 0, 0, 1)).map((s) => s.id), ['traitors-new-blood', 'survivor-51', '']);
   assert.deepEqual(homeShowList(Date.UTC(2026, 8, 25)).map((s) => s.id), ['']);
   /* The same list src/lib/props.ts offers a commissioner. */
   assert.deepEqual(on13.filter((s) => s.id).map((s) => s.id), templatesOpen(SEP13).map((t) => t.id));
@@ -186,14 +194,18 @@ test('Awards & TV: each open ready set, soonest first, dated by its broadcast, t
 
 test('Awards & TV layout: two across, and Your own questions fills an odd row or takes its own', () => {
   const { homeShows } = load();
+  /* Four sets on the 13th (even): Your own questions takes its own row. */
   const three = homeShows(SEP13);
-  assert.deepEqual(byClass(three, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n2', 4]]);
+  assert.deepEqual(byClass(three, 'lg-fam-row').map((r) => [r.className, r.children.length]),
+    [['lg-fam-row n2', 4], ['lg-fam-row n1', 1]]);
+  /* Three after the Emmys (odd): it fills the last pair. */
   const two = homeShows(Date.UTC(2026, 8, 15, 1));
-  assert.deepEqual(byClass(two, 'lg-fam-row').map((r) => [r.className, r.children.length]),
-    [['lg-fam-row n2', 2], ['lg-fam-row n1', 1]]);
+  assert.deepEqual(byClass(two, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n2', 4]]);
+  /* Two after Dancing with the Stars locks (even): its own row again. */
   const one = homeShows(Date.UTC(2026, 8, 16));
-  assert.deepEqual(byClass(one, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n2', 2]]);
-  assert.deepEqual(showTiles(one).map((b) => b.dataset.template), ['survivor-51', '']);
+  assert.deepEqual(byClass(one, 'lg-fam-row').map((r) => [r.className, r.children.length]),
+    [['lg-fam-row n2', 2], ['lg-fam-row n1', 1]]);
+  assert.deepEqual(showTiles(one).map((b) => b.dataset.template), ['traitors-new-blood', 'survivor-51', '']);
   const none = homeShows(Date.UTC(2026, 8, 25));
   assert.deepEqual(byClass(none, 'lg-fam-row').map((r) => [r.className, r.children.length]), [['lg-fam-row n1', 1]]);
   for (const b of showTiles(three)) assert.equal(b.dataset.sport, 'props', 'every Awards & TV tile is a questions group');
@@ -234,15 +246,14 @@ test('Awards & TV tap: remembers the set and goes where a sport tile goes - #/pr
 
 /* 🔴 EVERY MARK FROM OUR ORIGIN (2026-09-13, "are we not capturing the rest of
  * the logos?"). The NBA's was hot-linked and every league after it was words. */
-test('every league with a mark shows it from our origin, light and dark; racing, UFC and cricket are words', () => {
+test('every league with a mark shows it from our origin, light and dark; only cricket is words', () => {
   const { HOME_MARKS, HOME_FAMILIES, homeMarkDark } = load();
   const ids = HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id));
-  /* F1: its guidelines allow no logo. NASCAR: ESPN has none. UFC: the vault's Logos
-     table allows no UFC mark. Cricket: ESPN's marks are per competition, not one. */
-  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(),
-    ['cricket', 'f1', 'nascar', 'nascar-oreilly', 'nascar-truck', 'ufc']);
+  /* Racing and combat carry marks since Jason asked (2026-09-13: "racing logos?"): F1's
+     and UFC's own, NASCAR our drawn flag. Cricket: ESPN's marks are per competition. */
+  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket']);
   for (const [id, src] of Object.entries(HOME_MARKS)) {
-    assert.match(src, /^\/logos\/leagues\/[a-z0-9]+-500\.png$/, id);
+    assert.match(src, /^\/logos\/leagues\/[a-z0-9]+-500\.(png|svg)$/, id);
     assert.ok(existsSync(new URL('../public' + src, import.meta.url)), src + ' is on disk');
     assert.ok(existsSync(new URL('../public' + homeMarkDark(src), import.meta.url)), homeMarkDark(src) + ' is on disk');
   }
@@ -301,33 +312,40 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
   /* The roll-ups: the header is the button, and it names the panel it opens. */
   const heads = byClass(wrap, 'lg-fam-h');
   assert.deepEqual(heads.map((h) => h.textContent),
-    ['Football', 'Basketball', 'Baseball', 'Hockey', 'Racing', 'Soccer', 'Combat', 'Cricket']);
-  for (const f of byClass(wrap, 'lg-fam')) {
+    ['Football', 'Basketball', 'Hockey', 'Racing', 'Soccer'], 'only a family with more than one league rolls up');
+  const rolls = byClass(wrap, 'lg-fam').filter((f) => f.rollH);
+  for (const f of rolls) {
     assert.equal(f.rollH.tagName, 'button');
     assert.equal(f.rollH.type, 'button');
     assert.equal(f.rollH.getAttribute('aria-controls'), f.rollRow.id, f.dataset.fam + ' controls its tiles');
     assert.equal(f.rollRow.getAttribute('aria-labelledby'), f.rollH.id);
   }
+  /* One league, no dropdown: the heading and its one tile, always showing. */
+  const solos = byClass(wrap, 'lg-fam').filter((f) => !f.rollH);
+  assert.deepEqual(solos.map((f) => f.dataset.fam), ['baseball', 'combat', 'cricket']);
+  for (const f of solos) {
+    assert.equal(byClass(f, 'lg-fam-solo-h')[0].textContent, f.dataset.fam === 'combat' ? 'Combat' : f.dataset.fam === 'cricket' ? 'Cricket' : 'Baseball');
+    assert.equal(f.soloRow.hidden, false, f.dataset.fam + ' shows its tile');
+    assert.equal(byClass(f, 'lg-league').length, 1);
+    assert.equal(byClass(f, 'lg-chev').length, 0, 'no chevron where nothing opens');
+  }
   assert.deepEqual(byClass(panel(wrap, 'sports'), 'lg-fam-row').map((r) => r.className),
     ['lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n1', 'lg-fam-row n2', 'lg-fam-row n2', 'lg-fam-row n2',
       'lg-fam-row n1', 'lg-fam-row n1'], 'two or three across');
-  /* No group, no storage: every family starts collapsed, marks showing. */
+  /* No group, no storage: every roll-up starts collapsed, marks showing. */
   assert.deepEqual(openFams(wrap), []);
-  assert.ok(byClass(wrap, 'lg-fam').every((f) => f.rollRow.hidden === true && f.rollMarks.hidden === false
+  assert.ok(rolls.every((f) => f.rollRow.hidden === true && f.rollMarks.hidden === false
     && f.rollH.getAttribute('aria-expanded') === 'false'));
   const L = (n) => '/logos/leagues/' + n + '-500.png';
-  assert.deepEqual(byClass(wrap, 'lg-fam').map((f) => [f.dataset.fam, byClass(f.rollMarks, 'lg-fam-mark').map((m) => m.src)]), [
-    ['football', [L('ncaa'), L('nfl')]],
-    ['basketball', [L('ncaa'), L('nba'), L('wnba')]],
-    ['baseball', [L('mlb')]],
+  assert.deepEqual(rolls.map((f) => [f.dataset.fam, byClass(f.rollMarks, 'lg-fam-mark').map((m) => m.src)]), [
+    ['football', [L('nfl'), L('ncaa')]],
+    ['basketball', [L('nba'), L('wnba'), L('ncaa')]],
     ['hockey', [L('nhl'), L('ncaa')]],
-    ['racing', []],
-    ['soccer', [L('epl'), L('mls'), L('ucl'), L('laliga'), L('ligamx')]],
-    ['combat', []],
-    ['cricket', []]
-  ], 'each mark once, small, in the collapsed header');
+    ['racing', [L('f1'), '/logos/leagues/nascar-500.svg']],
+    ['soccer', [L('epl'), L('mls'), L('ucl'), L('laliga'), L('ligamx')]]
+  ], 'each mark once, small, in the collapsed header - the NCAA last');
   assert.equal(fam(wrap, 'soccer').rollMarks.getAttribute('aria-hidden'), 'true', 'the name is the label, not the marks');
-  for (const m of byClass(wrap, 'lg-fam-mark')) assert.equal(m.dataset.logoDark, m.src.replace('-500.png', '-500-dark.png'));
+  for (const m of byClass(wrap, 'lg-fam-mark')) assert.equal(m.dataset.logoDark, m.src.replace(/-500\.(png|svg)$/, '-500-dark.$1'));
 
   /* The tiles. */
   assert.equal(tile(wrap, 'womens-college-basketball').children[0].tagName, 'img');
@@ -344,8 +362,14 @@ test('signed out: two tabs, every family rolled up with its marks small, no requ
     assert.equal(img.dataset.logoDark, '/logos/leagues/' + id + '-500-dark.png');
   }
   assert.equal(tile(wrap, 'nfl').children[0].tagName, 'img', 'NFL is its shield');
-  assert.equal(tile(wrap, 'f1').children[0].textContent, 'Formula 1', 'F1 is words');
-  assert.equal(tile(wrap, 'ufc').children[0].textContent, 'UFC', 'UFC is words');
+  for (const id of ['f1', 'ufc']) {
+    assert.equal(tile(wrap, id).children[0].tagName, 'img', id + ' is its mark');
+    assert.equal(tile(wrap, id).children[0].src, '/logos/leagues/' + id + '-500.png');
+  }
+  for (const [id, cap] of [['nascar', 'Cup'], ['nascar-oreilly', 'O’Reilly'], ['nascar-truck', 'Trucks']]) {
+    assert.equal(tile(wrap, id).children[0].src, '/logos/leagues/nascar-500.svg', id + ' is the drawn flag');
+    assert.equal(byClass(tile(wrap, id), 'lg-league-c')[0].textContent, cap, 'a caption tells the three flags apart');
+  }
   assert.equal(tile(wrap, 'cricket').children[0].textContent, 'Cricket', 'cricket is words');
   assert.equal(tile(wrap, 'nfl').getAttribute('aria-label'), 'NFL', 'a mark tile still says its name');
   const my = byClass(wrap, 'lg-mygroups')[0];
@@ -428,13 +452,16 @@ test('a family you closed stays closed even when you have a group in it; the oth
   globalThis.AG_POOL_ONLY = true;
   signIn();
   mem.set('ag.homeOpen', JSON.stringify({ football: false }));
-  ANSWER = async () => reply([{ id: 'G-NFL', sport: 'nfl' }, { id: 'G-MLB', sport: 'mlb' }]);
+  ANSWER = async () => reply([{ id: 'G-NFL', sport: 'nfl' }, { id: 'G-NHL', sport: 'nhl' }, { id: 'G-MLB', sport: 'mlb' }]);
   const M = load();
   const wrap = mk('div');
   M.homeScreen(wrap);
   await settle();
   assert.equal(tile(wrap, 'nfl').classList.contains('is-mine'), true);
-  assert.deepEqual(openFams(wrap), ['baseball'], 'football remembered closed; baseball opened by its group');
+  assert.deepEqual(openFams(wrap), ['hockey'], 'football remembered closed; hockey opened by its group');
+  /* Baseball is one league - no roll-up to open; its tile is simply there, marked. */
+  assert.equal(fam(wrap, 'baseball').soloRow.hidden, false);
+  assert.equal(tile(wrap, 'mlb').classList.contains('is-mine'), true);
 });
 
 test('the tabs: Sports by default, a tap or an arrow key switches, and the choice is remembered', () => {

@@ -90,6 +90,11 @@ const SURVIVOR_51 = ['Rob Antonson', 'Brady Booker', 'Patt Cannaday', 'Linnea Ca
   'Carter Krull', 'Alexis Levine', 'Angelica "Jelly" Loblack', 'Eric Macksoud', 'Maggie Nestor',
   'Thien An Nguyen', 'Mike Pinsky', 'Aaliyah Puglia', 'Ana Sani', 'Devin Way'];
 
+const TRAITORS_NB = ['Tomica Adams', 'Shane Beatty', 'Abbey Benjamin', 'Morgan Cook', 'Kim Daily', 'Katie Fites',
+  'Michael Foote', 'Wyatt Gillespie', 'Niyyah Hayes', 'Madeline Kostopulos', 'Sherry Kuehl', 'Abby Lee', 'Kriste Lewis',
+  'Ben McDonnell', 'Clyde Moser', 'Xavier Scruggs', 'Logan Smith', 'Arisa Thomas', 'Joe Vanella', 'Jay Vinnedge',
+  'Victor Vollbrechthausen', 'Mark Zgoda'];
+
 const DWTS_35 = ['Tatyana Ali', 'Tyler Cameron', 'Giada De Laurentiis', 'Jenna Dewan', 'Ezra Frech', 'Amber Glenn',
   'Taylor Hanson', 'Maura Higgins', 'Conner Leavitt', 'Ciara Miller', 'Sarah Jane Nader', 'Jackson Olson',
   'Guillermo Rodriguez', 'Harry Shum Jr.', 'Julia Stiles', 'Connor Wood'];
@@ -143,6 +148,26 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
    * America on September 2. Both questions lock at the premiere: 8 PM Eastern is
    * 2026-09-16T00:00:00Z. Settles from the couples table's status column; a double
    * elimination in the first week voids "eliminated first" (no single pick called it). */
+  /* 🔴 THE TRAITORS: NEW BLOOD - Jason, 2026-09-13: "do the traitors ... next". NBC's
+   * civilian spinoff: premieres Thursday, September 17, 2026, 8 PM ET (a two-hour
+   * episode), hosted by Alan Cumming, 22 contestants as Wikipedia's page lists them, read
+   * 2026-09-13. Several players can win, so "who wins" is not one answer - the set asks
+   * what is: the first murdered, the first banished (a double murder in one episode
+   * voids), and whether a Traitor is among the winners. All lock at the premiere, 8 PM
+   * Eastern = 2026-09-18T00:00:00Z. Settles from the contestants table's finish and role
+   * columns (checked on the real seasons 3 and 4). */
+  'traitors-new-blood': {
+    id: 'traitors-new-blood',
+    name: 'The Traitors: New Blood',
+    when: 'Premieres Thursday, September 17 · 8 PM ET · NBC',
+    source: { kind: 'wiki-traitors', page: 'The_Traitors:_New_Blood' },
+    questions: [
+      { text: 'Who is murdered first?', points: 3, lockAt: Date.UTC(2026, 8, 18, 0, 0, 0), options: TRAITORS_NB, key: 'first-murdered' },
+      { text: 'Who is banished first?', points: 3, lockAt: Date.UTC(2026, 8, 18, 0, 0, 0), options: TRAITORS_NB, key: 'first-banished' },
+      { text: 'Does a Traitor win?', points: 5, lockAt: Date.UTC(2026, 8, 18, 0, 0, 0), options: ['Yes', 'No'], key: 'traitor-wins' }
+    ]
+  },
+
   'dwts-35': {
     id: 'dwts-35',
     name: 'Dancing with the Stars, season 35',

@@ -4074,23 +4074,30 @@ function heroBlock() {
  * network never holds the front door blank. POOL_ONLY = false draws Home
  * exactly as before - the gate in homeScreen returns before anything else. */
 const HOME_FAMILIES = [
-  { h: 'Football', leagues: [['college-football', 'College football'], ['nfl', 'NFL']] },
+  /* 🔴 THE NCAA LAST IN EVERY FAMILY. Jason, 2026-09-13: "put the ncaa logo last in the
+   * list". The pro league first, the college shield after it. */
+  { h: 'Football', leagues: [['nfl', 'NFL'], ['college-football', 'College football']] },
   /* Two NCAA shields in one family: each carries a caption under it, Men and
    * Women (2026-09-13), so the two college basketball tiles cannot be confused.
    * The third element is that caption; the second is still the accessible name. */
-  { h: 'Basketball', leagues: [['mens-college-basketball', 'College basketball', 'Men'],
-    ['womens-college-basketball', 'Women’s college basketball', 'Women'], ['nba', 'NBA'], ['wnba', 'WNBA']] },
+  { h: 'Basketball', leagues: [['nba', 'NBA'], ['wnba', 'WNBA'], ['mens-college-basketball', 'College basketball', 'Men'],
+    ['womens-college-basketball', 'Women’s college basketball', 'Women']] },
   { h: 'Baseball', leagues: [['mlb', 'MLB']] },
   /* College hockey, 2026-09-13 - beside the NHL. The NCAA shield with a caption,
    * Men, the way the two basketball shields carry theirs. */
   { h: 'Hockey', leagues: [['nhl', 'NHL'], ['mens-college-hockey', 'College hockey', 'Men']] },
-  { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup'], ['nascar-oreilly', "NASCAR O'Reilly"], ['nascar-truck', 'NASCAR Trucks']] },
+  /* Racing marks - Jason, 2026-09-13: "racing logos?". Formula 1's own mark; NASCAR has
+   * none on ESPN's CDN, so its three series share a drawn checkered flag with a caption
+   * each - Cup, O'Reilly, Trucks - the way the NCAA shields carry theirs. */
+  { h: 'Racing', leagues: [['f1', 'Formula 1'], ['nascar', 'NASCAR Cup', 'Cup'], ['nascar-oreilly', "NASCAR O'Reilly", 'O’Reilly'],
+    ['nascar-truck', 'NASCAR Trucks', 'Trucks']] },
   /* Soccer, 2026-09-13 - last, as in POOL_SPORTS. */
   { h: 'Soccer', leagues: [['epl', 'Premier League'], ['mls', 'MLS'], ['ucl', 'Champions League'],
     ['laliga', 'La Liga'], ['ligamx', 'Liga MX']] },
   /* UFC and cricket, 2026-09-13 - day sports graded by ESPN's winner flag
-   * (src/slate-day.ts). Both are words: the vault's Logos table allows no UFC
-   * mark, and ESPN's cricket marks are per competition, not one for the sport. */
+   * (src/slate-day.ts). UFC carries its mark since Jason asked for the combat and
+   * racing logos (2026-09-13); cricket stays words - ESPN's cricket marks are per
+   * competition, not one for the sport. */
   { h: 'Combat', leagues: [['ufc', 'UFC']] },
   { h: 'Cricket', leagues: [['cricket', 'Cricket']] }
 ];
@@ -4101,10 +4108,17 @@ const HOME_FAMILIES = [
  * tests/logos-complete.test.mjs checks every path here is on disk in both.
  *
  * The mark alone, the name as the tile's accessible label - "remove the word NFL
- * and College" (2026-09-11). NOT Formula 1 (its guidelines allow no logo at all -
- * vault: Any Given/wiki/live-sports-data-2026-09-12.md) and not NASCAR (ESPN has
- * no mark for it): those tiles stay words. */
+ * and College" (2026-09-11). Formula 1 and UFC joined 2026-09-13 on Jason's ask
+ * ("racing logos?", after "no racing logos and no combat logos") - a call he made over
+ * the vault's note that F1's guidelines allow no logo (Any Given/wiki/
+ * live-sports-data-2026-09-12.md), the same call he made for the college marks. NASCAR
+ * has no mark on ESPN's CDN: its series draw our own checkered flag (an SVG). */
 const HOME_MARKS = {
+  'f1': '/logos/leagues/f1-500.png',
+  'nascar': '/logos/leagues/nascar-500.svg',
+  'nascar-oreilly': '/logos/leagues/nascar-500.svg',
+  'nascar-truck': '/logos/leagues/nascar-500.svg',
+  'ufc': '/logos/leagues/ufc-500.png',
   'college-football': '/logos/leagues/ncaa-500.png',
   'nfl': '/logos/leagues/nfl-500.png',
   'mens-college-basketball': '/logos/leagues/ncaa-500.png',
@@ -4124,7 +4138,7 @@ const HOME_MARKS = {
 /** The dark-ground file beside a mark: nhl-500.png -> nhl-500-dark.png. The NHL's
  *  light shield is black and sinks into --bg without it. */
 function homeMarkDark(src) {
-  return src.replace(/-500\.png$/, '-500-dark.png');
+  return src.replace(/-500\.(png|svg)$/, '-500-dark.$1');
 }
 
 /** Where a tap on a sport goes. Pure: the sport, my groups, the current group's
@@ -4151,7 +4165,8 @@ const HOME_SHOW_NAMES = {
   'emmys-2026': 'The Emmys',
   /* "Dancing with the Stars, season 35" is three lines on a half-width tile at
      393px; the date under it already says which night. */
-  'dwts-35': 'Dancing with the Stars'
+  'dwts-35': 'Dancing with the Stars',
+  'traitors-new-blood': 'The Traitors'
 };
 const HOME_OWN = {
   id: '', label: 'Your own questions', cap: 'The Oscars, the Derby, the Draft, cricket…'
@@ -4311,6 +4326,23 @@ function homeFamily(f) {
   const n = f.leagues.length;
   const fam = el('div', 'lg-fam');
   fam.dataset.fam = key;
+  /* 🔴 ONE LEAGUE, NO ROLL-UP. Jason, 2026-09-13: "baseball is only mlb so it does not
+     need a dropdown". A family with a single league - Baseball, Combat, Cricket - is its
+     heading and its one tile, always showing: a header that only hides one button is a
+     tap that buys nothing. */
+  if (n === 1) {
+    fam.classList.add('is-solo');
+    fam.appendChild(el('div', 'lg-fam-solo-h', f.h));
+    const row = el('div', 'lg-fam-row n1');
+    row.id = 'lg-fam-p-' + key;
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', f.h);
+    const [id, label, cap] = f.leagues[0];
+    row.appendChild(leagueTile(id, label, cap));
+    fam.appendChild(row);
+    fam.soloRow = row;
+    return fam;
+  }
   const h = el('button', 'lg-fam-h');
   h.type = 'button';
   h.id = 'lg-fam-h-' + key;
@@ -4411,7 +4443,7 @@ function markHomeGroups(wrap) {
   /* A family with nothing remembered on this phone opens once the list says you
    * are in a group of one of its sports. A remembered choice is left alone. */
   for (const f of wrap.querySelectorAll('.lg-fam')) {
-    if (typeof homeOpenMap()[f.dataset.fam] !== 'boolean') homeFamOpen(f, homeFamWanted(f.dataset.fam, f.rollRow));
+    if (f.rollH && typeof homeOpenMap()[f.dataset.fam] !== 'boolean') homeFamOpen(f, homeFamWanted(f.dataset.fam, f.rollRow));
   }
 }
 
@@ -5937,6 +5969,9 @@ const CSS = `
   border: 1px solid var(--line); border-radius: var(--radius-card); cursor: pointer; }
 .lg-fam-h:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .lg-fam-t { flex: 1 1 auto; min-width: 0; font-size: var(--t-emph); font-weight: 800; }
+/* A one-league family's heading: the same words as a roll-up's, but no button - its
+   one tile is always showing (Jason: "baseball is only mlb so it does not need a dropdown"). */
+.lg-fam-solo-h { padding: 6px 14px 2px; font-size: var(--t-emph); font-weight: 800; color: var(--fg); }
 .lg-fam-marks { display: flex; align-items: center; gap: 8px; flex: none; }
 .lg-fam-mark { display: block; width: 22px; height: 22px; object-fit: contain; }
 /* The chevron: down while closed, up while open. */

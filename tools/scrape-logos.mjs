@@ -153,12 +153,16 @@ async function crests(label, path, dir, teams, keyOf) {
  * Named by OUR sport id, beside the nfl/ncaa pair already there:
  *   public/logos/leagues/<id>-500.png and <id>-500-dark.png
  *
- * 🔴 NOT FORMULA 1. ESPN serves leagues/500/f1.png, and it is not fetched: F1's
- * own guidelines allow the name "to inform or report and not to brand" and no
- * logo at all (vault: Any Given/wiki/live-sports-data-2026-09-12.md, Logos
- * table). Its tile stays the words. Not NASCAR either - ESPN has no mark for it
- * (leagues/500/nascar.png is 404) and we do not draw one. */
+ * FORMULA 1 AND UFC SINCE 2026-09-13 - Jason: "racing logos?" (after "no racing logos
+ * and no combat logos"). The vault's Logos table notes F1's guidelines allow no logo
+ * (Any Given/wiki/live-sports-data-2026-09-12.md); Jason made the call, as he did for
+ * the college marks. NASCAR has no mark on ESPN's CDN (leagues/500/nascar.png is 404):
+ * its tiles draw our own checkered flag, public/logos/leagues/nascar-500(-dark).svg,
+ * which this scraper does not touch. */
 const LEAGUE_MARKS = [
+  ['f1', 'teamlogos/leagues', 'f1'],
+  /* ESPN has no dark UFC file - the light one serves both (DARK_IS_LIGHT). */
+  ['ufc', 'teamlogos/leagues', 'ufc'],
   ['nba', 'teamlogos/leagues', 'nba'],
   ['wnba', 'teamlogos/leagues', 'wnba'],
   ['mlb', 'teamlogos/leagues', 'mlb'],
@@ -177,7 +181,7 @@ const LEAGUE_MARKS = [
  * is the current "LIGA BBVA MX" (looked at 2026-09-13). A stale sponsor mark must
  * not ship, so the dark file is always the light one here, even over a file that
  * is already on disk. */
-const DARK_IS_LIGHT = new Set(['ligamx']);
+const DARK_IS_LIGHT = new Set(['ligamx', 'ufc']);
 
 if (which === 'leagues') {
   const dir = root + 'leagues';

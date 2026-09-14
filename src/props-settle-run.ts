@@ -15,7 +15,7 @@
 import { PROP_TEMPLATES } from './lib/props.ts';
 import { winnersFromWikiAwards, findCategory, matchOption, castRows, answersFromCast } from './lib/props-settle.ts';
 
-const KINDS = ['wiki-awards', 'wiki-survivor', 'wiki-dwts'];
+const KINDS = ['wiki-awards', 'wiki-survivor', 'wiki-dwts', 'wiki-traitors'];
 
 const UA = 'AnyGiven/1.0 (https://anygiven.app; ruppohana@gmail.com)';
 export const wikiHtmlUrl = (page: string) => `https://en.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(page)}`;

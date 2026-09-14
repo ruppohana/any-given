@@ -112,6 +112,22 @@ test('Dancing with the Stars: the winner, and a double elimination voids "elimin
   for (const o of PROP_TEMPLATES['dwts-35'].questions[0].options) assert.ok(names.has(o), 'not on the page: ' + o);
 });
 
+test('The Traitors: the first murdered, the first banished, and whether a Traitor won (real seasons 3 and 4)', () => {
+  assert.deepEqual(answersFromCast('wiki-traitors', castRows(page('The_Traitors_American_TV_series_season_4'))),
+    { 'first-murdered': 'Ian Terry', 'first-banished': 'Porsha Williams', 'traitor-wins': 'Yes' }, 'Rob Rausch won as a Traitor');
+  assert.deepEqual(answersFromCast('wiki-traitors', castRows(page('The_Traitors_American_TV_series_season_3'))),
+    { 'first-murdered': 'Dorinda Medley', 'first-banished': 'Wells Adams', 'traitor-wins': 'No' }, 'four Faithful winners');
+  /* New Blood the week before: 22 names, nothing written yet. */
+  const nb = castRows(page('The_Traitors_New_Blood'));
+  assert.deepEqual(answersFromCast('wiki-traitors', nb), {});
+  const names = new Set(nb.map((r) => r.name));
+  const T = PROP_TEMPLATES['traitors-new-blood'];
+  assert.equal(T.questions[0].options.length, 22);
+  for (const o of T.questions[0].options) assert.ok(names.has(o), 'not on the page: ' + o);
+  assert.deepEqual(T.questions[2].options, ['Yes', 'No']);
+  assert.ok(T.questions.every((q) => q.lockAt === Date.UTC(2026, 8, 18, 0, 0, 0)), '8 PM ET Thursday the 17th');
+});
+
 test('the reality sets settle through the same run: Survivor from its page, nobody typing', async () => {
   const { d, DB } = db();
   const S = PROP_TEMPLATES['survivor-51'];

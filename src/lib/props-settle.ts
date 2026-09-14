@@ -57,29 +57,35 @@ export function winnersFromWikiAwards(html: string): Map<string, string> {
  * table has a status cell ("Eliminated 1st & 2nd", shared by two rows with rowspan, or
  * "Winners"). One row per person, the name in the row's <th>. Read on the real Survivor 50
  * and DWTS season 34 pages. */
-const FINISH = /^(Sole Survivor|Runner-up|\d+(st|nd|rd|th) voted out|Winners|Runners-up|Third place|Fourth place|Eliminated|Withdrew|Medically evacuated|Quit)/i;
+/* The Traitors adds its own finishes: "Murdered (Episode 2)", "Banished (Episode 2)",
+   "Winner (Episode 12)" - and a role cell, "Faithful" or "Traitor" (the real season 4
+   page, read 2026-09-13). */
+const FINISH = /^(Sole Survivor|Runner-up|\d+(st|nd|rd|th) voted out|Winners?\b|Runners-up|Third place|Fourth place|Eliminated|Withdrew|Medically evacuated|Quit|Murdered|Banished)/i;
+const ROLE = /^(Faithful|Traitor)\b/i;
 
-/** Every person in a cast table with the finish written against them ('' while still in). */
-export function castRows(html: string): { name: string; status: string }[] {
+/** Every person in a cast table with the finish written against them ('' while still in),
+ *  their role where the table has one (The Traitors), and the episode the finish names. */
+export function castRows(html: string): { name: string; status: string; role: string; episode: number | null }[] {
   const clean = String(html || '').replace(/\sdata-mw='[^']*'/g, '').replace(/\sdata-mw="[^"]*"/g, '');
-  const out: { name: string; status: string }[] = [];
+  const out: { name: string; status: string; role: string; episode: number | null }[] = [];
   let carry = '', left = 0;
   for (const tr of clean.split(/<tr\b[^>]*>/i).slice(1)) {
     const th = tr.match(/^\s*<th\b[^>]*scope="row"[^>]*>([\s\S]*?)<\/th>/i);
     if (!th) continue;
     const name = text(th[1].split(/<br\b/i)[0]);
     if (!name) continue;
-    let status = '';
+    let status = '', role = '';
     for (const td of tr.matchAll(/<td\b([^>]*)>([\s\S]*?)<\/td>/gi)) {
       const t = text(td[2]);
-      if (!FINISH.test(t)) continue;
+      if (!role && ROLE.test(t)) { role = t; continue; }
+      if (status || !FINISH.test(t)) continue;
       status = t;
       const rs = Number((td[1].match(/rowspan="(\d+)"/i) || [])[1]) || 1;
       carry = t; left = rs - 1;
-      break;
     }
     if (!status && left > 0) { status = carry; left--; }
-    out.push({ name, status });
+    const ep = status.match(/\(Episode (\d+)\)/i);
+    out.push({ name, status, role, episode: ep ? Number(ep[1]) : null });
   }
   return out;
 }
@@ -87,8 +93,26 @@ export function castRows(html: string): { name: string; status: string }[] {
 /** What a cast table settles: 'winner' and 'first-out', each a name - or 'void' when
  *  two people went out first together (a double elimination), which no single pick can
  *  have called. Absent while the page does not say. */
-export function answersFromCast(kind: string, rows: { name: string; status: string }[]): Record<string, string> {
+export function answersFromCast(kind: string, rows: { name: string; status: string; role?: string; episode?: number | null }[]): Record<string, string> {
   const out: Record<string, string> = {};
+  /* 🔴 THE TRAITORS: the first murdered and the first banished are whoever went at the
+     LOWEST episode - two in the same episode (a double murder) voids, since no single
+     pick called it. "Does a Traitor win?" is Yes the moment any winner's role is
+     Traitor, No when every winner is Faithful; nothing until a winner is written. */
+  if (kind === 'wiki-traitors') {
+    const firstOf = (re: RegExp) => {
+      const hit = rows.filter((r) => re.test(r.status) && r.episode != null);
+      if (!hit.length) return null;
+      const min = Math.min(...hit.map((r) => r.episode as number));
+      const names = [...new Set(hit.filter((r) => r.episode === min).map((r) => r.name))];
+      return names.length === 1 ? names[0] : 'void';
+    };
+    const m = firstOf(/^Murdered/i); if (m) out['first-murdered'] = m;
+    const b = firstOf(/^Banished/i); if (b) out['first-banished'] = b;
+    const winners = rows.filter((r) => /^Winners?\b/i.test(r.status));
+    if (winners.length) out['traitor-wins'] = winners.some((r) => /^Traitor/i.test(r.role || '')) ? 'Yes' : 'No';
+    return out;
+  }
   /* 🔴 DWTS: ONLY THE COUPLES TABLE. Its status carries a date ("Winners on November 25,
      2025", "Eliminated 1st & 2nd on September 23, 2025"); later tables on the same page
      repeat "Winners" against past champions' pairings ("Robert & Witney", "Jordan & Apolo

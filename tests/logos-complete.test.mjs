@@ -37,21 +37,26 @@ const homeMarkDark = pick('homeMarkDark');
 
 test('every league mark Home draws is on our origin, light and dark', () => {
   const ids = HOME_FAMILIES.flatMap((f) => f.leagues.map(([id]) => id));
-  /* Words: F1's guidelines allow no logo, ESPN has no NASCAR mark, the vault's
-     Logos table allows no UFC mark, and ESPN's cricket marks are per competition. */
-  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(),
-    ['cricket', 'f1', 'nascar', 'nascar-oreilly', 'nascar-truck', 'ufc']);
+  /* Words: only cricket - ESPN's cricket marks are per competition, not one for the
+     sport. F1 and UFC carry their marks since Jason asked (2026-09-13: "racing logos?"). */
+  assert.deepEqual(ids.filter((id) => !HOME_MARKS[id]).sort(), ['cricket']);
   for (const [id, src] of Object.entries(HOME_MARKS)) {
-    assert.match(src, /^\/logos\/leagues\/[a-z0-9]+-500\.png$/, id + ' is a local league mark');
+    assert.match(src, /^\/logos\/leagues\/[a-z0-9]+-500\.(png|svg)$/, id + ' is a local league mark');
     assert.ok(onDisk(src), src + ' is on disk');
-    assert.equal(homeMarkDark(src), src.replace('-500.png', '-500-dark.png'));
+    assert.equal(homeMarkDark(src), src.replace(/-500\.(png|svg)$/, '-500-dark.$1'));
     assert.ok(onDisk(homeMarkDark(src)), homeMarkDark(src) + ' is on disk');
   }
 });
 
-test('no Formula 1 or NASCAR mark ships', () => {
+test('racing and combat: the F1 and UFC marks, and NASCAR as our own drawn checkered flag', () => {
   const files = readdirSync(new URL('../public/logos/leagues/', import.meta.url));
-  assert.deepEqual(files.filter((f) => /^(f1|nascar)/.test(f)), []);
+  assert.deepEqual(files.filter((f) => /^(f1|ufc|nascar)/.test(f)).sort(),
+    ['f1-500-dark.png', 'f1-500.png', 'nascar-500-dark.svg', 'nascar-500.svg', 'ufc-500-dark.png', 'ufc-500.png']);
+  /* NASCAR has no mark on ESPN's CDN: the flag is ours, not a NASCAR logo. */
+  const flag = readFileSync(new URL('../public/logos/leagues/nascar-500.svg', import.meta.url), 'utf8');
+  assert.match(flag, /<title>Checkered flag<\/title>/);
+  assert.equal(HOME_MARKS.nascar, HOME_MARKS['nascar-oreilly']);
+  assert.equal(HOME_MARKS.nascar, HOME_MARKS['nascar-truck']);
 });
 
 test('the Home screen asks ESPN\'s CDN for nothing, and every league mark it names is on disk', () => {
