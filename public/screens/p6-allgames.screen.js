@@ -661,7 +661,13 @@ export async function refreshDay(games, sport, day) {
     for (const g of games || []) {
       const n = byId.get(String(g.id));
       if (!n) continue;
-      g.status = n.status === 'final' ? 'final' : n.status === 'in_progress' ? 'in_progress' : 'scheduled';
+      /* A drawn bout, a washed-out match or a postponed game arrives as 'void' - kept,
+         never shown as "not started" until a reload (found 2026-09-13). */
+      g.status = n.status === 'final' ? 'final' : n.status === 'in_progress' ? 'in_progress' : n.status === 'void' ? 'void' : 'scheduled';
+      /* Cricket's own result line and score text travel too. */
+      if (typeof n.summary === 'string') g.summary = n.summary;
+      if (n.homeScoreText !== undefined) g.homeScoreText = n.homeScoreText;
+      if (n.awayScoreText !== undefined) g.awayScoreText = n.awayScoreText;
       if (num(n.period)) g.period = n.period;
       if (typeof n.clock === 'string') g.clock = n.clock;
       if (n.statusName) g.statusName = n.statusName;

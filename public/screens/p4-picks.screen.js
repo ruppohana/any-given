@@ -1747,7 +1747,13 @@ export function render(root, data, state) {
         if (crowdSuppression(crowdShare(p.crowd, p.side), p.crowd && p.crowd.n, true)) hidden++;  // locked rows only
       }
       box.appendChild(el('p', 'p4-footline num',
-        'Every pick is editable until that game kicks, and locks at kickoff. One rule, no exceptions, and it is per game rather than per week.'));
+        /* A fight card locks by its part of the card, a cricket match at the first ball -
+           "kickoff" is football's word (found on the UFC and cricket cards, 2026-09-13). */
+        data.noun === 'bout'
+          ? 'Every pick is editable until its part of the card starts - prelims or main card - and locks then. One rule, no exceptions, per bout.'
+          : data.noun === 'match' && data.sport === 'cricket'
+            ? 'Every pick is editable until its match starts, and locks at the first ball. One rule, no exceptions, per match.'
+            : 'Every pick is editable until that game kicks, and locks at kickoff. One rule, no exceptions, and it is per game rather than per week.'));
       box.appendChild(el('p', 'p4-footline num',
         'Your pool’s split is shown only where it cannot name anybody' +
         (hidden ? ' — it is held back on ' + hidden + (hidden === 1 ? ' game' : ' games') + ' here.' : '.')));
