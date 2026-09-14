@@ -136,7 +136,10 @@ test('the screen contains no sort, no rank assignment and no profit arithmetic',
   assert.ok(!/\.sort\s*\(/.test(SCREEN_CODE), 'the screen must never sort a board');
   assert.ok(!/balance\s*-\s*(start|r\.start)/.test(SCREEN_CODE),
     'the screen must never recompute profit');
-  assert.ok(!/rank\s*[:=]\s*(?!0)/.test(SCREEN_CODE.replace(/rank: 1, movement: 0/g, '')),
+  /* An assignment - `rank: 2` or `rank = 2` - never a comparison. This guard held raw
+     backspace bytes where its word boundaries belonged, so it never ran until 2026-09-13;
+     running, it read `self.rank === 1` (a read, not an assignment) as one. */
+  assert.ok(!/\brank\s*(?::|=(?!=))(?!\s*0\b)/.test(SCREEN_CODE.replace(/rank: 1, movement: 0/g, '')),
     'the screen must never assign a rank');
 });
 
@@ -340,7 +343,7 @@ test('nobody is eliminated — a zero balance is a row like any other', () => {
   );
   assert.equal(rows.length, 1);
   assert.equal(rows[0].balance, 0);
-  const dead = /eliminat\w*|locked out|out of the game|game over|no Marbles left/i;
+  const dead = /\beliminat\w*|locked out|out of the game|game over|no Marbles left/i;
   const copy = SCREEN_CODE.replace(/Nobody is knocked out and nothing here can be bought\./g, '');
   assert.ok(!dead.test(copy), 'the screen tells somebody they are out');
 });
@@ -355,7 +358,7 @@ test('no box-shadow, no --maroon, no --gold, no dependency', () => {
   assert.ok(!/--maroon|--gold/.test(SCREEN_CODE), 'read --accent, never the two it swaps between');
   assert.ok(/var\(--accent\)/.test(CSS_CODE), 'the accent indirection is never read');
   assert.ok(!/@import|from ['"]https?:|<img|icon-font|\.woff/.test(SCREEN_CODE + CSS_CODE));
-  assert.ok(!/espncdn|logo/i.test(SCREEN_CODE + CSS_CODE), 'no marks, ever');
+  assert.ok(!/espncdn|\blogo\b/i.test(SCREEN_CODE + CSS_CODE), 'no marks, ever');
 });
 
 test('every rule is scoped and nothing is written at :root', () => {

@@ -469,7 +469,7 @@ test('CONTRACT §5: no shadow, no dependency, no CDN mark, no fetch', () => {
    * have forced the honest route - real captured games - to be replaced by
    * invented ones to satisfy a purity rule about a different function. */
   const renderBody = CODE.slice(CODE.indexOf('export function render'));
-  assert.doesNotMatch(renderBody, /fetch\s*\(|XMLHttpRequest|WebSocket/,
+  assert.doesNotMatch(renderBody, /\bfetch\s*\(|XMLHttpRequest|WebSocket/,
     'render() reached the network - data arrives as an argument');
   assert.doesNotMatch(CODE, /espncdn|\.png|\.svg\b|<img|createElement\(['"]img/i,
     'no image, no mark of its own - teamChip owns that decision');

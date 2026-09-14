@@ -268,7 +268,7 @@ test('🔴 the player dimension is absent, and that is recorded rather than hidd
    *
    * This test fails the day somebody adds a player market without the parser
    * work, which is exactly when it should. */
-  const playerish = CALL_TYPES.filter((t) => /who|scorer|which player/i.test(t.question));
+  const playerish = CALL_TYPES.filter((t) => /\bwho\b|scorer|which player/i.test(t.question));
   assert.equal(playerish.length, 0,
     'a player-scoped market needs an explicit per-play star from the parser first');
 });

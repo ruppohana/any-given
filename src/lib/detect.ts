@@ -496,7 +496,7 @@ export function detect(
      * comment above already says a kick return is not a big play, and the rule
      * was right while the flag it depended on was not. The feed writes
      * "A.Borregales kicks 63 yards from NE 35", which is unambiguous. */
-    const looksLikeKick = /kicks\s+\d+\s+yards\s+from|kickoff/i.test(p.text || '');
+    const looksLikeKick = /\bkicks\s+\d+\s+yards\s+from\b|\bkickoff\b/i.test(p.text || '');
     if (!admin && !kickoff && !looksLikeKick && !punt && !touchdown && !isFieldGoal &&
       p.yards >= cfg.bigPlayYards) {
       add('big_play', NOTABLE, `${p.yards} yards — ${off}`, clean, `bp:${p.id}`);

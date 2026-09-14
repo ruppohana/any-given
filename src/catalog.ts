@@ -506,13 +506,13 @@ function runOrPass(
    * in it. Ask it first and the question never reaches the sentence.
    *
    * The text remains a fallback for the case where typeText is missing, and
-   * there it is word-boundaried so a surname cannot satisfy it.  is not
+   * there it is word-boundaried so a surname cannot satisfy it. \b is not
    * cosmetic here: it is the difference between "kneel" and "Kneeland". */
   const NOT_A_SNAP = /^(kickoff|punt|field goal|extra point|qb kneel|kneel|spike|timeout|end period|end of half|end of game|two-minute warning|penalty)/;
   if (t && NOT_A_SNAP.test(t)) {
     return { side: null, because: 'not a run-or-pass snap' };
   }
-  if (!t && has(s, /kickoff|punts?|field goal|extra point|kneels?|spikes? the ball/)) {
+  if (!t && has(s, /\bkickoff\b|\bpunts?\b|\bfield goal\b|\bextra point\b|\bkneels?\b|\bspikes? the ball\b/)) {
     return { side: null, because: 'not a run-or-pass snap' };
   }
   if (has(t, /sack/) || has(s, / sacked/)) {

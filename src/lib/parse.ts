@@ -450,7 +450,7 @@ export function parsePlays(summary: any): Play[] {
       if (!p || typeof p !== 'object') continue;
       const key = p.id != null
         ? `id:${p.id}`
-        : `sq:${p.sequenceNumber} ${p.text || ''}`;
+        : `sq:${p.sequenceNumber}\u0000${p.text || ''}`;
       if (seen.has(key)) continue;   // the active drive appears twice
       seen.add(key);
 

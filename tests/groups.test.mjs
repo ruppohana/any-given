@@ -48,7 +48,7 @@ test('a pasted invite list: lowercased, de-duplicated, bad ones named, capped', 
 });
 
 test('a message keeps its lines, loses control characters and blank runs, is capped', () => {
-  assert.equal(cleanBody('hi\r\n\r\n\r\n\r\nthere'), 'hi\n\nthere');
+  assert.equal(cleanBody('hi\r\n\r\n\r\n\r\nthere\u0007'), 'hi\n\nthere');
   assert.equal(cleanBody('y'.repeat(5000)).length, LIMITS.messageMax);
   assert.equal(cleanBody('   '), '');
 });
