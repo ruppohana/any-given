@@ -183,7 +183,8 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
    * (Kigali 2025, Wikipedia's final classifications) and the obvious names beside them,
    * plus "Someone else", which pays when the winner is nobody listed. Settles from the
    * championships page's medal table (checked on the real 2024 and 2025 pages).
-   * Riders for Women's time trial, Men's time trial and Men's road race: the confirmed start list, read 2026-09-14. */
+   * Riders for Women's time trial, Men's time trial and Men's road race: the confirmed start list, read 2026-09-14.
+   * Riders for Women's road race: the confirmed start list, read 2026-09-15. */
   'worlds-2026': {
     id: 'worlds-2026',
     name: 'Cycling Worlds 2026',
@@ -197,7 +198,7 @@ export const PROP_TEMPLATES: Record<string, { id: string; name: string; when: st
       { text: 'Which nation wins the mixed relay?', points: 1, lockAt: Date.UTC(2026, 8, 22, 12, 30, 0), key: 'relay',
         options: ['Australia', 'Switzerland', 'Germany', 'Italy', 'France', 'Netherlands', 'Great Britain', 'Belgium', 'Canada', 'United States', 'Another nation'] },
       { text: "Who wins the women's road race?", points: 3, lockAt: Date.UTC(2026, 8, 26, 13, 0, 0), key: "Women's road race",
-        options: ['Magdeleine Vallieres', 'Demi Vollering', 'Lotte Kopecky', 'Elisa Longo Borghini', 'Kasia Niewiadoma', 'Pauline Ferrand-Prévot', 'Marlen Reusser', 'Niamh Fisher-Black', 'Someone else'] },
+        options: ['Demi Vollering', 'Magdeleine Vallieres', 'Lotte Kopecky', 'Elisa Longo Borghini', 'Katarzyna Niewiadoma', 'Marlen Reusser', 'Niamh Fisher-Black', 'Puck Pieterse', 'Kristen Faulkner', 'Liane Lippert', 'Cédrine Kerbaol', 'Cecilie Uttrup Ludwig', 'Sarah Gigante', 'Noemi Rüegg', 'Someone else'] },
       { text: "Who wins the men's road race?", points: 5, lockAt: Date.UTC(2026, 8, 27, 13, 0, 0), key: "Men's road race",
         options: ['Remco Evenepoel', 'Mathieu van der Poel', 'Isaac del Toro', 'Tom Pidcock', 'Paul Seixas', 'Wout van Aert', 'Juan Ayuso', 'Ben Healy', 'Primož Roglič', 'Mads Pedersen', 'Marc Hirschi', 'Brandon McNulty', 'Quinn Simmons', 'Matteo Jorgenson', 'Someone else'] }
     ]
